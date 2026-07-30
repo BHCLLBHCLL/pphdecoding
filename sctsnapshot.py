@@ -32,7 +32,9 @@ ZIP 压缩块（``ZIPBODYBYTES`` / ``ZIPOCTREE`` / ``ZIPFACETINGRULES``）整段
 
 解压后内容：
 
-- ``ZIPBODYBYTES`` → ``CADthru/PKBody3`` 包装的 Parasolid 体二进制
+- ``ZIPBODYBYTES`` → ``CADthru/PKBody3`` 包装：``data`` 为 Blowfish 小端
+  变体 ECB 密文（``blowfish_le``，固定密钥），解密后是 Parasolid
+  二进制传输流（内嵌 ``SCH_3701153`` schema）
 - ``ZIPOCTREE`` / ``ZIPFACETINGRULES`` → 嵌套的快照记录流
 """
 
@@ -281,8 +283,11 @@ class PKBody3:
     之后可选 ``[pad u8]?`` + ``u32le = 0x17DA2940`` 尾标
     （大体常见；小体可无；pad 本例 box.pph 为 1 字节 ``0xB1``）。
 
-    ``data`` 不是标准 Parasolid ``.x_t``/``.x_b``；同版本项目间共享
-    400 字节 schema 前缀（box 与 laptop 样例 LCP=400），其后为私有体流。
+    ``data`` 整体为 **Blowfish 小端变体 ECB** 密文（见 ``blowfish_le``，
+    固定密钥 ``HowDareYouSaySuchAThing``）。``decrypt()`` 后是
+    **Parasolid 二进制传输流**（类 ``.x_b``，内嵌 ``SCH_3701153`` schema
+    与 ASCII 字段名）。同版本项目间"共享 400 字节前缀"的现象实为
+    ECB 下相同 schema 头明文产生相同密文块。
     """
 
     data: bytes
@@ -312,14 +317,24 @@ class PKBody3:
         raise ValueError(
             f"PKBody3 尺寸不匹配: size={size} file={len(raw)} rem={len(rest)}")
 
+    def decrypt(self, key: bytes = None) -> bytes:
+        """Blowfish-LE ECB 解密 ``data`` → Parasolid 二进制传输流。
+
+        ``key`` 缺省为 scFLOW 固定密钥。输出以
+        ``TRANSMIT FILE created by modeller version`` 头（其二进制变体
+        前缀为 ``A3.: ``）开头。
+        """
+        from blowfish_le import DEFAULT_KEY, decrypt_ecb
+        return decrypt_ecb(self.data, key if key is not None else DEFAULT_KEY)
+
     @property
     def schema_prefix(self) -> bytes:
-        """共享 schema 前缀（本样例 400 字节；较短体则返回全部 data）。"""
+        """密文前 400 字节（历史名称；ECB 下同版本体间逐字节相同）。"""
         return self.data[:PKBODY3_SCHEMA_PREFIX_LEN]
 
     @property
     def body_payload(self) -> bytes:
-        """去掉共享前缀后的体相关字节。"""
+        """密文第 400 字节之后部分（历史名称，语义同 schema_prefix）。"""
         if len(self.data) <= PKBODY3_SCHEMA_PREFIX_LEN:
             return b""
         return self.data[PKBODY3_SCHEMA_PREFIX_LEN:]
