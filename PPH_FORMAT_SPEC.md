@@ -105,6 +105,10 @@
   bit=0 取低半区）。`oct.OctModel.iter_leaves()` 已实现。
 - 样例统计：叶子 3,465,218，深度 2..20（直方图见测试）。
 
+> **与快照关系**：同内容亦嵌在 `main.sctsnapshot` 的 `ZIPOCTREE`→
+> `OCTREEBODY`→`BYTEARRAY` 中（字节级一致，见 §6.3.2）。ZIP 成员 `.oct`
+> 可视为该块的抽出副本。
+
 ## 5. 文本成员
 
 ### 5.1 `main.xml` — 项目定义（scFLOW XML 方言）
@@ -205,26 +209,97 @@ NUMERICALREGION）+ `WRAPPINGOPTCLS`（包面参数）。
 
 ### 6.3 ZIP 压缩块（`ZIPBODYBYTES`/`ZIPOCTREE`/`ZIPFACETINGRULES`）
 
-28 字节头（小端）：
+整段记录负载即为 **Microsoft LZMS** 压缩流（Windows Compression API，
+`COMPRESSION_ALGORITHM_LZMS = 4`，`cabinet.dll` 的 `CreateDecompressor` /
+`Decompress`）。流首可读字段（小端，亦为 LZMS 流自身前缀）：
 
 ```
-[u32 magic = 0xC0E5510A][u16 hdr_len = 24][u16 codec/id]
+[u32 magic = 0xC0E5510A][u16 hdr_len = 24][u16 stream_id]
 [u64 uncompressed_size][u64 uncompressed_size（重复）]
-[u32 compressed_size][payload compressed_size 字节]
+[u32 compressed_size][...LZMS 压缩数据 compressed_size 字节...]
 ```
 
-- `ZIPBODYBYTES`：Parasolid 体的压缩序列化（本例 4 个体，
-  解压后 3,059..116,595 字节）。`PKBODY_T` 为体句柄 id。
-- `ZIPOCTREE`：八叉树数据（解压后 25,102,350 字节，压缩 427,949 字节，
-  比 58.7:1）。
-- `ZIPFACETINGRULES`：面片化规则（解压后 1,274 字节）。
+**解析要点：**
 
-> **未解**：payload 为厂商私有位流编码。已排除 zlib/raw-deflate/
-> lzma/lz4/zstd/brotli/bz2/PackBits。特征：ZIPBODYBYTES 起始为 128 字节
-> 0x88 族填充（0x88/0x89/0x98），ZIPOCTREE 起始为 0xAA 族
-> （0xAA/0xA9/0x9A/0x99）——呈位打包 RLE/LZ 混合特征。codec/id 字段
-> （1035/1067/1162/1189/1194/1011）随块变化，疑似版本或块参数。
-> 头部三尺寸字段完整，payload 可原样透传（round-trip 互操作不受影响）。
+- 解压必须从偏移 0（含 magic）开始；剥离任意前缀（含 28 字节）后传入会
+  失败（`ERROR_BAD_COMPRESSION_BUFFER` / err=605）。
+- 查询输出尺寸时 `Decompress(..., out=NULL)` 返回
+  `ERROR_INSUFFICIENT_BUFFER`（122）属正常契约，随后按 `needed` 分配再解。
+- `stream_id` 随块变化，是流元数据而非独立编解码选择器。本例：
+
+  | 块 | stream_id | unc | comp |
+  |----|-----------|-----|------|
+  | ZIPBODYBYTES ×4 | 1035 / 1162 / 1189 / 1194 | 17627 / 116595 / 7843 / 3059 | 15760 / 102033 / 7270 / 2893 |
+  | ZIPOCTREE | 1267 | 25,102,350 | 427,949 |
+  | ZIPFACETINGRULES | 1067 | 1,274 | 478 |
+
+- 解压尺寸与 `uncompressed_size` 字段精确吻合。
+- Windows：`sctsnapshot.ZipBlob.decompress()`；非 Windows 可原样透传
+  （round-trip 不受影响）。`CreateCompressor(LZMS)` 可重压（字节可能不同）。
+
+> 历史误判：曾当作厂商私有位流（已排除 zlib/lzma/lz4/zstd/brotli/bz2/
+> PackBits/LZNT1/XPRESS）。实为微软 WIM/ESD 同款 LZMS；通过 SCTprime DLL
+> 逆向定位到 `CreateDecompressor(4, …)` 后确认。
+
+#### 6.3.1 `ZIPBODYBYTES` → `CADthru/PKBody3`
+
+```
+CADthru/PKBody3          # 15 字节 ASCII 魔数
+u32le size               # 后续 data 字节数
+data[size]               # CADThru 封装的 Parasolid 体二进制
+[u32le trailer]?         # 可选；本例大体有、小体无
+```
+
+两种合法尺寸：
+
+| 变体 | 条件 | 本例 |
+|------|------|------|
+| 带尾标 | `19 + size + 4 == len` | PK 62715（data=17604）、63022（116572）；尾标均为 `0x17DA2940`（固定常量，非内容 CRC） |
+| 无尾标 | `19 + size == len` | PK 65125（data=7824）、65252（3040） |
+
+- `data` 起始约 96 字节在全部体间相同（共享 schema/头段，观测起于
+  `55 ef 1a 13 8f 82 af 75 …`），其后为体相关几何。
+- **不是**标准 Parasolid `.x_t` / `.x_b` 明文；内层序列化细节仍未解（§9）。
+- API：`ZipBlob.decompress_body()` → `PKBody3`。
+
+#### 6.3.2 `ZIPOCTREE` → 嵌套快照记录流
+
+解压后为与外层同构的小端记录序列（本例顶层 7 条，skipped=0）：
+
+| 标签 | 含义 / 本例规模 |
+|------|-----------------|
+| `LOCATIONLENGTH` / `LOCATIONSTRING` | 路径长度与内容（本例空路径） |
+| `OCTREEVISIBLE` | 可见性标志 |
+| `OCTREEMDLBODY` | 八叉树关联 MDL 体（~66 KiB 子记录） |
+| **`OCTREEBODY`** | 见下：内含完整 `*.oct` |
+| `OCTREEDIVISION` | 见下 |
+| `OCTREEREGION` | 见下 |
+
+大块共用包装：`QUEUESTRUCT` → `QUEUEBODY` →
+`INDEXARRAY[8]`（本例 `01 00 00 00 00 00 00 00` = i32 `[1, 0]`，疑似
+version/flags）+ `BYTEARRAY[…]`。
+
+- **`OCTREEBODY`**：`BYTEARRAY` **字节级等于** 同项目 `*.oct` 成员
+  （本例 19,802,609 B，以 `CRDL-FLD` 开头）。即 ZIP 内 `.oct` 是快照
+  八叉树体的抽出副本。
+- **`OCTREEDIVISION`**：`BYTEARRAY` 长 = `n_internal + 1`（本例 495,032）；
+  值域约 0..20+，峰值落在 0/1/2/4/8/16——精确字段语义未解（§9）。
+- **`OCTREEREGION`**：`BYTEARRAY` 约 4.7 MiB，值几乎仅 `{0, 1}`，区域标记位图；
+  精确与叶子/内部节点的对应关系未解（§9）。
+
+API：`SctSnapshot.decompress_octree()` /
+`SctSnapshot.octree_crdlfld_bytes()`。
+
+#### 6.3.3 `ZIPFACETINGRULES` → `FACETINGRULES`
+
+解压后单条顶层记录 `FACETINGRULES`（本例 LEN=1254，44 个子记录）：
+
+- 若干 `BOOL`（0/1 开关）与 `DOUBLE`（含 `0`、`1e6`、`1e4` 等）
+- `STRINGW` 容差串（如 `'9.999…e-07 m'`、`'0.0001 m'`）
+- 大量空 `INTARRAY` / `INT2ARRAY` / `BYTEARRAY` / `boolARRAY`
+- 嵌套 `FACEALIGNSTATES` 等
+
+API：`SctSnapshot.decompress_faceting_rules()`。
 
 ### 6.4 解析注意
 
@@ -232,6 +307,8 @@ NUMERICALREGION）+ `WRAPPINGOPTCLS`（包面参数）。
   （观测为 0 与 `...ff 7f` 垃圾字节混合），顺序解析会失步；
   `sctsnapshot._resync` 通过前向搜索下一个合法记录头重新对齐。
 - 本样例顶层 14 条记录全部对齐（skipped_bytes=0）。
+- LZMS 块本身是叶子：不要把压缩负载当子记录流解析；先解压再按 §6.3.x
+  解释明文。
 
 ## 7. 体网格 GPH（`<组名>.gph`）
 
@@ -250,33 +327,43 @@ main.xml (网格组 meshinggroup1, sgs_name=MeshingGroup_1)
    │         │                │                │
    ▼         ▼                ▼                ▼
 meshinggroup1.gph   meshinggroup1.oct   *_part.mdl   *_ridge.mdl
-   ▲                                       ▲
-   │ LS_SurfaceRegions/LS_Parts            │ LS_MdlSurfaceRegions
+   ▲                    ▲                  ▲
+   │ LS_SurfaceRegions  │                  │ LS_MdlSurfaceRegions
+   │ /LS_Parts          │                  │
    └────── 区域名一致(open/@PartSurface_*) ──┘
+                        │
+                        │ 字节级 ≡
+                        ▼
+          sctsnapshot ZIPOCTREE → OCTREEBODY → BYTEARRAY
 sctsnapshot: ASSEMBLY 树(air_domain/rotation1/impeller1) ↔ mdl 面区域
-sctsnapshot: BSGSEX/MeshingGroup_1 ↔ main.xml 网格组 ↔ oct 文件名
+             ZIPBODYBYTES → PKBody3 ↔ PKBODY_T 体句柄
+sctsnapshot: BSGSEX/MeshingGroup_1 ↔ main.xml 网格组 ↔ oct/gph/mdl 文件名前缀
 main.prp: 物性条目 ← main.xml conditions 引用
 ```
 
 ## 9. 已知未解项
 
-1. **ZIP payload 编码**（§6.3）：厂商私有位流，待进一步逆向；
-   不影响其余全部内容的解析与互操作（块可原样透传）。
+1. `CADthru/PKBody3` 内层 `data` 的 Parasolid 序列化细节（非标准 x_t/x_b
+   明文；可选尾标 `0x17DA2940` 为跨大体共享常量，语义未完全确认）。
+   外层包装与 LZMS 已完整可解；互操作可透传整块。
 2. `LS_CsidOfFaces` 双块的精确语义（观测：b1 全 0、b2=闭体 id 1..N，
    推测为面两侧闭体 id）。
 3. `FACEGROUPW` 中 `MESH_CHORDTOL/CHORDANG/SURFTOL/SURFANG` 的 8 字节
    负载编码（未按 f64 对齐解读出常见值）。
 4. `DPOINTU`/`LENGTHVWU` 固定 36/12 字节结构的字段划分
    （推测 f64 值 + u32 单位码，部分观测为未初始化值）。
+5. `OCTREEDIVISION`/`OCTREEREGION` 字节语义的精确字段划分
+   （长度已对齐：division=`n_internal+1`，region 值域 `{0,1}` 位图）。
+6. `QUEUEBODY`/`INDEXARRAY` 的 `[1,0]` 含义；`OCTREEMDLBODY` 内部布局。
 
 ## 10. 本仓解析器用法
 
 ```bash
-python pph_parser.py 项目.pph               # 全部成员摘要
+python pph_parser.py 项目.pph               # 全部成员摘要（含 LZMS 解压摘要）
 python pph_parser.py 项目.pph --extract out # 解包
 python pph_parser.py 项目.pph --snapshot    # sctsnapshot 完整记录树
 python pph_parser.py 项目.pph --octree      # 八叉树叶子深度统计
-python tests/test_pph_parser.py             # 18 项健全性测试
+python tests/test_pph_parser.py             # 21 项健全性测试（含 3 项 LZMS）
 ```
 
 模块：
@@ -284,9 +371,13 @@ python tests/test_pph_parser.py             # 18 项健全性测试
 | 模块 | 职责 |
 |------|------|
 | `pph_parser.py` | CLI + ZIP 容器 + 成员分类 + 摘要 |
-| `crdlfld.py` | CRDL-FLD 公共层（节扫描、记录迭代、元数据） |
+| `crdlfld.py` | CRDL-FLD 公共层（节扫描、记录迭代、元数据；>512MiB mmap） |
 | `mdl.py` | MDL 面片几何（节点/面/csid/frid/状态/区域） |
 | `oct.py` | OCT 八叉树（位图、叶子重建、块 id） |
-| `sctsnapshot.py` | 快照记录流（树、ZIP 头、语义提取） |
+| `sctsnapshot.py` | 快照记录流、LZMS 解压、PKBody3、ZIPOCTREE/FACETINGRULES |
 | `pphxml.py` | main.xml 方言净化、prp、xenv、js |
-"""
+
+关键 API：`ZipBlob.decompress()` / `decompress_body()` /
+`SctSnapshot.decompress_octree()` / `octree_crdlfld_bytes()` /
+`decompress_faceting_rules()`（LZMS 需 Windows `cabinet.dll`）。
+

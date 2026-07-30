@@ -12,7 +12,7 @@ python pph_parser.py tests\laptop_thermal_steady_scaled_v3_fanonly_simple.pph
 python pph_parser.py 项目.pph --extract out_dir   # 解包
 python pph_parser.py 项目.pph --snapshot          # sctsnapshot 完整记录树
 python pph_parser.py 项目.pph --octree            # 八叉树叶子深度统计
-python tests/test_pph_parser.py                   # 健全性测试（18 项）
+python tests/test_pph_parser.py                   # 健全性测试（21 项，含 LZMS）
 ```
 
 ## 模块
@@ -23,8 +23,10 @@ python tests/test_pph_parser.py                   # 健全性测试（18 项）
 | `crdlfld.py` | CRDL-FLD 公共二进制层（gph/oct/mdl 共享） |
 | `mdl.py` | `*_part.mdl` / `*_ridge.mdl` 面片几何 |
 | `oct.py` | `*.oct` 八叉树（前序位图 → 叶子包围盒重建） |
-| `sctsnapshot.py` | `main.sctsnapshot` 快照记录流 |
+| `sctsnapshot.py` | 快照记录流 + LZMS / PKBody3 / ZIPOCTREE |
 | `pphxml.py` | `main.xml`（索引标签方言）/ `main.prp` / `main.xenv` / `main.js` |
 
 依赖：仅 `numpy`（Python 3.10+）。体网格 `.gph` 的深度统计在检测到
 [gphdecoding](https://github.com/) 仓（同级目录）时自动调用其 `gph_model`。
+`main.sctsnapshot` 内 LZMS 压缩块解压需要 Windows `cabinet.dll`
+（`sctsnapshot.ZipBlob.decompress()`）。

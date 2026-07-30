@@ -20,24 +20,34 @@
 ``*STRUCT`` / ``ASSEMBLY`` / ``BODY`` / ``BYTEARRAY`` / ``WRAPBYTEARRAY`` /
 ``FACEGROUPSW`` / ``FACEINFOMAP`` / ``FFREVERSEMAP`` 等为容器（负载是子记录）。
 
-ZIP 压缩块（``ZIPBODYBYTES`` / ``ZIPOCTREE`` / ``ZIPFACETINGRULES``）头部：
+ZIP 压缩块（``ZIPBODYBYTES`` / ``ZIPOCTREE`` / ``ZIPFACETINGRULES``）整段负载
+即为 **Microsoft LZMS** 压缩流（Windows Compression API，
+``COMPRESSION_ALGORITHM_LZMS = 4``，``cabinet.dll``）。流首可读字段：
 
 .. code-block:: text
 
-    [magic u32le = 0xC0E5510A][hdr_len u16le = 24][codec/id u16le]
+    [magic u32le = 0xC0E5510A][hdr_len u16le = 24][stream_id u16le]
     [uncompressed_size u64le][uncompressed_size 重复 u64le]
-    [compressed_size u32le][payload（厂商私有位流编码，非 zlib/lz4/zstd）]
+    [compressed_size u32le][...LZMS 压缩数据...]
+
+解压后内容：
+
+- ``ZIPBODYBYTES`` → ``CADthru/PKBody3`` 包装的 Parasolid 体二进制
+- ``ZIPOCTREE`` / ``ZIPFACETINGRULES`` → 嵌套的快照记录流
 """
 
 from __future__ import annotations
 
 import struct
+import sys
 from dataclasses import dataclass, field
 from typing import Iterator, Optional
 
 import numpy as np
 
 ZIP_MAGIC = 0xC0E5510A
+PKBODY3_MAGIC = b"CADthru/PKBody3"
+COMPRESSION_ALGORITHM_LZMS = 4
 
 # UTF-16-LE 字符串标签
 _UTF16_TAGS = {"STRINGW", "NAMESTRINGW", "PRPFILESTRINGW", "SFILESTRINGW"}
@@ -67,14 +77,108 @@ _LEAF_TAGS = (_UTF16_TAGS | _BYTES_TAGS | _U16_TAGS | _I32_TAGS | _U8_TAGS
                  "ZIPBODYBYTES", "ZIPOCTREE", "ZIPFACETINGRULES"})
 
 
+def lzms_available() -> bool:
+    """当前平台是否可通过 ``cabinet.dll`` 解压 LZMS。"""
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+        ctypes.WinDLL("cabinet.dll")
+        return True
+    except OSError:
+        return False
+
+
+def lzms_decompress(compressed: bytes,
+                    uncompressed_size: Optional[int] = None) -> bytes:
+    """用 Windows Compression API（``cabinet.dll``）解压 LZMS 流。
+
+    ``compressed`` 必须是完整记录负载（含流首 28 字节可读字段）。
+    """
+    if sys.platform != "win32":
+        raise RuntimeError("LZMS 解压需要 Windows cabinet.dll")
+    import ctypes
+    from ctypes import wintypes
+
+    cab = ctypes.WinDLL("cabinet.dll")
+    CreateDecompressor = cab.CreateDecompressor
+    CreateDecompressor.argtypes = [
+        wintypes.DWORD, wintypes.LPVOID, ctypes.POINTER(wintypes.LPVOID)]
+    CreateDecompressor.restype = wintypes.BOOL
+    Decompress = cab.Decompress
+    Decompress.argtypes = [
+        wintypes.LPVOID, wintypes.LPCVOID, ctypes.c_size_t,
+        wintypes.LPVOID, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
+    Decompress.restype = wintypes.BOOL
+    CloseDecompressor = cab.CloseDecompressor
+    CloseDecompressor.argtypes = [wintypes.LPVOID]
+    CloseDecompressor.restype = wintypes.BOOL
+
+    handle = wintypes.LPVOID()
+    if not CreateDecompressor(COMPRESSION_ALGORITHM_LZMS, None,
+                              ctypes.byref(handle)):
+        raise OSError(ctypes.GetLastError(), "CreateDecompressor(LZMS) 失败")
+    try:
+        needed = ctypes.c_size_t(0)
+        ok = Decompress(handle, compressed, len(compressed),
+                        None, 0, ctypes.byref(needed))
+        err = ctypes.GetLastError()
+        # ERROR_INSUFFICIENT_BUFFER = 122：查询输出尺寸时的预期返回
+        if not ok and err not in (0, 122):
+            raise OSError(err, "Decompress(LZMS) 查询尺寸失败")
+        cap = needed.value or (uncompressed_size or 0)
+        if uncompressed_size and uncompressed_size > cap:
+            cap = uncompressed_size
+        if cap <= 0:
+            raise OSError(err, "Decompress(LZMS) 无法确定输出尺寸")
+        buf = ctypes.create_string_buffer(cap)
+        got = ctypes.c_size_t(0)
+        if not Decompress(handle, compressed, len(compressed),
+                          buf, cap, ctypes.byref(got)):
+            raise OSError(ctypes.GetLastError(), "Decompress(LZMS) 失败")
+        return buf.raw[:got.value]
+    finally:
+        CloseDecompressor(handle)
+
+
+@dataclass
+class PKBody3:
+    """``ZIPBODYBYTES`` 解压后的 CADThru Parasolid 体包装。
+
+    布局：``CADthru/PKBody3`` (15B) + ``u32le size`` + ``data[size]``，
+    部分体其后还有固定尾标 ``u32le = 0x17DA2940``（本样例大体有、小体无；
+    非内容 CRC）。
+    """
+
+    data: bytes
+    checksum: Optional[int] = None  # 实为可选尾标，字段名保留兼容
+
+    @classmethod
+    def parse(cls, raw: bytes) -> "PKBody3":
+        if not raw.startswith(PKBODY3_MAGIC):
+            raise ValueError("不是 CADthru/PKBody3 包装")
+        if len(raw) < 19:
+            raise ValueError("PKBody3 过短")
+        size = struct.unpack("<I", raw[15:19])[0]
+        if 19 + size + 4 == len(raw):
+            data = raw[19:19 + size]
+            checksum = struct.unpack("<I", raw[19 + size:19 + size + 4])[0]
+            return cls(data, checksum)
+        if 19 + size == len(raw):
+            return cls(raw[19:19 + size], None)
+        raise ValueError(
+            f"PKBody3 尺寸不匹配: size={size} file={len(raw)}")
+
+
 @dataclass
 class ZipBlob:
-    """ZIP 压缩块头部（payload 为厂商私有编码，不解码）。"""
+    """LZMS 压缩块（整段 ``raw`` 即为可解压流）。"""
 
-    codec_id: int
+    codec_id: int                 # 流首 u16（非独立编解码选择器）
     uncompressed_size: int
     compressed_size: int
-    payload: bytes = b""
+    payload: bytes = b""          # 流首 28 字节之后的压缩数据
+    raw: bytes = b""              # 完整 LZMS 流（含流首字段）
 
     @classmethod
     def parse(cls, payload: bytes) -> "ZipBlob":
@@ -82,8 +186,22 @@ class ZipBlob:
             codec = struct.unpack("<H", payload[6:8])[0]
             unc = struct.unpack("<Q", payload[8:16])[0]
             comp = struct.unpack("<I", payload[24:28])[0]
-            return cls(codec, unc, comp, payload[28:])
-        return cls(0, 0, len(payload), payload)
+            return cls(codec, unc, comp, payload[28:], payload)
+        return cls(0, 0, len(payload), payload, payload)
+
+    def decompress(self) -> bytes:
+        """LZMS 解压，返回明文。"""
+        return lzms_decompress(self.raw, self.uncompressed_size)
+
+    def decompress_body(self) -> PKBody3:
+        """``ZIPBODYBYTES`` → ``PKBody3``。"""
+        return PKBody3.parse(self.decompress())
+
+    def decompress_records(self, max_depth: int = 24) -> list["SnapRecord"]:
+        """``ZIPOCTREE`` / ``ZIPFACETINGRULES`` → 嵌套记录树。"""
+        data = self.decompress()
+        records, _, _ = _parse_region(data, 0, len(data), 0, max_depth)
+        return records
 
 
 @dataclass
@@ -116,7 +234,7 @@ class SnapRecord:
         if isinstance(v, np.ndarray):
             return f"{self.tag} [{self.length}] array{v.shape} {v[:6].tolist()}{'...' if v.size > 6 else ''}"
         if isinstance(v, ZipBlob):
-            return (f"{self.tag} [{self.length}] ZIP codec={v.codec_id} "
+            return (f"{self.tag} [{self.length}] LZMS id={v.codec_id} "
                     f"unc={v.uncompressed_size} comp={v.compressed_size}")
         s = repr(v)
         if len(s) > max_value_len:
@@ -258,7 +376,7 @@ class SctSnapshot:
 
     # ── 语义提取 ─────────────────────────────────────────────────────
     def bodies(self) -> list[dict]:
-        """Parasolid 体清单：``[(pk_id, zip_blob)]``。"""
+        """Parasolid 体清单：``[{pk_body, zip}]``。"""
         out = []
         for top in self.find_all("TOPASSYSTRUCT"):
             pk = None
@@ -269,6 +387,59 @@ class SctSnapshot:
                     out.append({"pk_body": pk, "zip": c.value})
                     pk = None
         return out
+
+    def zip_blobs(self, tag: str) -> list[ZipBlob]:
+        """收集指定标签的全部 LZMS 块。"""
+        return [r.value for r in self.find_all(tag)
+                if isinstance(r.value, ZipBlob)]
+
+    def decompress_bodies(self) -> list[dict]:
+        """解压全部 ``ZIPBODYBYTES`` → ``PKBody3``。"""
+        out = []
+        for b in self.bodies():
+            body = b["zip"].decompress_body()
+            out.append({
+                "pk_body": b["pk_body"],
+                "zip": b["zip"],
+                "pkbody3": body,
+                "data_size": len(body.data),
+            })
+        return out
+
+    def decompress_octree(self, max_depth: int = 8) -> list[SnapRecord]:
+        """解压 ``ZIPOCTREE`` 为嵌套记录树（含 OCTREEBODY 等）。"""
+        blobs = self.zip_blobs("ZIPOCTREE")
+        if not blobs:
+            return []
+        return blobs[0].decompress_records(max_depth=max_depth)
+
+    def octree_crdlfld_bytes(self) -> Optional[bytes]:
+        """从 ``ZIPOCTREE`` 提取 ``OCTREEBODY`` 内的 CRDL-FLD 字节
+        （与 ``*.oct`` 成员字节级一致）。"""
+        records = self.decompress_octree(max_depth=8)
+
+        def walk(recs: list[SnapRecord]) -> Optional[bytes]:
+            for r in recs:
+                if r.tag == "OCTREEBODY":
+                    for qb in r.find_all("QUEUEBODY"):
+                        for c in qb.children:
+                            if (c.tag == "BYTEARRAY"
+                                    and isinstance(c.value, bytes)
+                                    and b"CRDL-FLD" in c.value[:16]):
+                                return c.value
+                found = walk(r.children)
+                if found is not None:
+                    return found
+            return None
+
+        return walk(records)
+
+    def decompress_faceting_rules(self, max_depth: int = 12) -> list[SnapRecord]:
+        """解压 ``ZIPFACETINGRULES`` 为嵌套记录树。"""
+        blobs = self.zip_blobs("ZIPFACETINGRULES")
+        if not blobs:
+            return []
+        return blobs[0].decompress_records(max_depth=max_depth)
 
     def assembly_tree(self) -> list[dict]:
         """装配树（名称 + 子节点 + 关联 PKBODY_T）。"""

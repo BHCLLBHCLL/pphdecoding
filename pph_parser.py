@@ -182,11 +182,44 @@ def summarize_snapshot(arch: PphArchive, out, full: bool = False) -> None:
             out.append("  " + r.text())
         bodies = snap.bodies()
         if bodies:
-            out.append(f"  Parasolid 体: {len(bodies)} 个（ZIP 压缩存储）")
+            out.append(f"  Parasolid 体: {len(bodies)} 个（LZMS 压缩）")
             for b in bodies:
                 z = b["zip"]
                 out.append(f"    PKBODY_T={b['pk_body']} "
                            f"解压后 {z.uncompressed_size} B / 压缩 {z.compressed_size} B")
+            if sctsnapshot.lzms_available():
+                try:
+                    for b in snap.decompress_bodies():
+                        ck = b["pkbody3"].checksum
+                        ck_s = (f"checksum=0x{ck:08x}" if ck is not None
+                                else "no-trailer")
+                        out.append(
+                            f"    → PKBody3 data={b['data_size']} B {ck_s}")
+                except (OSError, ValueError) as exc:
+                    out.append(f"    （LZMS 解压失败: {exc}）")
+        for tag, label in (("ZIPOCTREE", "八叉树块"),
+                           ("ZIPFACETINGRULES", "面片规则块")):
+            blobs = snap.zip_blobs(tag)
+            if not blobs:
+                continue
+            z = blobs[0]
+            out.append(f"  {label} ({tag}): unc={z.uncompressed_size} "
+                       f"comp={z.compressed_size}")
+        if sctsnapshot.lzms_available():
+            try:
+                facet = snap.decompress_faceting_rules()
+                if facet:
+                    out.append(f"  ZIPFACETINGRULES 解压: {facet[0].text()}")
+                oct_recs = snap.decompress_octree(max_depth=6)
+                if oct_recs:
+                    tags = [r.tag for r in oct_recs]
+                    out.append(f"  ZIPOCTREE 解压顶层: {', '.join(tags)}")
+                    crdl = _octree_bytearray(oct_recs)
+                    if crdl:
+                        out.append(f"  OCTREEBODY ≡ *.oct CRDL-FLD "
+                                   f"({len(crdl):,} B)")
+            except (OSError, ValueError) as exc:
+                out.append(f"  （LZMS 嵌套块解压失败: {exc}）")
         groups = snap.meshing_groups()
         if groups:
             out.append(f"  网格组参数 (BSGSEX): {len(groups)} 组")
@@ -196,6 +229,23 @@ def summarize_snapshot(arch: PphArchive, out, full: bool = False) -> None:
             out.append("\n完整记录树:")
             out.append(snap.dump(max_depth=10))
         tmp.close()
+
+
+def _octree_bytearray(records) -> Optional[bytes]:
+    """从已解压的 ZIPOCTREE 记录树提取 OCTREEBODY 内 CRDL-FLD 字节。"""
+    for r in records:
+        stack = [r]
+        while stack:
+            cur = stack.pop()
+            if cur.tag == "OCTREEBODY":
+                for qb in cur.find_all("QUEUEBODY"):
+                    for c in qb.children:
+                        if (c.tag == "BYTEARRAY"
+                                and isinstance(c.value, bytes)
+                                and b"CRDL-FLD" in c.value[:16]):
+                            return c.value
+            stack.extend(cur.children)
+    return None
 
 
 class _TempFile:
