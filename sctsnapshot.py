@@ -47,7 +47,9 @@ import numpy as np
 
 ZIP_MAGIC = 0xC0E5510A
 PKBODY3_MAGIC = b"CADthru/PKBody3"
+PKBODY3_SCHEMA_PREFIX_LEN = 400  # 本样例四个体 data 共享前缀长度
 COMPRESSION_ALGORITHM_LZMS = 4
+PKBODY3_TRAILER_MARK = 0x17DA2940  # 大体可选尾标（非内容 CRC）
 
 # UTF-16-LE 字符串标签
 _UTF16_TAGS = {"STRINGW", "NAMESTRINGW", "PRPFILESTRINGW", "SFILESTRINGW"}
@@ -59,6 +61,15 @@ _U16_TAGS = {"FACESTATES", "EDGESTATES", "VERTEXSTATES"}
 _I32_TAGS = {"FIDPKFACE", "EIDPKEDGE", "VIDPKVERTEX"}
 # u8 数组
 _U8_TAGS = {"EDGEISSEAMLINE", "BODYSELECTION"}
+# f64 面片化容差（FACEGROUPW；DLL XML 以 %g 写出）
+_MESH_TOL_TAGS = {
+    "MESH_CHORDTOL", "MESH_CHORDANG", "MESH_SURFTOL", "MESH_SURFANG",
+}
+# 带单位的标量/点（见 ValueWithUnit / DPointU）
+_VWU_TAGS = {
+    "LENGTHVWU", "ANGLEVWU", "AREAVWU", "DENSITYVWU", "ENERGYVWU",
+    "FORCEVWU", "TIMEVWU", "VOLUMEVWU",
+}
 # 4 字节标量（u32/i32 值）标签
 _SCALAR4_TAGS = {
     "CADTHRUVERSION", "QUEUEID", "INTEGER", "BOOL", "SGBOOL",
@@ -69,10 +80,11 @@ _SCALAR4_TAGS = {
     "OCTREEBALANCING", "CSINFO_CECOUNT", "I777", "DUMMYASSYINFO_UNUSED",
     "FACESTATESLENGTH", "EDGESTATESLENGTH", "VERTEXSTATESLEN",
     "FIDPKFACELENGTH", "EIDPKEDGELENGTH", "VIDPKVERTEXLEN",
-    "ZEROLENGTH", "ZEROLENGTH2", "EDGEISSEAMLINE_UNUSED", "MESH_CHORDTOL_UNUSED",
+    "ZEROLENGTH", "ZEROLENGTH2", "EDGEISSEAMLINE_UNUSED",
 }
 # 明确的叶子（不尝试按容器展开）
 _LEAF_TAGS = (_UTF16_TAGS | _BYTES_TAGS | _U16_TAGS | _I32_TAGS | _U8_TAGS
+              | _MESH_TOL_TAGS | _VWU_TAGS | {"DPOINTU"}
               | {"STRING", "DOUBLE", "INTARRAY", "DOUBLEARRAY", "TRANSFORMMATRIX",
                  "ZIPBODYBYTES", "ZIPOCTREE", "ZIPFACETINGRULES"})
 
@@ -142,12 +154,53 @@ def lzms_decompress(compressed: bytes,
 
 
 @dataclass
+class ValueWithUnit:
+    """``LENGTHVWU`` 等：``f64 value`` + ``i32 unit_type``（12 字节）。
+
+    单位类型码与 ``main.xenv`` UNIT / DLL ``ValueWithUnit`` XML 对应；
+    本样例常见 ``unit_type=1``（模型长度单位）。
+    """
+
+    value: float
+    unit_type: int
+
+    @classmethod
+    def parse(cls, payload: bytes) -> "ValueWithUnit":
+        if len(payload) != 12:
+            raise ValueError(f"ValueWithUnit 期望 12 字节，得到 {len(payload)}")
+        value, unit_type = struct.unpack("<dI", payload)
+        return cls(value, unit_type)
+
+
+@dataclass
+class DPointU:
+    """``DPOINTU``：``3×f64`` 坐标 + ``3×i32`` 各轴单位类型（36 字节）。
+
+    二进制布局为值在前、类型在后（与 DLL 导出 XML 的 Type/Value 叙述顺序相反）。
+    """
+
+    xyz: tuple[float, float, float]
+    unit_types: tuple[int, int, int]
+
+    @classmethod
+    def parse(cls, payload: bytes) -> "DPointU":
+        if len(payload) != 36:
+            raise ValueError(f"DPOINTU 期望 36 字节，得到 {len(payload)}")
+        x, y, z = struct.unpack_from("<ddd", payload, 0)
+        tx, ty, tz = struct.unpack_from("<iii", payload, 24)
+        return cls((x, y, z), (tx, ty, tz))
+
+
+@dataclass
 class PKBody3:
     """``ZIPBODYBYTES`` 解压后的 CADThru Parasolid 体包装。
 
     布局：``CADthru/PKBody3`` (15B) + ``u32le size`` + ``data[size]``，
     部分体其后还有固定尾标 ``u32le = 0x17DA2940``（本样例大体有、小体无；
     非内容 CRC）。
+
+    ``data`` 不是标准 Parasolid ``.x_t``/``.x_b``；本样例四个体共享
+    400 字节 schema/密钥前缀，其后为 CADThru 私有体流。
     """
 
     data: bytes
@@ -168,6 +221,18 @@ class PKBody3:
             return cls(raw[19:19 + size], None)
         raise ValueError(
             f"PKBody3 尺寸不匹配: size={size} file={len(raw)}")
+
+    @property
+    def schema_prefix(self) -> bytes:
+        """共享 schema 前缀（本样例 400 字节；较短体则返回全部 data）。"""
+        return self.data[:PKBODY3_SCHEMA_PREFIX_LEN]
+
+    @property
+    def body_payload(self) -> bytes:
+        """去掉共享前缀后的体相关字节。"""
+        if len(self.data) <= PKBODY3_SCHEMA_PREFIX_LEN:
+            return b""
+        return self.data[PKBODY3_SCHEMA_PREFIX_LEN:]
 
 
 @dataclass
@@ -236,6 +301,12 @@ class SnapRecord:
         if isinstance(v, ZipBlob):
             return (f"{self.tag} [{self.length}] LZMS id={v.codec_id} "
                     f"unc={v.uncompressed_size} comp={v.compressed_size}")
+        if isinstance(v, ValueWithUnit):
+            return (f"{self.tag} [{self.length}] = {v.value!r} "
+                    f"(unit_type={v.unit_type})")
+        if isinstance(v, DPointU):
+            return (f"{self.tag} [{self.length}] = xyz={v.xyz} "
+                    f"units={v.unit_types}")
         s = repr(v)
         if len(s) > max_value_len:
             s = s[:max_value_len] + "..."
@@ -263,6 +334,12 @@ def _decode_scalar(tag: str, payload: bytes):
         return payload
     if tag == "DOUBLE" and n == 8:
         return struct.unpack("<d", payload)[0]
+    if tag in _MESH_TOL_TAGS and n == 8:
+        return struct.unpack("<d", payload)[0]
+    if tag in _VWU_TAGS and n == 12:
+        return ValueWithUnit.parse(payload)
+    if tag == "DPOINTU" and n == 36:
+        return DPointU.parse(payload)
     if tag == "INTARRAY" and n % 4 == 0:
         return np.frombuffer(payload, dtype="<i4").astype(np.int64).copy()
     if tag in ("DOUBLEARRAY", "TRANSFORMMATRIX") and n % 8 == 0:
@@ -433,6 +510,63 @@ class SctSnapshot:
             return None
 
         return walk(records)
+
+    def _octree_bytearray(self, tag: str) -> Optional[bytes]:
+        """从解压后的 ZIPOCTREE 取指定标签 QUEUEBODY/BYTEARRAY。"""
+        records = self.decompress_octree(max_depth=8)
+
+        def walk(recs: list[SnapRecord]) -> Optional[bytes]:
+            for r in recs:
+                if r.tag == tag:
+                    for qb in r.find_all("QUEUEBODY"):
+                        for c in qb.children:
+                            if c.tag == "BYTEARRAY" and isinstance(c.value, bytes):
+                                return c.value
+                found = walk(r.children)
+                if found is not None:
+                    return found
+            return None
+
+        return walk(records)
+
+    def octree_division(self) -> Optional[np.ndarray]:
+        """``OCTREEDIVISION``：``u8[n_internal+1]``，与内部节点前序对应。
+
+        每字节为 8 子节点槽位的位域（本样例约 75% 恰有 1 位为 1，
+        呈单子节点偏好）；首位可能为根/头字节。精确谓词仍部分开放。
+        """
+        raw = self._octree_bytearray("OCTREEDIVISION")
+        if raw is None:
+            return None
+        return np.frombuffer(raw, dtype=np.uint8).copy()
+
+    def octree_region(self, n_octants: Optional[int] = None
+                      ) -> Optional[dict]:
+        """``OCTREEREGION``：与 refinement 同序的每 octant ``u8`` 标志。
+
+        返回 ``{flags, padding, n_active, n_inactive}``。
+        ``flags[i]∈{0,1}`` 与 ``*.oct`` 前序位图下标对齐；数组尾部为零填充
+        （本例 pad=777,419）。``1`` 表示该 octant 落在活动/关注区域
+        （叶子约 88% 为 1）。
+        """
+        raw = self._octree_bytearray("OCTREEREGION")
+        if raw is None:
+            return None
+        arr = np.frombuffer(raw, dtype=np.uint8)
+        if n_octants is None:
+            # 尾部全 0 填充：有效长度取到最后一个非零之后，
+            # 但更稳妥由调用方传入 n_octants（与 *.oct 一致）。
+            nonzero = np.flatnonzero(arr)
+            n_octants = int(nonzero[-1]) + 1 if nonzero.size else 0
+        flags = arr[:n_octants].copy()
+        padding = int(arr.size - n_octants)
+        return {
+            "flags": flags,
+            "padding": padding,
+            "n_active": int(np.count_nonzero(flags)),
+            "n_inactive": int(n_octants - np.count_nonzero(flags)),
+            "raw_size": int(arr.size),
+        }
 
     def decompress_faceting_rules(self, max_depth: int = 12) -> list[SnapRecord]:
         """解压 ``ZIPFACETINGRULES`` 为嵌套记录树。"""

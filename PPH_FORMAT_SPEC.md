@@ -173,6 +173,14 @@ record := TAG[16] (ASCII，空格填充) + LEN (u32le) + PAYLOAD[LEN]
 - `*INFOLEN/*LENGTH` + `ZEROLENGTH(2)` 计数：`VERTEXSTATESLEN=8,
   ZEROLENGTH=1, VERTEXSTATES[14B]` 表示 8 项中尾部 1 项为零被省略，
   实际存 7×u16。
+- **带单位量**（DLL `ValueWithUnit` / `DPointU` XML 模板确认）：
+  - `MESH_CHORDTOL` / `MESH_CHORDANG` / `MESH_SURFTOL` / `MESH_SURFANG`：
+    各 **8 字节 `f64le`**（面片弦高/角度容差；本例均为 `0.0` 未设）。
+  - `LENGTHVWU`（及同类 `*VWU`）：**12 字节 = `f64le value` + `i32le unit_type`**
+    （本例 `unit_type=1`；可读样例值如 `0.02345`）。
+  - `DPOINTU`：**36 字节 = `3×f64le` 坐标 + `3×i32le` 各轴单位类型**
+    （值在前、类型在后；与 XML 叙述的 Type/Value 顺序相反。本例类型均为 1；
+    部分槽位坐标未初始化呈垃圾浮点，过滤 `|c|<1e3` 可得有效点）。
 
 ### 6.2 顶层结构（本样例）
 
@@ -257,10 +265,16 @@ data[size]               # CADThru 封装的 Parasolid 体二进制
 | 带尾标 | `19 + size + 4 == len` | PK 62715（data=17604）、63022（116572）；尾标均为 `0x17DA2940`（固定常量，非内容 CRC） |
 | 无尾标 | `19 + size == len` | PK 65125（data=7824）、65252（3040） |
 
-- `data` 起始约 96 字节在全部体间相同（共享 schema/头段，观测起于
-  `55 ef 1a 13 8f 82 af 75 …`），其后为体相关几何。
-- **不是**标准 Parasolid `.x_t` / `.x_b` 明文；内层序列化细节仍未解（§9）。
-- API：`ZipBlob.decompress_body()` → `PKBody3`。
+**`data` 内层：**
+
+- **不是**标准 Parasolid `.x_t` / `.x_b`（无 `**ABC…` / `PS\0\1` / `SCH=` /
+  `PARASOLID` 明文头）。
+- 本例四个体的 `data` **共享前 400 字节**（schema/会话密钥前缀，字节级相同），
+  其后才是体相关私有流；高熵，未见可解析的 XT 记录结构。
+- 判定为 CADThru **applio 私有体序列化**（`ParasolidGW` / `PrimeParasolidGW`
+  DLL 中有 `CADthru/PKBody3` 字符串）；独立还原 B-rep 需厂商运行时。
+- API：`ZipBlob.decompress_body()` → `PKBody3`；
+  `schema_prefix` / `body_payload` 拆分前后缀。
 
 #### 6.3.2 `ZIPOCTREE` → 嵌套快照记录流
 
@@ -282,13 +296,22 @@ version/flags）+ `BYTEARRAY[…]`。
 - **`OCTREEBODY`**：`BYTEARRAY` **字节级等于** 同项目 `*.oct` 成员
   （本例 19,802,609 B，以 `CRDL-FLD` 开头）。即 ZIP 内 `.oct` 是快照
   八叉树体的抽出副本。
-- **`OCTREEDIVISION`**：`BYTEARRAY` 长 = `n_internal + 1`（本例 495,032）；
-  值域约 0..20+，峰值落在 0/1/2/4/8/16——精确字段语义未解（§9）。
-- **`OCTREEREGION`**：`BYTEARRAY` 约 4.7 MiB，值几乎仅 `{0, 1}`，区域标记位图；
-  精确与叶子/内部节点的对应关系未解（§9）。
+- **`OCTREEDIVISION`**：`BYTEARRAY` 长 = `n_internal + 1`（本例 495,032）。
+  与内部节点**前序**一一对应的 `u8` 位域：每位对应 8 个子节点槽之一；
+  本例约 75% 字节恰有 1 位为 1、约 13% 为 0、约 10% 有 2 位为 1
+  （呈“偏向单个子槽”的掩码，**不是**节点深度，也不是“子节点是否再细分”
+  的简单掩码——与 refinement 子节点掩码吻合率仅 ~11%）。首位可能为根/
+  头字节。精确谓词（掩码选择哪些子槽）仍部分开放。
+- **`OCTREEREGION`**：存储长度大于 `n_octants`（本例 4,737,668 =
+  3,960,249 + **777,419 尾部零填充**）。有效段 `flags[n_octants]` 与
+  `LS_OctOctantRefinement` **同一前序下标**对齐，值域 `{0,1}`：
+  - `1` ≈ 活动/关注区域（本例叶子约 88% 为 1，内部约 80% 为 1）
+  - `0` ≈ 非活动
+  - 父节点标志与子节点 OR/AND 均非恒等式（OR 吻合 ~80%），故不是简单
+    向上传播的布尔闭包。
 
 API：`SctSnapshot.decompress_octree()` /
-`SctSnapshot.octree_crdlfld_bytes()`。
+`octree_crdlfld_bytes()` / `octree_division()` / `octree_region(n_octants)`。
 
 #### 6.3.3 `ZIPFACETINGRULES` → `FACETINGRULES`
 
@@ -341,20 +364,46 @@ sctsnapshot: BSGSEX/MeshingGroup_1 ↔ main.xml 网格组 ↔ oct/gph/mdl 文件
 main.prp: 物性条目 ← main.xml conditions 引用
 ```
 
-## 9. 已知未解项
+## 9. 待提升部分（无法完全逆向解析）
 
-1. `CADthru/PKBody3` 内层 `data` 的 Parasolid 序列化细节（非标准 x_t/x_b
-   明文；可选尾标 `0x17DA2940` 为跨大体共享常量，语义未完全确认）。
-   外层包装与 LZMS 已完整可解；互操作可透传整块。
-2. `LS_CsidOfFaces` 双块的精确语义（观测：b1 全 0、b2=闭体 id 1..N，
-   推测为面两侧闭体 id）。
-3. `FACEGROUPW` 中 `MESH_CHORDTOL/CHORDANG/SURFTOL/SURFANG` 的 8 字节
-   负载编码（未按 f64 对齐解读出常见值）。
-4. `DPOINTU`/`LENGTHVWU` 固定 36/12 字节结构的字段划分
-   （推测 f64 值 + u32 单位码，部分观测为未初始化值）。
-5. `OCTREEDIVISION`/`OCTREEREGION` 字节语义的精确字段划分
-   （长度已对齐：division=`n_internal+1`，region 值域 `{0,1}` 位图）。
-6. `QUEUEBODY`/`INDEXARRAY` 的 `[1,0]` 含义；`OCTREEMDLBODY` 内部布局。
+> 容器 ZIP、CRDL-FLD（gph/oct/mdl）、文本成员、快照记录树、LZMS 解压、
+> PKBody3 外层包装、单位量字段布局均已可解析。下列条目为当前**无法完全
+> 闭合**的缺口；导出转换与整块透传不受硬阻塞，独立 B-rep 重建除外。
+
+### 9.1 硬未解（独立几何还原受限）
+
+| 项 | 已掌握 | 缺口 | 影响 |
+|----|--------|------|------|
+| `CADthru/PKBody3.data` 体私有流 | 外层 `magic+size[+尾标 0x17DA2940]`；LZMS 可完整解压；四个体共享 **400 字节** schema 前缀；非标准 `.x_t`/`.x_b` | 前缀之后的高熵私有流字节编码；未见 `PS`/`SCH`/`PARASOLID` 明文头 | **独立还原 Parasolid B-rep 需 CADThru/ParasolidGW 运行时**；互操作可透传整块 |
+
+### 9.2 结构已知、语义未钉死
+
+| 项 | 已掌握 | 缺口 | 建议攻关 |
+|----|--------|------|----------|
+| `OCTREEDIVISION` | `u8[n_internal+1]`，与内部节点前序对应；每字节为 8 子槽位掩码（约 75% 恰 1 位为 1）；非深度、非“子节点是否再细分”简单掩码 | **精确谓词**：哪类子槽被置位 | 多样本差分；与 REGION/边界相交做相关；DLL 静态对照 |
+| `OCTREEREGION` | 有效段 `u8[n_octants]` 与 refinement **同前序下标**；值域 `{0,1}`；尾部零填充（本例 +777,419）；叶子约 88% 为 1 | **`1`/`0` 的几何或物理含义**（“活动区域”仅为工作假说）；父标志≠子 OR/AND 恒等式 | 对照体包围盒/面区域/BSGSEX 加密限制；改参数另存差分 |
+| `LS_CsidOfFaces` 双块 | 两路 `I4[n_faces]`；观测 b1 全 0、b2∈闭体 id 1..N | **面两侧闭体 id** 的严格证明与边界情形 | 多样本 + 与 `LS_MdlClosedVolumes` 交叉验证 |
+| `OCTREEMDLBODY` | 含 INTEGER / DPOINTARRAY / FINARRAY / FACETARRAY / PKBOX / FACEGROUPSW 等 | 各数组字段划分与语义 | 对照 `*_part.mdl` 面片计数 |
+| `QUEUEBODY`/`INDEXARRAY` | 本例恒为 8 字节 `01 00 00 00 00 00 00 00`（`[1,0]`） | version/flags 含义 | 多样本对比 |
+
+### 9.3 次要缺口
+
+| 项 | 已掌握 | 缺口 |
+|----|--------|------|
+| `LENGTHVWU.unit_type` / `DPOINTU.unit_types` | 布局已解（`f64+i32` / `3×f64+3×i32`）；本例类型码恒为 `1` | 与 `main.xenv` UNIT 枚举的**完整码表**映射 |
+| 快照未对齐保留区 | `ASSEMBLY`/`CSINFO` 后约 48 字节垃圾；`_resync` 可跳过 | 保留区是否含可忽略以外的语义 |
+| `PKBody3` 可选尾标 `0x17DA2940` | 大体有、小体无；非内容 CRC | 触发条件与正式名称 |
+
+### 9.4 已闭合（勿再当作未解）
+
+下列曾列为未解、现已闭合，仅作对照：
+
+- ZIP 块编解码 → **Microsoft LZMS**（`cabinet.dll`）
+- `MESH_CHORDTOL/CHORDANG/SURFTOL/SURFANG` → **`f64le`**
+- `LENGTHVWU` / `DPOINTU` → **单位量布局**（见 §6.1）
+- `ZIPOCTREE`→`OCTREEBODY` → **字节级等于** `*.oct`
+- MDL `face_type` → `133`/`134`（`npe = type - 130`）
+- OCT refinement → DFS 前序完整八叉树位图
 
 ## 10. 本仓解析器用法
 
@@ -363,7 +412,7 @@ python pph_parser.py 项目.pph               # 全部成员摘要（含 LZMS �
 python pph_parser.py 项目.pph --extract out # 解包
 python pph_parser.py 项目.pph --snapshot    # sctsnapshot 完整记录树
 python pph_parser.py 项目.pph --octree      # 八叉树叶子深度统计
-python tests/test_pph_parser.py             # 21 项健全性测试（含 3 项 LZMS）
+python tests/test_pph_parser.py             # 25 项健全性测试（含 LZMS / 单位量）
 ```
 
 模块：

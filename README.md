@@ -12,7 +12,7 @@ python pph_parser.py tests\laptop_thermal_steady_scaled_v3_fanonly_simple.pph
 python pph_parser.py 项目.pph --extract out_dir   # 解包
 python pph_parser.py 项目.pph --snapshot          # sctsnapshot 完整记录树
 python pph_parser.py 项目.pph --octree            # 八叉树叶子深度统计
-python tests/test_pph_parser.py                   # 健全性测试（21 项，含 LZMS）
+python tests/test_pph_parser.py                   # 健全性测试（25 项，含 LZMS）
 ```
 
 ## 模块
