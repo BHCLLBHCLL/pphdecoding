@@ -54,7 +54,8 @@ PKBODY3_TRAILER_MARK = 0x17DA2940  # 大体可选尾标（非内容 CRC）
 # UTF-16-LE 字符串标签
 _UTF16_TAGS = {"STRINGW", "NAMESTRINGW", "PRPFILESTRINGW", "SFILESTRINGW"}
 # 原始字节串标签（不按 UTF-16 解码）
-_BYTES_TAGS = {"LOCATIONSTRING", "REALPOSNAMES", "ORGFILENAMES"}
+_BYTES_TAGS = {"LOCATIONSTRING", "REALPOSNAMES", "ORGFILENAMES",
+               "DPOINTARRAY", "FINARRAY", "FACETARRAY", "PKBOX"}
 # u16 状态数组
 _U16_TAGS = {"FACESTATES", "EDGESTATES", "VERTEXSTATES"}
 # i32 PK id 数组
@@ -154,6 +155,87 @@ def lzms_decompress(compressed: bytes,
 
 
 @dataclass
+class OctreeMdlBody:
+    """``ZIPOCTREE`` / ``OCTREEMDLBODY``：八叉树关联的 CAD 面片体。
+
+    布局（子记录顺序）：
+
+    - ``INTEGER`` ×3 = ``n_vertices, n_fins, n_facets``
+    - ``DPOINTARRAY`` = ``n_vertices × (f64 x,y,z)``
+    - ``FINARRAY`` = ``n_fins × (i32 v0, i32 v1)`` 边/半边端点
+    - ``FACETARRAY`` = ``n_facets × 9×i32``：
+      ``(v0,v1,v2, facet_index, -1, -1, fin0, fin1, fin2)``
+    - ``PKBOX`` = ``6×f64`` AABB ``(xmin,ymin,zmin,xmax,ymax,zmax)``
+    - ``BYTEARRAY[n_facets]`` / ``BYTEARRAY[n_fins]`` 标志（本例全 1）
+    - ``FACEGROUPSW`` 面组（如 ``open`` / ``$$$-$$$Part``）
+    """
+
+    n_vertices: int
+    n_fins: int
+    n_facets: int
+    vertices: np.ndarray          # (n, 3) f64
+    fins: np.ndarray              # (n_fins, 2) i32
+    facets: np.ndarray            # (n_facets, 9) i32
+    bbox_min: np.ndarray          # (3,)
+    bbox_max: np.ndarray          # (3,)
+    facet_flags: np.ndarray       # (n_facets,) u8
+    fin_flags: np.ndarray         # (n_fins,) u8
+    face_groups: list[dict]
+
+
+def _parse_octree_mdl_body(rec: "SnapRecord") -> Optional[OctreeMdlBody]:
+    if rec.tag != "OCTREEMDLBODY":
+        return None
+    ints = [c.value for c in rec.children
+            if c.tag == "INTEGER" and isinstance(c.value, int)]
+    if len(ints) < 3:
+        return None
+    nv, nfin, nfac = ints[0], ints[1], ints[2]
+    verts = fins = facets = None
+    bmin = bmax = None
+    facet_flags = fin_flags = np.empty(0, dtype=np.uint8)
+    groups: list[dict] = []
+    raw_bas: list[bytes] = []
+    for c in rec.children:
+        if c.tag == "DPOINTARRAY" and isinstance(c.value, bytes):
+            n = len(c.value) // 24
+            verts = np.frombuffer(c.value, dtype="<f8").reshape(n, 3).copy()
+        elif c.tag == "FINARRAY" and isinstance(c.value, bytes):
+            n = len(c.value) // 8
+            fins = np.frombuffer(c.value, dtype="<i4").reshape(n, 2).copy()
+        elif c.tag == "FACETARRAY" and isinstance(c.value, bytes):
+            n = len(c.value) // 36
+            facets = np.frombuffer(c.value, dtype="<i4").reshape(n, 9).copy()
+        elif c.tag == "PKBOX" and isinstance(c.value, bytes) and len(c.value) == 48:
+            box = struct.unpack("<6d", c.value)
+            bmin = np.array(box[:3]); bmax = np.array(box[3:])
+        elif c.tag == "BYTEARRAY" and isinstance(c.value, bytes) and not c.children:
+            raw_bas.append(c.value)
+        elif c.tag == "FACEGROUPSW":
+            for fg in c.find_all("FACEGROUPW"):
+                entry: dict = {}
+                for x in fg.children:
+                    if x.tag == "NAMESTRINGW":
+                        entry["name"] = x.value
+                    elif x.tag == "FACEARRAYSIZE":
+                        entry.setdefault("face_array_sizes", []).append(x.value)
+                    elif x.tag == "MESHENABLED":
+                        entry["mesh_enabled"] = x.value
+                if entry:
+                    groups.append(entry)
+    for ba in raw_bas:
+        if len(ba) == nfac:
+            facet_flags = np.frombuffer(ba, dtype=np.uint8).copy()
+        elif len(ba) == nfin:
+            fin_flags = np.frombuffer(ba, dtype=np.uint8).copy()
+    if verts is None or fins is None or facets is None or bmin is None:
+        return None
+    return OctreeMdlBody(
+        nv, nfin, nfac, verts, fins, facets, bmin, bmax,
+        facet_flags, fin_flags, groups)
+
+
+@dataclass
 class ValueWithUnit:
     """``LENGTHVWU`` 等：``f64 value`` + ``i32 unit_type``（12 字节）。
 
@@ -196,15 +278,16 @@ class PKBody3:
     """``ZIPBODYBYTES`` 解压后的 CADThru Parasolid 体包装。
 
     布局：``CADthru/PKBody3`` (15B) + ``u32le size`` + ``data[size]``，
-    部分体其后还有固定尾标 ``u32le = 0x17DA2940``（本样例大体有、小体无；
-    非内容 CRC）。
+    之后可选 ``[pad u8]?`` + ``u32le = 0x17DA2940`` 尾标
+    （大体常见；小体可无；pad 本例 box.pph 为 1 字节 ``0xB1``）。
 
-    ``data`` 不是标准 Parasolid ``.x_t``/``.x_b``；本样例四个体共享
-    400 字节 schema/密钥前缀，其后为 CADThru 私有体流。
+    ``data`` 不是标准 Parasolid ``.x_t``/``.x_b``；同版本项目间共享
+    400 字节 schema 前缀（box 与 laptop 样例 LCP=400），其后为私有体流。
     """
 
     data: bytes
-    checksum: Optional[int] = None  # 实为可选尾标，字段名保留兼容
+    checksum: Optional[int] = None  # 可选尾标 0x17DA2940
+    pad: bytes = b""                # 尾标前可选填充
 
     @classmethod
     def parse(cls, raw: bytes) -> "PKBody3":
@@ -213,14 +296,21 @@ class PKBody3:
         if len(raw) < 19:
             raise ValueError("PKBody3 过短")
         size = struct.unpack("<I", raw[15:19])[0]
-        if 19 + size + 4 == len(raw):
-            data = raw[19:19 + size]
-            checksum = struct.unpack("<I", raw[19 + size:19 + size + 4])[0]
-            return cls(data, checksum)
-        if 19 + size == len(raw):
-            return cls(raw[19:19 + size], None)
+        end = 19 + size
+        if end > len(raw):
+            raise ValueError(
+                f"PKBody3 尺寸不匹配: size={size} file={len(raw)}")
+        data = raw[19:end]
+        rest = raw[end:]
+        if not rest:
+            return cls(data, None, b"")
+        if len(rest) == 4 and struct.unpack("<I", rest)[0] == PKBODY3_TRAILER_MARK:
+            return cls(data, PKBODY3_TRAILER_MARK, b"")
+        if (len(rest) >= 4
+                and struct.unpack("<I", rest[-4:])[0] == PKBODY3_TRAILER_MARK):
+            return cls(data, PKBODY3_TRAILER_MARK, rest[:-4])
         raise ValueError(
-            f"PKBody3 尺寸不匹配: size={size} file={len(raw)}")
+            f"PKBody3 尺寸不匹配: size={size} file={len(raw)} rem={len(rest)}")
 
     @property
     def schema_prefix(self) -> bytes:
@@ -567,6 +657,17 @@ class SctSnapshot:
             "n_inactive": int(n_octants - np.count_nonzero(flags)),
             "raw_size": int(arr.size),
         }
+
+    def octree_mdl_body(self) -> Optional[OctreeMdlBody]:
+        """解析 ``ZIPOCTREE`` / ``OCTREEMDLBODY`` CAD 面片体。"""
+        for root in self.decompress_octree(max_depth=8):
+            targets = ([root] if root.tag == "OCTREEMDLBODY"
+                       else list(root.find_all("OCTREEMDLBODY")))
+            for rec in targets:
+                parsed = _parse_octree_mdl_body(rec)
+                if parsed is not None:
+                    return parsed
+        return None
 
     def decompress_faceting_rules(self, max_depth: int = 12) -> list[SnapRecord]:
         """解压 ``ZIPFACETINGRULES`` 为嵌套记录树。"""
