@@ -1,204 +1,96 @@
-# DEV_SUMMARY — pphdecoding 开发总结
+# PPH 解析功能开发状态总结
 
-> 仓库：Cradle scFLOW 项目文件 `.pph` 逆向与解析器  
-> 文档日期：2026-08-01  
-> 对照样例：`box.pph`（简单立方体）+ `laptop_thermal_steady_scaled_v3_fanonly_simple.pph`  
-> 当前测试：`python -m pytest tests/test_pph_parser.py` → **31 passed**
+> 更新日期：2026-08-01 ｜ 仓库：`pphdecoding` ｜ 格式细节见
+> [PPH_FORMAT_SPEC.md](PPH_FORMAT_SPEC.md)
 
-完整格式规范见 [PPH_FORMAT_SPEC.md](PPH_FORMAT_SPEC.md)；用法见 [README.md](README.md)。
+## 1. 总体判断
 
----
+**解析/解码方向已相当完整，且已被 31 项测试锁定**（laptop 复杂样例 + box
+最小样例全部通过）。剩余工作集中在三处：
 
-## 1. 目标与范围
+1. 几何还原（Parasolid 实体 B-rep，硬未解）；
+2. 若干结构的语义确认（区域 flag、双侧闭体、尾标/填充字节等）；
+3. 尚未起步的写出/互操作路径（当前是纯解码器）。
 
-解析 scFLOW 工程包 `.pph`（ZIP 容器），覆盖：
+## 2. 当前完整性：已解析的层面
 
-| 层次 | 内容 |
-|------|------|
-| 容器 | ZIP 成员分类、解包 |
-| 文本 | `main.xml` / `main.prp` / `main.xenv` / `main.js` |
-| CRDL-FLD | `*.oct` / `*_part.mdl` / `*_ridge.mdl` /（可选）`*.gph` |
-| 快照 | `main.sctsnapshot` 小端记录流、LZMS、PKBody3、ZIPOCTREE |
-
-**非目标（仍受限）**：无 Parasolid 运行时独立还原 B-rep；`OCTREEREGION` flag 的完整物理/网格算法语义。
-
----
-
-## 2. 开发过程（里程碑）
-
-按依赖关系推进，而不是按文件名顺序。
-
-### 2.1 容器与公共层（v0.1）
-
-- ZIP 成员角色识别（`pph_parser.py`）
-- CRDL-FLD 大端公共层（`crdlfld.py`）→ gph / oct / mdl 共用
-- OCT 前序 refinement 位图与叶子包围盒重建（`oct.py`）
-- MDL 面片（节点 / 面 / csid / frid / 面区域）（`mdl.py`）
-- XML 方言净化（`pphxml.py`）
-
-### 2.2 快照记录流与 LZMS
-
-- 小端 `TAG[16]+LEN+PAYLOAD` 嵌套记录（与 CRDL-FLD 大端不同）
-- ZIP 块误判为厂商私有压缩 → 逆向 `SCTprime_Bx64.dll` 定位
-  `CreateDecompressor(4,…)` → **Microsoft LZMS**（`cabinet.dll`）
-- `ZIPBODYBYTES` / `ZIPOCTREE` / `ZIPFACETINGRULES` 解压通路打通
-
-### 2.3 ZIPOCTREE 结构定位
-
-| 记录 | 结论 |
-|------|------|
-| `OCTREEBODY` | `BYTEARRAY` **≡** 同项目 `*.oct` |
-| `OCTREEMDLBODY` | CAD 三角面片体（顶点/边/面/PKBOX/面组） |
-| `OCTREEDIVISION` / `OCTREEREGION` | 附属数组（语义见下） |
-| `INDEXARRAY` | `{count=1, offset=0}` 单段描述符 |
-
-### 2.4 box.pph 对照（简化样例）
-
-引入 `0.01³` 立方体 + `open` 边界样例，用于：
-
-- 缩小 DIVISION/REGION 搜索空间
-- 验证 `OCTREEMDLBODY`（8/19/12，`PKBOX=[0,0.01]³`）
-- 验证 PKBody3 pad+尾标变体（`pad=0xB1`）
-- 否定若干错误假说（REGION=立方体相交、DIVISION=子槽字节掩码等）
-
-探索脚本集中在 `tests/box/`；过时假说清单见 [tests/box/NOTES.md](tests/box/NOTES.md)。
-
-### 2.5 PKBody3 解密
-
-- 外层：`CADthru/PKBody3` + `size` + `data` + 可选 `pad` + 尾标 `0x17DA2940`
-- `data`：**Blowfish 小端变体 ECB**，固定密钥 `HowDareYouSaySuchAThing`
-- 实现：`blowfish_le.py` + `blowfish_tables.py`（DLL `BF_INIT` 金标准对照）
-- 明文：Parasolid 二进制传输流（含 `SCH_3701153`）；同版本密文前缀相同来自 ECB
-
-### 2.6 DIVISION / REGION 写入端（DLL）
-
-在 `SCTprime_Bx64.dll` 定位序列化函数：
-
-| 数组 | RVA（代表） | 序 | 语义 |
-|------|-------------|----|------|
-| DIVISION | `0x89be0` / `0x89ce0` | **前序**；子序 `(1,3,2,0,5,7,6,4)`；LSB-first | 每 octant 1 bit = is-internal |
-| REGION | `0x89d60` | **后序**；子序存储 `0..7` | 每 octant 1 字节（`node+0x64`） |
-
-验证：按上述规则重放，**box 与 laptop 对 DIVISION 均为 100% 字节一致**。  
-此前 laptop ~78%「匹配」是子序错误导致的统计巧合。
-
----
-
-## 3. 当前版本模块图
-
-```
-.pph (ZIP)
- ├─ main.xml / .prp / .xenv / .js     → pphxml.py
- ├─ *.oct / *_part.mdl / *_ridge.mdl → crdlfld + oct/mdl
- ├─ *.gph (可选深度)                 → 外链 gphdecoding
- └─ main.sctsnapshot                 → sctsnapshot.py
-      ├─ ZIP* → LZMS (cabinet.dll)
-      ├─ ZIPBODYBYTES → PKBody3 → blowfish_le.decrypt
-      └─ ZIPOCTREE → OCTREEBODY / DIVISION / REGION / MDLBODY
-```
-
-| 文件 | 职责 | 状态 |
+| 层面 | 状态 | 说明 |
 |------|------|------|
-| `pph_parser.py` | CLI、摘要、解包 | 稳定 |
-| `crdlfld.py` | CRDL-FLD 公共层 | 稳定 |
-| `oct.py` | 八叉树 | 稳定 |
-| `mdl.py` | 面片几何 | 稳定 |
-| `pphxml.py` | 文本成员 | 稳定 |
-| `sctsnapshot.py` | 快照 / LZMS / 八叉树附属数组 | 稳定（API 已对齐 DLL） |
-| `blowfish_le.py` | PKBody3 解密 | 稳定 |
-| `blowfish_tables.py` | Blowfish P/S 表 | 稳定 |
+| 容器（ZIP） | ✅ 完整 | 成员分类、解包、round-trip 与参考目录逐字节一致 |
+| 文本成员 | ✅ 完整 | `main.js` / `main.prp` / `main.xenv` / `main.xml` 均可解析；XML 方言索引标签 `<SECTITEM[0]>` 有 sanitize/还原机制 |
+| CRDL-FLD 公共层 | ✅ 完整 | gph/oct/mdl 共享的大端节扫描、记录迭代、元数据；`_valid_section_start` 防误判 |
+| MDL 面片几何 | ✅ 完整 | part/ridge 的顶点、面（face_type 133/134 = npe 规则）、csid、frid、状态、区域 |
+| OCT 八叉树 | ✅ 完整 | 前序位图、内部/叶子计数不变式、Morton 子序、叶子包围盒重建、深度统计 |
+| sctsnapshot 快照 | ✅ 完整 | 小端记录流、失步 `_resync`、LZMS 解压、`OCTREEDIVISION`/`OCTREEREGION` 序列化序（box/laptop 100% 重放一致）、`OCTREEMDLBODY`、单位量 VWU/DPOINTU |
+| 加密 | ✅ 闭环 | PKBody3 外层 → Blowfish-LE ECB 固定密钥 → Parasolid 二进制传输流；加解密互逆已验证 |
+| 测试 | ✅ 通过 | 31 项测试全过（laptop 复杂样例 + box 最小样例），CLI 摘要正常 |
 
-### 关键 API（当前）
+主要模块：
 
-```text
-ZipBlob.decompress() / decompress_body()
-PKBody3.decrypt()
-SctSnapshot.decompress_octree()
-SctSnapshot.octree_crdlfld_bytes()
-SctSnapshot.octree_division() / octree_division_bits()
-SctSnapshot.octree_region() / octree_region_as_oct_order(refinement)
-SctSnapshot.OCTREE_DIVISION_CHILD_ORDER  # (1,3,2,0,5,7,6,4)
-SctSnapshot.octree_mdl_body()
-```
-
----
-
-## 4. 样例工程
-
-| 样例 | 路径 | 用途 |
-|------|------|------|
-| laptop | `tests/laptop_thermal_steady_scaled_v3_fanonly_simple(.pph)` | 全量规模（~4M octants） |
-| box | `tests/box/`（由 `box.pph` 解包） | 语义裁决与几何对照 |
-
-验证入口：
-
-```bash
-python -m pytest tests/test_pph_parser.py
-python tests/box/verify_dll_order.py      # DIVISION/REGION 序（box+laptop）
-python tests/box/verify_division.py       # DIVISION 单独重放（box）
-python tests/box/analyze_box_octree.py    # box 摘要
-```
-
----
-
-## 5. 已闭合 vs 开放项
-
-### 5.1 已闭合（勿再当作未解）
-
-- ZIP → Microsoft LZMS  
-- PKBody3 外层变体 + Blowfish-LE ECB 解密  
-- `OCTREEBODY` ≡ `*.oct`；`OCTREEMDLBODY` 面片布局  
-- `OCTREEDIVISION` 位图语义与序列化序（两样本 100%）  
-- `OCTREEREGION` 后序序列化 + 尾零填充；与 oct 对齐 API  
-- `INDEXARRAY` = `{1,0}` 单段描述符  
-- MDL `face_type` 133/134；OCT refinement 前序 `x+2y+4z`
-
-### 5.2 仍开放
-
-| 优先级 | 项 | 说明 |
-|--------|----|------|
-| 高 | Parasolid 传输流 → B-rep | 需 PS 内核；解密明文已可得 |
-| 中 | `OCTREEREGION` flag 物理含义 | 序列化已定；box 上 flag1=特殊细化区叶子，与 open BC 的精确映射未钉死 |
-| 低 | `unit_type` 全表、`pad` 触发条件、快照保留区 | 不影响主路径解析 |
-
-详见规范 §9。
-
----
-
-## 6. 关键教训（给后续开发）
-
-1. **压缩/加密不要猜编解码**：以 DLL 导入与调用点为准（LZMS、Blowfish）。  
-2. **同长度数组 ≠ 同遍历序**：`*.oct` 前序 `0..7` ≠ DIVISION 子序置换 ≠ REGION 后序。  
-3. **部分匹配率陷阱**：随机基线 ~78% 会被当成「接近正确」；必须以字节级重放验收。  
-4. **简化样例价值**：`box.pph` 把 DIVISION 从「猜掩码」推进到「可证明的位图序」。  
-5. **探索脚本会过期**：`tests/box/` 大量实验保留作记录；以 `NOTES.md` + 规范 §6.3 为准。
-
----
-
-## 7. 当前版本状态快照
-
-| 项 | 值 |
-|----|-----|
-| 分支 | `main`（跟踪 `origin/main`） |
-| 回归测试 | 31 passed |
-| 格式规范 | `PPH_FORMAT_SPEC.md`（§6.3 / §9 已按 DLL 结论刷新） |
-| 样例探索说明 | `tests/box/NOTES.md` |
-| 运行依赖 | Python 3.10+、`numpy`；LZMS 需 Windows `cabinet.dll` |
-| 可选依赖 | 同级 `gphdecoding`（GPH 深度统计） |
-
-### 建议下一步（非阻塞）
-
-1. 若需 B-rep：对接 Parasolid（或厂商）加载 `PKBody3.decrypt()` 明文。  
-2. REGION flag：在后序重映射基础上，对照 mesher 参数 / open 延伸规则做谓词。  
-3. 清理或归档 `tests/box/` 中已标注过时的探索脚本，避免误用。
-
----
-
-## 8. 文档索引
-
-| 文档 | 内容 |
+| 模块 | 职责 |
 |------|------|
-| [README.md](README.md) | 用法与模块一览 |
-| [PPH_FORMAT_SPEC.md](PPH_FORMAT_SPEC.md) | 格式规范与待解表 |
-| [tests/box/NOTES.md](tests/box/NOTES.md) | box 探索脚本权威入口 / 过时清单 |
-| [DEV_SUMMARY.md](DEV_SUMMARY.md) | 本文：过程与版本状态 |
+| `pph_parser.py` | CLI + ZIP 容器 + 成员分类 + 摘要报告 |
+| `crdlfld.py` | CRDL-FLD 公共二进制层（gph/oct/mdl 共享） |
+| `mdl.py` | `*_part.mdl` / `*_ridge.mdl` 面片几何 |
+| `oct.py` | `*.oct` 八叉树（前序位图 → 叶子包围盒重建） |
+| `sctsnapshot.py` | 快照记录流 + LZMS / PKBody3 / ZIPOCTREE DIVISION·REGION |
+| `blowfish_le.py` | PKBody3 Blowfish 小端变体 ECB（`blowfish_tables.py`） |
+| `pphxml.py` | main.xml 方言净化、prp、xenv、js |
+
+## 3. 未完成的关键点
+
+### 3.1 硬未解：Parasolid 实体几何还原
+
+- 已掌握：Blowfish-LE 解密得到含 `SCH_3701153` 的二进制传输流，可读
+  schema/字段名。
+- 缺口：没有 Parasolid 运行时，**无法独立还原拓扑/几何实体（B-rep）**。
+- 影响：PKBody3 当前只停留在"解密出明文传输流"，下游几何互操作受限于此。
+
+### 3.2 结构已明、语义未钉死
+
+| 项 | 已掌握 | 缺口 |
+|----|--------|------|
+| `OCTREEREGION` flag 物理含义 | 后序序列化、取值 `{0,1}`、重映射后 flag=1 全为叶子且集中于 ±x 翼细化区 | 与 open 边界条件 / 网格算法的精确对应（非简单 AABB） |
+| `LS_CsidOfFaces` | 双路 `I4[n_faces]` 布局 | 严格"双侧闭体"语义；box 仅确认 b1 全 0、b2 全 1 |
+| PKBody3 尾标 `0x17DA2940` | 确认为常量标记 | 校验算法未识别（已排除 CRC32） |
+| PKBody3 `pad` 字节 | 可选；box 首见 `0xB1` | 取值含义与触发条件未知 |
+
+### 3.3 次要缺口
+
+- `unit_type` 码表：布局已解，但样例恒为 1，未与 `main.xenv` UNIT
+  全量建立映射。
+- 快照 48 字节未对齐保留区：`_resync` 可跳过，但不知是否承载语义
+  （laptop/box 顶层 skipped=0）。
+- `main.xml` 索引标签非标准 XML：标准解析器需先 sanitize，是已知互操作陷阱。
+
+### 3.4 平台与依赖限制
+
+- **LZMS 解压仅限 Windows** `cabinet.dll`；非 Windows 只能透传原始压缩块，
+  无法解码嵌套内容（读取侧受限）。
+- gph 深度统计依赖同级 `gphdecoding` 仓，不在本仓库内。
+
+### 3.5 写端整体缺失
+
+- 仓库是**纯解码器**：ZIP 打包、LZMS 压缩、Blowfish 加密、sctsnapshot
+  序列化均未实现。
+- `encrypt_ecb` 与 LZMS `CreateCompressor` 已验证可行，但
+  PPH_FORMAT_SPEC 开篇"支撑导出转换与文件互操作"的目标目前只完成了解读一半。
+
+### 3.6 验证覆盖局限
+
+- 所有结论基于 **laptop 与 box 两个样例**；测试断言含样例特定值
+  （30 个物性组、23 个条件等）。
+- 多网格组、`unit_type ≠ 1`、不同 pad/尾标变体等尚未被覆盖，属于
+  "未验证"而非"已验证失败"。
+
+## 4. 建议的下一步
+
+按投入产出排序：
+
+1. **语义钉死**：用更多真实项目 pph 验证 `OCTREEREGION`、`LS_CsidOfFaces`、
+   `unit_type` 映射（纯解析，收益明确）。
+2. **平台解耦**：为非 Windows 提供 LZMS 解码 fallback（纯 Python 实现或
+   外部库），补全读取侧能力。
+3. **写端起步**：从最小可写闭环（box.pph：ZIP 打包 + Blowfish 加密 +
+   LZMS 压缩）验证 round-trip，为文件互操作铺路。
+4. **Parasolid 还原**：评估引入 Parasolid 内核 / 替代方案（长期硬骨头）。
