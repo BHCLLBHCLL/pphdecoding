@@ -460,3 +460,5 @@ python tests/box/verify_dll_order.py        # DIVISION/REGION 写入端序对照
 `octree_region_as_oct_order()` / `decompress_faceting_rules()`
 （LZMS 需 Windows `cabinet.dll`）。
 
+开发过程与版本状态见 [DEV_SUMMARY.md](DEV_SUMMARY.md)。
+

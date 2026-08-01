@@ -3,7 +3,8 @@
 decode cradle scflow project format pph file
 
 解析 Cradle scFLOW 项目文件 `.pph`（ZIP 容器 + CRDL-FLD 二进制 +
-CADThru 快照记录流），完整格式说明见 [PPH_FORMAT_SPEC.md](PPH_FORMAT_SPEC.md)。
+CADThru 快照记录流）。完整格式说明见 [PPH_FORMAT_SPEC.md](PPH_FORMAT_SPEC.md)；
+开发过程与当前版本状态见 [DEV_SUMMARY.md](DEV_SUMMARY.md)。
 
 ## 用法
 
