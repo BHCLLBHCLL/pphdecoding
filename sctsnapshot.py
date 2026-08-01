@@ -36,6 +36,16 @@ ZIP 压缩块（``ZIPBODYBYTES`` / ``ZIPOCTREE`` / ``ZIPFACETINGRULES``）整段
   变体 ECB 密文（``blowfish_le``，固定密钥），解密后是 Parasolid
   二进制传输流（内嵌 ``SCH_3701153`` schema）
 - ``ZIPOCTREE`` / ``ZIPFACETINGRULES`` → 嵌套的快照记录流
+
+``ZIPOCTREE`` 内与八叉树相关的队列（``QUEUEBODY`` 布局均为
+``INDEXARRAY`` + ``BYTEARRAY``；``INDEXARRAY`` = ``i32[2] = {count=1, offset=0}``，
+表示后续 ``BYTEARRAY`` 为单段负载）：
+
+- ``OCTREEBODY`` — CRDL-FLD，与 ``*.oct`` 字节级一致
+- ``OCTREEDIVISION`` — 每 octant 1 bit 的 is-internal 位图（前序，
+  子序 ``(1,3,2,0,5,7,6,4)``，LSB-first）；见 :meth:`octree_division`
+- ``OCTREEREGION`` — 每 octant 1 字节标志（后序，子序 ``0..7``）；
+  见 :meth:`octree_region`
 """
 
 from __future__ import annotations
@@ -634,44 +644,115 @@ class SctSnapshot:
 
         return walk(records)
 
-    def octree_division(self) -> Optional[np.ndarray]:
-        """``OCTREEDIVISION``：``u8[n_internal+1]``，与内部节点前序对应。
+    # DIVISION 序列化子节点访问序（相对存储槽 0..7；存储槽 =
+    # ``x + 2*y + 4*z``，与 ``*.oct`` / ``oct.py`` 一致）。
+    # 来源：SCTprime_Bx64.dll!0x89be0 内嵌表 ``(1,3,2,0,5,7,6,4)``。
+    OCTREE_DIVISION_CHILD_ORDER: tuple[int, ...] = (1, 3, 2, 0, 5, 7, 6, 4)
 
-        每字节为 8 子节点槽位的位域（本样例约 75% 恰有 1 位为 1，
-        呈单子节点偏好）；首位可能为根/头字节。精确谓词仍部分开放。
+    def octree_division(self) -> Optional[np.ndarray]:
+        """``OCTREEDIVISION`` 原始字节：``ceil(n_octants/8)`` 字节位图。
+
+        语义（DLL 写入端 ``0x89be0`` / ``0x89ce0``）：
+
+        - 每位对应一个八叉体：``1`` = 内部节点（有 8 子），``0`` = 叶子
+        - **前序 DFS** 发出；子访问序见 :attr:`OCTREE_DIVISION_CHILD_ORDER`
+        - 字节内 **LSB-first**（bit0 = 流中第 1 位）
+        - 对满八叉树 ``n = 1+8*n_internal``，长度恰为 ``n_internal+1``
+
+        与 ``*.oct`` refinement 描述同一棵树，仅子遍历置换不同；
+        box / laptop 样本上按上述规则重放可达 100% 字节一致。
         """
         raw = self._octree_bytearray("OCTREEDIVISION")
         if raw is None:
             return None
         return np.frombuffer(raw, dtype=np.uint8).copy()
 
+    def octree_division_bits(self, n_octants: Optional[int] = None
+                             ) -> Optional[np.ndarray]:
+        """解包 ``OCTREEDIVISION`` 为 ``u8[n_octants]`` 的 is-internal 位流
+        （前序 + :attr:`OCTREE_DIVISION_CHILD_ORDER` 序）。"""
+        raw = self.octree_division()
+        if raw is None:
+            return None
+        bits = np.unpackbits(raw, bitorder="little")
+        if n_octants is not None:
+            bits = bits[:n_octants]
+        return bits
+
     def octree_region(self, n_octants: Optional[int] = None
                       ) -> Optional[dict]:
-        """``OCTREEREGION``：与 refinement 同序的每 octant ``u8`` 标志。
+        """``OCTREEREGION``：每 octant 一字节标志（``0/1``）。
 
-        返回 ``{flags, padding, n_active, n_inactive}``。
-        ``flags[i]∈{0,1}`` 与 ``*.oct`` 前序位图下标对齐；数组尾部为零填充
-        （本例 pad=777,419）。``1`` 表示该 octant 落在活动/关注区域
-        （叶子约 88% 为 1）。
+        序列化（DLL ``0x89d60``）：
+
+        - **后序 DFS**：先 8 子（存储槽序 ``0..7``），再写本节点
+        - 每节点写 ``node[+0x64]`` 的 1 字节；数组尾部为零填充
+        - ``flags`` 返回值为**文件后序**下的 ``u8[n_octants]``，
+          **不是** ``*.oct`` 前序下标。若需与 refinement 对齐，
+          使用 :meth:`octree_region_as_oct_order`。
+
+        几何上 ``flag=1`` 集中于特殊细化区（box：±x 翼块叶子；
+        laptop：局部高深度柱）；box 样本上全部 ``flag=1`` 均为叶子。
         """
         raw = self._octree_bytearray("OCTREEREGION")
         if raw is None:
             return None
         arr = np.frombuffer(raw, dtype=np.uint8)
         if n_octants is None:
-            # 尾部全 0 填充：有效长度取到最后一个非零之后，
-            # 但更稳妥由调用方传入 n_octants（与 *.oct 一致）。
             nonzero = np.flatnonzero(arr)
             n_octants = int(nonzero[-1]) + 1 if nonzero.size else 0
         flags = arr[:n_octants].copy()
         padding = int(arr.size - n_octants)
         return {
             "flags": flags,
+            "order": "postorder",
             "padding": padding,
             "n_active": int(np.count_nonzero(flags)),
             "n_inactive": int(n_octants - np.count_nonzero(flags)),
             "raw_size": int(arr.size),
         }
+
+    def octree_region_as_oct_order(
+            self, refinement: np.ndarray) -> Optional[np.ndarray]:
+        """把 ``OCTREEREGION`` 后序字节重映射为 ``*.oct`` 前序下标数组。
+
+        ``refinement`` 为 ``*.oct`` / ``OCTREEBODY`` 的 ``U1[n]`` 位图
+        （子序 ``0..7 = x+2y+4z``）。返回 ``flags_oct[i]`` 与
+        ``refinement[i]`` 同下标。
+        """
+        n = int(refinement.shape[0])
+        reg = self.octree_region(n_octants=n)
+        if reg is None:
+            return None
+        children: list[Optional[list[int]]] = [None] * n
+        stack: list[list[int]] = []
+        if refinement[0]:
+            children[0] = [-1] * 8
+            stack.append([0, 0])
+        for pos in range(1, n):
+            parent, slot = stack[-1]
+            children[parent][slot] = pos
+            stack[-1][1] = slot + 1
+            if stack[-1][1] == 8:
+                stack.pop()
+            if refinement[pos]:
+                children[pos] = [-1] * 8
+                stack.append([pos, 0])
+        post: list[int] = []
+
+        def dfs(i: int) -> None:
+            ch = children[i]
+            if ch is not None:
+                for p in range(8):
+                    dfs(ch[p])
+            post.append(i)
+
+        dfs(0)
+        out = np.empty(n, dtype=np.uint8)
+        flags = reg["flags"]
+        for k, idx in enumerate(post):
+            out[idx] = flags[k]
+        return out
 
     def octree_mdl_body(self) -> Optional[OctreeMdlBody]:
         """解析 ``ZIPOCTREE`` / ``OCTREEMDLBODY`` CAD 面片体。"""
