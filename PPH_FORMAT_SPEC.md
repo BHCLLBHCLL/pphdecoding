@@ -255,11 +255,12 @@ NUMERICALREGION）+ `WRAPPINGOPTCLS`（包面参数）。
 ```
 CADthru/PKBody3          # 15 字节 ASCII 魔数
 u32le size               # 后续 data 字节数
-data[size]               # CADThru 封装的 Parasolid 体二进制
-[u32le trailer]?         # 可选；本例大体有、小体无
+data[size]               # Blowfish-LE ECB 密文（见下）
+[pad u8]?                # 可选；box 样例 1 字节 0xB1
+[u32le trailer]?         # 可选常量 0x17DA2940
 ```
 
-两种合法尺寸变体（尾标出现与否）及 box 样例的 pad 变体：
+三种合法尺寸变体：
 
 | 变体 | 条件 | 本例 |
 |------|------|------|
@@ -267,16 +268,18 @@ data[size]               # CADThru 封装的 Parasolid 体二进制
 | 尾标 | `19 + size + 4 == len`，尾=`0x17DA2940` | laptop PK 62715 / 63022 |
 | pad+尾标 | `19 + size + pad + 4 == len`，尾=`0x17DA2940` | **box.pph** PK 51：`size=7643`，`pad=1`（`0xB1`） |
 
-**`data` 内层：**
+**`data` 加解密（已闭合）：**
 
-- **不是**标准 Parasolid `.x_t` / `.x_b`（无 `**ABC…` / `PS\0\1` / `SCH=` /
-  `PARASOLID` 明文头）。
-- **跨项目共享 400 字节 schema 前缀**：`box.pph` 与 laptop 样例
-  `data[:400]` **字节级相同**（同 SCTpre/SDK 版本的会话 schema），其后才是
-  体相关私有流；高熵，未见可解析的 XT 记录结构。
-- 判定为 CADThru **applio 私有体序列化**；独立还原 B-rep 需厂商运行时。
+- 算法：**Blowfish 小端变体 ECB**（标准 16 轮 / π 表 / 密钥扩展；
+  唯一差别是 8 字节块按两个 **LE u32** 读作 (L,R)）。实现见
+  `blowfish_le.py`（金标准对照：DLL `BF_INIT` @ `0x57BBB0`）。
+- 固定密钥：`b"HowDareYouSaySuchAThing"`（23 字节）。
+- 解密后为 **Parasolid 二进制传输流**（类 `.x_b`，内嵌
+  `SCH_3701153` schema 与 ASCII 字段名）。
+- 同版本项目间密文前 ~400 字节相同：ECB 下相同 schema 头明文 →
+  相同密文块（历史误称为“私有 schema 前缀”）。
 - API：`ZipBlob.decompress_body()` → `PKBody3`；
-  `schema_prefix` / `body_payload` / `pad`。
+  `PKBody3.decrypt()` / `schema_prefix` / `pad`。
 
 #### 6.3.2 `ZIPOCTREE` → 嵌套快照记录流
 
@@ -292,29 +295,34 @@ data[size]               # CADThru 封装的 Parasolid 体二进制
 | `OCTREEREGION` | 见下 |
 
 大块共用包装：`QUEUESTRUCT` → `QUEUEBODY` →
-`INDEXARRAY[8]`（本例 `01 00 00 00 00 00 00 00` = i32 `[1, 0]`，疑似
-version/flags）+ `BYTEARRAY[…]`。
+`INDEXARRAY[8]` + `BYTEARRAY[…]`。
 
+- **`INDEXARRAY`**：`i32le[2] = {count=1, offset=0}`（box / laptop 恒同）。
+  表示后续 `BYTEARRAY` 为**单段**负载（非 version/flags）。
 - **`OCTREEBODY`**：`BYTEARRAY` **字节级等于** 同项目 `*.oct` 成员
-  （本例 19,802,609 B，以 `CRDL-FLD` 开头）。即 ZIP 内 `.oct` 是快照
-  八叉树体的抽出副本。
-- **`OCTREEDIVISION`**：`BYTEARRAY` 长 = `n_internal + 1`（本例 495,032）。
-  与内部节点**前序**一一对应的 `u8` 位域：每位对应 8 个子节点槽之一；
-  本例约 75% 字节恰有 1 位为 1、约 13% 为 0、约 10% 有 2 位为 1
-  （呈“偏向单个子槽”的掩码，**不是**节点深度，也不是“子节点是否再细分”
-  的简单掩码——与 refinement 子节点掩码吻合率仅 ~11%）。首位可能为根/
-  头字节。精确谓词（掩码选择哪些子槽）仍部分开放。
-- **`OCTREEREGION`**：存储长度大于 `n_octants`（本例 4,737,668 =
-  3,960,249 + **777,419 尾部零填充**）。有效段 `flags[n_octants]` 与
-  `LS_OctOctantRefinement` **同一前序下标**对齐，值域 `{0,1}`：
-  - `1` ≈ 活动/关注区域（本例叶子约 88% 为 1，内部约 80% 为 1）
-  - `0` ≈ 非活动
-  - 父节点标志与子节点 OR/AND 均非恒等式（OR 吻合 ~80%），故不是简单
-    向上传播的布尔闭包。
+  （本例 19,802,609 B，以 `CRDL-FLD` 开头）。
+- **`OCTREEDIVISION`**（DLL 写入端 `SCTprime_Bx64!0x89be0` / `0x89ce0`）：
+  - 每位对应一个八叉体：`1` = 内部（有 8 子），`0` = 叶子
+  - **前序 DFS** 发出；子访问序相对存储槽 `0..7`（`x+2y+4z`）为
+    **`(1,3,2,0,5,7,6,4)`**（DLL 内嵌表）
+  - 字节内 **LSB-first**；长度 = `ceil(n_octants/8)` =
+    `n_internal+1`（满八叉树恒等式）
+  - 与 `*.oct` refinement **描述同一棵树**，仅子遍历置换不同；
+    box / laptop 按上述规则重放均 **100% 字节一致**
+- **`OCTREEREGION`**（DLL 写入端 `0x89d60`）：
+  - 每节点 1 字节，取自内存节点 `+0x64`；值域 `{0,1}`
+  - **后序 DFS** 发出；子访问序为存储槽序 **`0..7`**
+  - 存储长度 ≥ `n_octants`，尾部为零填充（laptop：4,737,668 =
+    3,960,249 + 777,419）
+  - **不是** `*.oct` 前序下标；对齐 refinement 须做后序→前序重映射
+    （`octree_region_as_oct_order`）
+  - 几何：`flag=1` 集中于特殊细化区（box：±x 翼块叶子，且全部
+    `flag=1` 均为叶子；laptop：局部高深度柱）
 
 API：`SctSnapshot.decompress_octree()` /
-`octree_crdlfld_bytes()` / `octree_division()` / `octree_region(n_octants)` /
-`octree_mdl_body()`。
+`octree_crdlfld_bytes()` / `octree_division()` / `octree_division_bits()` /
+`octree_region(n_octants)` / `octree_region_as_oct_order(refinement)` /
+`octree_mdl_body()`。常量：`SctSnapshot.OCTREE_DIVISION_CHILD_ORDER`。
 
 **`OCTREEMDLBODY`（已闭合，box.pph 验证）：**
 
@@ -386,22 +394,21 @@ main.prp: 物性条目 ← main.xml conditions 引用
 
 > 分析样例：`laptop_…_simple.pph`（复杂）与 **`box.pph`**（0.01³ 立方体 +
 > `open` 边界，单 PK 体、2249 octants）。容器 ZIP、CRDL-FLD、文本成员、快照
-> 记录树、LZMS、PKBody3 外层、单位量布局、`OCTREEMDLBODY` 均已可解析。
+> 记录树、LZMS、PKBody3 加解密、单位量、`OCTREEMDLBODY`、
+> `OCTREEDIVISION`/`OCTREEREGION` 序列化序、`INDEXARRAY` 均已可解析。
 
 ### 9.1 硬未解（独立几何还原受限）
 
 | 项 | 已掌握 | 缺口 | box 样例增益 |
 |----|--------|------|----------------|
-| `CADthru/PKBody3.data` 体私有流 | 外层 `magic+size[+pad][+尾标 0x17DA2940]`；LZMS；**跨项目 400B schema 前缀相同**（box≡laptop）；非 XT | 前缀后私有流编码 | 确认 schema 与模型无关；发现 **pad+尾标** 变体（`pad=0xB1`） |
+| Parasolid 传输流 → B-rep | Blowfish-LE 解密后为含 `SCH_3701153` 的二进制传输流 | 无 Parasolid 运行时则无法独立还原拓扑/几何实体 | 确认外层加密与两端变体；解密明文可读 schema/字段名 |
 
 ### 9.2 结构已知、语义未钉死
 
 | 项 | 已掌握 | 缺口 | box 样例增益 |
 |----|--------|------|----------------|
-| `OCTREEDIVISION` | `u8[n_internal+1]` 子槽位掩码（约 75% 单 bit） | **精确谓词** | 规模小（282 B）可全表打印；仍非 subdiv/region 掩码 |
-| `OCTREEREGION` | `u8[n_octants]` 前序对齐 + 尾零填充；`{0,1}` | **几何/物理含义** | 否定“简单 AABB 相交”假说（与 `[0,0.01]³` 相交精度极低）；flag1 偏细、偏域外，含义仍开放 |
-| `LS_CsidOfFaces` | 两路 `I4[n_faces]` | 严格双侧语义 | **单闭体确认**：b1 全 0、b2 全 1；支持“外侧=0 / 内侧=闭体 id” |
-| `QUEUEBODY`/`INDEXARRAY` | 恒 `[1,0]` | version/flags | box 仍为 `[1,0]`，无新信息 |
+| `OCTREEREGION` flag 物理含义 | 后序序列化；`{0,1}`；重映射后 flag1 全为叶子且集中 ±x 翼细化区 | 与 open BC / 网格算法状态的精确对应（非简单 AABB） | 否定前序对齐与“立方体相交”假说；确认翼块模式 |
+| `LS_CsidOfFaces` | 两路 `I4[n_faces]` | 严格双侧语义 | **单闭体确认**：b1 全 0、b2 全 1 |
 
 ### 9.3 次要缺口
 
@@ -409,7 +416,7 @@ main.prp: 物性条目 ← main.xml conditions 引用
 |----|--------|------|----------|
 | `unit_type` 码表 | 布局已解；样例恒 `1` | 与 xenv UNIT 全量映射 | 仍恒为 1 |
 | 快照未对齐保留区 | `_resync` 可跳过 | 是否含语义 | 顶层 skipped=0 |
-| PKBody3 尾标/`pad` | 尾标常量确认；pad 可选 | pad 字节含义、触发条件 | 首见 `pad=0xB1` |
+| PKBody3 `pad` 字节 | 可选；尾标常量确认 | pad 取值含义、触发条件 | 首见 `pad=0xB1` |
 
 ### 9.4 已闭合（勿再当作未解）
 
@@ -417,8 +424,12 @@ main.prp: 物性条目 ← main.xml conditions 引用
 - `MESH_*` 容差 → **`f64le`**；`LENGTHVWU`/`DPOINTU` → 单位量布局
 - `ZIPOCTREE`→`OCTREEBODY` → **≡ `*.oct`**
 - **`OCTREEMDLBODY`** → CAD 三角面片体（§6.3.2；box 8/19/12 + `[0,0.01]³`）
-- MDL `face_type` 133/134；OCT refinement DFS 位图
-- PKBody3 外层三种尺寸变体（无尾标 / 尾标 / pad+尾标）
+- MDL `face_type` 133/134；OCT refinement 前序 DFS 位图（子序 `x+2y+4z`）
+- PKBody3 外层三种尺寸变体；**`data` → Blowfish-LE ECB**（密钥固定）
+- **`OCTREEDIVISION`** → 每 octant 1 bit is-internal；前序 + 子序
+  `(1,3,2,0,5,7,6,4)` + LSB-first（box/laptop 100% 重放）
+- **`OCTREEREGION`** → 每 octant 1 字节；**后序** + 子序 `0..7` + 尾零填充
+- **`INDEXARRAY`** → `{count=1, offset=0}` 单段描述符
 
 ## 10. 本仓解析器用法
 
@@ -427,7 +438,8 @@ python pph_parser.py 项目.pph               # 全部成员摘要（含 LZMS �
 python pph_parser.py 项目.pph --extract out # 解包
 python pph_parser.py 项目.pph --snapshot    # sctsnapshot 完整记录树
 python pph_parser.py 项目.pph --octree      # 八叉树叶子深度统计
-python tests/test_pph_parser.py             # 25 项健全性测试（含 LZMS / 单位量）
+python tests/test_pph_parser.py             # 健全性测试（含 LZMS / DIVISION 重放）
+python tests/box/verify_dll_order.py        # DIVISION/REGION 写入端序对照
 ```
 
 模块：
@@ -438,10 +450,13 @@ python tests/test_pph_parser.py             # 25 项健全性测试（含 LZMS /
 | `crdlfld.py` | CRDL-FLD 公共层（节扫描、记录迭代、元数据；>512MiB mmap） |
 | `mdl.py` | MDL 面片几何（节点/面/csid/frid/状态/区域） |
 | `oct.py` | OCT 八叉树（位图、叶子重建、块 id） |
-| `sctsnapshot.py` | 快照记录流、LZMS 解压、PKBody3、ZIPOCTREE/FACETINGRULES |
+| `sctsnapshot.py` | 快照记录流、LZMS、PKBody3、ZIPOCTREE DIVISION/REGION |
+| `blowfish_le.py` | PKBody3 Blowfish 小端变体 ECB（`blowfish_tables.py`） |
 | `pphxml.py` | main.xml 方言净化、prp、xenv、js |
 
 关键 API：`ZipBlob.decompress()` / `decompress_body()` /
-`SctSnapshot.decompress_octree()` / `octree_crdlfld_bytes()` /
-`decompress_faceting_rules()`（LZMS 需 Windows `cabinet.dll`）。
+`PKBody3.decrypt()` / `SctSnapshot.decompress_octree()` /
+`octree_crdlfld_bytes()` / `octree_division_bits()` /
+`octree_region_as_oct_order()` / `decompress_faceting_rules()`
+（LZMS 需 Windows `cabinet.dll`）。
 

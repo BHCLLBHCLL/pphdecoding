@@ -190,11 +190,21 @@ def summarize_snapshot(arch: PphArchive, out, full: bool = False) -> None:
             if sctsnapshot.lzms_available():
                 try:
                     for b in snap.decompress_bodies():
-                        ck = b["pkbody3"].checksum
-                        ck_s = (f"checksum=0x{ck:08x}" if ck is not None
+                        pk = b["pkbody3"]
+                        ck = pk.checksum
+                        ck_s = (f"trailer=0x{ck:08x}" if ck is not None
                                 else "no-trailer")
+                        pad_s = (f" pad={len(pk.pad)}B" if pk.pad else "")
+                        try:
+                            plain = pk.decrypt()
+                            head = plain[:24]
+                            dec_s = (f" decrypt={len(plain)}B"
+                                     f" head={head!r}")
+                        except Exception as exc:  # noqa: BLE001
+                            dec_s = f" decrypt-fail={exc}"
                         out.append(
-                            f"    → PKBody3 data={b['data_size']} B {ck_s}")
+                            f"    → PKBody3 data={b['data_size']} B "
+                            f"{ck_s}{pad_s}{dec_s}")
                 except (OSError, ValueError) as exc:
                     out.append(f"    （LZMS 解压失败: {exc}）")
         for tag, label in (("ZIPOCTREE", "八叉树块"),
@@ -218,6 +228,17 @@ def summarize_snapshot(arch: PphArchive, out, full: bool = False) -> None:
                     if crdl:
                         out.append(f"  OCTREEBODY ≡ *.oct CRDL-FLD "
                                    f"({len(crdl):,} B)")
+                    div = snap.octree_division()
+                    if div is not None:
+                        out.append(
+                            f"  OCTREEDIVISION: {len(div):,} B "
+                            f"(is-internal 位图, perm="
+                            f"{sctsnapshot.SctSnapshot.OCTREE_DIVISION_CHILD_ORDER})")
+                    reg_raw = snap._octree_bytearray("OCTREEREGION")
+                    if reg_raw is not None:
+                        out.append(
+                            f"  OCTREEREGION: {len(reg_raw):,} B "
+                            f"(后序 u8/octant + 尾零填充)")
             except (OSError, ValueError) as exc:
                 out.append(f"  （LZMS 嵌套块解压失败: {exc}）")
         groups = snap.meshing_groups()

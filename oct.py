@@ -16,6 +16,12 @@
 
 八叉树几何重建：从根包围盒出发，按前序位图递归二分；子节点顺序按
 Morton/Z 序约定（bit0=x, bit1=y, bit2=z；低位为 min 半区）。
+
+快照 ``ZIPOCTREE`` 中的附属数组（见 ``sctsnapshot`` / PPH_FORMAT_SPEC §6.3.2）：
+
+* ``OCTREEDIVISION`` — 与本文件 refinement **同一棵树**，但序列化子序为
+  ``(1,3,2,0,5,7,6,4)``（非本文件的 ``0..7``），且为 LSB 位打包。
+* ``OCTREEREGION`` — **后序** 每节点 1 字节标志（非本文件前序下标）。
 """
 
 from __future__ import annotations
