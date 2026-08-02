@@ -1529,6 +1529,7 @@ class View3DTab(QWidget):
 
         self.vtk_widget = QVTKRenderWindowInteractor(self)
         self.renderer = pph_vtk.make_renderer([])
+        self.renderer.GetActiveCamera().ParallelProjectionOn()
         self.vtk_widget.GetRenderWindow().AddRenderer(self.renderer)
         self._started = False
         self.legend = LegendPanel(self)
@@ -1944,6 +1945,7 @@ class View3DTab(QWidget):
                 self.status.setText(f"坐标轴失败: {exc}")
 
         self.renderer.ResetCamera()
+        self._ensure_parallel_camera()
         # 缓存包围盒供 Plane position
         try:
             b = self.renderer.ComputeVisiblePropBounds()
@@ -2110,13 +2112,19 @@ class View3DTab(QWidget):
             self._rubber_style = vtkInteractorStyleTrackballCamera()
         iren.SetInteractorStyle(self._rubber_style)
 
+    def _ensure_parallel_camera(self) -> None:
+        """Draw Window 固定使用平行投影（正交），对齐 scFLOWpre。"""
+        cam = self.renderer.GetActiveCamera()
+        cam.ParallelProjectionOn()
+
     def fit(self) -> None:
         self.renderer.ResetCamera()
+        self._ensure_parallel_camera()
         self._safe_vtk_render()
 
     def reset_viewpoint(self) -> None:
         self.renderer.ResetCamera()
-        self.renderer.GetActiveCamera().ParallelProjectionOff()
+        self._ensure_parallel_camera()
         self._safe_vtk_render()
 
 

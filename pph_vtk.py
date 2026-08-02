@@ -424,6 +424,7 @@ def make_renderer(actors, background: tuple[float, float, float] = (0.92, 0.92, 
         if a is not None:
             ren.AddActor(a)
     ren.ResetCamera()
+    ren.GetActiveCamera().ParallelProjectionOn()
     return ren
 
 
