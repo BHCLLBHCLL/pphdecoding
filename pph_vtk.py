@@ -5,7 +5,9 @@
 
 - :func:`mdl_mesh` — ``MdlModel`` 面片几何（按 frid / csid 着色）；
 - :func:`oct_leaves` — ``OctModel`` 叶子包围盒（按深度着色，可限深/限量）；
-- :func:`gph_boundary_mesh` — ``gphstats.parse_mesh`` 的边界面（按 owner 着色）。
+- :func:`gph_boundary_mesh` / :func:`gph_faces_mesh` — GPH 面（边界或含内部）；
+- :func:`plane_from_abcd` / :func:`cut_polydata` / :func:`clip_polydata` —
+  体网格 / 几何剖切（对齐 scFLOWpre Cross Section View）。
 
 统一通过 :func:`polydata_actor` 生成 actor；离屏渲染走
 ``vtkWin32OpenGLRenderWindow + SetOffScreenRendering(1)``。
@@ -166,6 +168,17 @@ def oct_leaves(oct_model, max_leaves: int = 50_000,
 
 def gph_boundary_mesh(mesh: dict, max_faces: int = 200_000) -> "vtkPolyData":
     """gphstats.parse_mesh → 边界面 vtkPolyData（cell scalars = owner）。"""
+    return gph_faces_mesh(mesh, max_faces=max_faces, boundary_only=True)
+
+
+def gph_faces_mesh(mesh: dict, max_faces: int = 200_000,
+                   boundary_only: bool = False,
+                   face_scalars: Optional[np.ndarray] = None) -> "vtkPolyData":
+    """GPH 面 → vtkPolyData。
+
+    ``boundary_only``：仅边界面；否则含内部面（供体网格剖切）。
+    ``face_scalars``：每面标量（如闭体 cvol）；缺省用 owner。
+    """
     import vtk
 
     pd = vtk.vtkPolyData()
@@ -174,17 +187,90 @@ def gph_boundary_mesh(mesh: dict, max_faces: int = 200_000) -> "vtkPolyData":
     pd.SetPoints(vtk.vtkPoints())
     pd.GetPoints().SetData(_to_vtk(mesh["vertices"]))
     polys = vtk.vtkCellArray()
-    mask = mesh["boundary_mask"]
-    idx = np.flatnonzero(mask)[:max_faces]
+    if boundary_only:
+        mask = mesh["boundary_mask"]
+        idx = np.flatnonzero(mask)[:max_faces]
+    else:
+        n = min(int(mesh["n_faces"]), max_faces)
+        idx = np.arange(n, dtype=np.int64)
+    if idx.size == 0:
+        return pd
     offsets = np.concatenate(
         [[0], np.cumsum(mesh["npe"][idx])]).astype(np.int64)
     conn = np.concatenate([
         mesh["conn"][mesh["face_offsets"][i]:mesh["face_offsets"][i + 1]]
         for i in idx])
-    _add_polygons(pd, polys, conn, offsets, scalars=mesh["owner"][idx].astype(
-        np.float64))
+    if face_scalars is not None:
+        scalars = np.asarray(face_scalars)[idx].astype(np.float64)
+    else:
+        scalars = mesh["owner"][idx].astype(np.float64)
+    _add_polygons(pd, polys, conn, offsets, scalars=scalars)
     pd.SetPolys(polys)
     return pd
+
+
+def plane_from_abcd(a: float, b: float, c: float, d: float):
+    """Ax+By+Cz=D → vtkPlane（法向归一化，原点取平面上一点）。"""
+    import vtk
+
+    abc = np.array([a, b, c], dtype=np.float64)
+    abc_norm = float(np.linalg.norm(abc))
+    if abc_norm < 1e-12:
+        abc = np.array([1.0, 0.0, 0.0])
+        abc_norm = 1.0
+    unit = abc / abc_norm
+    origin = [0.0, 0.0, 0.0]
+    axis = int(np.argmax(np.abs(abc)))
+    if abs(abc[axis]) > 1e-12:
+        origin[axis] = float(d) / float(abc[axis])
+    plane = vtk.vtkPlane()
+    plane.SetOrigin(*origin)
+    plane.SetNormal(float(unit[0]), float(unit[1]), float(unit[2]))
+    return plane
+
+
+def plane_from_axis_frac(bounds, axis: str, frac: float):
+    """包围盒轴向分数位置 → vtkPlane（法向为轴正方向）。"""
+    import vtk
+
+    axes = {"X": 0, "Y": 1, "Z": 2}
+    ai = axes[axis.upper()]
+    origin = [(bounds[0] + bounds[1]) * 0.5,
+              (bounds[2] + bounds[3]) * 0.5,
+              (bounds[4] + bounds[5]) * 0.5]
+    lo, hi = bounds[ai * 2], bounds[ai * 2 + 1]
+    origin[ai] = lo + float(frac) * (hi - lo)
+    normal = [0.0, 0.0, 0.0]
+    normal[ai] = 1.0
+    plane = vtk.vtkPlane()
+    plane.SetOrigin(*origin)
+    plane.SetNormal(*normal)
+    return plane
+
+
+def cut_polydata(pd, plane) -> "vtkPolyData":
+    """vtkCutter：剖切面与 polydata 相交（截面线/面）。"""
+    import vtk
+
+    cutter = vtk.vtkCutter()
+    cutter.SetInputData(pd)
+    cutter.SetCutFunction(plane)
+    cutter.GenerateCutScalarsOff()
+    cutter.Update()
+    return cutter.GetOutput()
+
+
+def clip_polydata(pd, plane, inside_out: bool = False) -> "vtkPolyData":
+    """vtkClipPolyData：保留平面一侧（``inside_out`` 取反）。"""
+    import vtk
+
+    clip = vtk.vtkClipPolyData()
+    clip.SetInputData(pd)
+    clip.SetClipFunction(plane)
+    clip.SetInsideOut(1 if inside_out else 0)
+    clip.GenerateClippedOutputOff()
+    clip.Update()
+    return clip.GetOutput()
 
 
 def preset_colors(n: int) -> list[tuple[float, float, float]]:

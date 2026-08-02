@@ -2,16 +2,15 @@
 """PPH 查看/修改 GUI —— scFLOW Pre 风格界面（PyQt5 + VTK OpenGL 加速）。
 
 参考 ``CradleCFD2025.2/Manuals/scFLOW/HTML/Pre_eng``（Navigation /
-Tree / Property / Draw Window）重新设计：
+Tree / Property / Draw / Cross Section View of Mesh）重新设计：
 
-- **Navigation Window**（左上方）：按操作顺序的功能导航
-  （打开 → 项目信息 → 网格组 → GPH/OCT/MDL → 快照 → XML/JS → 看板）；
-- **Tree Window**（左下方）：成员树（文本/快照/网格组）+ 右键菜单；
-- **Draw Window**（中央 3D）：着色/线框显示模式、网格线叠加、截面裁剪、
-  橡皮框缩放、Fit/Reset、坐标轴、Qt 图例；
-- **Property Window**（右侧）：选中成员/树项的解析属性；
-- **看板**（Dashboard）：归档、网格、八叉树、面片、快照、Parasolid
-  的文件格式数据卡片 + 成员尺寸条形图。
+- **Navigation Window**（左上方）：按操作顺序的功能导航；
+- **Tree Window**（左下方）：成员树 + **模型树**（网格组 → 几何/八叉树/体网格，
+  含闭体与面区域勾选、状态摘要、右键「显示 octree/mesh 信息」）；
+- **Draw Window**（中央 3D）：几何 / 八叉树 / 网格图层、体网格剖切
+  （Ax+By+Cz=D、Plane position、仅截面线、按闭体着色）；
+- **Property / Status**（右侧）：选中项属性 + 几何/网格/八叉树状态；
+- **看板**（Dashboard）：归档与格式数据卡片。
 
 用法：``python pph_gui.py [项目.pph]``。
 """
@@ -27,10 +26,10 @@ from typing import Optional
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QPainter, QPixmap
 from PyQt5.QtWidgets import (
-    QAction, QApplication, QCheckBox, QComboBox, QDockWidget, QFileDialog,
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QMainWindow,
-    QMessageBox, QPlainTextEdit, QPushButton, QSlider, QSplitter,
-    QTabWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QAction, QApplication, QCheckBox, QComboBox, QDockWidget, QDoubleSpinBox,
+    QFileDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
+    QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QSlider,
+    QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 import pph_parser
@@ -193,15 +192,15 @@ class NavigationWindow(QWidget):
     SECTIONS = [
         ("模型数据", [
             ("项目信息 (xenv/prp)", "project"),
-            ("体网格 GPH", "gph"),
-            ("八叉树 OCT", "oct"),
             ("面片几何 MDL", "mdl"),
+            ("八叉树 OCT", "oct"),
+            ("体网格 GPH", "gph"),
         ]),
         ("视图", [
+            ("3D / 剖切", "view3d"),
             ("快照 / Parasolid", "snapshot"),
             ("项目定义 XML", "xml"),
             ("用户脚本 JS", "js"),
-            ("3D 视图", "view3d"),
         ]),
         ("数据", [
             ("格式数据看板", "dashboard"),
@@ -316,90 +315,277 @@ class PropertyPanel(QWidget):
             item.setText(1, "" if value is None else str(value))
 
 
-class ModelTree(QWidget):
-    """模型树：复选框 + 右键菜单控制显隐（不使用单击/双击）。
+class StatusPanel(QWidget):
+    """几何 / 八叉树 / 体网格状态（对齐 Tree 右键 Show … information）。"""
 
-    - 勾选 = 显示该项；取消勾选 = 隐藏该项（闭体按 csid、面区域按 frid
-      从 MDL 掩码中排除）；
-    - 右键菜单：仅显示此项 / 隐藏此项 / 显示全部 / 隐藏全部 / 在 3D 中查看。
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        title = QLabel("Status", self)
+        title.setStyleSheet("font-weight: bold; color: #1a5fb4;")
+        layout.addWidget(title)
+        self.tabs = QTabWidget(self)
+        self.geo_tree = QTreeWidget(self)
+        self.oct_tree = QTreeWidget(self)
+        self.mesh_tree = QTreeWidget(self)
+        for tw, name in ((self.geo_tree, "几何"),
+                         (self.oct_tree, "八叉树"),
+                         (self.mesh_tree, "体网格")):
+            tw.setHeaderLabels(["项", "值"])
+            tw.setColumnWidth(0, 120)
+            self.tabs.addTab(tw, name)
+        layout.addWidget(self.tabs, 1)
+        self._group_status: dict[str, dict] = {}
+
+    def set_group_status(self, group: str, status: dict) -> None:
+        self._group_status[group] = status
+        self.show_group(group)
+
+    def clear(self) -> None:
+        self._group_status.clear()
+        for tw in (self.geo_tree, self.oct_tree, self.mesh_tree):
+            tw.clear()
+
+    def show_group(self, group: str, focus: Optional[str] = None) -> None:
+        st = self._group_status.get(group, {})
+        self._fill_tree(self.geo_tree, st.get("geometry") or {"状态": "无 MDL"})
+        self._fill_tree(self.oct_tree, st.get("octree") or {"状态": "无 OCT"})
+        self._fill_tree(self.mesh_tree, st.get("mesh") or {"状态": "无 GPH"})
+        if focus == "octree":
+            self.tabs.setCurrentWidget(self.oct_tree)
+        elif focus == "mesh":
+            self.tabs.setCurrentWidget(self.mesh_tree)
+        elif focus == "geometry":
+            self.tabs.setCurrentWidget(self.geo_tree)
+
+    @staticmethod
+    def _fill_tree(tree: QTreeWidget, props: dict) -> None:
+        tree.clear()
+        for key, value in props.items():
+            item = QTreeWidgetItem([str(key), ""])
+            if isinstance(value, dict):
+                item.setText(1, "")
+                for k, v in value.items():
+                    item.addChild(QTreeWidgetItem([str(k), str(v)]))
+                item.setExpanded(True)
+            elif isinstance(value, (list, tuple)):
+                item.setText(1, f"[{len(value)}]")
+                for v in value:
+                    item.addChild(QTreeWidgetItem(["", str(v)]))
+            else:
+                item.setText(1, "" if value is None else str(value))
+            tree.addTopLevelItem(item)
+
+
+class ModelTree(QWidget):
+    """scFLOW 风格模型树：网格组 → 几何 / 八叉树 / 体网格。
+
+    - 勾选控制显隐（组 / 图层 / 闭体 / 面区域）；
+    - 选中项刷新 Property / Status；
+    - 右键：仅显示 / 显示全部 / 显示 octree·mesh 信息 / 在 3D 中查看。
     """
 
     visibility_changed = pyqtSignal(str, set, set, bool)
-    # (group, 隐藏的body, 隐藏的region, 组可见)
-    focus_3d = pyqtSignal()
+    # (group, 隐藏的 body, 隐藏的 region, 组可见)
+    layer_visibility_changed = pyqtSignal(str, str, bool)
+    # (group, layer in mdl|oct|gph, visible)
+    item_selected = pyqtSignal(dict)
+    # 选中项属性（给 Property）
+    status_requested = pyqtSignal(str, str)
+    # (group, focus: geometry|octree|mesh|"")
+    focus_3d = pyqtSignal(str)
+    # group → 切到 3D 并选中该组
+    select_mesh = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         self.tree = QTreeWidget(self)
-        self.tree.setHeaderLabels(["模型", "说明"])
+        self.tree.setHeaderLabels(["模型", "状态"])
+        self.tree.setColumnWidth(0, 160)
         self.tree.itemChanged.connect(self._on_item_changed)
+        self.tree.itemSelectionChanged.connect(self._on_selection)
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._context_menu)
         self.tree.setToolTip(
-            "勾选=显示，取消勾选=隐藏；右键菜单可批量控制")
+            "勾选=显示；选中查看状态；右键可显示 octree/mesh 信息")
         v.addWidget(self.tree)
+        self._info: dict[str, dict] = {}
 
-    def populate(self, groups_models: dict) -> None:
-        """``groups_models``: {group: {'part': MdlModel 或 None}}。"""
+    def populate(self, groups_info: dict) -> None:
+        """``groups_info[group]`` 含 part / oct_summary / gph_summary / paths。"""
+        self._info = groups_info
         self.tree.blockSignals(True)
         self.tree.clear()
-        for group in sorted(groups_models):
+        for group in sorted(groups_info):
+            info = groups_info[group]
             root = QTreeWidgetItem([group, "网格组"])
             root.setData(0, Qt.UserRole, ("group", group, None))
             root.setFlags(root.flags() | Qt.ItemIsUserCheckable)
             root.setCheckState(0, Qt.Checked)
             self.tree.addTopLevelItem(root)
-            m = groups_models[group].get("part")
+
+            m = info.get("part")
+            geo_status = self._geometry_status_text(info)
+            geo = QTreeWidgetItem(["几何 (MDL)", geo_status])
+            geo.setData(0, Qt.UserRole, ("layer", group, "mdl"))
+            geo.setFlags(geo.flags() | Qt.ItemIsUserCheckable)
+            geo.setCheckState(0, Qt.Checked if info.get("paths", {}).get("part")
+                              else Qt.Unchecked)
+            if not info.get("paths", {}).get("part"):
+                geo.setFlags(geo.flags() & ~Qt.ItemIsEnabled)
+            root.addChild(geo)
             if m is not None:
                 if m.csid[1].size:
                     bodies = sorted({int(x) for x in m.csid[1] if x > 0})
                     if bodies:
-                        bnode = QTreeWidgetItem(["闭体", "closed volumes"])
+                        bnode = QTreeWidgetItem(["闭体", f"{len(bodies)}"])
+                        bnode.setData(0, Qt.UserRole, ("folder", group, "body"))
                         for b in bodies:
-                            item = QTreeWidgetItem([f"body {b}", ""])
+                            item = QTreeWidgetItem([f"body {b}", "closed volume"])
                             item.setData(0, Qt.UserRole, ("body", group, b))
                             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
                             item.setCheckState(0, Qt.Checked)
                             bnode.addChild(item)
-                        root.addChild(bnode)
+                        geo.addChild(bnode)
                 seen: dict[int, str] = {}
                 for r in m.surface_regions:
                     if not r.name.startswith("@"):
                         seen.setdefault(r.index, r.name)
                 if seen:
-                    rnode = QTreeWidgetItem(["面区域", "surface regions"])
+                    rnode = QTreeWidgetItem(["面区域", f"{len(seen)}"])
+                    rnode.setData(0, Qt.UserRole, ("folder", group, "region"))
                     for idx, name in sorted(seen.items()):
                         item = QTreeWidgetItem([name, f"frid={idx}"])
                         item.setData(0, Qt.UserRole, ("region", group, idx))
                         item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
                         item.setCheckState(0, Qt.Checked)
                         rnode.addChild(item)
-                    root.addChild(rnode)
+                    geo.addChild(rnode)
+
+            oct_status = self._oct_status_text(info)
+            oct_item = QTreeWidgetItem(["八叉树 (OCT)", oct_status])
+            oct_item.setData(0, Qt.UserRole, ("layer", group, "oct"))
+            oct_item.setFlags(oct_item.flags() | Qt.ItemIsUserCheckable)
+            has_oct = bool(info.get("paths", {}).get("oct"))
+            oct_item.setCheckState(0, Qt.Checked if has_oct else Qt.Unchecked)
+            if not has_oct:
+                oct_item.setFlags(oct_item.flags() & ~Qt.ItemIsEnabled)
+            root.addChild(oct_item)
+
+            mesh_status = self._mesh_status_text(info)
+            mesh_item = QTreeWidgetItem(["体网格 (GPH)", mesh_status])
+            mesh_item.setData(0, Qt.UserRole, ("layer", group, "gph"))
+            mesh_item.setFlags(mesh_item.flags() | Qt.ItemIsUserCheckable)
+            has_gph = bool(info.get("paths", {}).get("gph"))
+            mesh_item.setCheckState(0, Qt.Checked if has_gph else Qt.Unchecked)
+            if not has_gph:
+                mesh_item.setFlags(mesh_item.flags() & ~Qt.ItemIsEnabled)
+            root.addChild(mesh_item)
+
             root.setExpanded(True)
+            geo.setExpanded(True)
         self.tree.blockSignals(False)
 
-    # ── 状态查询 ────────────────────────────────────────────────────
+    @staticmethod
+    def _geometry_status_text(info: dict) -> str:
+        m = info.get("part")
+        if m is None:
+            return "—"
+        return f"{m.n_faces:,} 面 · {m.n_closed_volumes} 闭体"
+
+    @staticmethod
+    def _oct_status_text(info: dict) -> str:
+        s = info.get("oct_summary") or {}
+        if not s:
+            return "—"
+        return f"{s.get('n_leaves', 0):,} 叶 · {s.get('n_octants', 0):,} 节点"
+
+    @staticmethod
+    def _mesh_status_text(info: dict) -> str:
+        s = info.get("gph_summary") or {}
+        if not s:
+            return "—"
+        links = s.get("links") or {}
+        cells = links.get("n_cells", s.get("n_cells") or 0)
+        faces = links.get("n_faces", 0)
+        return f"{cells:,} 单元 · {faces:,} 面"
+
+    def group_status_props(self, group: str) -> dict:
+        """供 StatusPanel 使用的结构化状态。"""
+        info = self._info.get(group, {})
+        m = info.get("part")
+        geo: dict = {"状态": "无 MDL"}
+        if m is not None:
+            bodies = sorted({int(x) for x in m.csid[1] if x > 0}) if m.csid[1].size else []
+            regions = [(r.name, r.index) for r in m.surface_regions
+                       if not r.name.startswith("@")]
+            geo = {
+                "类型": "MDL 面片几何",
+                "顶点": f"{m.n_vertices:,}",
+                "面": f"{m.n_faces:,}",
+                "闭体数": m.n_closed_volumes,
+                "闭体 ID": bodies,
+                "体区域": m.volume_regions,
+                "面区域": [f"{n} (frid={i})" for n, i in regions],
+            }
+            if m.xyz.size:
+                lo = m.xyz.min(axis=0)
+                hi = m.xyz.max(axis=0)
+                geo["包围盒"] = {
+                    "xmin…xmax": f"{lo[0]:.6g} … {hi[0]:.6g}",
+                    "ymin…ymax": f"{lo[1]:.6g} … {hi[1]:.6g}",
+                    "zmin…zmax": f"{lo[2]:.6g} … {hi[2]:.6g}",
+                }
+        oct_s = info.get("oct_summary") or {}
+        octree = {"状态": "无 OCT"} if not oct_s else {
+            "类型": "OCT 八叉树",
+            "节点": f"{oct_s.get('n_octants', 0):,}",
+            "内部": f"{oct_s.get('n_internal', 0):,}",
+            "叶子": f"{oct_s.get('n_leaves', 0):,}",
+            "单位": oct_s.get("unit", ""),
+            "最大深度": oct_s.get("max_depth", "—"),
+        }
+        gph = info.get("gph_summary") or {}
+        mesh = {"状态": "无 GPH"}
+        if gph:
+            links = gph.get("links") or {}
+            mesh = {
+                "类型": "GPH 体网格",
+                "单元": f"{links.get('n_cells', gph.get('n_cells') or 0):,}",
+                "面": f"{links.get('n_faces', 0):,}",
+                "边界面": f"{links.get('boundary_faces', 0):,}",
+                "顶点": f"{gph.get('n_vertices', 0):,}",
+                "方言": gph.get("dialect", ""),
+                "npe": f"[{links.get('npe_min', 0)}..{links.get('npe_max', 0)}]",
+                "体区域": gph.get("volume_regions") or [],
+                "面区域": [n for n, _ in (gph.get("surface_regions") or [])],
+                "闭体 cvol": gph.get("cvol_unique") or [],
+            }
+        return {"geometry": geo, "octree": octree, "mesh": mesh}
+
     def _items(self, group: str, kind: str):
         root = self._group_root(group)
         if root is None:
             return []
         out = []
-        for i in range(root.childCount()):
-            node = root.child(i)
-            if node.text(0) in ("闭体", "面区域"):
-                for j in range(node.childCount()):
-                    child = node.child(j)
-                    data = child.data(0, Qt.UserRole)
-                    if data and data[0] == kind:
-                        out.append(child)
+        stack = [root.child(i) for i in range(root.childCount())]
+        while stack:
+            node = stack.pop()
+            data = node.data(0, Qt.UserRole)
+            if data and data[0] == kind:
+                out.append(node)
+            for j in range(node.childCount()):
+                stack.append(node.child(j))
         return out
 
     def _group_root(self, group: str) -> Optional[QTreeWidgetItem]:
         for i in range(self.tree.topLevelItemCount()):
             root = self.tree.topLevelItem(i)
-            if root.data(0, Qt.UserRole) and root.data(0, Qt.UserRole)[1] == group:
+            data = root.data(0, Qt.UserRole)
+            if data and data[1] == group:
                 return root
         return None
 
@@ -407,8 +593,13 @@ class ModelTree(QWidget):
         root = self._group_root(group)
         return root is not None and root.checkState(0) == Qt.Checked
 
+    def layer_visible(self, group: str, layer: str) -> bool:
+        for item in self._items(group, "layer"):
+            if item.data(0, Qt.UserRole)[2] == layer:
+                return item.checkState(0) == Qt.Checked
+        return True
+
     def hidden_sets(self, group: str) -> tuple[set, set]:
-        """返回 (隐藏的 body id 集合, 隐藏的 region frid 集合)。"""
         hidden_bodies: set = set()
         hidden_regions: set = set()
         for item in self._items(group, "body"):
@@ -421,13 +612,43 @@ class ModelTree(QWidget):
 
     def _on_item_changed(self, item: QTreeWidgetItem, _col: int) -> None:
         data = item.data(0, Qt.UserRole)
-        if data and data[0] in ("group", "body", "region"):
-            group = data[1]
+        if not data:
+            return
+        kind, group, value = data[0], data[1], data[2]
+        if kind == "layer":
+            self.layer_visibility_changed.emit(
+                group, value, item.checkState(0) == Qt.Checked)
+            return
+        if kind in ("group", "body", "region"):
             hidden_bodies, hidden_regions = self.hidden_sets(group)
-            self.visibility_changed.emit(group, hidden_bodies, hidden_regions,
-                                         self.group_visible(group))
+            self.visibility_changed.emit(
+                group, hidden_bodies, hidden_regions,
+                self.group_visible(group))
 
-    # ── 右键菜单 ────────────────────────────────────────────────────
+    def _on_selection(self) -> None:
+        items = self.tree.selectedItems()
+        if not items:
+            return
+        data = items[0].data(0, Qt.UserRole)
+        if not data:
+            return
+        kind, group, value = data[0], data[1], data[2]
+        props = {"网格组": group, "节点": kind}
+        if kind == "body":
+            props["闭体 csid"] = value
+        elif kind == "region":
+            props["面区域 frid"] = value
+            props["名称"] = items[0].text(0)
+        elif kind == "layer":
+            props["图层"] = {"mdl": "几何 MDL", "oct": "八叉树 OCT",
+                             "gph": "体网格 GPH"}.get(value, value)
+            props["状态列"] = items[0].text(1)
+        st = self.group_status_props(group)
+        focus = {"mdl": "geometry", "oct": "octree",
+                 "gph": "mesh"}.get(value if kind == "layer" else "", "")
+        self.item_selected.emit(props)
+        self.status_requested.emit(group, focus)
+
     def _context_menu(self, pos) -> None:
         from PyQt5.QtWidgets import QMenu
 
@@ -435,15 +656,20 @@ class ModelTree(QWidget):
         if item is None:
             return
         data = item.data(0, Qt.UserRole)
-        group = data[1] if data else None
-        if group is None:
+        if not data:
             return
+        kind, group, value = data[0], data[1], data[2]
         menu = QMenu(self)
         act_only = menu.addAction("仅显示此项")
         act_hide = menu.addAction("隐藏此项")
         menu.addSeparator()
         act_all = menu.addAction("显示全部")
         act_none = menu.addAction("隐藏全部")
+        menu.addSeparator()
+        act_oct_info = menu.addAction("显示八叉树信息")
+        act_mesh_info = menu.addAction("显示体网格信息")
+        act_geo_info = menu.addAction("显示几何信息")
+        act_sel_mesh = menu.addAction("选择体网格视图")
         menu.addSeparator()
         act_3d = menu.addAction("在 3D 中查看")
         act = menu.exec_(self.tree.viewport().mapToGlobal(pos))
@@ -452,27 +678,55 @@ class ModelTree(QWidget):
         if act is act_only:
             self._set_only(item, group)
         elif act is act_hide:
-            item.setCheckState(0, Qt.Unchecked)
+            if item.flags() & Qt.ItemIsUserCheckable:
+                item.setCheckState(0, Qt.Unchecked)
         elif act is act_all:
             self._set_all(group, True)
         elif act is act_none:
             self._set_all(group, False)
+        elif act is act_oct_info:
+            self.status_requested.emit(group, "octree")
+        elif act is act_mesh_info:
+            self.status_requested.emit(group, "mesh")
+        elif act is act_geo_info:
+            self.status_requested.emit(group, "geometry")
+        elif act is act_sel_mesh:
+            self.select_mesh.emit(group)
         elif act is act_3d:
-            self.focus_3d.emit()
+            self.focus_3d.emit(group)
 
     def _set_only(self, item: QTreeWidgetItem, group: str) -> None:
-        """仅显示选中项：该项勾选，其余（同组 body/region）取消勾选。"""
         data = item.data(0, Qt.UserRole)
-        if not data or data[0] == "group":
+        if not data:
+            return
+        if data[0] == "group":
             self._set_all(group, True)
+            return
+        if data[0] == "layer":
+            self.tree.blockSignals(True)
+            for other in self._items(group, "layer"):
+                other.setCheckState(
+                    0, Qt.Checked if other is item else Qt.Unchecked)
+            root = self._group_root(group)
+            if root is not None:
+                root.setCheckState(0, Qt.Checked)
+            self.tree.blockSignals(False)
+            self.layer_visibility_changed.emit(
+                group, data[2], True)
+            for other in self._items(group, "layer"):
+                if other is not item:
+                    self.layer_visibility_changed.emit(
+                        group, other.data(0, Qt.UserRole)[2], False)
+            return
+        if data[0] not in ("body", "region"):
             return
         self.tree.blockSignals(True)
         kind, _, value = data
         for other in self._items(group, "body") + self._items(group, "region"):
-            other.setCheckState(0, Qt.Checked
-                                if other.data(0, Qt.UserRole)[2] == value
-                                and other.data(0, Qt.UserRole)[0] == kind
-                                else Qt.Unchecked)
+            od = other.data(0, Qt.UserRole)
+            other.setCheckState(
+                0, Qt.Checked if od[0] == kind and od[2] == value
+                else Qt.Unchecked)
         root = self._group_root(group)
         if root is not None:
             root.setCheckState(0, Qt.Checked)
@@ -485,11 +739,19 @@ class ModelTree(QWidget):
         root = self._group_root(group)
         if root is not None:
             root.setCheckState(0, state)
-            for item in self._items(group, "body") + self._items(group, "region"):
-                item.setCheckState(0, state)
+            for item in (self._items(group, "body")
+                         + self._items(group, "region")
+                         + self._items(group, "layer")):
+                if item.flags() & Qt.ItemIsEnabled:
+                    item.setCheckState(0, state)
         self.tree.blockSignals(False)
         if root is not None:
             self._on_item_changed(root, 0)
+            for item in self._items(group, "layer"):
+                if item.flags() & Qt.ItemIsEnabled:
+                    self.layer_visibility_changed.emit(
+                        group, item.data(0, Qt.UserRole)[2],
+                        item.checkState(0) == Qt.Checked)
 
 
 class DashboardTab(QWidget):
@@ -759,7 +1021,7 @@ class SnapshotTab(QWidget):
 
 
 class View3DTab(QWidget):
-    """Draw Window：VTK（OpenGL2）3D 视窗 + scFLOW 风格视图控制。"""
+    """Draw Window：VTK 3D + 几何/网格视图 + 体网格剖切（Cross Section）。"""
 
     show_all_requested = pyqtSignal()
 
@@ -770,13 +1032,13 @@ class View3DTab(QWidget):
 
         self.group_box = QComboBox(self)
         self.group_box.currentTextChanged.connect(self._on_group_changed)
-        self.chk_mdl_part = QCheckBox("MDL part 面片", self)
+        self.chk_mdl_part = QCheckBox("几何 MDL", self)
         self.chk_mdl_part.setChecked(True)
-        self.chk_mdl_ridge = QCheckBox("MDL ridge 细节", self)
+        self.chk_mdl_ridge = QCheckBox("ridge", self)
         self.chk_mdl_ridge.setChecked(False)
-        self.chk_oct = QCheckBox("OCT 叶子盒", self)
+        self.chk_oct = QCheckBox("八叉树", self)
         self.chk_oct.setChecked(True)
-        self.chk_gph = QCheckBox("GPH 边界面", self)
+        self.chk_gph = QCheckBox("体网格", self)
         self.chk_gph.setChecked(True)
         self.chk_edges = QCheckBox("网格线", self)
         self.chk_edges.setChecked(True)
@@ -787,24 +1049,52 @@ class View3DTab(QWidget):
         self.color_by = QComboBox(self)
         self.color_by.addItems(["frid", "csid"])
         self.view_kind = QComboBox(self)
-        self.view_kind.addItems(["全部", "仅几何 (MDL)", "仅网格 (GPH/OCT)"])
+        self.view_kind.addItems([
+            "全部", "仅几何 (MDL)", "仅八叉树", "仅体网格 (GPH)"])
         self.view_kind.currentTextChanged.connect(self.render)
         self.display_mode = QComboBox(self)
         self.display_mode.addItems(["着色", "线框"])
         self.display_mode.currentTextChanged.connect(self.render)
-        self.chk_clip = QCheckBox("剖面", self)
-        self.chk_clip.toggled.connect(self.render)
+
+        # ── Cross Section（对齐 scFLOW Mesh 页签）──────────────────
+        self.chk_section = QCheckBox("剖切", self)
+        self.chk_section.toggled.connect(self._on_section_toggled)
+        self.section_target = QComboBox(self)
+        self.section_target.addItems(["几何/八叉树", "体网格"])
+        self.section_target.currentTextChanged.connect(self._on_section_ui)
+        self.clip_axis = QComboBox(self)
+        self.clip_axis.addItems(["X", "Y", "Z", "自定义 ABC"])
+        self.clip_axis.currentIndexChanged.connect(self._on_axis_changed)
         self.clip_slider = QSlider(Qt.Horizontal, self)
         self.clip_slider.setRange(0, 100)
         self.clip_slider.setValue(50)
-        self.clip_slider.valueChanged.connect(self._clip_changed)
-        self.clip_axis = QComboBox(self)
-        self.clip_axis.addItems(["X", "Y", "Z"])
-        self.clip_axis.currentIndexChanged.connect(self._clip_changed)
+        self.clip_slider.valueChanged.connect(self._plane_slider_changed)
+        self.spin_a = QDoubleSpinBox(self)
+        self.spin_b = QDoubleSpinBox(self)
+        self.spin_c = QDoubleSpinBox(self)
+        self.spin_d = QDoubleSpinBox(self)
+        for sp, val in ((self.spin_a, 1.0), (self.spin_b, 0.0),
+                        (self.spin_c, 0.0), (self.spin_d, 0.0)):
+            sp.setDecimals(6)
+            sp.setRange(-1e9, 1e9)
+            sp.setValue(val)
+            sp.setMaximumWidth(90)
+        self.chk_lines_only = QCheckBox("仅截面线", self)
+        self.chk_lines_only.setToolTip(
+            "Draw only sectional lines（体网格剖切）")
+        self.chk_color_cvol = QCheckBox("按闭体着色", self)
+        self.chk_color_cvol.setChecked(True)
+        self.chk_opposite = QCheckBox("显示反侧", self)
+        self.chk_opposite.setToolTip("Opposite side（几何裁剪取反）")
+        self.btn_draw_section = QPushButton("Draw 剖切", self)
+        self.btn_draw_section.setToolTip(
+            "体网格剖切需指定平面后点击 Draw（对齐 scFLOW）")
+        self.btn_draw_section.clicked.connect(self._draw_mesh_section)
+
         self.btn_render = QPushButton("渲染", self)
         self.btn_fit = QPushButton("Fit", self)
         self.btn_reset = QPushButton("Reset", self)
-        self.btn_rubber = QPushButton("橡皮框缩放", self)
+        self.btn_rubber = QPushButton("橡皮框", self)
         self.btn_pick = QPushButton("拾取面", self)
         self.btn_show_all = QPushButton("恢复全部", self)
         self.btn_rubber.setCheckable(True)
@@ -817,17 +1107,14 @@ class View3DTab(QWidget):
         self.btn_show_all.clicked.connect(self.clear_visibility)
         self.status = QLabel("未加载", self)
 
-        # ── 分组控制面板（替代单行拥挤排列）──────────────────────────
         panel = QFrame(self)
         panel.setFrameShape(QFrame.StyledPanel)
         pv = QVBoxLayout(panel)
         pv.setContentsMargins(6, 4, 6, 4)
         pv.setSpacing(3)
-        # 行 1：网格组 / 显示 / 着色 / 视图按钮
         row1 = QHBoxLayout()
         row1.addWidget(QLabel("网格组:", panel))
         row1.addWidget(self.group_box)
-        row1.addSpacing(12)
         row1.addWidget(QLabel("显示:", panel))
         row1.addWidget(self.display_mode)
         row1.addWidget(QLabel("着色:", panel))
@@ -835,30 +1122,46 @@ class View3DTab(QWidget):
         row1.addWidget(QLabel("视图:", panel))
         row1.addWidget(self.view_kind)
         row1.addStretch(1)
-        row1.addWidget(self.btn_render)
-        row1.addWidget(self.btn_fit)
-        row1.addWidget(self.btn_reset)
-        row1.addWidget(self.btn_rubber)
-        row1.addWidget(self.btn_pick)
-        row1.addWidget(self.btn_show_all)
+        for b in (self.btn_render, self.btn_fit, self.btn_reset,
+                  self.btn_rubber, self.btn_pick, self.btn_show_all):
+            row1.addWidget(b)
         pv.addLayout(row1)
-        # 行 2：图层开关
         row2 = QHBoxLayout()
         row2.addWidget(QLabel("图层:", panel))
         for chk in (self.chk_mdl_part, self.chk_mdl_ridge, self.chk_oct,
                     self.chk_gph, self.chk_edges, self.chk_axes,
                     self.chk_legend):
             row2.addWidget(chk)
+            chk.toggled.connect(self.render)
         row2.addStretch(1)
         pv.addLayout(row2)
-        # 行 3：剖面裁剪
-        row3 = QHBoxLayout()
-        row3.addWidget(self.chk_clip)
-        row3.addWidget(QLabel("裁剪轴:", panel))
-        row3.addWidget(self.clip_axis)
-        row3.addWidget(QLabel("位置:", panel))
-        row3.addWidget(self.clip_slider, 1)
-        pv.addLayout(row3)
+
+        sec = QGroupBox("Cross Section（剖切）", panel)
+        sg = QGridLayout(sec)
+        sg.setContentsMargins(6, 4, 6, 4)
+        sg.addWidget(self.chk_section, 0, 0)
+        sg.addWidget(QLabel("对象:"), 0, 1)
+        sg.addWidget(self.section_target, 0, 2)
+        sg.addWidget(QLabel("轴/平面:"), 0, 3)
+        sg.addWidget(self.clip_axis, 0, 4)
+        sg.addWidget(QLabel("Plane position:"), 0, 5)
+        sg.addWidget(self.clip_slider, 0, 6, 1, 2)
+        sg.addWidget(QLabel("A"), 1, 0)
+        sg.addWidget(self.spin_a, 1, 1)
+        sg.addWidget(QLabel("B"), 1, 2)
+        sg.addWidget(self.spin_b, 1, 3)
+        sg.addWidget(QLabel("C"), 1, 4)
+        sg.addWidget(self.spin_c, 1, 5)
+        sg.addWidget(QLabel("D"), 1, 6)
+        sg.addWidget(self.spin_d, 1, 7)
+        row_opt = QHBoxLayout()
+        row_opt.addWidget(self.chk_lines_only)
+        row_opt.addWidget(self.chk_color_cvol)
+        row_opt.addWidget(self.chk_opposite)
+        row_opt.addWidget(self.btn_draw_section)
+        row_opt.addStretch(1)
+        sg.addLayout(row_opt, 2, 0, 1, 8)
+        pv.addWidget(sec)
 
         self.vtk_widget = QVTKRenderWindowInteractor(self)
         self.renderer = pph_vtk.make_renderer([])
@@ -876,45 +1179,214 @@ class View3DTab(QWidget):
         hbox.addWidget(self.legend, 0)
         layout.addLayout(hbox, 1)
         layout.addWidget(self.status)
+
         self.groups: dict[str, dict] = {}
-        self._clip_enabled = False
         self._mdl_filter: Optional[dict] = None
         self._pickable_actors: list = []
         self._picked_status = ""
         self._cache: dict[tuple, object] = {}
         self._hidden: dict[str, tuple[set, set]] = {}
         self._group_hidden: set[str] = set()
+        self._layer_hidden: dict[str, set[str]] = {}
+        self._mesh_section_pd = None  # Draw 后缓存的截面
+        self._mesh_section_dirty = True
+        self._bounds_cache: Optional[tuple] = None
+        self._vtk_ok = True
+        self._on_section_ui()
+
+    def _safe_vtk_render(self) -> None:
+        if not self._started or not self._vtk_ok:
+            return
+        try:
+            self.vtk_widget.GetRenderWindow().Render()
+        except Exception:  # noqa: BLE001
+            self._vtk_ok = False
 
     def showEvent(self, event) -> None:  # noqa: N802 - Qt 命名
         super().showEvent(event)
         if not self._started:
             self._started = True
-            try:  # VTK 9.3：QVTKRenderWindowInteractor 无 start()，改用交互器初始化
+            try:
                 from vtkmodules.vtkInteractionStyle import (
                     vtkInteractorStyleTrackballCamera)
                 self._trackball_style = vtkInteractorStyleTrackballCamera()
                 iren = self.vtk_widget.GetRenderWindow().GetInteractor()
                 iren.SetInteractorStyle(self._trackball_style)
                 iren.Initialize()
-            except Exception:  # noqa: BLE001 - 离屏/无 GL 环境不阻塞
-                pass
-            try:
-                self.vtk_widget.GetRenderWindow().Render()
             except Exception:  # noqa: BLE001
                 pass
+            self._safe_vtk_render()
+            if self.groups:
+                self.render()
 
     def set_groups(self, groups: dict[str, dict]) -> None:
         self.groups = groups
+        self._mesh_section_pd = None
+        self._mesh_section_dirty = True
         self.group_box.blockSignals(True)
         self.group_box.clear()
         self.group_box.addItems(sorted(groups))
         self.group_box.blockSignals(False)
         if groups:
             self.group_box.setCurrentIndex(0)
-            self.render()  # 显式触发首次渲染
+            # 窗口未 show 前不触发 VTK Render（无 GL/offscreen 会崩）
+            if self._started:
+                self.render()
+
+    def select_group(self, name: str) -> None:
+        if name in self.groups:
+            self.group_box.setCurrentText(name)
+
+    def set_view_mode(self, mode: str) -> None:
+        """mode: all|geometry|octree|mesh"""
+        mapping = {
+            "all": "全部",
+            "geometry": "仅几何 (MDL)",
+            "octree": "仅八叉树",
+            "mesh": "仅体网格 (GPH)",
+        }
+        text = mapping.get(mode, mode)
+        idx = self.view_kind.findText(text)
+        if idx >= 0:
+            self.view_kind.setCurrentIndex(idx)
 
     def _on_group_changed(self, _name: str) -> None:
+        self._mesh_section_pd = None
+        self._mesh_section_dirty = True
         self.render()
+
+    def _on_section_toggled(self, checked: bool) -> None:
+        if not checked:
+            self._mesh_section_pd = None
+        self._on_section_ui()
+        if self._started:
+            self.render()
+
+    def _on_section_ui(self, *_args) -> None:
+        mesh_mode = self.section_target.currentText() == "体网格"
+        self.chk_lines_only.setEnabled(mesh_mode)
+        self.chk_color_cvol.setEnabled(mesh_mode)
+        self.btn_draw_section.setEnabled(
+            self.chk_section.isChecked() and mesh_mode)
+        self.chk_opposite.setEnabled(
+            self.chk_section.isChecked() and not mesh_mode)
+        custom = self.clip_axis.currentText() == "自定义 ABC"
+        for sp in (self.spin_a, self.spin_b, self.spin_c):
+            sp.setEnabled(custom or mesh_mode)
+        self.spin_d.setEnabled(True)
+
+    def _on_axis_changed(self, *_args) -> None:
+        self._sync_abcd_from_axis()
+        self._on_section_ui()
+        self._plane_slider_changed()
+
+    def _sync_abcd_from_axis(self) -> None:
+        axis = self.clip_axis.currentText()
+        if axis == "自定义 ABC":
+            return
+        a = b = c = 0.0
+        if axis == "X":
+            a = 1.0
+        elif axis == "Y":
+            b = 1.0
+        else:
+            c = 1.0
+        self.spin_a.blockSignals(True)
+        self.spin_b.blockSignals(True)
+        self.spin_c.blockSignals(True)
+        self.spin_a.setValue(a)
+        self.spin_b.setValue(b)
+        self.spin_c.setValue(c)
+        self.spin_a.blockSignals(False)
+        self.spin_b.blockSignals(False)
+        self.spin_c.blockSignals(False)
+        self._update_d_from_slider()
+
+    def _plane_slider_changed(self, *_args) -> None:
+        self._update_d_from_slider()
+        self._mesh_section_dirty = True
+        if not self.chk_section.isChecked():
+            return
+        if self.section_target.currentText() == "体网格":
+            # 对齐 scFLOW：体网格需 Draw，仅更新 D
+            self.status.setText(
+                "平面已更新 — 点击「Draw 剖切」刷新体网格截面")
+            return
+        self.render()
+
+    def _update_d_from_slider(self) -> None:
+        bounds = self._bounds_cache
+        if bounds is None:
+            return
+        axis = self.clip_axis.currentText()
+        frac = self.clip_slider.value() / 100.0
+        if axis == "X":
+            d = bounds[0] + frac * (bounds[1] - bounds[0])
+        elif axis == "Y":
+            d = bounds[2] + frac * (bounds[3] - bounds[2])
+        elif axis == "Z":
+            d = bounds[4] + frac * (bounds[5] - bounds[4])
+        else:
+            # 自定义：沿法向在包围盒中心附近平移
+            import numpy as np
+            n = np.array([self.spin_a.value(), self.spin_b.value(),
+                          self.spin_c.value()], dtype=float)
+            nn = float(np.linalg.norm(n)) or 1.0
+            n /= nn
+            center = np.array([(bounds[0] + bounds[1]) * 0.5,
+                               (bounds[2] + bounds[3]) * 0.5,
+                               (bounds[4] + bounds[5]) * 0.5])
+            # 投影范围
+            corners = np.array([
+                [bounds[i], bounds[j], bounds[k]]
+                for i in (0, 1) for j in (2, 3) for k in (4, 5)])
+            projs = corners @ n
+            d = float(projs.min() + frac * (projs.max() - projs.min()))
+        self.spin_d.blockSignals(True)
+        self.spin_d.setValue(d)
+        self.spin_d.blockSignals(False)
+
+    def _current_plane(self):
+        return pph_vtk.plane_from_abcd(
+            self.spin_a.value(), self.spin_b.value(),
+            self.spin_c.value(), self.spin_d.value())
+
+    def _draw_mesh_section(self) -> None:
+        """体网格剖切 Draw：对含内部面的 GPH 执行 vtkCutter。"""
+        name = self.group_box.currentText()
+        group = self.groups.get(name)
+        if not group or not group.get("gph"):
+            self.status.setText("当前组无 GPH，无法剖切体网格")
+            return
+        try:
+            import gphstats
+            import numpy as np
+
+            path = group["gph"]
+            mesh = self._cached(("gph_mesh", path), lambda: _gph_mesh(path))
+            face_scalars = None
+            if self.chk_color_cvol.isChecked():
+                with gphstats.open_buffer(path) as data:
+                    cvol = gphstats.cvol_ids(data)
+                if cvol is not None and cvol.size:
+                    owner = mesh["owner"]
+                    face_scalars = np.zeros(mesh["n_faces"], dtype=np.float64)
+                    valid = (owner >= 0) & (owner < cvol.size)
+                    face_scalars[valid] = cvol[owner[valid]]
+            pd = self._cached(
+                ("gph_all", path, bool(self.chk_color_cvol.isChecked())),
+                lambda: pph_vtk.gph_faces_mesh(
+                    mesh, max_faces=DEFAULT_CAPS["gph"] * 3,
+                    boundary_only=False, face_scalars=face_scalars))
+            plane = self._current_plane()
+            self._mesh_section_pd = pph_vtk.cut_polydata(pd, plane)
+            self._mesh_section_dirty = False
+            n = self._mesh_section_pd.GetNumberOfCells()
+            self.status.setText(f"体网格剖切完成：截面单元 {n:,}")
+            if self._started:
+                self.render()
+        except Exception as exc:  # noqa: BLE001
+            self.status.setText(f"体网格剖切失败: {exc}")
 
     @staticmethod
     def _region_annotations(model) -> Optional[dict]:
@@ -945,6 +1417,12 @@ class View3DTab(QWidget):
                 pd = pph_vtk.mdl_mesh(
                     model, color_by=self.color_by.currentText(),
                     max_faces=cap, face_mask=mask)
+                if (self.chk_section.isChecked()
+                        and self.section_target.currentText() == "几何/八叉树"
+                        and pd.GetNumberOfCells() > 0):
+                    plane = self._current_plane()
+                    pd = pph_vtk.clip_polydata(
+                        pd, plane, inside_out=self.chk_opposite.isChecked())
                 discrete = self.color_by.currentText() == "frid"
                 ann = self._region_annotations(model) if discrete else None
                 legend_entries = None
@@ -966,6 +1444,12 @@ class View3DTab(QWidget):
                 import oct
                 om = self._cached(("oct", path), lambda: oct.parse_oct(path))
                 pd = pph_vtk.oct_leaves(om, max_leaves=cap)
+                if (self.chk_section.isChecked()
+                        and self.section_target.currentText() == "几何/八叉树"
+                        and pd.GetNumberOfCells() > 0):
+                    plane = self._current_plane()
+                    pd = pph_vtk.clip_polydata(
+                        pd, plane, inside_out=self.chk_opposite.isChecked())
                 return LayerRender(
                     pph_vtk.polydata_actor(pd, wireframe=True),
                     "OCT 深度", edges=False)
@@ -980,7 +1464,7 @@ class View3DTab(QWidget):
                 return LayerRender(
                     pph_vtk.polydata_actor(pd, opacity=0.9),
                     "GPH owner")
-        except Exception as exc:  # noqa: BLE001 - 渲染尽力而为
+        except Exception as exc:  # noqa: BLE001
             self.status.setText(f"{kind} 渲染失败: {exc}")
             return None
         return None
@@ -988,6 +1472,13 @@ class View3DTab(QWidget):
     def render(self) -> None:
         name = self.group_box.currentText()
         group = self.groups.get(name)
+        if not self._started:
+            # 仅更新状态文案，避免无 GL 时组装 actor/Render 崩溃
+            if not group:
+                self.status.setText("无网格组数据")
+            else:
+                self.status.setText(f"组 {name}：待显示窗口后渲染")
+            return
         self.renderer.RemoveAllViewProps()
         if self._orientation is not None:
             try:
@@ -997,18 +1488,28 @@ class View3DTab(QWidget):
             self._orientation = None
         if not group:
             self.status.setText("无网格组数据")
-            self.vtk_widget.GetRenderWindow().Render()
+            self._safe_vtk_render()
             return
+
+        mesh_section = (self.chk_section.isChecked()
+                        and self.section_target.currentText() == "体网格")
+        lines_only = mesh_section and self.chk_lines_only.isChecked()
+
         layers: list[tuple[str, Optional[LayerRender]]] = []
         self._pickable_actors = []
-        if self._layer_visible("mdl") and self.chk_mdl_part.isChecked():
+        if (self._layer_visible("mdl", name)
+                and self.chk_mdl_part.isChecked() and not lines_only):
             layers.append(("MDL part", self._make_actor("mdl", group, name)))
-        if self._layer_visible("ridge") and self.chk_mdl_ridge.isChecked():
+        if (self._layer_visible("ridge", name)
+                and self.chk_mdl_ridge.isChecked() and not lines_only):
             layers.append(("MDL ridge", self._make_actor("ridge", group, name)))
-        if self._layer_visible("oct") and self.chk_oct.isChecked():
+        if (self._layer_visible("oct", name)
+                and self.chk_oct.isChecked() and not lines_only):
             layers.append(("OCT", self._make_actor("oct", group)))
-        if self._layer_visible("gph") and self.chk_gph.isChecked():
+        if (self._layer_visible("gph", name) and self.chk_gph.isChecked()
+                and not lines_only):
             layers.append(("GPH", self._make_actor("gph", group)))
+
         wireframe = self.display_mode.currentText() == "线框"
         legend_layers = []
         cells = []
@@ -1026,44 +1527,95 @@ class View3DTab(QWidget):
             legend_layers.append((layer.title, lut, layer.legend_entries))
             if self.chk_edges.isChecked() and layer.edges and not wireframe:
                 self.renderer.AddActor(pph_vtk.edges_actor(mapper.GetInput()))
+
+        # 体网格截面线（需先 Draw）
+        if mesh_section and self._mesh_section_pd is not None:
+            cut = self._mesh_section_pd
+            if cut.GetNumberOfCells() > 0:
+                actor = pph_vtk.polydata_actor(
+                    cut, opacity=1.0, discrete=self.chk_color_cvol.isChecked())
+                actor.GetProperty().SetLineWidth(2.0)
+                actor.GetProperty().SetRepresentationToSurface()
+                self.renderer.AddActor(actor)
+                cells.append(f"截面={cut.GetNumberOfCells():,}")
+                legend_layers.append(
+                    ("截面 cvol" if self.chk_color_cvol.isChecked()
+                     else "截面", actor.GetMapper().GetLookupTable(), None))
+
         if self.chk_legend.isChecked():
             self.legend.set_layers(legend_layers)
         else:
             self.legend.setVisible(False)
-        if self.chk_axes.isChecked():
+        if self.chk_axes.isChecked() and self._vtk_ok:
             try:
                 self._orientation = pph_vtk.orientation_marker_widget(
                     self.vtk_widget.GetRenderWindow().GetInteractor())
             except Exception as exc:  # noqa: BLE001
                 self.status.setText(f"坐标轴失败: {exc}")
+
         self.renderer.ResetCamera()
-        self._clip_enabled = self.chk_clip.isChecked()
-        self._apply_clip()
-        self.vtk_widget.GetRenderWindow().Render()
+        # 缓存包围盒供 Plane position
+        try:
+            b = self.renderer.ComputeVisiblePropBounds()
+            if b[1] >= b[0]:
+                self._bounds_cache = tuple(b)
+                if not self.chk_section.isChecked():
+                    self._update_d_from_slider()
+        except Exception:  # noqa: BLE001
+            pass
+        self._safe_vtk_render()
+        extra = ""
+        if mesh_section and self._mesh_section_pd is None:
+            extra = " | 体网格剖切：设置平面后点 Draw"
+        elif mesh_section and self._mesh_section_dirty:
+            extra = " | 平面已变，需重新 Draw"
         self.status.setText(
             f"组 {name}：{', '.join(cells) if cells else '无可用几何'}"
-            + (f"（上限: {DEFAULT_CAPS}）" if not self._picked_status
-               else self._picked_status))
+            + (self._picked_status or "") + extra)
 
     def precache(self, group_models: dict) -> None:
-        """预置已解析的 MDL 模型，避免渲染时重复解析。"""
         for _g, info in group_models.items():
             model = info.get("part")
             path = info.get("part_path")
             if model is not None and path:
                 self._cache[("mdl", path)] = model
 
-    def _layer_visible(self, kind: str) -> bool:
-        """视图类型过滤：仅几何(MDL) / 仅网格(GPH+OCT) / 全部。"""
+    def _layer_visible(self, kind: str, group: Optional[str] = None) -> bool:
         mode = self.view_kind.currentText()
         if mode == "仅几何 (MDL)":
-            return kind in ("mdl", "ridge")
-        if mode == "仅网格 (GPH/OCT)":
-            return kind in ("oct", "gph")
+            if kind not in ("mdl", "ridge"):
+                return False
+        elif mode == "仅八叉树":
+            if kind != "oct":
+                return False
+        elif mode == "仅体网格 (GPH)":
+            if kind != "gph":
+                return False
+        layer_key = {"mdl": "mdl", "ridge": "mdl", "oct": "oct",
+                     "gph": "gph"}.get(kind, kind)
+        if group and layer_key in self._layer_hidden.get(group, set()):
+            return False
         return True
 
+    def set_layer_visibility(self, group: str, layer: str,
+                             visible: bool) -> None:
+        hidden = self._layer_hidden.setdefault(group, set())
+        if visible:
+            hidden.discard(layer)
+        else:
+            hidden.add(layer)
+        # 同步工具栏勾选（当前组）
+        if group == self.group_box.currentText():
+            mapping = {"mdl": self.chk_mdl_part, "oct": self.chk_oct,
+                       "gph": self.chk_gph}
+            chk = mapping.get(layer)
+            if chk is not None:
+                chk.blockSignals(True)
+                chk.setChecked(visible)
+                chk.blockSignals(False)
+        self.render()
+
     def _mdl_mask(self, model, group: Optional[str] = None) -> Optional[object]:
-        """生成 MDL 面掩码：拾取面/单显过滤 + 模型树勾选隐藏。"""
         import numpy as np
         if model.n_faces == 0:
             return None
@@ -1083,7 +1635,6 @@ class View3DTab(QWidget):
             if kind == "region":
                 return model.frid == value
             return None
-        # 模型树勾选：隐藏的 body / region
         if group is not None and group in self._group_hidden:
             return np.zeros(model.n_faces, dtype=bool)
         hidden_bodies, hidden_regions = self._hidden.get(
@@ -1102,7 +1653,6 @@ class View3DTab(QWidget):
 
     def set_model_visibility(self, group: str, hidden_bodies,
                              hidden_regions, group_visible: bool = True) -> None:
-        """模型树勾选 → 更新显隐并重渲染（模型已缓存，不重新解析）。"""
         self._hidden[group] = (set(hidden_bodies), set(hidden_regions))
         if group_visible:
             self._group_hidden.discard(group)
@@ -1111,7 +1661,6 @@ class View3DTab(QWidget):
         self.render()
 
     def set_model_filter(self, filter_: Optional[dict]) -> None:
-        """按模型树/拾取设置仅显示过滤（None = 全部）。"""
         self._mdl_filter = filter_
         if filter_ is None:
             self._picked_status = " | 已恢复全部"
@@ -1127,10 +1676,10 @@ class View3DTab(QWidget):
         self.render()
 
     def clear_visibility(self) -> None:
-        """恢复全部：清空显隐过滤（同时触发 show_all_requested）。"""
         self._mdl_filter = None
         self._hidden.clear()
         self._group_hidden.clear()
+        self._layer_hidden.clear()
         self._picked_status = " | 已恢复全部"
         self.show_all_requested.emit()
         self.render()
@@ -1158,43 +1707,6 @@ class View3DTab(QWidget):
         cell = picker.GetCellId()
         self.set_model_filter({"kind": "face", "value": int(cell)})
 
-    def _apply_clip(self) -> None:
-        """截面裁剪：按 clip_axis/clip_slider 生成一个 vtkPlane。"""
-        import vtk
-
-        for i in range(self.renderer.GetViewProps().GetNumberOfItems()):
-            prop = self.renderer.GetViewProps().GetItemAsObject(i)
-            mapper = getattr(prop, "GetMapper", lambda: None)()
-            if mapper is None or not hasattr(mapper, "SetClippingPlanes"):
-                continue
-            if not self._clip_enabled:
-                mapper.SetClippingPlanes(vtk.vtkPlaneCollection())
-                continue
-            bounds = mapper.GetInput().GetBounds()
-            if bounds is None or bounds[1] < bounds[0]:
-                continue
-            frac = self.clip_slider.value() / 100.0
-            axes = {"X": 0, "Y": 1, "Z": 2}
-            axis = axes[self.clip_axis.currentText()]
-            planes = vtk.vtkPlaneCollection()
-            plane = vtk.vtkPlane()
-            origin = [(bounds[0] + bounds[1]) / 2,
-                      (bounds[2] + bounds[3]) / 2,
-                      (bounds[4] + bounds[5]) / 2]
-            lo, hi = bounds[axis * 2], bounds[axis * 2 + 1]
-            origin[axis] = lo + frac * (hi - lo)
-            normal = [0.0, 0.0, 0.0]
-            normal[axis] = 1.0
-            plane.SetOrigin(*origin)
-            plane.SetNormal(*normal)
-            planes.AddItem(plane)
-            mapper.SetClippingPlanes(planes)
-
-    def _clip_changed(self, *_args) -> None:
-        if self._clip_enabled:
-            self._apply_clip()
-            self.vtk_widget.GetRenderWindow().Render()
-
     def _toggle_rubber_zoom(self, checked: bool) -> None:
         from vtkmodules.vtkInteractionStyle import (
             vtkInteractorStyleRubberBandZoom, vtkInteractorStyleTrackballCamera)
@@ -1210,12 +1722,12 @@ class View3DTab(QWidget):
 
     def fit(self) -> None:
         self.renderer.ResetCamera()
-        self.vtk_widget.GetRenderWindow().Render()
+        self._safe_vtk_render()
 
     def reset_viewpoint(self) -> None:
         self.renderer.ResetCamera()
         self.renderer.GetActiveCamera().ParallelProjectionOff()
-        self.vtk_widget.GetRenderWindow().Render()
+        self._safe_vtk_render()
 
 
 class PphViewer(QMainWindow):
@@ -1257,11 +1769,15 @@ class PphViewer(QMainWindow):
             self._member_context_menu)
         self.model_tree = ModelTree(self)
         self.model_tree.visibility_changed.connect(self._on_model_visibility)
-        self.model_tree.focus_3d.connect(
-            lambda: self.tabs.setCurrentWidget(self.view3d))
+        self.model_tree.layer_visibility_changed.connect(
+            self._on_layer_visibility)
+        self.model_tree.item_selected.connect(self._on_model_item_selected)
+        self.model_tree.status_requested.connect(self._on_status_requested)
+        self.model_tree.focus_3d.connect(self._focus_model_3d)
+        self.model_tree.select_mesh.connect(self._select_mesh_view)
         left_tabs = QTabWidget(self)
-        left_tabs.addTab(self.member_tree, "成员")
         left_tabs.addTab(self.model_tree, "模型")
+        left_tabs.addTab(self.member_tree, "成员")
         left = QSplitter(Qt.Vertical, self)
         left.addWidget(self.navigation)
         left.addWidget(left_tabs)
@@ -1272,10 +1788,16 @@ class PphViewer(QMainWindow):
         dock.setFeatures(QDockWidget.DockWidgetMovable)
         self.addDockWidget(Qt.LeftDockWidgetArea, dock)
 
-        # 右侧：Property Window
+        # 右侧：Property + Status（几何 / 八叉树 / 体网格）
         self.property_panel = PropertyPanel(self)
-        pdock = QDockWidget("Property", self)
-        pdock.setWidget(self.property_panel)
+        self.status_panel = StatusPanel(self)
+        right = QSplitter(Qt.Vertical, self)
+        right.addWidget(self.property_panel)
+        right.addWidget(self.status_panel)
+        right.setStretchFactor(0, 1)
+        right.setStretchFactor(1, 1)
+        pdock = QDockWidget("Property / Status", self)
+        pdock.setWidget(right)
         pdock.setFeatures(QDockWidget.DockWidgetMovable)
         self.addDockWidget(Qt.RightDockWidgetArea, pdock)
 
@@ -1418,21 +1940,105 @@ class PphViewer(QMainWindow):
             self.member_tree.scrollToItem(item)
 
     def _build_model_tree(self) -> None:
-        """解析各网格组 _part.mdl（一次），填充模型树并预置 3D 缓存。"""
+        """解析各网格组 MDL/OCT/GPH 摘要，填充模型树与 Status。"""
         import mdl
+
         groups: dict[str, dict] = {}
         self.model_models: dict[str, dict] = {}
+        # 收集路径
         for name, path in self.bin_paths.items():
-            if name.lower().endswith("_part.mdl"):
-                g = _member_group(name)
+            g = _member_group(name)
+            if not g:
+                continue
+            info = groups.setdefault(g, {"paths": {}, "part": None,
+                                         "oct_summary": None,
+                                         "gph_summary": None})
+            low = name.lower()
+            if low.endswith("_part.mdl"):
+                info["paths"]["part"] = path
+            elif low.endswith("_ridge.mdl"):
+                info["paths"]["ridge"] = path
+            elif low.endswith(".oct"):
+                info["paths"]["oct"] = path
+            elif low.endswith(".gph"):
+                info["paths"]["gph"] = path
+
+        self.status_panel.clear()
+        for g, info in groups.items():
+            part_path = info["paths"].get("part")
+            if part_path:
                 try:
-                    model = mdl.parse_mdl(path, load_arrays=True)
-                except Exception:  # noqa: BLE001 - 模型树尽力而为
+                    model = mdl.parse_mdl(part_path, load_arrays=True)
+                except Exception:  # noqa: BLE001
                     model = None
-                groups.setdefault(g, {})["part"] = model
-                self.model_models[g] = {"part": model, "part_path": path}
+                info["part"] = model
+                self.model_models[g] = {"part": model, "part_path": part_path}
+            oct_path = info["paths"].get("oct")
+            if oct_path:
+                try:
+                    import oct
+                    om = oct.parse_oct(oct_path)
+                    max_depth = 0
+                    try:
+                        for _mn, _mx, d in om.iter_leaves():
+                            if d > max_depth:
+                                max_depth = d
+                    except Exception:  # noqa: BLE001
+                        max_depth = -1
+                    info["oct_summary"] = {
+                        "n_octants": om.n_octants,
+                        "n_internal": om.n_internal,
+                        "n_leaves": om.n_leaves,
+                        "unit": om.unit,
+                        "max_depth": max_depth if max_depth >= 0 else "—",
+                    }
+                except Exception:  # noqa: BLE001
+                    info["oct_summary"] = None
+            gph_path = info["paths"].get("gph")
+            if gph_path:
+                try:
+                    import gphstats
+                    with gphstats.open_buffer(gph_path) as data:
+                        info["gph_summary"] = gphstats.summarize(data)
+                except Exception:  # noqa: BLE001
+                    info["gph_summary"] = None
         self.model_tree.populate(groups)
+        for g in groups:
+            self.status_panel.set_group_status(
+                g, self.model_tree.group_status_props(g))
+        if groups:
+            self.status_panel.show_group(sorted(groups)[0])
         self.view3d.precache(self.model_models)
+
+    def _on_model_item_selected(self, props: dict) -> None:
+        self.property_panel.set_properties(props)
+
+    def _on_status_requested(self, group: str, focus: str) -> None:
+        st = self.model_tree.group_status_props(group)
+        self.status_panel.set_group_status(group, st)
+        self.status_panel.show_group(group, focus or None)
+        label = {"geometry": "几何", "octree": "八叉树",
+                 "mesh": "体网格"}.get(focus, "状态")
+        self.statusBar().showMessage(f"{group} — {label}信息")
+
+    def _focus_model_3d(self, group: str) -> None:
+        self.tabs.setCurrentWidget(self.view3d)
+        self.view3d.select_group(group)
+
+    def _select_mesh_view(self, group: str) -> None:
+        self.tabs.setCurrentWidget(self.view3d)
+        self.view3d.select_group(group)
+        self.view3d.set_view_mode("mesh")
+        self.view3d.chk_section.setChecked(True)
+        self.view3d.section_target.setCurrentText("体网格")
+        self.statusBar().showMessage(
+            f"{group}：体网格视图 — 设置平面后点 Draw 剖切")
+
+    def _on_layer_visibility(self, group: str, layer: str,
+                             visible: bool) -> None:
+        self.view3d.set_layer_visibility(group, layer, visible)
+        self.statusBar().showMessage(
+            f"组 {group}：图层 {layer} = {'显示' if visible else '隐藏'}")
 
     def _on_model_visibility(self, group: str, hidden_bodies: set,
                              hidden_regions: set, group_visible: bool) -> None:
