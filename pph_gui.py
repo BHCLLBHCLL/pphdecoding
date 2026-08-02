@@ -22,15 +22,17 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from PyQt5.QtCore import QPoint, QPointF, QRectF, QSize, Qt, pyqtSignal
+from PyQt5.QtCore import (
+    QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer, pyqtSignal,
+)
 from PyQt5.QtGui import (
     QBrush, QColor, QFont, QIcon, QPainter, QPen, QPixmap, QPolygon,
 )
 from PyQt5.QtWidgets import (
     QAction, QApplication, QCheckBox, QComboBox, QDoubleSpinBox,
     QFileDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
-    QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QSlider,
-    QSplitter, QStackedWidget, QTabWidget, QToolBar, QTreeWidget,
+    QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy,
+    QSlider, QSplitter, QStackedWidget, QTabWidget, QToolBar, QTreeWidget,
     QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -441,46 +443,72 @@ class LegendPanel(QFrame):
         super().__init__(parent)
         self.setFixedWidth(180)
         self.setFrameShape(QFrame.StyledPanel)
+        self.setAutoFillBackground(True)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setAttribute(Qt.WA_OpaquePaintEvent, True)
+        self.setStyleSheet(
+            "LegendPanel, QFrame { background: #ffffff;"
+            " border: 1px solid #9a9a9a; }")
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(6, 6, 6, 6)
         self._layout.setSpacing(6)
         self.setVisible(False)
 
-    def clear(self) -> None:
-        while self._layout.count():
-            item = self._layout.takeAt(0)
+    @staticmethod
+    def _drain_layout(layout) -> None:
+        """递归清空 layout（含嵌套 QHBoxLayout），避免图例叠加残留。"""
+        while layout.count():
+            item = layout.takeAt(0)
             w = item.widget()
             if w is not None:
+                w.hide()
+                w.setParent(None)
                 w.deleteLater()
+            child = item.layout()
+            if child is not None:
+                LegendPanel._drain_layout(child)
+
+    def clear(self) -> None:
+        self._drain_layout(self._layout)
 
     def set_layers(self, layers) -> None:
         self.clear()
+        if not layers:
+            self.setVisible(False)
+            return
         for title, lut, entries in layers:
             self._layout.addWidget(QLabel(f"<b>{title}</b>", self))
             if entries:
                 for label, rgb in entries:
-                    row = QHBoxLayout()
-                    swatch = QLabel(self)
+                    row_w = QWidget(self)
+                    row = QHBoxLayout(row_w)
+                    row.setContentsMargins(0, 0, 0, 0)
+                    swatch = QLabel(row_w)
                     swatch.setFixedSize(16, 16)
                     swatch.setStyleSheet(
                         f"background-color: rgb({int(rgb[0] * 255)},"
                         f"{int(rgb[1] * 255)},{int(rgb[2] * 255)});"
                         "border: 1px solid #888;")
                     row.addWidget(swatch)
-                    row.addWidget(QLabel(label, self), 1)
-                    self._layout.addLayout(row)
+                    row.addWidget(QLabel(label, row_w), 1)
+                    self._layout.addWidget(row_w)
             elif lut is not None:
-                row = QHBoxLayout()
-                pm_label = QLabel(self)
+                row_w = QWidget(self)
+                row = QHBoxLayout(row_w)
+                row.setContentsMargins(0, 0, 0, 0)
+                pm_label = QLabel(row_w)
                 pm_label.setPixmap(self._gradient_pixmap(lut))
                 row.addWidget(pm_label)
                 rng = lut.GetRange()
-                row.addWidget(QLabel(f"{rng[1]:g} … {rng[0]:g}", self), 1)
-                self._layout.addLayout(row)
+                row.addWidget(
+                    QLabel(f"{rng[1]:g} … {rng[0]:g}", row_w), 1)
+                self._layout.addWidget(row_w)
             else:
                 self._layout.addWidget(QLabel("—", self))
         self._layout.addStretch(1)
         self.setVisible(True)
+        self.update()
 
     @staticmethod
     def _gradient_pixmap(lut, height: int = 120) -> QPixmap:
@@ -504,12 +532,17 @@ class PaneFrame(QFrame):
         super().__init__(parent)
         self.setObjectName("PaneFrame")
         self.setFrameShape(QFrame.StyledPanel)
+        self.setAutoFillBackground(True)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setAttribute(Qt.WA_OpaquePaintEvent, True)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
         bar = QFrame(self)
         bar.setObjectName("PaneTitleBar")
         bar.setFixedHeight(24)
+        bar.setAutoFillBackground(True)
+        bar.setAttribute(Qt.WA_StyledBackground, True)
         hb = QHBoxLayout(bar)
         hb.setContentsMargins(8, 0, 6, 0)
         self.title_label = QLabel(title, bar)
@@ -517,7 +550,16 @@ class PaneFrame(QFrame):
         hb.addWidget(self.title_label)
         hb.addStretch(1)
         lay.addWidget(bar)
-        lay.addWidget(content, 1)
+        # 内容外包一层，避免 VTK 原生 HWND 画穿标题栏/邻窗
+        host = QFrame(self)
+        host.setObjectName("PaneBody")
+        host.setAutoFillBackground(True)
+        host.setAttribute(Qt.WA_StyledBackground, True)
+        hl = QVBoxLayout(host)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.addWidget(content, 1)
+        lay.addWidget(host, 1)
+        self._content = content
 
     def set_title(self, title: str) -> None:
         self.title_label.setText(title)
@@ -1527,7 +1569,21 @@ class View3DTab(QWidget):
         sg.addLayout(row_opt, 2, 0, 1, 8)
         pv.addWidget(sec)
 
-        self.vtk_widget = QVTKRenderWindowInteractor(self)
+        # VTK 放在原生容器内，限制 HWND 裁剪范围，避免最大化后画穿邻窗
+        self._vtk_host = QFrame(self)
+        self._vtk_host.setObjectName("VtkHost")
+        self._vtk_host.setAutoFillBackground(True)
+        self._vtk_host.setAttribute(Qt.WA_StyledBackground, True)
+        self._vtk_host.setAttribute(Qt.WA_NativeWindow, True)
+        self._vtk_host.setStyleSheet(
+            "#VtkHost { background: #ebebeb; border: none; }")
+        host_lay = QVBoxLayout(self._vtk_host)
+        host_lay.setContentsMargins(0, 0, 0, 0)
+        self.vtk_widget = QVTKRenderWindowInteractor(self._vtk_host)
+        self.vtk_widget.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Expanding)
+        host_lay.addWidget(self.vtk_widget, 1)
+
         self.renderer = pph_vtk.make_renderer([])
         self.renderer.GetActiveCamera().ParallelProjectionOn()
         self.vtk_widget.GetRenderWindow().AddRenderer(self.renderer)
@@ -1535,12 +1591,15 @@ class View3DTab(QWidget):
         self.legend = LegendPanel(self)
         self._orientation = None
         self._rubber_style = None
+        self._resize_timer = QTimer(self)
+        self._resize_timer.setSingleShot(True)
+        self._resize_timer.timeout.connect(self._sync_vtk_viewport)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(panel)
         hbox = QHBoxLayout()
-        hbox.addWidget(self.vtk_widget, 1)
+        hbox.addWidget(self._vtk_host, 1)
         hbox.addWidget(self.legend, 0)
         layout.addLayout(hbox, 1)
         layout.addWidget(self.status)
@@ -1559,13 +1618,40 @@ class View3DTab(QWidget):
         self._vtk_ok = True
         self._on_section_ui()
 
+    def _sync_vtk_viewport(self) -> None:
+        """把 Qt 控件尺寸同步到 VTK RenderWindow（最大化/缩放后必须）。"""
+        if not self._started or not self._vtk_ok:
+            return
+        try:
+            w = max(1, self.vtk_widget.width())
+            h = max(1, self.vtk_widget.height())
+            rw = self.vtk_widget.GetRenderWindow()
+            # VTK 与 Qt 坐标可能不一致；强制对齐并重绘
+            rw.SetSize(w, h)
+            self.vtk_widget.update()
+            self._vtk_host.update()
+            self.legend.update()
+            rw.Render()
+        except Exception:  # noqa: BLE001
+            self._vtk_ok = False
+
     def _safe_vtk_render(self) -> None:
         if not self._started or not self._vtk_ok:
             return
         try:
-            self.vtk_widget.GetRenderWindow().Render()
+            w = max(1, self.vtk_widget.width())
+            h = max(1, self.vtk_widget.height())
+            rw = self.vtk_widget.GetRenderWindow()
+            if rw.GetSize() != (w, h):
+                rw.SetSize(w, h)
+            rw.Render()
         except Exception:  # noqa: BLE001
             self._vtk_ok = False
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        super().resizeEvent(event)
+        # 防抖：最大化动画结束后再同步 VTK，避免残影/重叠
+        self._resize_timer.start(30)
 
     def showEvent(self, event) -> None:  # noqa: N802 - Qt 命名
         super().showEvent(event)
@@ -1580,9 +1666,11 @@ class View3DTab(QWidget):
                 iren.Initialize()
             except Exception:  # noqa: BLE001
                 pass
-            self._safe_vtk_render()
+            self._sync_vtk_viewport()
             if self.groups:
                 self.render()
+        else:
+            QTimer.singleShot(0, self._sync_vtk_viewport)
 
     def set_groups(self, groups: dict[str, dict]) -> None:
         self.groups = groups
@@ -1936,6 +2024,7 @@ class View3DTab(QWidget):
         if self.chk_legend.isChecked():
             self.legend.set_layers(legend_layers)
         else:
+            self.legend.clear()
             self.legend.setVisible(False)
         if self.chk_axes.isChecked() and self._vtk_ok:
             try:
@@ -2141,9 +2230,41 @@ class PphViewer(QMainWindow):
         self.bin_paths: dict[str, str] = {}
         self.tmp_dir: Optional[str] = None
         self.snap = None
+        self._layout_timer = QTimer(self)
+        self._layout_timer.setSingleShot(True)
+        self._layout_timer.timeout.connect(self._refresh_layout)
         self._build_ui()
         self._apply_style()
         self.log("Ready. Open a .pph project to begin.")
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        super().resizeEvent(event)
+        self._layout_timer.start(40)
+
+    def changeEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        super().changeEvent(event)
+        if event.type() == QEvent.WindowStateChange:
+            # 最大化 / 还原后 splitter 与 VTK 原生窗需二次刷新
+            self._layout_timer.start(80)
+
+    def _refresh_layout(self) -> None:
+        """全屏/缩放后强制各子窗与 VTK 视口重绘，消除重叠残影。"""
+        central = self.centralWidget()
+        if central is not None:
+            central.updateGeometry()
+            for sp in central.findChildren(QSplitter):
+                sp.updateGeometry()
+                sp.update()
+            for pane in central.findChildren(PaneFrame):
+                pane.update()
+        if hasattr(self, "message_win"):
+            self.message_win.update()
+            self.message_win.text.viewport().update()
+        if hasattr(self, "view3d"):
+            self.view3d._sync_vtk_viewport()
+            self.view3d.legend.update()
+        self.update()
+        QApplication.processEvents()
 
     def log(self, msg: str, level: str = "INFO") -> None:
         if hasattr(self, "message_win"):
@@ -2501,10 +2622,11 @@ class PphViewer(QMainWindow):
                 background: #bbdefb;
             }
             #NavTree::item { padding: 2px 2px; height: 20px; }
-            #PaneFrame {
+            #PaneFrame, #PaneBody {
                 background: #ffffff;
                 border: 1px solid #9a9a9a;
             }
+            #PaneBody { border: none; }
             #PaneTitleBar {
                 background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
                     stop:0 #5b9bd5, stop:1 #2e75b6);
