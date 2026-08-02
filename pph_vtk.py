@@ -286,12 +286,43 @@ def preset_colors(n: int) -> list[tuple[float, float, float]]:
     return out
 
 
+def apply_depth_bias(mapper, layer: str = "mid") -> None:
+    """共面图层深度偏置：back（退后）/ mid / front（略前）。"""
+    if mapper is None:
+        return
+    try:
+        mapper.SetResolveCoincidentTopologyToPolygonOffset()
+    except Exception:  # noqa: BLE001
+        return
+    # (factor, units)：正值推向远处，负值拉近相机
+    params = {
+        "back": (4.0, 12.0),
+        "mid": (0.5, 1.0),
+        "front": (-0.5, -2.0),
+        "lines": (-2.0, -8.0),
+    }.get(layer, (0.5, 1.0))
+    try:
+        if layer == "lines":
+            mapper.SetRelativeCoincidentTopologyLineOffsetParameters(*params)
+        else:
+            mapper.SetRelativeCoincidentTopologyPolygonOffsetParameters(*params)
+    except Exception:  # noqa: BLE001
+        try:
+            mapper.SetResolveCoincidentTopologyPolygonOffsetParameters(*params)
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def polydata_actor(pd, scalar_range: Optional[tuple[float, float]] = None,
                    opacity: float = 1.0, wireframe: bool = False,
                    color: Optional[tuple[float, float, float]] = None,
                    discrete: bool = False,
-                   annotations: Optional[dict] = None) -> "vtkActor":
-    """生成 vtkActor：有 cell scalars 时按彩虹 LUT 着色。"""
+                   annotations: Optional[dict] = None,
+                   depth_bias: str = "mid") -> "vtkActor":
+    """生成 vtkActor：有 cell scalars 时按彩虹 LUT 着色。
+
+    ``depth_bias``：``back`` / ``mid`` / ``front``，用于 MDL+GPH 叠层消花。
+    """
     import vtk
 
     mapper = vtk.vtkPolyDataMapper()
@@ -305,6 +336,8 @@ def polydata_actor(pd, scalar_range: Optional[tuple[float, float]] = None,
         mapper.ScalarVisibilityOn()
     else:
         mapper.ScalarVisibilityOff()
+    if not wireframe:
+        apply_depth_bias(mapper, depth_bias)
     actor = vtk.vtkActor()
     actor.SetMapper(mapper)
     actor.GetProperty().SetOpacity(opacity)
@@ -343,24 +376,55 @@ def _make_lut(rng: tuple[float, float], discrete: bool = False,
     return lut
 
 
-def edges_actor(pd, color: tuple[float, float, float] = (0.10, 0.10, 0.14),
-                opacity: float = 0.65, line_width: float = 1.0) -> "vtkActor":
-    """网格线叠加：vtkExtractEdges 提取多边形边，以暗色线条渲染。"""
+def edges_actor(pd, color: tuple[float, float, float] = (0.12, 0.12, 0.16),
+                opacity: float = 1.0, line_width: float = 1.15) -> "vtkActor":
+    """网格线叠加：提取边并前移深度，避免与实体面 Z-fighting 断线。
+
+    策略：
+    - ``vtkFeatureEdges`` 取边界/流形边（比全量 ExtractEdges 更干净）；
+    - mapper 使用 PolygonOffset，线段相对面向相机前移；
+    - 不透明 + 略加粗线宽，平行投影下轮廓连续可读。
+    """
     import vtk
 
-    ext = vtk.vtkExtractEdges()
-    ext.SetInputData(pd)
-    ext.Update()
+    # FeatureEdges：边界边 + 流形边；关闭非流形/特征边减少杂线
+    try:
+        ext = vtk.vtkFeatureEdges()
+        ext.SetInputData(pd)
+        ext.BoundaryEdgesOn()
+        ext.ManifoldEdgesOn()
+        ext.NonManifoldEdgesOff()
+        ext.FeatureEdgesOff()
+        ext.ColoringOff()
+        ext.Update()
+        edge_pd = ext.GetOutput()
+        if edge_pd is None or edge_pd.GetNumberOfCells() == 0:
+            raise RuntimeError("empty feature edges")
+    except Exception:  # noqa: BLE001
+        ext2 = vtk.vtkExtractEdges()
+        ext2.SetInputData(pd)
+        ext2.Update()
+        edge_pd = ext2.GetOutput()
+
     mapper = vtk.vtkPolyDataMapper()
-    mapper.SetInputConnection(ext.GetOutputPort())
+    mapper.SetInputData(edge_pd)
     mapper.ScalarVisibilityOff()
+    apply_depth_bias(mapper, "lines")
+
     actor = vtk.vtkActor()
     actor.SetMapper(mapper)
-    actor.GetProperty().SetColor(*color)
-    actor.GetProperty().SetOpacity(opacity)
-    actor.GetProperty().SetLineWidth(line_width)
-    actor.GetProperty().SetAmbient(1.0)
-    actor.GetProperty().SetDiffuse(0.0)
+    prop = actor.GetProperty()
+    prop.SetColor(*color)
+    prop.SetOpacity(opacity)
+    prop.SetLineWidth(line_width)
+    prop.SetAmbient(1.0)
+    prop.SetDiffuse(0.0)
+    prop.SetSpecular(0.0)
+    prop.LightingOff()
+    try:
+        prop.SetRenderLinesAsTubes(False)
+    except Exception:  # noqa: BLE001
+        pass
     return actor
 
 

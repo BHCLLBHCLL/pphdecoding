@@ -26,7 +26,8 @@ from PyQt5.QtCore import (
     QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer, pyqtSignal,
 )
 from PyQt5.QtGui import (
-    QBrush, QColor, QFont, QIcon, QPainter, QPen, QPixmap, QPolygon,
+    QBrush, QColor, QFont, QIcon, QPainter, QPalette, QPen, QPixmap,
+    QPolygon,
 )
 from PyQt5.QtWidgets import (
     QAction, QApplication, QCheckBox, QComboBox, QDoubleSpinBox,
@@ -58,7 +59,7 @@ class LayerRender:
     actor: object
     title: str
     annotations: Optional[dict] = None
-    edges: bool = True   # 是否叠加网格线
+    edges: bool = False  # 是否叠加网格线（仅体网格 GPH 默认开启）
     legend_entries: Optional[list[tuple[str, tuple]]] = None  # (标签, RGB)
 
 
@@ -441,19 +442,32 @@ class LegendPanel(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("LegendPanel")
         self.setFixedWidth(180)
         self.setFrameShape(QFrame.StyledPanel)
-        self.setAutoFillBackground(True)
+        # 不用 WA_OpaquePaintEvent：与样式表冲突时最大化后整块变黑
         self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setAttribute(Qt.WA_OpaquePaintEvent, True)
+        self.setAutoFillBackground(True)
+        pal = self.palette()
+        pal.setColor(QPalette.Window, QColor(255, 255, 255))
+        pal.setColor(QPalette.Base, QColor(255, 255, 255))
+        pal.setColor(QPalette.Button, QColor(255, 255, 255))
+        self.setPalette(pal)
         self.setStyleSheet(
-            "LegendPanel, QFrame { background: #ffffff;"
+            "#LegendPanel { background-color: #ffffff;"
             " border: 1px solid #9a9a9a; }")
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(6, 6, 6, 6)
         self._layout.setSpacing(6)
         self.setVisible(False)
+
+    def paintEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        # 强制白底，防止 VTK HWND 透出后显示为黑块
+        p = QPainter(self)
+        p.fillRect(self.rect(), QColor(255, 255, 255))
+        p.end()
+        super().paintEvent(event)
 
     @staticmethod
     def _drain_layout(layout) -> None:
@@ -881,8 +895,9 @@ class ModelTree(QWidget):
             mesh_item.setData(0, Qt.UserRole, ("layer", group, "gph"))
             mesh_item.setFlags(mesh_item.flags() | Qt.ItemIsUserCheckable)
             has_gph = bool(info.get("paths", {}).get("gph"))
-            # 默认不显示体网格 GPH
-            mesh_item.setCheckState(0, Qt.Unchecked)
+            # 默认显示体网格（与 Draw 工具栏一致）
+            mesh_item.setCheckState(
+                0, Qt.Checked if has_gph else Qt.Unchecked)
             mesh_item.setIcon(0, AppIcons.get("mesh", 16))
             if not has_gph:
                 mesh_item.setFlags(mesh_item.flags() & ~Qt.ItemIsEnabled)
@@ -1442,9 +1457,11 @@ class View3DTab(QWidget):
         self.chk_oct = QCheckBox("八叉树", self)
         self.chk_oct.setChecked(False)
         self.chk_gph = QCheckBox("体网格", self)
-        self.chk_gph.setChecked(False)
+        self.chk_gph.setChecked(True)  # 默认与几何 MDL / 网格线 / 坐标轴一同显示
         self.chk_edges = QCheckBox("网格线", self)
         self.chk_edges.setChecked(True)
+        self.chk_edges.setToolTip(
+            "体网格边线（GPH）；几何 MDL 三角面片边默认不绘制，避免重叠花屏")
         self.chk_axes = QCheckBox("坐标轴", self)
         self.chk_axes.setChecked(True)
         self.chk_legend = QCheckBox("图例", self)
@@ -1456,11 +1473,16 @@ class View3DTab(QWidget):
             "全部", "仅几何 (MDL)", "仅八叉树", "仅体网格 (GPH)"])
         self.view_kind.currentTextChanged.connect(self.render)
         self.display_mode = QComboBox(self)
-        self.display_mode.addItems(["半透明", "不透明", "线框"])
-        self.display_mode.setCurrentText("半透明")
+        self.display_mode.addItems(["不透明", "半透明", "线框"])
+        self.display_mode.setCurrentText("不透明")
         self.display_mode.setToolTip(
-            "体网格/几何显示：半透明 · 不透明 · 线框")
+            "体网格/几何显示：不透明（默认）· 半透明 · 线框")
         self.display_mode.currentTextChanged.connect(self.render)
+        self.chk_gph_color = QCheckBox("GPH owner 着色", self)
+        self.chk_gph_color.setChecked(False)
+        self.chk_gph_color.setToolTip(
+            "默认关闭；勾选后按 owner 单元 ID 着色")
+        self.chk_gph_color.toggled.connect(self.render)
 
         # ── Cross Section（对齐 scFLOW Mesh 页签）──────────────────
         self.chk_section = QCheckBox("剖切", self)
@@ -1535,10 +1557,11 @@ class View3DTab(QWidget):
         row2 = QHBoxLayout()
         row2.addWidget(QLabel("图层:", panel))
         for chk in (self.chk_mdl_part, self.chk_mdl_ridge, self.chk_oct,
-                    self.chk_gph, self.chk_edges, self.chk_axes,
-                    self.chk_legend):
+                    self.chk_gph, self.chk_gph_color, self.chk_edges,
+                    self.chk_axes, self.chk_legend):
             row2.addWidget(chk)
-            chk.toggled.connect(self.render)
+            if chk is not self.chk_gph_color:
+                chk.toggled.connect(self.render)
         row2.addStretch(1)
         pv.addLayout(row2)
 
@@ -1569,16 +1592,16 @@ class View3DTab(QWidget):
         sg.addLayout(row_opt, 2, 0, 1, 8)
         pv.addWidget(sec)
 
-        # VTK 放在原生容器内，限制 HWND 裁剪范围，避免最大化后画穿邻窗
+        # VTK 容器：勿设 WA_NativeWindow（最大化后 HWND 易盖住右侧图例变黑）
         self._vtk_host = QFrame(self)
         self._vtk_host.setObjectName("VtkHost")
         self._vtk_host.setAutoFillBackground(True)
         self._vtk_host.setAttribute(Qt.WA_StyledBackground, True)
-        self._vtk_host.setAttribute(Qt.WA_NativeWindow, True)
         self._vtk_host.setStyleSheet(
-            "#VtkHost { background: #ebebeb; border: none; }")
+            "#VtkHost { background: #d8d8d8; border: none; }")
         host_lay = QVBoxLayout(self._vtk_host)
         host_lay.setContentsMargins(0, 0, 0, 0)
+        host_lay.setSpacing(0)
         self.vtk_widget = QVTKRenderWindowInteractor(self._vtk_host)
         self.vtk_widget.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -1588,7 +1611,25 @@ class View3DTab(QWidget):
         self.renderer.GetActiveCamera().ParallelProjectionOn()
         self.vtk_widget.GetRenderWindow().AddRenderer(self.renderer)
         self._started = False
-        self.legend = LegendPanel(self)
+
+        # 图例放独立侧栏（白底），与 VTK 宿主分离，避免被 OpenGL 窗盖住
+        self._legend_host = QFrame(self)
+        self._legend_host.setObjectName("LegendHost")
+        self._legend_host.setFixedWidth(188)
+        self._legend_host.setAutoFillBackground(True)
+        self._legend_host.setAttribute(Qt.WA_StyledBackground, True)
+        pal = self._legend_host.palette()
+        pal.setColor(QPalette.Window, QColor(255, 255, 255))
+        self._legend_host.setPalette(pal)
+        self._legend_host.setStyleSheet(
+            "#LegendHost { background-color: #ffffff;"
+            " border-left: 1px solid #9a9a9a; }")
+        leg_lay = QVBoxLayout(self._legend_host)
+        leg_lay.setContentsMargins(4, 4, 4, 4)
+        self.legend = LegendPanel(self._legend_host)
+        leg_lay.addWidget(self.legend, 1)
+        self._legend_host.setVisible(False)
+
         self._orientation = None
         self._rubber_style = None
         self._resize_timer = QTimer(self)
@@ -1597,11 +1638,18 @@ class View3DTab(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         layout.addWidget(panel)
         hbox = QHBoxLayout()
+        hbox.setContentsMargins(0, 0, 0, 0)
+        hbox.setSpacing(0)
         hbox.addWidget(self._vtk_host, 1)
-        hbox.addWidget(self.legend, 0)
+        hbox.addWidget(self._legend_host, 0)
         layout.addLayout(hbox, 1)
+        self.status.setAutoFillBackground(True)
+        self.status.setMinimumHeight(22)
+        self.status.setMaximumHeight(40)
+        self.status.setWordWrap(True)
         layout.addWidget(self.status)
 
         self.groups: dict[str, dict] = {}
@@ -1623,14 +1671,19 @@ class View3DTab(QWidget):
         if not self._started or not self._vtk_ok:
             return
         try:
-            w = max(1, self.vtk_widget.width())
-            h = max(1, self.vtk_widget.height())
+            # 仅用 VTK 宿主尺寸，绝不包含右侧图例宽度
+            w = max(1, self._vtk_host.width())
+            h = max(1, self._vtk_host.height())
+            self.vtk_widget.resize(w, h)
             rw = self.vtk_widget.GetRenderWindow()
-            # VTK 与 Qt 坐标可能不一致；强制对齐并重绘
             rw.SetSize(w, h)
             self.vtk_widget.update()
             self._vtk_host.update()
-            self.legend.update()
+            # 图例侧栏置顶重绘，避免被 OpenGL 窗盖成黑块
+            if self._legend_host.isVisible():
+                self._legend_host.raise_()
+                self._legend_host.repaint()
+                self.legend.repaint()
             rw.Render()
         except Exception:  # noqa: BLE001
             self._vtk_ok = False
@@ -1639,12 +1692,17 @@ class View3DTab(QWidget):
         if not self._started or not self._vtk_ok:
             return
         try:
-            w = max(1, self.vtk_widget.width())
-            h = max(1, self.vtk_widget.height())
+            w = max(1, self._vtk_host.width())
+            h = max(1, self._vtk_host.height())
+            self.vtk_widget.resize(w, h)
             rw = self.vtk_widget.GetRenderWindow()
-            if rw.GetSize() != (w, h):
+            cur = rw.GetSize()
+            if int(cur[0]) != w or int(cur[1]) != h:
                 rw.SetSize(w, h)
             rw.Render()
+            if self._legend_host.isVisible():
+                self._legend_host.raise_()
+                self.legend.update()
         except Exception:  # noqa: BLE001
             self._vtk_ok = False
 
@@ -1676,6 +1734,14 @@ class View3DTab(QWidget):
         self.groups = groups
         self._mesh_section_pd = None
         self._mesh_section_dirty = True
+        self._layer_hidden.clear()
+        # 打开工程默认：几何 + 体网格 + 网格线 + 坐标轴
+        self.chk_mdl_part.setChecked(True)
+        self.chk_gph.setChecked(True)
+        self.chk_edges.setChecked(True)
+        self.chk_axes.setChecked(True)
+        self.chk_oct.setChecked(False)
+        self.chk_gph_color.setChecked(False)
         self.group_box.blockSignals(True)
         self.group_box.clear()
         self.group_box.addItems(sorted(groups))
@@ -1867,8 +1933,17 @@ class View3DTab(QWidget):
             return 0.65
         return 0.7  # mdl
 
+    def _gph_and_mdl_overlap(self, group_name: str) -> bool:
+        """几何与体网格是否将同时显示（需叠层消花策略）。"""
+        mdl_on = (self._layer_visible("mdl", group_name)
+                  and self.chk_mdl_part.isChecked())
+        gph_on = (self._layer_visible("gph", group_name)
+                  and self.chk_gph.isChecked())
+        return bool(mdl_on and gph_on)
+
     def _make_actor(self, kind: str, group: dict,
-                    group_name: Optional[str] = None) -> Optional[LayerRender]:
+                    group_name: Optional[str] = None,
+                    overlap_mesh: bool = False) -> Optional[LayerRender]:
         cap = DEFAULT_CAPS.get(kind, DEFAULT_CAPS["mdl"])
         try:
             if kind in ("mdl", "ridge"):
@@ -1896,14 +1971,22 @@ class View3DTab(QWidget):
                     colors = pph_vtk.preset_colors(len(vals))
                     legend_entries = [
                         (ann[v], colors[i]) for i, v in enumerate(vals)]
-                opacity = self._surface_opacity(kind)
                 wire = self.display_mode.currentText() == "线框"
+                # 与体网格同显：MDL 退到背景半透明层，不画三角网线
+                if overlap_mesh and not wire:
+                    opacity = 0.22
+                    bias = "back"
+                else:
+                    opacity = self._surface_opacity(kind)
+                    bias = "mid"
                 return LayerRender(
                     pph_vtk.polydata_actor(pd, opacity=opacity,
                                            wireframe=wire,
                                            discrete=discrete,
-                                           annotations=ann),
-                    f"MDL {key}", ann, edges=not wire, legend_entries=legend_entries)
+                                           annotations=ann,
+                                           depth_bias=bias),
+                    f"MDL {key}", ann, edges=False,
+                    legend_entries=legend_entries)
             if kind == "oct":
                 path = group.get("oct")
                 if not path:
@@ -1917,9 +2000,20 @@ class View3DTab(QWidget):
                     plane = self._current_plane()
                     pd = pph_vtk.clip_polydata(
                         pd, plane, inside_out=self.chk_opposite.isChecked())
+                # 八叉树默认线框 + 单色（类似体网格风格），关闭深度彩虹着色以免花屏
+                oct_color = (0.42, 0.36, 0.86)  # 紫蓝，区别于 GPH 灰青
+                actor = pph_vtk.polydata_actor(
+                    pd, wireframe=True, color=oct_color, opacity=1.0,
+                    depth_bias="mid")
+                actor.GetMapper().ScalarVisibilityOff()
+                prop = actor.GetProperty()
+                prop.SetLineWidth(1.2)
+                prop.SetAmbient(1.0)
+                prop.SetDiffuse(0.0)
+                prop.LightingOff()
                 return LayerRender(
-                    pph_vtk.polydata_actor(pd, wireframe=True),
-                    "OCT 深度", edges=False)
+                    actor, "OCT", edges=False,
+                    legend_entries=[("octree", oct_color)])
             if kind == "gph":
                 path = group.get("gph")
                 if not path:
@@ -1930,9 +2024,21 @@ class View3DTab(QWidget):
                         _gph_mesh(path), max_faces=cap))
                 opacity = self._surface_opacity("gph")
                 wire = self.display_mode.currentText() == "线框"
+                color_by_owner = self.chk_gph_color.isChecked()
+                # 叠层时体网格在中层；网格线再前移
+                bias = "mid" if overlap_mesh else "mid"
+                if color_by_owner:
+                    actor = pph_vtk.polydata_actor(
+                        pd, opacity=opacity, wireframe=wire,
+                        depth_bias=bias)
+                    return LayerRender(actor, "GPH owner", edges=not wire)
+                actor = pph_vtk.polydata_actor(
+                    pd, opacity=opacity, wireframe=wire,
+                    color=(0.72, 0.76, 0.82), depth_bias=bias)
+                actor.GetMapper().ScalarVisibilityOff()
                 return LayerRender(
-                    pph_vtk.polydata_actor(pd, opacity=opacity, wireframe=wire),
-                    "GPH owner", edges=not wire)
+                    actor, "GPH", edges=not wire,
+                    legend_entries=[("mesh", (0.72, 0.76, 0.82))])
         except Exception as exc:  # noqa: BLE001
             self.status.setText(f"{kind} 渲染失败: {exc}")
             return None
@@ -1963,40 +2069,61 @@ class View3DTab(QWidget):
         mesh_section = (self.chk_section.isChecked()
                         and self.section_target.currentText() == "体网格")
         lines_only = mesh_section and self.chk_lines_only.isChecked()
+        overlap = self._gph_and_mdl_overlap(name) and not lines_only
 
         layers: list[tuple[str, Optional[LayerRender]]] = []
         self._pickable_actors = []
+        # 绘制顺序：MDL（后）→ GPH（中）→ 网格线（前，后面单独加）
         if (self._layer_visible("mdl", name)
                 and self.chk_mdl_part.isChecked() and not lines_only):
-            layers.append(("MDL part", self._make_actor("mdl", group, name)))
+            layers.append(
+                ("MDL part",
+                 self._make_actor("mdl", group, name, overlap_mesh=overlap)))
         if (self._layer_visible("ridge", name)
                 and self.chk_mdl_ridge.isChecked() and not lines_only):
-            layers.append(("MDL ridge", self._make_actor("ridge", group, name)))
+            layers.append(
+                ("MDL ridge",
+                 self._make_actor("ridge", group, name, overlap_mesh=overlap)))
         if (self._layer_visible("oct", name)
                 and self.chk_oct.isChecked() and not lines_only):
             layers.append(("OCT", self._make_actor("oct", group)))
         if (self._layer_visible("gph", name) and self.chk_gph.isChecked()
                 and not lines_only):
-            layers.append(("GPH", self._make_actor("gph", group)))
+            layers.append(
+                ("GPH",
+                 self._make_actor("gph", group, overlap_mesh=overlap)))
 
         mode = self.display_mode.currentText()
         wireframe = mode == "线框"
         legend_layers = []
         cells = []
+        edge_actors = []
         for label, layer in layers:
             if layer is None:
                 continue
             prop = layer.actor.GetProperty()
-            if wireframe:
+            if label == "OCT":
+                # 八叉树始终线框，不受全局「不透明」显示模式改成实体面
+                prop.SetRepresentationToWireframe()
+                prop.SetOpacity(1.0)
+                prop.SetLineWidth(1.2)
+            elif wireframe:
                 prop.SetRepresentationToWireframe()
                 prop.SetOpacity(1.0)
             else:
                 prop.SetRepresentationToSurface()
-                # 体网格按显示模式设透明度；几何在「半透明」时略透以便叠看
                 if label == "GPH":
                     prop.SetOpacity(0.45 if mode == "半透明" else 1.0)
                 elif label.startswith("MDL"):
-                    prop.SetOpacity(0.7 if mode == "半透明" else 1.0)
+                    if overlap:
+                        # 叠层策略：几何半透明垫底，避免与体网格花屏
+                        prop.SetOpacity(0.22)
+                        try:
+                            prop.SetOpacityForceOpaque(False)
+                        except Exception:  # noqa: BLE001
+                            pass
+                    else:
+                        prop.SetOpacity(0.7 if mode == "半透明" else 1.0)
             self.renderer.AddActor(layer.actor)
             if label in ("MDL part", "MDL ridge"):
                 self._pickable_actors.append(layer.actor)
@@ -2004,8 +2131,12 @@ class View3DTab(QWidget):
             cells.append(f"{label}={mapper.GetInput().GetNumberOfCells():,}")
             lut = mapper.GetLookupTable()
             legend_layers.append((layer.title, lut, layer.legend_entries))
+            # 仅体网格叠加网格线，最后统一加入以保证画在最前
             if self.chk_edges.isChecked() and layer.edges and not wireframe:
-                self.renderer.AddActor(pph_vtk.edges_actor(mapper.GetInput()))
+                edge_actors.append(
+                    pph_vtk.edges_actor(mapper.GetInput()))
+        for ea in edge_actors:
+            self.renderer.AddActor(ea)
 
         # 体网格截面线（需先 Draw）
         if mesh_section and self._mesh_section_pd is not None:
@@ -2021,11 +2152,14 @@ class View3DTab(QWidget):
                     ("截面 cvol" if self.chk_color_cvol.isChecked()
                      else "截面", actor.GetMapper().GetLookupTable(), None))
 
-        if self.chk_legend.isChecked():
+        if self.chk_legend.isChecked() and legend_layers:
             self.legend.set_layers(legend_layers)
+            self._legend_host.setVisible(True)
+            self._legend_host.raise_()
         else:
             self.legend.clear()
             self.legend.setVisible(False)
+            self._legend_host.setVisible(False)
         if self.chk_axes.isChecked() and self._vtk_ok:
             try:
                 self._orientation = pph_vtk.orientation_marker_widget(
@@ -2050,6 +2184,8 @@ class View3DTab(QWidget):
             extra = " | 体网格剖切：设置平面后点 Draw"
         elif mesh_section and self._mesh_section_dirty:
             extra = " | 平面已变，需重新 Draw"
+        if overlap and not wireframe:
+            extra += " | 叠层：MDL 半透明垫底，优先 GPH 网格线"
         self.status.setText(
             f"组 {name}：{', '.join(cells) if cells else '无可用几何'}"
             + (self._picked_status or "") + extra)
@@ -2262,7 +2398,11 @@ class PphViewer(QMainWindow):
             self.message_win.text.viewport().update()
         if hasattr(self, "view3d"):
             self.view3d._sync_vtk_viewport()
+            if self.view3d._legend_host.isVisible():
+                self.view3d._legend_host.raise_()
+                self.view3d._legend_host.repaint()
             self.view3d.legend.update()
+            self.view3d.status.update()
         self.update()
         QApplication.processEvents()
 
@@ -2522,9 +2662,9 @@ class PphViewer(QMainWindow):
         disp_label.setToolTip("Display mode")
         tb_disp.addWidget(disp_label)
         self.tb_display = QComboBox(self)
-        self.tb_display.addItems(["半透明", "不透明", "线框"])
-        self.tb_display.setCurrentText("半透明")
-        self.tb_display.setToolTip("半透明 / 不透明 / 线框")
+        self.tb_display.addItems(["不透明", "半透明", "线框"])
+        self.tb_display.setCurrentText("不透明")
+        self.tb_display.setToolTip("不透明（默认）/ 半透明 / 线框")
         self.tb_display.setMinimumWidth(88)
         self.tb_display.currentTextChanged.connect(self._toolbar_display)
         tb_disp.addWidget(self.tb_display)
@@ -2746,8 +2886,11 @@ class PphViewer(QMainWindow):
             self.show_page("draw")
             self.view3d.set_view_mode("mesh")
             self.view3d.chk_gph.setChecked(True)
+            # 网格模式默认不透明、关闭 owner 着色
+            self.view3d.display_mode.setCurrentText("不透明")
+            self.view3d.chk_gph_color.setChecked(False)
             self.view3d.render()
-            self.log("View — Mesh")
+            self.log("View — Mesh (opaque, owner coloring off)")
         elif key == "view_section":
             self.show_page("draw")
             self.view3d.set_view_mode("mesh")
@@ -2880,6 +3023,10 @@ class PphViewer(QMainWindow):
         for g in groups:
             self.status_panel.set_group_status(
                 g, self.model_tree.group_status_props(g))
+            # 与默认图层一致：MDL/GPH 可见，OCT 隐藏
+            self.view3d.set_layer_visibility(g, "mdl", True)
+            self.view3d.set_layer_visibility(g, "gph", True)
+            self.view3d.set_layer_visibility(g, "oct", False)
         if groups:
             self.status_panel.show_group(sorted(groups)[0])
         self.view3d.precache(self.model_models)
@@ -2905,6 +3052,8 @@ class PphViewer(QMainWindow):
         self.view3d.select_group(group)
         self.view3d.set_view_mode("mesh")
         self.view3d.chk_gph.setChecked(True)
+        self.view3d.display_mode.setCurrentText("不透明")
+        self.view3d.chk_gph_color.setChecked(False)
         self.view3d.chk_section.setChecked(True)
         self.view3d.section_target.setCurrentText("体网格")
         self.log(f"{group}: mesh view — set plane then Draw section")
