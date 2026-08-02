@@ -470,7 +470,8 @@ class ModelTree(QWidget):
             oct_item.setData(0, Qt.UserRole, ("layer", group, "oct"))
             oct_item.setFlags(oct_item.flags() | Qt.ItemIsUserCheckable)
             has_oct = bool(info.get("paths", {}).get("oct"))
-            oct_item.setCheckState(0, Qt.Checked if has_oct else Qt.Unchecked)
+            # 默认不显示八叉树（与 3D 工具栏一致）
+            oct_item.setCheckState(0, Qt.Unchecked)
             if not has_oct:
                 oct_item.setFlags(oct_item.flags() & ~Qt.ItemIsEnabled)
             root.addChild(oct_item)
@@ -480,7 +481,8 @@ class ModelTree(QWidget):
             mesh_item.setData(0, Qt.UserRole, ("layer", group, "gph"))
             mesh_item.setFlags(mesh_item.flags() | Qt.ItemIsUserCheckable)
             has_gph = bool(info.get("paths", {}).get("gph"))
-            mesh_item.setCheckState(0, Qt.Checked if has_gph else Qt.Unchecked)
+            # 默认不显示体网格 GPH
+            mesh_item.setCheckState(0, Qt.Unchecked)
             if not has_gph:
                 mesh_item.setFlags(mesh_item.flags() & ~Qt.ItemIsEnabled)
             root.addChild(mesh_item)
@@ -1037,9 +1039,9 @@ class View3DTab(QWidget):
         self.chk_mdl_ridge = QCheckBox("ridge", self)
         self.chk_mdl_ridge.setChecked(False)
         self.chk_oct = QCheckBox("八叉树", self)
-        self.chk_oct.setChecked(True)
+        self.chk_oct.setChecked(False)
         self.chk_gph = QCheckBox("体网格", self)
-        self.chk_gph.setChecked(True)
+        self.chk_gph.setChecked(False)
         self.chk_edges = QCheckBox("网格线", self)
         self.chk_edges.setChecked(True)
         self.chk_axes = QCheckBox("坐标轴", self)
@@ -1053,7 +1055,10 @@ class View3DTab(QWidget):
             "全部", "仅几何 (MDL)", "仅八叉树", "仅体网格 (GPH)"])
         self.view_kind.currentTextChanged.connect(self.render)
         self.display_mode = QComboBox(self)
-        self.display_mode.addItems(["着色", "线框"])
+        self.display_mode.addItems(["半透明", "不透明", "线框"])
+        self.display_mode.setCurrentText("半透明")
+        self.display_mode.setToolTip(
+            "体网格/几何显示：半透明 · 不透明 · 线框")
         self.display_mode.currentTextChanged.connect(self.render)
 
         # ── Cross Section（对齐 scFLOW Mesh 页签）──────────────────
@@ -1402,6 +1407,18 @@ class View3DTab(QWidget):
             self._cache[key] = build()
         return self._cache[key]
 
+    def _surface_opacity(self, kind: str) -> float:
+        """按显示模式返回表面不透明度（线框时仍给 1.0）。"""
+        mode = self.display_mode.currentText()
+        if mode == "线框" or mode == "不透明":
+            return 1.0
+        # 半透明
+        if kind == "gph":
+            return 0.45
+        if kind == "ridge":
+            return 0.65
+        return 0.7  # mdl
+
     def _make_actor(self, kind: str, group: dict,
                     group_name: Optional[str] = None) -> Optional[LayerRender]:
         cap = DEFAULT_CAPS.get(kind, DEFAULT_CAPS["mdl"])
@@ -1431,12 +1448,14 @@ class View3DTab(QWidget):
                     colors = pph_vtk.preset_colors(len(vals))
                     legend_entries = [
                         (ann[v], colors[i]) for i, v in enumerate(vals)]
-                opacity = 1.0 if kind == "mdl" else 0.85
+                opacity = self._surface_opacity(kind)
+                wire = self.display_mode.currentText() == "线框"
                 return LayerRender(
                     pph_vtk.polydata_actor(pd, opacity=opacity,
+                                           wireframe=wire,
                                            discrete=discrete,
                                            annotations=ann),
-                    f"MDL {key}", ann, True, legend_entries)
+                    f"MDL {key}", ann, edges=not wire, legend_entries=legend_entries)
             if kind == "oct":
                 path = group.get("oct")
                 if not path:
@@ -1461,9 +1480,11 @@ class View3DTab(QWidget):
                     ("gph_pd", path),
                     lambda: pph_vtk.gph_boundary_mesh(
                         _gph_mesh(path), max_faces=cap))
+                opacity = self._surface_opacity("gph")
+                wire = self.display_mode.currentText() == "线框"
                 return LayerRender(
-                    pph_vtk.polydata_actor(pd, opacity=0.9),
-                    "GPH owner")
+                    pph_vtk.polydata_actor(pd, opacity=opacity, wireframe=wire),
+                    "GPH owner", edges=not wire)
         except Exception as exc:  # noqa: BLE001
             self.status.setText(f"{kind} 渲染失败: {exc}")
             return None
@@ -1510,14 +1531,24 @@ class View3DTab(QWidget):
                 and not lines_only):
             layers.append(("GPH", self._make_actor("gph", group)))
 
-        wireframe = self.display_mode.currentText() == "线框"
+        mode = self.display_mode.currentText()
+        wireframe = mode == "线框"
         legend_layers = []
         cells = []
         for label, layer in layers:
             if layer is None:
                 continue
+            prop = layer.actor.GetProperty()
             if wireframe:
-                layer.actor.GetProperty().SetRepresentationToWireframe()
+                prop.SetRepresentationToWireframe()
+                prop.SetOpacity(1.0)
+            else:
+                prop.SetRepresentationToSurface()
+                # 体网格按显示模式设透明度；几何在「半透明」时略透以便叠看
+                if label == "GPH":
+                    prop.SetOpacity(0.45 if mode == "半透明" else 1.0)
+                elif label.startswith("MDL"):
+                    prop.SetOpacity(0.7 if mode == "半透明" else 1.0)
             self.renderer.AddActor(layer.actor)
             if label in ("MDL part", "MDL ridge"):
                 self._pickable_actors.append(layer.actor)
