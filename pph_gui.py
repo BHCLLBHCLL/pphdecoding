@@ -2337,9 +2337,17 @@ class View3DTab(QWidget):
                 mdl_model = self._mdl_model_for_group(group, group_name)
                 face_mask = self._gph_visibility_mask(
                     aux, group_name, mdl_model)
-                # 掩码随树勾选变化，不能缓存过滤后的 polydata
-                pd = pph_vtk.gph_boundary_mesh(
-                    aux["mesh"], max_faces=cap, face_mask=face_mask)
+                # 掩码随树勾选变化，不能缓存过滤后的 polydata。
+                # Part Tree 过滤时不能只用外边界：rotation1 等旋转域的
+                # @PartSurface 多为与流体的交界面（internal），boundary_only
+                # 会把环面网格几乎滤光，只剩叶轮附近边界。
+                if face_mask is not None:
+                    pd = pph_vtk.gph_faces_mesh(
+                        aux["mesh"], max_faces=max(cap, 800_000),
+                        boundary_only=False, face_mask=face_mask)
+                else:
+                    pd = pph_vtk.gph_boundary_mesh(
+                        aux["mesh"], max_faces=cap, face_mask=face_mask)
                 opacity = self._surface_opacity("gph")
                 wire = self.display_mode.currentText() == "线框"
                 color_by_owner = self.chk_gph_color.isChecked()
