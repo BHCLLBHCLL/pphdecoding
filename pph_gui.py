@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-"""PPH 查看/修改 GUI —— scFLOW Pre 风格界面（PyQt5 + VTK OpenGL 加速）。
+"""PPH 查看/修改 GUI —— 对齐 scFLOWpre 主界面排版（PyQt5 + VTK）。
 
-参考 ``CradleCFD2025.2/Manuals/scFLOW/HTML/Pre_eng``（Navigation /
-Tree / Property / Draw / Cross Section View of Mesh）重新设计：
+布局参照 Cradle scFLOWpre（Manuals/scFLOW/HTML/Pre_eng）：
 
-- **Navigation Window**（左上方）：按操作顺序的功能导航；
-- **Tree Window**（左下方）：成员树 + **模型树**（网格组 → 几何/八叉树/体网格，
-  含闭体与面区域勾选、状态摘要、右键「显示 octree/mesh 信息」）；
-- **Draw Window**（中央 3D）：几何 / 八叉树 / 网格图层、体网格剖切
-  （Ax+By+Cz=D、Plane position、仅截面线、按闭体着色）；
-- **Property / Status**（右侧）：选中项属性 + 几何/网格/八叉树状态；
-- **看板**（Dashboard）：归档与格式数据卡片。
+  Menu: File / Edit / Select / View / Condition / Execute / Option / Help
+  Toolbars + 主工作区：
+    Navigation | Tree + Property | Draw + Message
+
+PPH 只读/轻量编辑能力映射到对应菜单与导航项；未实现的
+scFLOW 网格生成等操作在 Message 中提示。
 
 用法：``python pph_gui.py [项目.pph]``。
 """
@@ -21,15 +19,19 @@ import os
 import sys
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 
-from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QFont, QPainter, QPixmap
+from PyQt5.QtCore import QPoint, QPointF, QRectF, QSize, Qt, pyqtSignal
+from PyQt5.QtGui import (
+    QBrush, QColor, QFont, QIcon, QPainter, QPen, QPixmap, QPolygon,
+)
 from PyQt5.QtWidgets import (
-    QAction, QApplication, QCheckBox, QComboBox, QDockWidget, QDoubleSpinBox,
+    QAction, QApplication, QCheckBox, QComboBox, QDoubleSpinBox,
     QFileDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
     QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QSlider,
-    QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QSplitter, QStackedWidget, QTabWidget, QToolBar, QTreeWidget,
+    QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 import pph_parser
@@ -80,6 +82,317 @@ def _gph_mesh(path: str) -> dict:
     import gphstats
     with gphstats.open_buffer(path) as data:
         return gphstats.parse_mesh(data)
+
+
+class AppIcons:
+    """轻量矢量图标（QPainter），供工具栏 / Navigation / Tree 使用。"""
+
+    _cache: dict[tuple, QIcon] = {}
+
+    @classmethod
+    def get(cls, name: str, size: int = 20) -> QIcon:
+        key = (name, size)
+        if key not in cls._cache:
+            cls._cache[key] = QIcon(cls._paint(name, size))
+        return cls._cache[key]
+
+    @classmethod
+    def _paint(cls, name: str, size: int) -> QPixmap:
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        m = max(1, size // 10)
+        r = QRectF(m, m, size - 2 * m, size - 2 * m)
+        drawer = getattr(cls, f"_draw_{name}", None)
+        if drawer:
+            drawer(p, r, size)
+        else:
+            cls._draw_generic(p, r)
+        p.end()
+        return pm
+
+    @staticmethod
+    def _pen(color, w=1.6):
+        pen = QPen(QColor(color))
+        pen.setWidthF(w)
+        pen.setJoinStyle(Qt.RoundJoin)
+        pen.setCapStyle(Qt.RoundCap)
+        return pen
+
+    @classmethod
+    def _draw_generic(cls, p, r, _s=0):
+        p.setPen(cls._pen("#555"))
+        p.setBrush(QBrush(QColor("#dde3ea")))
+        p.drawRoundedRect(r, 3, 3)
+
+    @classmethod
+    def _draw_open(cls, p, r, _s):
+        p.setPen(cls._pen("#2e75b6", 1.4))
+        p.setBrush(QBrush(QColor("#f4c542")))
+        tab = QRectF(r.left(), r.top(), r.width() * 0.45, r.height() * 0.28)
+        p.drawRoundedRect(tab, 2, 2)
+        body = QRectF(r.left(), r.top() + r.height() * 0.22,
+                      r.width(), r.height() * 0.72)
+        p.setBrush(QBrush(QColor("#ffd966")))
+        p.drawRoundedRect(body, 2, 2)
+
+    @classmethod
+    def _draw_save(cls, p, r, _s):
+        p.setPen(cls._pen("#1f4e79", 1.3))
+        p.setBrush(QBrush(QColor("#5b9bd5")))
+        p.drawRoundedRect(r, 2, 2)
+        p.setBrush(QBrush(QColor("#fff")))
+        slot = QRectF(r.left() + r.width() * 0.22, r.top(),
+                      r.width() * 0.56, r.height() * 0.38)
+        p.drawRect(slot)
+        p.setBrush(QBrush(QColor("#eaf2fb")))
+        label = QRectF(r.left() + r.width() * 0.18,
+                       r.top() + r.height() * 0.48,
+                       r.width() * 0.64, r.height() * 0.42)
+        p.drawRoundedRect(label, 1, 1)
+
+    @classmethod
+    def _draw_reload(cls, p, r, _s):
+        p.setPen(cls._pen("#2e7d32", 2.0))
+        p.setBrush(Qt.NoBrush)
+        p.drawArc(r.toRect(), 40 * 16, 280 * 16)
+        cx, cy = r.center().x(), r.center().y()
+        tip = QPolygon([
+            QPoint(int(cx + r.width() * 0.42), int(cy - r.height() * 0.05)),
+            QPoint(int(cx + r.width() * 0.18), int(cy - r.height() * 0.38)),
+            QPoint(int(cx + r.width() * 0.48), int(cy - r.height() * 0.32)),
+        ])
+        p.setBrush(QBrush(QColor("#2e7d32")))
+        p.setPen(Qt.NoPen)
+        p.drawPolygon(tip)
+
+    @classmethod
+    def _draw_part(cls, p, r, _s):
+        p.setPen(cls._pen("#1565c0", 1.4))
+        p.setBrush(QBrush(QColor("#90caf9")))
+        pts = QPolygon([
+            QPoint(int(r.left() + r.width() * 0.2), int(r.bottom())),
+            QPoint(int(r.left() + r.width() * 0.5), int(r.top())),
+            QPoint(int(r.right()), int(r.bottom() - r.height() * 0.15)),
+            QPoint(int(r.left() + r.width() * 0.55),
+                   int(r.bottom() - r.height() * 0.05)),
+        ])
+        p.drawPolygon(pts)
+
+    @classmethod
+    def _draw_octree(cls, p, r, _s):
+        p.setPen(cls._pen("#6a1b9a", 1.2))
+        p.setBrush(QBrush(QColor("#ce93d8")))
+        # 四分方格示意八叉树
+        x0, y0, w, h = r.left(), r.top(), r.width(), r.height()
+        for i in range(2):
+            for j in range(2):
+                cell = QRectF(x0 + i * w * 0.5, y0 + j * h * 0.5,
+                              w * 0.48, h * 0.48)
+                p.drawRect(cell)
+        # 右上再细分
+        sub = QRectF(x0 + w * 0.5, y0, w * 0.24, h * 0.24)
+        p.setBrush(QBrush(QColor("#ab47bc")))
+        p.drawRect(sub)
+        sub2 = QRectF(x0 + w * 0.74, y0, w * 0.24, h * 0.24)
+        p.drawRect(sub2)
+
+    @classmethod
+    def _draw_mesh(cls, p, r, _s):
+        p.setPen(cls._pen("#00838f", 1.2))
+        p.setBrush(QBrush(QColor("#80deea")))
+        p.drawEllipse(r)
+        p.setPen(cls._pen("#006064", 1.0))
+        cx, cy = r.center().x(), r.center().y()
+        for ang in (0, 60, 120):
+            import math
+            a = math.radians(ang)
+            x = cx + math.cos(a) * r.width() * 0.42
+            y = cy + math.sin(a) * r.height() * 0.42
+            p.drawLine(QPointF(cx, cy), QPointF(x, y))
+        p.drawLine(QPoint(int(r.left() + 2), int(r.center().y())),
+                   QPoint(int(r.right() - 2), int(r.center().y())))
+
+    @classmethod
+    def _draw_section(cls, p, r, _s):
+        p.setPen(cls._pen("#455a64", 1.2))
+        p.setBrush(QBrush(QColor("#b0bec5")))
+        p.drawRoundedRect(r, 2, 2)
+        p.setPen(cls._pen("#c62828", 2.2))
+        p.drawLine(QPoint(int(r.left()), int(r.top() + r.height() * 0.7)),
+                   QPoint(int(r.right()), int(r.top() + r.height() * 0.3)))
+
+    @classmethod
+    def _draw_fit(cls, p, r, _s):
+        p.setPen(cls._pen("#37474f", 1.6))
+        p.setBrush(Qt.NoBrush)
+        # 四角括号
+        s = r.width() * 0.28
+        corners = [
+            (r.left(), r.top(), 1, 1),
+            (r.right(), r.top(), -1, 1),
+            (r.left(), r.bottom(), 1, -1),
+            (r.right(), r.bottom(), -1, -1),
+        ]
+        for x, y, sx, sy in corners:
+            p.drawLine(QPoint(int(x), int(y)),
+                       QPoint(int(x + sx * s), int(y)))
+            p.drawLine(QPoint(int(x), int(y)),
+                       QPoint(int(x), int(y + sy * s)))
+        p.setBrush(QBrush(QColor("#90a4ae")))
+        p.drawEllipse(r.adjusted(r.width() * 0.28, r.height() * 0.28,
+                                 -r.width() * 0.28, -r.height() * 0.28))
+
+    @classmethod
+    def _draw_show_all(cls, p, r, _s):
+        p.setPen(cls._pen("#ef6c00", 1.3))
+        p.setBrush(QBrush(QColor("#ffe0b2")))
+        p.drawEllipse(r.adjusted(r.width() * 0.15, r.height() * 0.2,
+                                 -r.width() * 0.15, -r.height() * 0.15))
+        p.setBrush(QBrush(QColor("#fff")))
+        eye = QRectF(r.center().x() - r.width() * 0.12,
+                     r.center().y() - r.height() * 0.08,
+                     r.width() * 0.24, r.height() * 0.24)
+        p.drawEllipse(eye)
+        p.setBrush(QBrush(QColor("#333")))
+        p.drawEllipse(eye.adjusted(eye.width() * 0.3, eye.height() * 0.3,
+                                   -eye.width() * 0.3, -eye.height() * 0.3))
+
+    @classmethod
+    def _draw_display(cls, p, r, _s):
+        p.setPen(cls._pen("#5d4037", 1.2))
+        p.setBrush(QBrush(QColor(100, 149, 237, 120)))
+        p.drawEllipse(r)
+        p.setBrush(QBrush(QColor("#5c6bc0")))
+        p.drawEllipse(r.adjusted(r.width() * 0.35, r.height() * 0.35,
+                                 -r.width() * 0.05, -r.height() * 0.05))
+
+    @classmethod
+    def _draw_folder(cls, p, r, _s):
+        cls._draw_open(p, r, _s)
+
+    @classmethod
+    def _draw_group(cls, p, r, _s):
+        p.setPen(cls._pen("#1565c0", 1.2))
+        p.setBrush(QBrush(QColor("#bbdefb")))
+        p.drawRoundedRect(r, 3, 3)
+        p.setPen(cls._pen("#0d47a1", 1.4))
+        p.drawText(r.toRect(), Qt.AlignCenter, "G")
+
+    @classmethod
+    def _draw_body(cls, p, r, _s):
+        p.setPen(cls._pen("#2e7d32", 1.2))
+        p.setBrush(QBrush(QColor("#a5d6a7")))
+        p.drawRoundedRect(r.adjusted(2, 2, -2, -2), 3, 3)
+
+    @classmethod
+    def _draw_region(cls, p, r, _s):
+        p.setPen(cls._pen("#f9a825", 1.3))
+        p.setBrush(QBrush(QColor("#fff59d")))
+        p.drawEllipse(r.adjusted(1, 1, -1, -1))
+
+    @classmethod
+    def _draw_project(cls, p, r, _s):
+        p.setPen(cls._pen("#455a64", 1.2))
+        p.setBrush(QBrush(QColor("#cfd8dc")))
+        p.drawRoundedRect(r, 2, 2)
+        p.setPen(cls._pen("#263238", 1.0))
+        for i in range(3):
+            y = r.top() + r.height() * (0.28 + i * 0.22)
+            p.drawLine(QPoint(int(r.left() + 3), int(y)),
+                       QPoint(int(r.right() - 3), int(y)))
+
+    @classmethod
+    def _draw_script(cls, p, r, _s):
+        p.setPen(cls._pen("#6a1b9a", 1.2))
+        p.setBrush(QBrush(QColor("#e1bee7")))
+        p.drawRoundedRect(r, 2, 2)
+        p.setPen(cls._pen("#4a148c", 1.5))
+        p.setFont(QFont("Consolas", max(6, int(r.height() * 0.45))))
+        p.drawText(r.toRect(), Qt.AlignCenter, "{}")
+
+    @classmethod
+    def _draw_xml(cls, p, r, _s):
+        p.setPen(cls._pen("#bf360c", 1.2))
+        p.setBrush(QBrush(QColor("#ffccbc")))
+        p.drawRoundedRect(r, 2, 2)
+        p.setPen(cls._pen("#bf360c", 1.3))
+        p.setFont(QFont("Consolas", max(6, int(r.height() * 0.4))))
+        p.drawText(r.toRect(), Qt.AlignCenter, "<>")
+
+    @classmethod
+    def _draw_snapshot(cls, p, r, _s):
+        p.setPen(cls._pen("#00695c", 1.2))
+        p.setBrush(QBrush(QColor("#b2dfdb")))
+        p.drawRoundedRect(r, 2, 2)
+        p.setBrush(QBrush(QColor("#26a69a")))
+        p.drawEllipse(r.adjusted(r.width() * 0.25, r.height() * 0.25,
+                                 -r.width() * 0.25, -r.height() * 0.25))
+
+    @classmethod
+    def _draw_dashboard(cls, p, r, _s):
+        p.setPen(cls._pen("#37474f", 1.1))
+        colors = ["#ef5350", "#42a5f5", "#66bb6a", "#ffa726"]
+        cells = [
+            QRectF(r.left(), r.top(), r.width() * 0.48, r.height() * 0.48),
+            QRectF(r.left() + r.width() * 0.52, r.top(),
+                   r.width() * 0.48, r.height() * 0.48),
+            QRectF(r.left(), r.top() + r.height() * 0.52,
+                   r.width() * 0.48, r.height() * 0.48),
+            QRectF(r.left() + r.width() * 0.52, r.top() + r.height() * 0.52,
+                   r.width() * 0.48, r.height() * 0.48),
+        ]
+        for cell, c in zip(cells, colors):
+            p.setBrush(QBrush(QColor(c)))
+            p.drawRoundedRect(cell, 1, 1)
+
+    @classmethod
+    def _draw_nav_section(cls, p, r, _s):
+        p.setPen(cls._pen("#1565c0", 1.2))
+        p.setBrush(QBrush(QColor("#e3f2fd")))
+        p.drawRoundedRect(r, 2, 2)
+        p.setPen(cls._pen("#0d47a1", 1.8))
+        mid = r.center().y()
+        p.drawLine(QPoint(int(r.left() + 3), int(mid)),
+                   QPoint(int(r.right() - 3), int(mid)))
+        p.drawLine(QPoint(int(r.center().x()), int(r.top() + 3)),
+                   QPoint(int(r.center().x()), int(r.bottom() - 3)))
+
+    @classmethod
+    def _draw_param(cls, p, r, _s):
+        p.setPen(cls._pen("#546e7a", 1.3))
+        p.setBrush(QBrush(QColor("#eceff1")))
+        p.drawEllipse(r)
+        # 简易齿轮齿
+        cx, cy = r.center().x(), r.center().y()
+        import math
+        for i in range(8):
+            a = math.radians(i * 45)
+            x1 = cx + math.cos(a) * r.width() * 0.28
+            y1 = cy + math.sin(a) * r.height() * 0.28
+            x2 = cx + math.cos(a) * r.width() * 0.48
+            y2 = cy + math.sin(a) * r.height() * 0.48
+            p.drawLine(QPointF(x1, y1), QPointF(x2, y2))
+
+
+# Navigation / Tree 节点 key → 图标名
+NAV_ICONS = {
+    "open": "open", "reload": "reload", "project": "project",
+    "mdl": "part", "regions": "region",
+    "oct": "octree", "oct_param": "param",
+    "gph": "mesh", "mesh_param": "param",
+    "snapshot": "snapshot",
+    "view_part": "part", "view_octree": "octree", "view_mesh": "mesh",
+    "view_section": "section", "view_show_all": "show_all",
+    "xml": "xml", "js": "script", "dashboard": "dashboard", "save": "save",
+}
+NAV_SECTION_ICONS = {
+    "Prepare Parts": "folder",
+    "Build Analysis Model": "octree",
+    "View": "show_all",
+    "Data / Script": "script",
+}
 
 
 class BarChart(QWidget):
@@ -184,78 +497,122 @@ class LegendPanel(QFrame):
         return pm
 
 
+class PaneFrame(QFrame):
+    """scFLOWpre 风格停靠窗格：标题栏 + 内容区。"""
+
+    def __init__(self, title: str, content: QWidget, parent=None):
+        super().__init__(parent)
+        self.setObjectName("PaneFrame")
+        self.setFrameShape(QFrame.StyledPanel)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        bar = QFrame(self)
+        bar.setObjectName("PaneTitleBar")
+        bar.setFixedHeight(24)
+        hb = QHBoxLayout(bar)
+        hb.setContentsMargins(8, 0, 6, 0)
+        self.title_label = QLabel(title, bar)
+        self.title_label.setObjectName("PaneTitle")
+        hb.addWidget(self.title_label)
+        hb.addStretch(1)
+        lay.addWidget(bar)
+        lay.addWidget(content, 1)
+
+    def set_title(self, title: str) -> None:
+        self.title_label.setText(title)
+
+
+class MessageWindow(QWidget):
+    """Message Window：操作日志 / 提示 / 未实现功能说明。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(2, 2, 2, 2)
+        self.text = QPlainTextEdit(self)
+        self.text.setReadOnly(True)
+        self.text.setMaximumBlockCount(2000)
+        self.text.setPlaceholderText("Messages…")
+        v.addWidget(self.text)
+
+    def log(self, msg: str, level: str = "INFO") -> None:
+        ts = datetime.now().strftime("%H:%M:%S")
+        self.text.appendPlainText(f"[{ts}] {level}: {msg}")
+        self.text.verticalScrollBar().setValue(
+            self.text.verticalScrollBar().maximum())
+
+    def clear(self) -> None:
+        self.text.clear()
+
+
 class NavigationWindow(QWidget):
-    """scFLOW Pre 风格 Navigation Window：工具按钮 + 文件信息 + 分组导航。"""
+    """scFLOWpre Navigation Window：按预处理流程排列的功能入口。"""
 
     navigated = pyqtSignal(str)
 
+    # 对齐 Pre Navigation 流程；key → PphViewer._on_navigate
     SECTIONS = [
-        ("模型数据", [
-            ("项目信息 (xenv/prp)", "project"),
-            ("面片几何 MDL", "mdl"),
-            ("八叉树 OCT", "oct"),
-            ("体网格 GPH", "gph"),
+        ("Prepare Parts", [
+            ("Open Project (PPH)", "open"),
+            ("Reload Project", "reload"),
+            ("Project Info (xenv/prp)", "project"),
+            ("Parts / Geometry (MDL)", "mdl"),
+            ("Register Region", "regions"),
         ]),
-        ("视图", [
-            ("3D / 剖切", "view3d"),
-            ("快照 / Parasolid", "snapshot"),
-            ("项目定义 XML", "xml"),
-            ("用户脚本 JS", "js"),
+        ("Build Analysis Model", [
+            ("Octree (OCT)", "oct"),
+            ("Octree Parameter (view)", "oct_param"),
+            ("Mesh (GPH)", "gph"),
+            ("Mesh Parameter (view)", "mesh_param"),
+            ("Snapshot / Parasolid", "snapshot"),
         ]),
-        ("数据", [
-            ("格式数据看板", "dashboard"),
+        ("View", [
+            ("Draw — Part", "view_part"),
+            ("Draw — Octree", "view_octree"),
+            ("Draw — Mesh", "view_mesh"),
+            ("Cross Section of Mesh", "view_section"),
+            ("Show All", "view_show_all"),
+        ]),
+        ("Data / Script", [
+            ("Project XML", "xml"),
+            ("User Script (JS)", "js"),
+            ("Format Dashboard", "dashboard"),
+            ("Save As…", "save"),
         ]),
     ]
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumWidth(250)
+        self.setMinimumWidth(200)
         v = QVBoxLayout(self)
-        v.setContentsMargins(6, 6, 6, 6)
-        v.setSpacing(6)
-        title = QLabel("Navigation", self)
-        title.setStyleSheet(
-            "font-size: 14px; font-weight: bold; color: #1a5fb4;")
-        v.addWidget(title)
-
-        # 工具按钮行
-        btns = QHBoxLayout()
-        self.btn_open = QPushButton("打开", self)
-        self.btn_save = QPushButton("另存为", self)
-        self.btn_reload = QPushButton("重载", self)
-        for b, key in ((self.btn_open, "open"), (self.btn_save, "save"),
-                       (self.btn_reload, "reload")):
-            b.setMinimumHeight(26)
-            b.clicked.connect(lambda _c, k=key: self.navigated.emit(k))
-            btns.addWidget(b)
-        v.addLayout(btns)
-
-        # 当前文件信息
-        self.file_label = QLabel("未打开文件", self)
+        v.setContentsMargins(4, 4, 4, 4)
+        v.setSpacing(4)
+        self.file_label = QLabel("No project", self)
         self.file_label.setWordWrap(True)
-        self.file_label.setStyleSheet(
-            "background: #eaf2fb; border: 1px solid #b9d3ee;"
-            "border-radius: 3px; padding: 4px; color: #234;")
+        self.file_label.setObjectName("NavFileLabel")
         v.addWidget(self.file_label)
-
-        # 分组导航树
         self.tree = QTreeWidget(self)
         self.tree.setHeaderHidden(True)
         self.tree.setIndentation(14)
+        self.tree.setIconSize(QSize(18, 18))
+        self.tree.setRootIsDecorated(True)
         self.tree.itemClicked.connect(self._on_clicked)
-        self.tree.setStyleSheet(
-            "QTreeWidget::item { padding: 3px; }")
+        self.tree.setObjectName("NavTree")
         for section, items in self.SECTIONS:
             root = QTreeWidgetItem([section])
             root.setFlags(Qt.ItemIsEnabled)
             font = root.font(0)
             font.setBold(True)
             root.setFont(0, font)
+            root.setIcon(0, AppIcons.get(
+                NAV_SECTION_ICONS.get(section, "nav_section"), 16))
             self.tree.addTopLevelItem(root)
             for label, key in items:
                 child = QTreeWidgetItem([label])
                 child.setData(0, Qt.UserRole, key)
                 child.setToolTip(0, label)
+                child.setIcon(0, AppIcons.get(NAV_ICONS.get(key, "generic"), 16))
                 root.addChild(child)
             root.setExpanded(True)
         v.addWidget(self.tree, 1)
@@ -266,29 +623,25 @@ class NavigationWindow(QWidget):
             self.navigated.emit(key)
 
     def set_file_info(self, path: str, n_members: int, total_size: str) -> None:
-        import os
         self.file_label.setText(
-            f"文件: {os.path.basename(path)}\n"
-            f"成员 {n_members} 个 · {total_size}")
+            f"{os.path.basename(path)}\n"
+            f"{n_members} members · {total_size}")
 
     def set_loaded(self, loaded: bool) -> None:
-        self.file_label.setText("未打开文件" if not loaded
-                                else self.file_label.text())
+        if not loaded:
+            self.file_label.setText("No project")
 
 
 class PropertyPanel(QWidget):
-    """scFLOW Pre 风格 Property Window：选中树项的解析属性。"""
+    """Property Window：选中树项的解析属性。"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
-        title = QLabel("Property", self)
-        title.setStyleSheet("font-weight: bold; color: #1a5fb4;")
-        layout.addWidget(title)
+        layout.setContentsMargins(2, 2, 2, 2)
         self.tree = QTreeWidget(self)
-        self.tree.setHeaderLabels(["属性", "值"])
-        self.tree.setColumnWidth(0, 130)
+        self.tree.setHeaderLabels(["Property", "Value"])
+        self.tree.setColumnWidth(0, 120)
         layout.addWidget(self.tree, 1)
 
     def set_properties(self, props: dict) -> None:
@@ -321,10 +674,7 @@ class StatusPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
-        title = QLabel("Status", self)
-        title.setStyleSheet("font-weight: bold; color: #1a5fb4;")
-        layout.addWidget(title)
+        layout.setContentsMargins(2, 2, 2, 2)
         self.tabs = QTabWidget(self)
         self.geo_tree = QTreeWidget(self)
         self.oct_tree = QTreeWidget(self)
@@ -405,6 +755,7 @@ class ModelTree(QWidget):
         self.tree = QTreeWidget(self)
         self.tree.setHeaderLabels(["模型", "状态"])
         self.tree.setColumnWidth(0, 160)
+        self.tree.setIconSize(QSize(16, 16))
         self.tree.itemChanged.connect(self._on_item_changed)
         self.tree.itemSelectionChanged.connect(self._on_selection)
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -425,6 +776,7 @@ class ModelTree(QWidget):
             root.setData(0, Qt.UserRole, ("group", group, None))
             root.setFlags(root.flags() | Qt.ItemIsUserCheckable)
             root.setCheckState(0, Qt.Checked)
+            root.setIcon(0, AppIcons.get("group", 16))
             self.tree.addTopLevelItem(root)
 
             m = info.get("part")
@@ -434,6 +786,7 @@ class ModelTree(QWidget):
             geo.setFlags(geo.flags() | Qt.ItemIsUserCheckable)
             geo.setCheckState(0, Qt.Checked if info.get("paths", {}).get("part")
                               else Qt.Unchecked)
+            geo.setIcon(0, AppIcons.get("part", 16))
             if not info.get("paths", {}).get("part"):
                 geo.setFlags(geo.flags() & ~Qt.ItemIsEnabled)
             root.addChild(geo)
@@ -443,11 +796,13 @@ class ModelTree(QWidget):
                     if bodies:
                         bnode = QTreeWidgetItem(["闭体", f"{len(bodies)}"])
                         bnode.setData(0, Qt.UserRole, ("folder", group, "body"))
+                        bnode.setIcon(0, AppIcons.get("folder", 16))
                         for b in bodies:
                             item = QTreeWidgetItem([f"body {b}", "closed volume"])
                             item.setData(0, Qt.UserRole, ("body", group, b))
                             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
                             item.setCheckState(0, Qt.Checked)
+                            item.setIcon(0, AppIcons.get("body", 16))
                             bnode.addChild(item)
                         geo.addChild(bnode)
                 seen: dict[int, str] = {}
@@ -457,11 +812,13 @@ class ModelTree(QWidget):
                 if seen:
                     rnode = QTreeWidgetItem(["面区域", f"{len(seen)}"])
                     rnode.setData(0, Qt.UserRole, ("folder", group, "region"))
+                    rnode.setIcon(0, AppIcons.get("folder", 16))
                     for idx, name in sorted(seen.items()):
                         item = QTreeWidgetItem([name, f"frid={idx}"])
                         item.setData(0, Qt.UserRole, ("region", group, idx))
                         item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
                         item.setCheckState(0, Qt.Checked)
+                        item.setIcon(0, AppIcons.get("region", 16))
                         rnode.addChild(item)
                     geo.addChild(rnode)
 
@@ -472,6 +829,7 @@ class ModelTree(QWidget):
             has_oct = bool(info.get("paths", {}).get("oct"))
             # 默认不显示八叉树（与 3D 工具栏一致）
             oct_item.setCheckState(0, Qt.Unchecked)
+            oct_item.setIcon(0, AppIcons.get("octree", 16))
             if not has_oct:
                 oct_item.setFlags(oct_item.flags() & ~Qt.ItemIsEnabled)
             root.addChild(oct_item)
@@ -483,6 +841,7 @@ class ModelTree(QWidget):
             has_gph = bool(info.get("paths", {}).get("gph"))
             # 默认不显示体网格 GPH
             mesh_item.setCheckState(0, Qt.Unchecked)
+            mesh_item.setIcon(0, AppIcons.get("mesh", 16))
             if not has_gph:
                 mesh_item.setFlags(mesh_item.flags() & ~Qt.ItemIsEnabled)
             root.addChild(mesh_item)
@@ -1762,12 +2121,12 @@ class View3DTab(QWidget):
 
 
 class PphViewer(QMainWindow):
-    """主窗口（scFLOW Pre 风格）。"""
+    """主窗口 —— scFLOWpre 式排版。"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("PPH 查看/修改器 (scFLOW Pre 风格)")
-        self.resize(1440, 860)
+        self.setWindowTitle("PPH Viewer — scFLOWpre layout")
+        self.resize(1600, 900)
         self.arch: Optional[pph_parser.PphArchive] = None
         self.archive_path: Optional[str] = None
         self.member_bytes: dict[str, bytes] = {}
@@ -1776,24 +2135,44 @@ class PphViewer(QMainWindow):
         self.snap = None
         self._build_ui()
         self._apply_style()
+        self.log("Ready. Open a .pph project to begin.")
+
+    def log(self, msg: str, level: str = "INFO") -> None:
+        if hasattr(self, "message_win"):
+            self.message_win.log(msg, level)
+        self.statusBar().showMessage(msg, 8000)
+
+    def show_page(self, name: str) -> None:
+        """切换 Draw 区堆叠页：draw / dashboard / editor / snapshot。"""
+        pages = {
+            "draw": self.view3d,
+            "dashboard": self.dashboard,
+            "editor": self.editor_tab,
+            "snapshot": self.snapshot_tab,
+        }
+        w = pages.get(name, self.view3d)
+        self.work_stack.setCurrentWidget(w)
+        titles = {
+            "draw": "Draw Window",
+            "dashboard": "Draw Window — Dashboard",
+            "editor": "Draw Window — Text Editor",
+            "snapshot": "Draw Window — Snapshot",
+        }
+        self.draw_pane.set_title(titles.get(name, "Draw Window"))
 
     def _build_ui(self) -> None:
-        tb = self.addToolBar("文件")
-        act_open = QAction("打开…", self)
-        act_open.triggered.connect(self.open_dialog)
-        act_save = QAction("另存为…", self)
-        act_save.triggered.connect(self.save_as_dialog)
-        act_reload = QAction("重新加载", self)
-        act_reload.triggered.connect(self.reload)
-        tb.addAction(act_open)
-        tb.addAction(act_save)
-        tb.addAction(act_reload)
+        self._build_menus()
+        self._build_toolbars()
 
-        # 左侧：Navigation（上）+ Tree Window（下）
+        # ── Navigation ────────────────────────────────────────────
         self.navigation = NavigationWindow(self)
         self.navigation.navigated.connect(self._on_navigate)
+        nav_pane = PaneFrame("Navigation", self.navigation)
+
+        # ── Tree（模型 + 成员）────────────────────────────────────
         self.member_tree = QTreeWidget(self)
-        self.member_tree.setHeaderLabels(["成员", "角色 / 说明", "大小"])
+        self.member_tree.setHeaderLabels(["Member", "Role", "Size"])
+        self.member_tree.setIconSize(QSize(16, 16))
         self.member_tree.itemClicked.connect(self._on_member_clicked)
         self.member_tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.member_tree.customContextMenuRequested.connect(
@@ -1806,52 +2185,335 @@ class PphViewer(QMainWindow):
         self.model_tree.status_requested.connect(self._on_status_requested)
         self.model_tree.focus_3d.connect(self._focus_model_3d)
         self.model_tree.select_mesh.connect(self._select_mesh_view)
-        left_tabs = QTabWidget(self)
-        left_tabs.addTab(self.model_tree, "模型")
-        left_tabs.addTab(self.member_tree, "成员")
-        left = QSplitter(Qt.Vertical, self)
-        left.addWidget(self.navigation)
-        left.addWidget(left_tabs)
-        left.setStretchFactor(0, 2)
-        left.setStretchFactor(1, 3)
-        dock = QDockWidget("Navigation / Tree", self)
-        dock.setWidget(left)
-        dock.setFeatures(QDockWidget.DockWidgetMovable)
-        self.addDockWidget(Qt.LeftDockWidgetArea, dock)
+        tree_tabs = QTabWidget(self)
+        tree_tabs.addTab(self.model_tree, "Part Tree")
+        tree_tabs.addTab(self.member_tree, "Archive")
+        tree_pane = PaneFrame("Tree", tree_tabs)
 
-        # 右侧：Property + Status（几何 / 八叉树 / 体网格）
+        # ── Property（属性 + 几何/OCT/网格状态）──────────────────
         self.property_panel = PropertyPanel(self)
         self.status_panel = StatusPanel(self)
-        right = QSplitter(Qt.Vertical, self)
-        right.addWidget(self.property_panel)
-        right.addWidget(self.status_panel)
-        right.setStretchFactor(0, 1)
-        right.setStretchFactor(1, 1)
-        pdock = QDockWidget("Property / Status", self)
-        pdock.setWidget(right)
-        pdock.setFeatures(QDockWidget.DockWidgetMovable)
-        self.addDockWidget(Qt.RightDockWidgetArea, pdock)
+        prop_tabs = QTabWidget(self)
+        prop_tabs.addTab(self.property_panel, "Property")
+        prop_tabs.addTab(self.status_panel, "Status")
+        self.prop_tabs = prop_tabs
+        prop_pane = PaneFrame("Property", prop_tabs)
 
-        # 中央标签页
-        self.tabs = QTabWidget(self)
+        mid_left = QSplitter(Qt.Vertical, self)
+        mid_left.addWidget(tree_pane)
+        mid_left.addWidget(prop_pane)
+        mid_left.setStretchFactor(0, 3)
+        mid_left.setStretchFactor(1, 2)
+        mid_left.setSizes([480, 280])
+
+        # ── Draw + Message ────────────────────────────────────────
         self.view3d = View3DTab(self)
         self.dashboard = DashboardTab(self)
         self.dashboard.set_viewer(self)
         self.editor_tab = TextEditorTab(self)
         self.snapshot_tab = SnapshotTab(self)
-        self.tabs.addTab(self.view3d, "3D")
-        self.tabs.addTab(self.dashboard, "看板")
-        self.tabs.addTab(self.editor_tab, "文本编辑")
-        self.tabs.addTab(self.snapshot_tab, "快照")
         self.view3d.show_all_requested.connect(self._show_all_models)
-        self.setCentralWidget(self.tabs)
-        self.statusBar().showMessage("未打开文件")
+        # 工具栏 Display 与 Draw 内控件双向同步
+        self.view3d.display_mode.currentTextChanged.connect(
+            self._sync_tb_display)
+        self.tb_display.blockSignals(True)
+        self.tb_display.setCurrentText(self.view3d.display_mode.currentText())
+        self.tb_display.blockSignals(False)
+        self.work_stack = QStackedWidget(self)
+        self.work_stack.addWidget(self.view3d)
+        self.work_stack.addWidget(self.dashboard)
+        self.work_stack.addWidget(self.editor_tab)
+        self.work_stack.addWidget(self.snapshot_tab)
+        # 兼容旧代码中的 self.tabs
+        self.tabs = self.work_stack
+        self.draw_pane = PaneFrame("Draw Window", self.work_stack)
+
+        self.message_win = MessageWindow(self)
+        msg_pane = PaneFrame("Message", self.message_win)
+
+        right = QSplitter(Qt.Vertical, self)
+        right.addWidget(self.draw_pane)
+        right.addWidget(msg_pane)
+        right.setStretchFactor(0, 5)
+        right.setStretchFactor(1, 1)
+        right.setSizes([640, 140])
+
+        # ── 三列主分割：Nav | Tree+Property | Draw+Message ────────
+        main = QSplitter(Qt.Horizontal, self)
+        main.addWidget(nav_pane)
+        main.addWidget(mid_left)
+        main.addWidget(right)
+        main.setStretchFactor(0, 0)
+        main.setStretchFactor(1, 0)
+        main.setStretchFactor(2, 1)
+        main.setSizes([220, 300, 1000])
+        self.setCentralWidget(main)
+        self.statusBar().showMessage("No project")
+
+    def _build_menus(self) -> None:
+        mb = self.menuBar()
+
+        def add_act(menu, text, slot=None, shortcut=None, tip=None):
+            act = QAction(text, self)
+            if shortcut:
+                act.setShortcut(shortcut)
+            if tip:
+                act.setToolTip(tip)
+            if slot:
+                act.triggered.connect(slot)
+            else:
+                act.triggered.connect(
+                    lambda checked=False, t=text: self._nyi(t))
+            menu.addAction(act)
+            return act
+
+        # File
+        m = mb.addMenu("File(&F)")
+        add_act(m, "Open…", self.open_dialog, "Ctrl+O")
+        add_act(m, "Reload", self.reload, "F5")
+        add_act(m, "Save As…", self.save_as_dialog, "Ctrl+Shift+S")
+        m.addSeparator()
+        add_act(m, "Open Project Folder", self._open_project_folder)
+        add_act(m, "Export Member…", self._export_member)
+        m.addSeparator()
+        add_act(m, "Exit", self.close, "Alt+F4")
+
+        # Edit
+        m = mb.addMenu("Edit(&E)")
+        add_act(m, "Create Parts")
+        add_act(m, "Modify Parts")
+        add_act(m, "Register Region",
+                lambda: self._on_navigate("regions"))
+        add_act(m, "Edit Project XML / JS",
+                lambda: self._on_navigate("xml"))
+
+        # Select
+        m = mb.addMenu("Select(&S)")
+        add_act(m, "Pick Face", self._toggle_pick_face)
+        add_act(m, "Clear Selection",
+                lambda: self.view3d.set_model_filter(None))
+
+        # View
+        m = mb.addMenu("View(&V)")
+        add_act(m, "Part", lambda: self._on_navigate("view_part"))
+        add_act(m, "Octree", lambda: self._on_navigate("view_octree"))
+        add_act(m, "Mesh", lambda: self._on_navigate("view_mesh"))
+        m.addSeparator()
+        add_act(m, "Fit to Draw Window",
+                lambda: self.view3d.fit(), "Ctrl+F")
+        add_act(m, "Reset Viewpoint",
+                lambda: self.view3d.reset_viewpoint())
+        add_act(m, "Show All", lambda: self._on_navigate("view_show_all"))
+        m.addSeparator()
+        add_act(m, "Cross Section View of Mesh",
+                lambda: self._on_navigate("view_section"))
+        add_act(m, "Rubber Box Zoom", self._toggle_rubber)
+        m.addSeparator()
+        add_act(m, "Dashboard", lambda: self._on_navigate("dashboard"))
+        add_act(m, "Snapshot", lambda: self._on_navigate("snapshot"))
+
+        # Condition
+        m = mb.addMenu("Condition(&C)")
+        add_act(m, "Parts Control",
+                lambda: self._on_navigate("mdl"))
+        add_act(m, "Octree Parameter",
+                lambda: self._on_navigate("oct_param"))
+        add_act(m, "Mesh Parameter",
+                lambda: self._on_navigate("mesh_param"))
+        add_act(m, "Part Material / Conditions")
+
+        # Execute
+        m = mb.addMenu("Execute(&X)")
+        add_act(m, "Build Analysis Model")
+        add_act(m, "Generate Octree for Meshing")
+        add_act(m, "Generate Mesh")
+        add_act(m, "Execute Solver")
+
+        # Option
+        m = mb.addMenu("Option(&O)")
+        add_act(m, "Environment Settings")
+        add_act(m, "Show Geometry Status",
+                lambda: self._focus_status("geometry"))
+        add_act(m, "Show Octree Status",
+                lambda: self._focus_status("octree"))
+        add_act(m, "Show Mesh Status",
+                lambda: self._focus_status("mesh"))
+
+        # Help
+        m = mb.addMenu("Help(&H)")
+        add_act(m, "About PPH Viewer", self._about)
+        add_act(m, "Open scFLOWpre Manual", self._open_manual)
+
+    def _build_toolbars(self) -> None:
+        icon_sz = 22
+
+        def _tb(name: str) -> QToolBar:
+            tb = QToolBar(name, self)
+            tb.setMovable(False)
+            tb.setIconSize(QSize(icon_sz, icon_sz))
+            tb.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+            return tb
+
+        tb_file = _tb("File")
+        for text, icon, tip, slot in (
+            ("Open", "open", "Open Project (PPH)", self.open_dialog),
+            ("Save As", "save", "Save As…", self.save_as_dialog),
+            ("Reload", "reload", "Reload Project", self.reload),
+        ):
+            act = QAction(AppIcons.get(icon, icon_sz), text, self)
+            act.setToolTip(tip)
+            act.triggered.connect(slot)
+            tb_file.addAction(act)
+        self.addToolBar(tb_file)
+
+        tb_view = _tb("View")
+        for text, icon, tip, key in (
+            ("Part", "part", "View — Part (geometry)", "view_part"),
+            ("Octree", "octree", "View — Octree", "view_octree"),
+            ("Mesh", "mesh", "View — Mesh", "view_mesh"),
+            ("Section", "section", "Cross Section View of Mesh", "view_section"),
+            ("Fit", "fit", "Fit to Draw Window", None),
+            ("Show All", "show_all", "Show All", "view_show_all"),
+        ):
+            act = QAction(AppIcons.get(icon, icon_sz), text, self)
+            act.setToolTip(tip)
+            if key:
+                act.triggered.connect(
+                    lambda _c=False, k=key: self._on_navigate(k))
+            else:
+                act.triggered.connect(
+                    lambda: self.view3d.fit() if hasattr(self, "view3d")
+                    else None)
+            tb_view.addAction(act)
+        self.addToolBar(tb_view)
+
+        tb_disp = _tb("Display")
+        disp_label = QLabel()
+        disp_label.setPixmap(AppIcons.get("display", 18).pixmap(18, 18))
+        disp_label.setToolTip("Display mode")
+        tb_disp.addWidget(disp_label)
+        self.tb_display = QComboBox(self)
+        self.tb_display.addItems(["半透明", "不透明", "线框"])
+        self.tb_display.setCurrentText("半透明")
+        self.tb_display.setToolTip("半透明 / 不透明 / 线框")
+        self.tb_display.setMinimumWidth(88)
+        self.tb_display.currentTextChanged.connect(self._toolbar_display)
+        tb_disp.addWidget(self.tb_display)
+        self.addToolBar(tb_disp)
+
+    def _toolbar_display(self, mode: str) -> None:
+        if not hasattr(self, "view3d"):
+            return
+        idx = self.view3d.display_mode.findText(mode)
+        if idx >= 0 and self.view3d.display_mode.currentIndex() != idx:
+            self.view3d.display_mode.setCurrentIndex(idx)
+
+    def _sync_tb_display(self, mode: str) -> None:
+        if self.tb_display.currentText() != mode:
+            self.tb_display.blockSignals(True)
+            self.tb_display.setCurrentText(mode)
+            self.tb_display.blockSignals(False)
+
+    def _nyi(self, name: str) -> None:
+        self.log(
+            f"[{name}] not available in PPH viewer "
+            f"(scFLOWpre-only / not yet mapped).",
+            "WARN")
+
+    def _about(self) -> None:
+        QMessageBox.about(
+            self, "About",
+            "PPH Viewer\n"
+            "Layout & menus aligned with Cradle scFLOWpre.\n"
+            "Inspect / lightly edit scFLOW .pph archives.")
+
+    def _open_manual(self) -> None:
+        path = (r"C:\Program Files\Cradle\CradleCFD2025.2"
+                r"\Manuals\scFLOW\HTML\Pre_eng\index.html")
+        if os.path.isfile(path):
+            os.startfile(path)  # noqa: S606 - Windows open
+            self.log(f"Opened manual: {path}")
+        else:
+            self.log(f"Manual not found: {path}", "ERROR")
+
+    def _open_project_folder(self) -> None:
+        if not self.archive_path:
+            self.log("No project open.", "WARN")
+            return
+        folder = os.path.dirname(os.path.abspath(self.archive_path))
+        os.startfile(folder)  # noqa: S606
+        self.log(f"Opened folder: {folder}")
+
+    def _export_member(self) -> None:
+        item = self.member_tree.currentItem()
+        name = item.data(0, Qt.UserRole) if item else None
+        if not name or name not in self.member_bytes:
+            self.log("Select an archive member first.", "WARN")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, f"Export {name}", name, "All files (*)")
+        if not path:
+            return
+        with open(path, "wb") as f:
+            f.write(self.member_bytes[name])
+        self.log(f"Exported {name} → {path}")
+
+    def _toggle_pick_face(self) -> None:
+        self.show_page("draw")
+        checked = not self.view3d.btn_pick.isChecked()
+        self.view3d.btn_pick.setChecked(checked)
+
+    def _toggle_rubber(self) -> None:
+        self.show_page("draw")
+        checked = not self.view3d.btn_rubber.isChecked()
+        self.view3d.btn_rubber.setChecked(checked)
+
+    def _focus_status(self, focus: str) -> None:
+        groups = sorted(getattr(self.model_tree, "_info", {}) or {})
+        if not groups:
+            self.log("No meshing group loaded.", "WARN")
+            return
+        self.prop_tabs.setCurrentWidget(self.status_panel)
+        self._on_status_requested(groups[0], focus)
 
     def _apply_style(self) -> None:
-        self.setStyleSheet(
-            "QMainWindow { background: #f2f4f7; }"
-            "QTreeWidget, QPlainTextEdit { background: white; }"
-            "QDockWidget { font-weight: bold; }")
+        self.setStyleSheet("""
+            QMainWindow { background: #e8e8e8; }
+            QMenuBar { background: #f0f0f0; }
+            QToolBar { background: #f5f5f5; border: none; spacing: 2px;
+                       padding: 2px; }
+            QToolBar QToolButton {
+                padding: 2px 6px 1px 6px; margin: 1px;
+                border: 1px solid transparent; border-radius: 3px;
+            }
+            QToolBar QToolButton:hover {
+                background: #e3f2fd; border: 1px solid #90caf9;
+            }
+            QToolBar QToolButton:pressed {
+                background: #bbdefb;
+            }
+            #NavTree::item { padding: 2px 2px; height: 20px; }
+            #PaneFrame {
+                background: #ffffff;
+                border: 1px solid #9a9a9a;
+            }
+            #PaneTitleBar {
+                background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                    stop:0 #5b9bd5, stop:1 #2e75b6);
+            }
+            #PaneTitle {
+                color: white; font-weight: bold; font-size: 11px;
+            }
+            #NavFileLabel {
+                background: #eaf2fb; border: 1px solid #b9d3ee;
+                padding: 4px; color: #234; font-size: 11px;
+            }
+            QTreeWidget, QPlainTextEdit {
+                background: white; border: none;
+            }
+            QSplitter::handle { background: #c8c8c8; width: 3px; height: 3px; }
+            QStatusBar { background: #f0f0f0; }
+        """)
 
     # ── 打开 / 保存 ─────────────────────────────────────────────────
     def open_dialog(self) -> None:
@@ -1891,9 +2553,9 @@ class PphViewer(QMainWindow):
         self.navigation.set_file_info(
             path, len(self.arch.members),
             _fmt_size(sum(m.size for m in self.arch.members)))
-        self.tabs.setCurrentWidget(self.view3d)  # 3D 为默认显示区域
-        self.setWindowTitle(f"PPH 查看/修改器 - {path}")
-        self.statusBar().showMessage(f"已打开 {path}")
+        self.show_page("draw")
+        self.setWindowTitle(f"PPH Viewer — {os.path.basename(path)}")
+        self.log(f"Opened {path} ({len(self.arch.members)} members)")
         return True
 
     def reload(self) -> None:
@@ -1920,9 +2582,8 @@ class PphViewer(QMainWindow):
         except Exception as exc:  # noqa: BLE001
             QMessageBox.critical(self, "保存失败", str(exc))
             return
-        self.statusBar().showMessage(
-            f"已保存 {path}"
-            + (f"（修改: {list(overrides)}）" if overrides else ""))
+        self.log(f"Saved {path}"
+                 + (f" (overrides: {list(overrides)})" if overrides else ""))
         QMessageBox.information(self, "完成", f"已写出 {path}")
 
     # ── Navigation ──────────────────────────────────────────────────
@@ -1934,16 +2595,68 @@ class PphViewer(QMainWindow):
         elif key == "save":
             self.save_as_dialog()
         elif key == "dashboard":
-            self.tabs.setCurrentWidget(self.dashboard)
+            self.show_page("dashboard")
             self.dashboard.populate()
-        elif key == "view3d":
-            self.tabs.setCurrentWidget(self.view3d)
+            self.log("Dashboard")
+        elif key in ("view3d", "view_part"):
+            self.show_page("draw")
+            self.view3d.set_view_mode("geometry")
+            self.view3d.chk_mdl_part.setChecked(True)
+            self.view3d.chk_oct.setChecked(False)
+            self.view3d.chk_gph.setChecked(False)
+            self.view3d.render()
+            self.log("View — Part (geometry)")
+        elif key == "view_octree":
+            self.show_page("draw")
+            self.view3d.set_view_mode("octree")
+            self.view3d.chk_oct.setChecked(True)
+            self.view3d.render()
+            self.log("View — Octree")
+        elif key == "view_mesh":
+            self.show_page("draw")
+            self.view3d.set_view_mode("mesh")
+            self.view3d.chk_gph.setChecked(True)
+            self.view3d.render()
+            self.log("View — Mesh")
+        elif key == "view_section":
+            self.show_page("draw")
+            self.view3d.set_view_mode("mesh")
+            self.view3d.chk_gph.setChecked(True)
+            self.view3d.chk_section.setChecked(True)
+            self.view3d.section_target.setCurrentText("体网格")
+            self.log("View — Cross Section: set plane then Draw")
+        elif key == "view_show_all":
+            self.show_page("draw")
+            self.view3d.clear_visibility()
+            self.log("View — Show All")
         elif key == "snapshot":
-            self.tabs.setCurrentWidget(self.snapshot_tab)
+            self.show_page("snapshot")
+            self.log("Snapshot / Parasolid")
+        elif key == "regions":
+            self.show_page("draw")
+            self._focus_status("geometry")
+            self.log("Register Region — surface/volume regions in Status")
+        elif key in ("oct_param",):
+            self.show_page("draw")
+            self._focus_status("octree")
+            name = self._member_for_nav("oct")
+            if name:
+                self._select_member(name)
+            self.log("Octree Parameter (status / member props)")
+        elif key in ("mesh_param",):
+            self.show_page("draw")
+            self._focus_status("mesh")
+            name = self._member_for_nav("gph")
+            if name:
+                self._select_member(name)
+            self.log("Mesh Parameter (status / member props)")
         elif key in ("project", "gph", "oct", "mdl", "xml", "js", "groups"):
             name = self._member_for_nav(key)
             if name:
                 self._select_member(name)
+                self.log(f"Selected member: {name}")
+            else:
+                self.log(f"No member for '{key}'", "WARN")
 
     def _member_for_nav(self, key: str) -> Optional[str]:
         if key == "project":
@@ -2050,26 +2763,27 @@ class PphViewer(QMainWindow):
         self.status_panel.show_group(group, focus or None)
         label = {"geometry": "几何", "octree": "八叉树",
                  "mesh": "体网格"}.get(focus, "状态")
-        self.statusBar().showMessage(f"{group} — {label}信息")
+        self.prop_tabs.setCurrentWidget(self.status_panel)
+        self.log(f"{group} — {label}")
 
     def _focus_model_3d(self, group: str) -> None:
-        self.tabs.setCurrentWidget(self.view3d)
+        self.show_page("draw")
         self.view3d.select_group(group)
 
     def _select_mesh_view(self, group: str) -> None:
-        self.tabs.setCurrentWidget(self.view3d)
+        self.show_page("draw")
         self.view3d.select_group(group)
         self.view3d.set_view_mode("mesh")
+        self.view3d.chk_gph.setChecked(True)
         self.view3d.chk_section.setChecked(True)
         self.view3d.section_target.setCurrentText("体网格")
-        self.statusBar().showMessage(
-            f"{group}：体网格视图 — 设置平面后点 Draw 剖切")
+        self.log(f"{group}: mesh view — set plane then Draw section")
 
     def _on_layer_visibility(self, group: str, layer: str,
                              visible: bool) -> None:
         self.view3d.set_layer_visibility(group, layer, visible)
-        self.statusBar().showMessage(
-            f"组 {group}：图层 {layer} = {'显示' if visible else '隐藏'}")
+        self.log(f"{group}: layer {layer} = "
+                 f"{'on' if visible else 'off'}")
 
     def _on_model_visibility(self, group: str, hidden_bodies: set,
                              hidden_regions: set, group_visible: bool) -> None:
@@ -2078,11 +2792,11 @@ class PphViewer(QMainWindow):
             group, hidden_bodies, hidden_regions, group_visible)
         n_hidden = len(hidden_bodies) + len(hidden_regions)
         if n_hidden or not group_visible:
-            self.statusBar().showMessage(
-                f"组 {group}：{'已隐藏' if not group_visible else '可见'}，"
-                f"隐藏 {n_hidden} 项")
+            self.log(
+                f"{group}: {'hidden' if not group_visible else 'visible'}, "
+                f"{n_hidden} items unchecked")
         else:
-            self.statusBar().showMessage(f"组 {group}：全部显示")
+            self.log(f"{group}: show all")
 
     def _show_all_models(self) -> None:
         """3D「恢复全部」→ 模型树全部勾选。"""
@@ -2091,7 +2805,7 @@ class PphViewer(QMainWindow):
             data = root.data(0, Qt.UserRole)
             if data:
                 self.model_tree._set_all(data[1], True)
-        self.statusBar().showMessage("已恢复全部显示")
+        self.log("Show All")
 
     def _find_tree_item(self, name: str) -> Optional[QTreeWidgetItem]:
         stack = [self.member_tree.topLevelItem(i)
@@ -2108,12 +2822,26 @@ class PphViewer(QMainWindow):
     def _populate_tree(self) -> None:
         self.member_tree.clear()
         text_root = QTreeWidgetItem(["文本成员", "main.js / prp / xenv / xml", ""])
+        text_root.setIcon(0, AppIcons.get("script", 16))
         snap_root = QTreeWidgetItem(["快照", "main.sctsnapshot", ""])
+        snap_root.setIcon(0, AppIcons.get("snapshot", 16))
         group_roots: dict[str, QTreeWidgetItem] = {}
+        role_icon = {
+            pph_parser.ROLE_PROJECT_XML: "xml",
+            pph_parser.ROLE_SCRIPT: "script",
+            pph_parser.ROLE_PRP: "project",
+            pph_parser.ROLE_XENV: "project",
+            pph_parser.ROLE_SNAPSHOT: "snapshot",
+            pph_parser.ROLE_GPH: "mesh",
+            pph_parser.ROLE_OCT: "octree",
+            pph_parser.ROLE_MDL_PART: "part",
+            pph_parser.ROLE_MDL_RIDGE: "part",
+        }
         for m in self.arch.members:
             item = QTreeWidgetItem([m.name, m.description, f"{m.size:,}"])
             item.setData(0, Qt.UserRole, m.name)
             item.setToolTip(0, m.name)
+            item.setIcon(0, AppIcons.get(role_icon.get(m.role, "generic"), 16))
             if m.role in (pph_parser.ROLE_PROJECT_XML, pph_parser.ROLE_SCRIPT,
                           pph_parser.ROLE_PRP, pph_parser.ROLE_XENV):
                 text_root.addChild(item)
@@ -2123,6 +2851,8 @@ class PphViewer(QMainWindow):
                 g = _member_group(m.name)
                 root = group_roots.setdefault(
                     g or m.name, QTreeWidgetItem([g or m.name, "网格组", ""]))
+                if root.icon(0).isNull():
+                    root.setIcon(0, AppIcons.get("group", 16))
                 root.addChild(item)
         for root in (text_root, snap_root):
             if root.childCount():
@@ -2156,7 +2886,7 @@ class PphViewer(QMainWindow):
         if act is act_prop:
             self._show_member_properties(name)
         elif act is act_3d:
-            self.tabs.setCurrentWidget(self.view3d)
+            self.show_page("draw")
             g = _member_group(name)
             if g and g in self.view3d.groups:
                 self.view3d.group_box.setCurrentText(g)
@@ -2188,10 +2918,10 @@ class PphViewer(QMainWindow):
         self._show_member_properties(name)
         if role in (pph_parser.ROLE_SCRIPT, pph_parser.ROLE_PRP,
                     pph_parser.ROLE_XENV, pph_parser.ROLE_PROJECT_XML):
-            self.tabs.setCurrentWidget(self.editor_tab)
+            self.show_page("editor")
             self.editor_tab.load_member(name, data)
         elif role == pph_parser.ROLE_SNAPSHOT:
-            self.tabs.setCurrentWidget(self.snapshot_tab)
+            self.show_page("snapshot")
 
     def _show_member_properties(self, name: str) -> None:
         m = next((x for x in self.arch.members if x.name == name), None)
@@ -2369,6 +3099,9 @@ class PphViewer(QMainWindow):
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    # Windows 常见无害警告：系统无 EUDC.TTE（用户自定义汉字字体）
+    os.environ.setdefault(
+        "QT_LOGGING_RULES", "qt.qpa.fonts.warning=false")
     app = QApplication(argv if argv is not None else sys.argv)
     win = PphViewer()
     win.show()
