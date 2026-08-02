@@ -1765,7 +1765,7 @@ class View3DTab(QWidget):
         self.chk_edges = QCheckBox("网格线", self)
         self.chk_edges.setChecked(True)
         self.chk_edges.setToolTip(
-            "体网格边线（GPH）；几何 MDL 三角面片边默认不绘制，避免重叠花屏")
+            "面网格（GPH）边线；与几何同时显示时 MDL 只作半透明垫底，不画三角网线")
         self.chk_axes = QCheckBox("坐标轴", self)
         self.chk_axes.setChecked(True)
         self.chk_legend = QCheckBox("图例", self)
@@ -2246,6 +2246,16 @@ class View3DTab(QWidget):
                   and self.chk_gph.isChecked())
         return bool(mdl_on and gph_on)
 
+    def _part_tree_filtered(self, group_name: Optional[str]) -> bool:
+        """Part Tree 是否隐藏了部分闭体/面区域（勾选过滤中）。"""
+        if not group_name:
+            return False
+        if group_name in self._group_hidden:
+            return True
+        hidden_bodies, hidden_regions = self._hidden.get(
+            group_name, (set(), set()))
+        return bool(hidden_bodies or hidden_regions)
+
     def _make_actor(self, kind: str, group: dict,
                     group_name: Optional[str] = None,
                     overlap_mesh: bool = False) -> Optional[LayerRender]:
@@ -2277,7 +2287,7 @@ class View3DTab(QWidget):
                     legend_entries = [
                         (ann[v], colors[i]) for i, v in enumerate(vals)]
                 wire = self.display_mode.currentText() == "线框"
-                # 与体网格同显：MDL 退到背景半透明层，不画三角网线
+                # 与体网格同显：MDL 仅半透明垫底，网格线留给 GPH 面网格
                 if overlap_mesh and not wire:
                     opacity = 0.22
                     bias = "back"
@@ -2377,6 +2387,8 @@ class View3DTab(QWidget):
         mesh_section = (self.chk_section.isChecked()
                         and self.section_target.currentText() == "体网格")
         lines_only = mesh_section and self.chk_lines_only.isChecked()
+        tree_filtered = self._part_tree_filtered(name)
+        # 体网格开着时始终叠层：MDL 垫底，网格线只来自 GPH 面网格
         overlap = self._gph_and_mdl_overlap(name) and not lines_only
 
         layers: list[tuple[str, Optional[LayerRender]]] = []
@@ -2421,7 +2433,11 @@ class View3DTab(QWidget):
             else:
                 prop.SetRepresentationToSurface()
                 if label == "GPH":
-                    prop.SetOpacity(0.45 if mode == "半透明" else 1.0)
+                    # 勾选过滤后不透明面网格，边线才是「面网格网格线」
+                    if tree_filtered:
+                        prop.SetOpacity(0.55 if mode == "半透明" else 1.0)
+                    else:
+                        prop.SetOpacity(0.45 if mode == "半透明" else 1.0)
                 elif label.startswith("MDL"):
                     if overlap:
                         # 叠层策略：几何半透明垫底，避免与体网格花屏
@@ -2439,7 +2455,7 @@ class View3DTab(QWidget):
             cells.append(f"{label}={mapper.GetInput().GetNumberOfCells():,}")
             lut = mapper.GetLookupTable()
             legend_layers.append((layer.title, lut, layer.legend_entries))
-            # 仅体网格叠加网格线，最后统一加入以保证画在最前
+            # 仅体网格（GPH）叠加面网格线
             if self.chk_edges.isChecked() and layer.edges and not wireframe:
                 edge_actors.append(
                     pph_vtk.edges_actor(mapper.GetInput()))
@@ -2493,7 +2509,9 @@ class View3DTab(QWidget):
         elif mesh_section and self._mesh_section_dirty:
             extra = " | 平面已变，需重新 Draw"
         if overlap and not wireframe:
-            extra += " | 叠层：MDL 半透明垫底，优先 GPH 网格线"
+            extra += " | 叠层：MDL 半透明垫底，面网格线来自 GPH"
+        elif tree_filtered and not wireframe:
+            extra += " | 勾选过滤：显示对应 GPH 面网格线"
         self.status.setText(
             f"组 {name}：{', '.join(cells) if cells else '无可用几何'}"
             + (self._picked_status or "") + extra)
@@ -2614,10 +2632,11 @@ class View3DTab(QWidget):
 
     def _gph_visibility_mask(self, aux: dict, group_name: Optional[str],
                              mdl_model) -> Optional[object]:
-        """由 MDL 闭体/面区域勾选生成 GPH 面可见掩码（True=显示）。
+        """由 Part Tree 勾选生成 GPH 面可见掩码（True=显示）。
 
-        体网格图层总开关仍由 ``chk_gph`` / 树节点「体网格」控制；
-        本掩码只过滤已勾选显示的体网格中的体域/面域。
+        白名单勾选零件的 ``@PartSurface_*`` / 面区域，而不是按隐藏体的
+        cvol 黑名单剔除——流体域 cvol 的边界面往往就是 case 等固体的
+        面网格，黑名单会误删勾选零件上的 GPH 网线。
         """
         import numpy as np
 
@@ -2633,60 +2652,53 @@ class View3DTab(QWidget):
             return None
 
         self._ensure_gph_meta(aux)
-        hide = np.zeros(n, dtype=bool)
         region_faces: dict = aux.get("region_faces") or {}
-        parts = aux.get("parts") or []
-        cvol = aux.get("cvol")
+        show = np.zeros(n, dtype=bool)
 
-        frid_names: dict[int, list[str]] = {}
+        def _or_faces(key: str) -> None:
+            arr = region_faces.get(key)
+            if arr is None or arr.size == 0:
+                return
+            valid = arr[(arr >= 0) & (arr < n)]
+            show[valid] = True
+
+        b1, b2 = mdl_model.csid
+        frid = mdl_model.frid
+        # body → 零件名；frid → 面区域名（均不含 @PartSurface_*）
+        body_names: dict[int, set[str]] = {}
+        region_by_frid: dict[int, list[str]] = {}
         for r in getattr(mdl_model, "surface_regions", None) or []:
             if r.name.startswith("@"):
                 continue
-            frid_names.setdefault(int(r.index), []).append(r.name)
+            region_by_frid.setdefault(int(r.index), []).append(r.name)
+            if b2.size == 0:
+                continue
+            sel = frid == int(r.index)
+            if not sel.any():
+                continue
+            for bid in np.unique(np.concatenate([b1[sel], b2[sel]])):
+                bid = int(bid)
+                if bid <= 0:
+                    continue
+                body_names.setdefault(bid, set()).add(r.name)
 
-        def _mark_names(names: list[str]) -> None:
+        # 勾选零件 → 对应 GPH @PartSurface_* 面网格
+        for bid, names in body_names.items():
+            if bid in hidden_bodies:
+                continue
             for name in names:
-                for key in (name, f"@PartSurface_{name}"):
-                    arr = region_faces.get(key)
-                    if arr is None or arr.size == 0:
-                        continue
-                    valid = arr[(arr >= 0) & (arr < n)]
-                    hide[valid] = True
+                _or_faces(f"@PartSurface_{name}")
 
-        part_cvols: dict[str, set[int]] = {}
-        for pname, spec in parts:
-            if isinstance(spec, frozenset):
-                part_cvols[pname] = {int(x) for x in spec}
-            elif isinstance(spec, (int, np.integer)):
-                part_cvols[pname] = {int(spec)}
-
-        b1, b2 = mdl_model.csid
-        for bid in hidden_bodies:
-            frs: set[int] = set()
-            if b2.size:
-                sel = (b1 == bid) | (b2 == bid)
-                if sel.any():
-                    frs.update(int(x) for x in np.unique(mdl_model.frid[sel]))
-            if not frs and int(bid) >= 1:
-                frs.add(int(bid) - 1)
-            names: list[str] = []
-            for fr in frs:
-                names.extend(frid_names.get(fr, []))
-            _mark_names(names)
-            cvols_hide: set[int] = set()
+        # 纯面区域（如 open）：GPH 里没有 @PartSurface_* 的同名节，按区域勾选
+        for frid_i, names in region_by_frid.items():
+            if frid_i in hidden_regions:
+                continue
             for name in names:
-                cvols_hide |= part_cvols.get(name, set())
-            if cvols_hide and cvol is not None and cvol.size:
-                owner = mesh["owner"]
-                valid = (owner >= 0) & (owner < cvol.size)
-                oc = np.full(n, -1, dtype=np.int64)
-                oc[valid] = cvol[owner[valid]].astype(np.int64)
-                hide |= np.isin(oc, list(cvols_hide))
+                if f"@PartSurface_{name}" in region_faces:
+                    continue  # 零件面已由 body 白名单处理
+                _or_faces(name)
 
-        for frid in hidden_regions:
-            _mark_names(frid_names.get(int(frid), []))
-
-        return ~hide
+        return show
 
     def _mdl_model_for_group(self, group: dict, group_name: Optional[str]):
         path = group.get("part") if group else None
