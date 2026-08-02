@@ -82,6 +82,33 @@ class MdlModel:
         off = self.face_offsets
         return self.conn[off[face_id] : off[face_id + 1]]
 
+    @property
+    def csid_sides(self) -> tuple[np.ndarray, np.ndarray]:
+        """面两侧闭体 id ``(volA, volB)``（0 = 外部/空，1..N = 闭体索引）。
+
+        语义（已用 box / laptop 钉死）：
+
+        - 边界面一侧为 0（另一侧 = 所属闭体，``b2 = frid + 1``）；
+        - 体间界面两侧均非零（laptop ridge 中 ``(2,1)`` 有 412,644 面，
+          即 body2/body1 的界面）；
+        - ``LS_MdlClosedVolumes`` 记录数 = ``max(b1,b2) + 1``（含索引 0 的
+          "外部"记录）。
+        """
+        return self.csid
+
+    @property
+    def n_closed_volumes(self) -> int:
+        """闭体数 = 两侧闭体 id 的最大值（0 为外部，不计入）。"""
+        b1, b2 = self.csid
+        if b1.size == 0 and b2.size == 0:
+            return 0
+        top = 0
+        if b1.size:
+            top = max(top, int(b1.max()))
+        if b2.size:
+            top = max(top, int(b2.max()))
+        return top
+
 
 def _largest_i4_block_indices(blocks: list[DataBlock], count: int) -> list[int]:
     sized = sorted(range(len(blocks)), key=lambda i: -blocks[i].byte_count)

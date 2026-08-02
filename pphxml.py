@@ -7,6 +7,12 @@
 * ``main.prp`` — 材料/物性数据库（标准 XML：group/entry 层次）。
 * ``main.xenv`` — 环境/单位/容差设置（标准 XML，UTF-8 BOM）。
 * ``main.js`` — 用户子程序脚本（JavaScript，``//@FormattedScript`` 段）。
+
+观测到的索引标签家族：``SECTITEM[N]``、``PRISMITEM[N]``、``SMOOTHITEM[N]``
+（净化后 ``TAG__IDXN``，``serialize_main_xml`` 可还原）。
+
+快照 ``LENGTHVWU``/``DPOINTU`` 中 ``unit_type`` 码到 xenv 单位的解析见
+``UNIT_TYPE_TO_XENV_KEY`` / ``resolve_snapshot_unit``。
 """
 
 from __future__ import annotations
@@ -16,16 +22,17 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Optional
 
-_INDEXED_TAG = re.compile(r"<(/?)([A-Za-z_][\w.]*)\[(\d+)\]")
+_INDEXED_TAG = re.compile(r"<(/?)([A-Za-z_][\w.]*)\[(\d+)\](>|/>)")
 
 
 def sanitize_scflow_xml(text: str) -> str:
     """把 scFLOW 的 ``<TAG[N]>`` 方言转换为合法 XML。
 
     ``<SECTITEM[0]>`` → ``<SECTITEM__IDX0>``；调用方可用
-    ``restore_index(tag)`` 取回 ``(原名, 索引)``。
+    ``restore_index(tag)`` 取回 ``(原名, 索引)``。闭合部分（``>`` 或 ``/>``）
+    随标签整体替换，避免向元素文本注入多余 ``>``。
     """
-    return _INDEXED_TAG.sub(r"<\1\2__IDX\3>", text)
+    return _INDEXED_TAG.sub(r"<\g<1>\g<2>__IDX\g<3>\g<4>", text)
 
 
 def restore_index(tag: str) -> tuple[str, Optional[int]]:
@@ -34,6 +41,34 @@ def restore_index(tag: str) -> tuple[str, Optional[int]]:
     if m:
         return m.group(1), int(m.group(2))
     return tag, None
+
+
+_IDX_SAFE_TAG = re.compile(r"^([A-Za-z_][\w.]*)__IDX(\d+)$")
+
+
+def serialize_main_xml(root: ET.Element) -> str:
+    """把净化后的 ElementTree 写回 scFLOW 方言。
+
+    ``TAG__IDXN`` → ``TAG[N]``，与 :func:`sanitize_scflow_xml` 互逆，
+    支撑修改后的 main.xml 写回 .pph（见 pphwriter.py）。
+    """
+    text = ET.tostring(root, encoding="unicode")
+    return re.sub(r"<(/?)([A-Za-z_][\w.]*)__IDX(\d+)(/?)([^>]*>)",
+                  r"<\1\2[\3]\4\5", text)
+
+
+# 快照 unit_type 码 → xenv 长度单位键（样例恒为 1 == MODEL_LENGTH_UNIT，
+# 即 'm'）。其余码值需多单位制样例确认后补充。
+UNIT_TYPE_TO_XENV_KEY: dict[int, str] = {1: "MODEL_LENGTH_UNIT"}
+
+
+def resolve_snapshot_unit(unit_type: int,
+                          xenv: "XenvSettings") -> Optional[str]:
+    """把快照 ``LENGTHVWU``/``DPOINTU`` 的 ``unit_type`` 解析为 xenv 单位串。"""
+    key = UNIT_TYPE_TO_XENV_KEY.get(unit_type)
+    if key is None:
+        return None
+    return xenv.get("UNIT", key)
 
 
 @dataclass

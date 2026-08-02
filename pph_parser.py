@@ -48,6 +48,12 @@ ROLE_MDL_PART = "surface_part_mdl"
 ROLE_MDL_RIDGE = "surface_ridge_mdl"
 ROLE_UNKNOWN = "unknown"
 
+# 外部 gphdecoding 仓候选路径（`_try_gph_deep` 优先使用；不可用则走内置降级）
+_GPH_DECODING_CANDIDATES = [
+    Path(__file__).resolve().parent.parent / "gphdecoding",
+    Path(r"D:\training\cgns\gphdecoding"),
+]
+
 
 def classify_member(name: str) -> tuple[str, str]:
     """``(角色, 说明)`` 按成员文件名分类。"""
@@ -192,8 +198,8 @@ def summarize_snapshot(arch: PphArchive, out, full: bool = False) -> None:
                     for b in snap.decompress_bodies():
                         pk = b["pkbody3"]
                         ck = pk.checksum
-                        ck_s = (f"trailer=0x{ck:08x}" if ck is not None
-                                else "no-trailer")
+                        ck_s = (f"zero-pad-tail=0x{ck:08x}" if ck is not None
+                                else "no-zero-pad-block")
                         pad_s = (f" pad={len(pk.pad)}B" if pk.pad else "")
                         try:
                             plain = pk.decrypt()
@@ -203,8 +209,18 @@ def summarize_snapshot(arch: PphArchive, out, full: bool = False) -> None:
                         except Exception as exc:  # noqa: BLE001
                             dec_s = f" decrypt-fail={exc}"
                         out.append(
-                            f"    → PKBody3 data={b['data_size']} B "
+                            f"    → PKBody3 size={pk.logical_size} B "
+                            f"data={len(pk.data)} B "
                             f"{ck_s}{pad_s}{dec_s}")
+                        try:
+                            import parasolid
+                            ps = parasolid.parse_transmit(plain)
+                            ps_s = (f" schema={ps.schema} "
+                                    f"字段={len(ps.fields)} 实体="
+                                    f"{ps.entities}")
+                            out.append("      " + ps_s)
+                        except Exception:  # noqa: BLE001 - 提取为尽力而为
+                            pass
                 except (OSError, ValueError) as exc:
                     out.append(f"    （LZMS 解压失败: {exc}）")
         for tag, label in (("ZIPOCTREE", "八叉树块"),
@@ -355,12 +371,8 @@ def summarize_binary_members(arch: PphArchive, out, work_dir: Optional[str] = No
 
 
 def _try_gph_deep(gph_path: str) -> Optional[list[str]]:
-    """若 gphdecoding 仓可用，给出网格拓扑深度统计。"""
-    candidates = [
-        Path(__file__).resolve().parent.parent / "gphdecoding",
-        Path(r"D:\training\cgns\gphdecoding"),
-    ]
-    for cand in candidates:
+    """gph 深度统计：优先同级 ``gphdecoding`` 仓，否则用仓库内 ``gphstats`` 降级。"""
+    for cand in _GPH_DECODING_CANDIDATES:
         if (cand / "gph_model.py").exists():
             sys.path.insert(0, str(cand))
             try:
@@ -394,6 +406,38 @@ def _try_gph_deep(gph_path: str) -> Optional[list[str]]:
                 return out
             except Exception as exc:  # pragma: no cover - 依赖外部仓
                 return [f"(gphdecoding 深度解析失败: {exc})"]
+    # 内建降级：仅依赖本仓库 crdlfld + gphstats
+    try:
+        import gphstats  # 仓库内轻量统计
+    except Exception:
+        return None
+    try:
+        with gphstats.open_buffer(gph_path) as data:
+            links = gphstats.links_summary(data)
+            cvol = gphstats.cvol_ids(data)
+            n_vertices, dialect = gphstats.nodes_vertex_count(data)
+            surfs = gphstats.surface_regions_summary(data)
+            parts = gphstats.parts_summary(data, cvol)
+            vols = gphstats.string_list(data, "LS_VolumeRegions")
+        out = []
+        if links:
+            out.append(
+                f"网格: {links['n_faces']:,} 面 / {links['n_cells']:,} 单元 / "
+                f"{n_vertices:,} 顶点 ({dialect})（内置轻量统计）"
+                + (" 多面体" if links["polyhedral"] else ""))
+            out.append(f"边界面: {links['boundary_faces']:,} "
+                       f"npe [{links['npe_min']}..{links['npe_max']}]")
+        if parts:
+            out.append("Parts: " + ", ".join(
+                f"{n}(cvol={gphstats.format_part_cvol_spec(c)})"
+                for n, c in parts))
+        if vols:
+            out.append(f"体区域: {vols}")
+        if surfs:
+            out.append("面区域: " + ", ".join(f"{n}({c:,})" for n, c in surfs))
+        return out
+    except Exception as exc:  # pragma: no cover - 防御
+        return [f"(内置 gph 统计失败: {exc})"]
     return None
 
 

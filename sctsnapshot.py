@@ -61,6 +61,8 @@ ZIP_MAGIC = 0xC0E5510A
 PKBODY3_MAGIC = b"CADthru/PKBody3"
 PKBODY3_SCHEMA_PREFIX_LEN = 400  # 本样例四个体 data 共享前缀长度
 COMPRESSION_ALGORITHM_LZMS = 4
+# wimlib 的独立压缩类型常量（WIMLIB_COMPRESSION_TYPE_LZMS = 3）
+WIMLIB_COMPRESSION_TYPE_LZMS = 3
 PKBODY3_TRAILER_MARK = 0x17DA2940  # 大体可选尾标（非内容 CRC）
 
 # UTF-16-LE 字符串标签
@@ -102,26 +104,9 @@ _LEAF_TAGS = (_UTF16_TAGS | _BYTES_TAGS | _U16_TAGS | _I32_TAGS | _U8_TAGS
                  "ZIPBODYBYTES", "ZIPOCTREE", "ZIPFACETINGRULES"})
 
 
-def lzms_available() -> bool:
-    """当前平台是否可通过 ``cabinet.dll`` 解压 LZMS。"""
-    if sys.platform != "win32":
-        return False
-    try:
-        import ctypes
-        ctypes.WinDLL("cabinet.dll")
-        return True
-    except OSError:
-        return False
-
-
-def lzms_decompress(compressed: bytes,
-                    uncompressed_size: Optional[int] = None) -> bytes:
-    """用 Windows Compression API（``cabinet.dll``）解压 LZMS 流。
-
-    ``compressed`` 必须是完整记录负载（含流首 28 字节可读字段）。
-    """
-    if sys.platform != "win32":
-        raise RuntimeError("LZMS 解压需要 Windows cabinet.dll")
+def _cabinet_decompress(compressed: bytes,
+                        uncompressed_size: Optional[int]) -> bytes:
+    """Windows Compression API（``cabinet.dll``）解压 LZMS 流。"""
     import ctypes
     from ctypes import wintypes
 
@@ -164,6 +149,126 @@ def lzms_decompress(compressed: bytes,
         return buf.raw[:got.value]
     finally:
         CloseDecompressor(handle)
+
+
+def _wimlib_library():
+    """加载 wimlib 动态库（跨平台 C 库），找不到返回 None。"""
+    import ctypes
+    import ctypes.util
+
+    candidates = ["wimlib.dll", "libwim.so", "libwim.so.15", "libwim.so.14",
+                  "libwim.so.13", "libwim.dylib"]
+    for name in candidates:
+        try:
+            return ctypes.CDLL(name)
+        except OSError:
+            continue
+    found = ctypes.util.find_library("wim")
+    if found:
+        try:
+            return ctypes.CDLL(found)
+        except OSError:
+            return None
+    return None
+
+
+def _wimlib_error(lib, rc: int) -> str:
+    try:
+        fn = lib.wimlib_get_error_string
+        fn.argtypes = [ctypes.c_int]
+        fn.restype = ctypes.c_char_p
+        msg = fn(rc)
+        return msg.decode("utf-8", errors="replace") if msg else str(rc)
+    except Exception:
+        return str(rc)
+
+
+def _wimlib_decompress(compressed: bytes, uncompressed_size: int) -> bytes:
+    """用 wimlib 解压 LZMS 流（优先新 API，兼容 1.13 一次性 API）。
+
+    ``compressed`` 必须是完整记录负载（含 MS-LZMS 块首 28 字节）。
+    """
+    import ctypes
+
+    lib = _wimlib_library()
+    if lib is None:
+        raise OSError("未找到 wimlib 动态库（wimlib.dll / libwim.so）")
+    out = ctypes.create_string_buffer(uncompressed_size)
+
+    # 新 API（wimlib >= 1.14）：create_decompressor + decompress_with_decompressor
+    create = getattr(lib, "wimlib_create_decompressor", None)
+    if create is not None:
+        create.argtypes = [ctypes.c_int, ctypes.c_size_t,
+                           ctypes.POINTER(ctypes.c_void_p)]
+        create.restype = ctypes.c_int
+        decompressor = ctypes.c_void_p()
+        rc = create(WIMLIB_COMPRESSION_TYPE_LZMS, uncompressed_size,
+                    ctypes.byref(decompressor))
+        if rc == 0:
+            try:
+                fn = lib.wimlib_decompress_with_decompressor
+                fn.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t,
+                               ctypes.c_void_p, ctypes.c_size_t]
+                fn.restype = ctypes.c_int
+                rc = fn(decompressor, compressed, len(compressed),
+                        out, uncompressed_size)
+            finally:
+                free = getattr(lib, "wimlib_free_decompressor", None)
+                if free is not None:
+                    free.argtypes = [ctypes.c_void_p]
+                    free(decompressor)
+            if rc != 0:
+                raise OSError(rc,
+                              f"wimlib_decompress_with_decompressor 失败: "
+                              f"{_wimlib_error(lib, rc)}")
+            return out.raw
+
+    # 旧 API（wimlib <= 1.13）：一次性 wimlib_decompress(..., compression_type)
+    fn = getattr(lib, "wimlib_decompress", None)
+    if fn is None:
+        raise OSError("wimlib 缺少 wimlib_decompress / wimlib_create_decompressor 符号")
+    fn.argtypes = [ctypes.c_void_p, ctypes.c_size_t,
+                   ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int]
+    fn.restype = ctypes.c_int
+    rc = fn(compressed, len(compressed), out, uncompressed_size,
+            WIMLIB_COMPRESSION_TYPE_LZMS)
+    if rc != 0:
+        raise OSError(rc, f"wimlib_decompress 失败: {_wimlib_error(lib, rc)}")
+    return out.raw
+
+
+def lzms_available() -> bool:
+    """LZMS 解压后端是否可用：Windows ``cabinet.dll`` 或 wimlib。"""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.WinDLL("cabinet.dll")
+            return True
+        except OSError:
+            pass
+    return _wimlib_library() is not None
+
+
+def lzms_decompress(compressed: bytes,
+                    uncompressed_size: Optional[int] = None) -> bytes:
+    """解压 LZMS 流：优先 Windows ``cabinet.dll``，回退 wimlib。
+
+    ``compressed`` 必须是完整记录负载（含流首 28 字节可读字段），
+    从偏移 0 整体解压（剥离前缀会使 cabinet.dll 返回 ERROR=605）。
+    """
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.WinDLL("cabinet.dll")
+            return _cabinet_decompress(compressed, uncompressed_size)
+        except OSError:
+            pass
+    if uncompressed_size is None:
+        if len(compressed) >= 16 and struct.unpack("<I", compressed[:4])[0] == ZIP_MAGIC:
+            uncompressed_size = struct.unpack("<Q", compressed[8:16])[0]
+        else:
+            raise RuntimeError("LZMS 解压需要已知的未压缩尺寸（wimlib 路径）")
+    return _wimlib_decompress(compressed, uncompressed_size)
 
 
 @dataclass
@@ -289,9 +394,17 @@ class DPointU:
 class PKBody3:
     """``ZIPBODYBYTES`` 解压后的 CADThru Parasolid 体包装。
 
-    布局：``CADthru/PKBody3`` (15B) + ``u32le size`` + ``data[size]``，
-    之后可选 ``[pad u8]?`` + ``u32le = 0x17DA2940`` 尾标
-    （大体常见；小体可无；pad 本例 box.pph 为 1 字节 ``0xB1``）。
+    布局：``CADthru/PKBody3`` (15B) + ``u32le size`` +
+    ``data[ceil8(size)]``（物理密文）。
+
+    **关键修正（2026-08-02）**：``size`` 是逻辑数据长度，物理密文占
+    ``ceil8(size)`` 字节，尾部为 Blowfish ECB 的零填充块密文。此前观察
+    到的"尾标 ``0x17DA2940``"与"pad ``0xB1``"都是该零填充块的密文碎片：
+    固定密钥下 ``E(0^8) = e5 e4 e5 b1 40 29 da 17``，低 32 位恰为
+    ``0x17DA2940``。因此仅当 ``size % 8 != 0`` 时"尾标"出现（5 个实测
+    体中 7643 / 17604 / 116572 非 8 倍数 → 出现；7824 / 3040 为 8 倍数
+    → 不出现）；``0xB1`` 是密文第 ``size`` 字节。该值不是独立存储的
+    标记或校验（已排除 CRC32 / Adler / 求和），也不承载任何状态语义。
 
     ``data`` 整体为 **Blowfish 小端变体 ECB** 密文（见 ``blowfish_le``，
     固定密钥 ``HowDareYouSaySuchAThing``）。``decrypt()`` 后是
@@ -300,9 +413,8 @@ class PKBody3:
     ECB 下相同 schema 头明文产生相同密文块。
     """
 
-    data: bytes
-    checksum: Optional[int] = None  # 可选尾标 0x17DA2940
-    pad: bytes = b""                # 尾标前可选填充
+    data: bytes         # 物理密文（ceil8(size) 字节，尾部为零填充块密文）
+    logical_size: int   # 声明的逻辑长度（size 字段，明文长度）
 
     @classmethod
     def parse(cls, raw: bytes) -> "PKBody3":
@@ -311,31 +423,41 @@ class PKBody3:
         if len(raw) < 19:
             raise ValueError("PKBody3 过短")
         size = struct.unpack("<I", raw[15:19])[0]
-        end = 19 + size
-        if end > len(raw):
+        phys = (size + 7) // 8 * 8  # 物理密文按 8 字节块补齐
+        end = 19 + phys
+        if end != len(raw):
             raise ValueError(
-                f"PKBody3 尺寸不匹配: size={size} file={len(raw)}")
-        data = raw[19:end]
-        rest = raw[end:]
-        if not rest:
-            return cls(data, None, b"")
-        if len(rest) == 4 and struct.unpack("<I", rest)[0] == PKBODY3_TRAILER_MARK:
-            return cls(data, PKBODY3_TRAILER_MARK, b"")
-        if (len(rest) >= 4
-                and struct.unpack("<I", rest[-4:])[0] == PKBODY3_TRAILER_MARK):
-            return cls(data, PKBODY3_TRAILER_MARK, rest[:-4])
-        raise ValueError(
-            f"PKBody3 尺寸不匹配: size={size} file={len(raw)} rem={len(rest)}")
+                f"PKBody3 尺寸不匹配: size={size} ceil8={phys} "
+                f"wrapper={len(raw)}")
+        return cls(raw[19:end], size)
+
+    @property
+    def checksum(self) -> Optional[int]:
+        """兼容字段：0x17DA2940 当且仅当密文末尾是零填充块的低 32 位
+        （即 ``logical_size % 8 != 0`` 时出现；非独立存储字段）。"""
+        if self.data[-4:] == struct.pack("<I", PKBODY3_TRAILER_MARK):
+            return PKBODY3_TRAILER_MARK
+        return None
+
+    @property
+    def pad(self) -> bytes:
+        """兼容字段：逻辑长度之后的密文碎片（零填充块密文的一部分）。"""
+        tail = self.data[self.logical_size:]
+        if self.checksum is not None and len(tail) >= 4:
+            return tail[:-4]
+        return tail
 
     def decrypt(self, key: bytes = None) -> bytes:
         """Blowfish-LE ECB 解密 ``data`` → Parasolid 二进制传输流。
 
         ``key`` 缺省为 scFLOW 固定密钥。输出以
         ``TRANSMIT FILE created by modeller version`` 头（其二进制变体
-        前缀为 ``A3.: ``）开头。
+        前缀为 ``A3.: ``）开头；长度截取到 ``logical_size``（去掉零填充
+        尾部，与原始明文逐字节一致）。
         """
         from blowfish_le import DEFAULT_KEY, decrypt_ecb
-        return decrypt_ecb(self.data, key if key is not None else DEFAULT_KEY)
+        plain = decrypt_ecb(self.data, key if key is not None else DEFAULT_KEY)
+        return plain[: self.logical_size]
 
     @property
     def schema_prefix(self) -> bytes:
@@ -691,8 +813,15 @@ class SctSnapshot:
           **不是** ``*.oct`` 前序下标。若需与 refinement 对齐，
           使用 :meth:`octree_region_as_oct_order`。
 
-        几何上 ``flag=1`` 集中于特殊细化区（box：±x 翼块叶子；
-        laptop：局部高深度柱）；box 样本上全部 ``flag=1`` 均为叶子。
+        语义（box / laptop 已钉死）：
+
+        - ``flag ∈ {0,1}``，两个样例上 ``flag=1`` **全部为叶子**；
+        - ``flag=1`` 集中在最深细化层：box 深度 4–5（其最深层，
+          883/1968 叶子，位于 y∈[0,0.011] 上半精化板）；laptop 深度
+          14–20（3,445,907 / 3,465,218 叶子，位于转子薄柱
+          x∈[-54.47,-51.78]、y∈[4.92,5.47]、z∈[-0.24,0.28]）；
+        - 区域索引空间与 ``OCTREERESTRRGN`` / MDL ``frid`` / ``csid-1``
+          一致（laptop：case1=1、rotation1=2、impeller1=3）。
         """
         raw = self._octree_bytearray("OCTREEREGION")
         if raw is None:
@@ -752,6 +881,38 @@ class SctSnapshot:
         flags = reg["flags"]
         for k, idx in enumerate(post):
             out[idx] = flags[k]
+        return out
+
+    def octree_restrict_regions(self) -> list[dict]:
+        """``BSGSEX → OCTREEPARAM → OCTREERESTR → OCTREERESTRRGN`` 区域清单。
+
+        每个区域记录字段（已钉死）：
+
+        - ``kind``（INTEGER）：0 = open/环境；2 = 指定体区域；
+        - ``index``（INTEGER）：区域索引，**与 MDL frid / csid-1 同索引空间**
+          （laptop：open=0、case1=1、rotation1=2、impeller1=3）；
+        - ``enabled``（BOOL）、附加整数与厚度 ``LENGTHVWU``（本样例 0.0）。
+
+        box 样例 4 个 ``OCTREERESTR`` 全为空（无受限区域）；laptop 的
+        meshing group 含 4 个区域（open + 3 个旋转机械体）。
+        """
+        out: list[dict] = []
+        for rstr in self.find_all("OCTREERESTR"):
+            for wrap in rstr.find_all("WRAPBYTEARRAY"):
+                for rgn in wrap.find_all("OCTREERESTRRGN"):
+                    ints = [c.value for c in rgn.children
+                            if c.tag == "INTEGER" and isinstance(c.value, int)]
+                    name = None
+                    for c in rgn.children:
+                        if c.tag == "STRING" and isinstance(c.value, str):
+                            name = c.value
+                            break
+                    if len(ints) >= 2 and name is not None:
+                        out.append({
+                            "name": name,
+                            "kind": int(ints[0]),
+                            "index": int(ints[1]),
+                        })
         return out
 
     def octree_mdl_body(self) -> Optional[OctreeMdlBody]:

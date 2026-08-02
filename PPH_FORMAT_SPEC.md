@@ -244,7 +244,11 @@ NUMERICALREGION）+ `WRAPPINGOPTCLS`（包面参数）。
 
 - 解压尺寸与 `uncompressed_size` 字段精确吻合。
 - Windows：`sctsnapshot.ZipBlob.decompress()`；非 Windows 可原样透传
-  （round-trip 不受影响）。`CreateCompressor(LZMS)` 可重压（字节可能不同）。
+  （round-trip 不受影响）；自 2026-08 起非 Windows 可回退
+  **wimlib**（`wimlib_create_decompressor` / `wimlib_decompress_with_decompressor`
+  或 1.13 一次性 API，`WIMLIB_COMPRESSION_TYPE_LZMS = 3`），见
+  `sctsnapshot.lzms_decompress`。
+  `CreateCompressor(LZMS)` 可重压（字节可能不同；`stream_id` 每次变化）。
 
 > 历史误判：曾当作厂商私有位流（已排除 zlib/lzma/lz4/zstd/brotli/bz2/
 > PackBits/LZNT1/XPRESS）。实为微软 WIM/ESD 同款 LZMS；通过 SCTprime DLL
@@ -254,19 +258,21 @@ NUMERICALREGION）+ `WRAPPINGOPTCLS`（包面参数）。
 
 ```
 CADthru/PKBody3          # 15 字节 ASCII 魔数
-u32le size               # 后续 data 字节数
-data[size]               # Blowfish-LE ECB 密文（见下）
-[pad u8]?                # 可选；box 样例 1 字节 0xB1
-[u32le trailer]?         # 可选常量 0x17DA2940
+u32le size               # 逻辑数据长度（明文/密文长度，非物理占用）
+data[ceil8(size)]        # Blowfish-LE ECB 密文，物理上按 8 字节块补齐
 ```
 
-三种合法尺寸变体：
+**关键修正（2026-08-02）**：包装体没有独立的 pad / 尾标字段。物理密文
+按 8 字节块补齐（`ceil8(size)`）；当 `size % 8 != 0` 时，末块为
+零填充块，其固定密钥密文 `E(0^8) = e5 e4 e5 b1 40 29 da 17` 的低 32 位
+恰为 `0x17DA2940`——这就是历史上观察到的“尾标”与 `0xB1`“pad”
+（`0xB1` 是密文第 `size` 字节）。该值不是独立存储的标记或校验
+（已排除 CRC32 / Adler / 求和），也不承载状态语义。
 
 | 变体 | 条件 | 本例 |
 |------|------|------|
-| 无尾标 | `19 + size == len` | laptop PK 65125 / 65252 |
-| 尾标 | `19 + size + 4 == len`，尾=`0x17DA2940` | laptop PK 62715 / 63022 |
-| pad+尾标 | `19 + size + pad + 4 == len`，尾=`0x17DA2940` | **box.pph** PK 51：`size=7643`，`pad=1`（`0xB1`） |
+| 8 倍数长度 | `19 + size == len` | laptop PK 65125（7824B）/ 65252（3040B） |
+| 非 8 倍数 | `19 + ceil8(size) == len`，末块密文尾= `0x17DA2940`（E(0) 低 32 位） | box PK 51：`size=7643` → `data=7648`；laptop PK 62715 / 63022 |
 
 **`data` 加解密（已闭合）：**
 
@@ -279,7 +285,10 @@ data[size]               # Blowfish-LE ECB 密文（见下）
 - 同版本项目间密文前 ~400 字节相同：ECB 下相同 schema 头明文 →
   相同密文块（历史误称为“私有 schema 前缀”）。
 - API：`ZipBlob.decompress_body()` → `PKBody3`；
-  `PKBody3.decrypt()` / `schema_prefix` / `pad`。
+  `PKBody3.decrypt()`（返回精确明文，长度 = `logical_size`）/
+  `schema_prefix` / `logical_size`；`checksum` / `pad` 为兼容性派生字段
+  （`0x17DA2940` / 零填充块密文碎片）。
+  写端：`pphwriter.encrypt_pkbody3()` 可对解密结果**逐字节复现**原始密文。
 
 #### 6.3.2 `ZIPOCTREE` → 嵌套快照记录流
 
@@ -405,18 +414,21 @@ main.prp: 物性条目 ← main.xml conditions 引用
 
 ### 9.2 结构已知、语义未钉死
 
-| 项 | 已掌握 | 缺口 | box 样例增益 |
-|----|--------|------|----------------|
-| `OCTREEREGION` flag 物理含义 | 后序序列化；`{0,1}`；重映射后 flag1 全为叶子且集中 ±x 翼细化区 | 与 open BC / 网格算法状态的精确对应（非简单 AABB） | 否定前序对齐与“立方体相交”假说；确认翼块模式 |
-| `LS_CsidOfFaces` | 两路 `I4[n_faces]` | 严格双侧语义 | **单闭体确认**：b1 全 0、b2 全 1 |
+已钉死（2026-08-02，box + laptop 双样例）：
+
+| 项 | 结论 | 证据 |
+|----|------|------|
+| `LS_CsidOfFaces` | 双侧闭体语义 `(volA, volB)`，0=外部，`b2 = frid + 1` | laptop part：frid×b2 = {(0,1),(1,2),(2,3),(3,4)} 精确一一对应；ridge 含界面面 `(2,1)`×412,644（两侧均非零）；`LS_MdlClosedVolumes` 记录数 = `max(b2)+1`（box 2 / laptop part 5 / laptop ridge 3） |
+| `OCTREEREGION` flag | 每 octant 1 字节，后序；重映射后 `flag=1` **全为叶子**，集中于最深细化层；区域索引与 `OCTREERESTRRGN` / frid / csid-1 同空间 | box：883 叶子，深度 4–5，y∈[0,0.011] 上半精化板；laptop：3,445,907/3,465,218 叶子，深度 14–20，转子薄柱 x∈[-54.47,-51.78]、y∈[4.92,5.47]、z∈[-0.24,0.28] |
+| `OCTREERESTR` 区域 | `OCTREERESTRRGN` 字段：`(kind, index, enabled, …)`；laptop 4 区 open=0 / case1=1 / rotation1=2 / impeller1=3（kind: open=0, 其余=2）；box 4 个 `OCTREERESTR` 全空 | 与 MDL `surface_regions` 索引、`csid-1` 一致 |
 
 ### 9.3 次要缺口
 
 | 项 | 已掌握 | 缺口 | box 增益 |
 |----|--------|------|----------|
-| `unit_type` 码表 | 布局已解；样例恒 `1` | 与 xenv UNIT 全量映射 | 仍恒为 1 |
-| 快照未对齐保留区 | `_resync` 可跳过 | 是否含语义 | 顶层 skipped=0 |
-| PKBody3 `pad` 字节 | 可选；尾标常量确认 | pad 取值含义、触发条件 | 首见 `pad=0xB1` |
+| `unit_type` 码表 | 布局已解；`1 → MODEL_LENGTH_UNIT`（`pphxml.resolve_snapshot_unit`） | 其余码值需多单位制样例确认 | 仍恒为 1 |
+| 快照 48 字节保留区 | 位于 `CSINFO→PBODYARRAY` 之间，4 个数据点均固定 48B，内容为旧序列化残留/未初始化垃圾，**不承载当前状态语义** | 无（可作已知对齐填充闭合） | skipped=0 |
+| PKBody3 末块 | **已闭合**：`0x17DA2940` = E(0^8) 低 32 位；`0xB1` = 零填充块密文第 `size` 字节 | 无 | 见 §6.3.1 |
 
 ### 9.4 已闭合（勿再当作未解）
 
@@ -430,6 +442,10 @@ main.prp: 物性条目 ← main.xml conditions 引用
   `(1,3,2,0,5,7,6,4)` + LSB-first（box/laptop 100% 重放）
 - **`OCTREEREGION`** → 每 octant 1 字节；**后序** + 子序 `0..7` + 尾零填充
 - **`INDEXARRAY`** → `{count=1, offset=0}` 单段描述符
+- **PKBody3 末块** → 无独立 pad/尾标；`0x17DA2940` 为 `E(0^8)` 低 32 位
+- **`OCTREERESTRRGN`** → `(kind, index, …)` 区域表，索引 = frid = csid-1
+- **写端闭环** → `pphwriter`（LZMS 压缩 / Blowfish 加密 / ZIP 容器），
+  PKBody3 再加密逐字节一致
 
 ## 10. 本仓解析器用法
 
@@ -439,6 +455,12 @@ python pph_parser.py 项目.pph --extract out # 解包
 python pph_parser.py 项目.pph --snapshot    # sctsnapshot 完整记录树
 python pph_parser.py 项目.pph --octree      # 八叉树叶子深度统计
 python tests/test_pph_parser.py             # 健全性测试（含 LZMS / DIVISION 重放）
+python tests/test_samples.py                # 跨样例结构不变式（自动发现 *.pph）
+python tests/test_minor_gaps.py             # 48B 保留区 / XML 往返 / unit_type
+python tests/test_platform.py               # LZMS 跨平台回退 / gph 内建统计
+python tests/test_semantics.py              # 双侧闭体 / OCTREEREGION / PKBody3 末块
+python tests/test_writer.py                 # 写端 round-trip
+python tests/test_parasolid.py              # Parasolid 传输流部分提取
 python tests/box/verify_dll_order.py        # DIVISION/REGION 写入端序对照
 ```
 
@@ -453,12 +475,16 @@ python tests/box/verify_dll_order.py        # DIVISION/REGION 写入端序对照
 | `sctsnapshot.py` | 快照记录流、LZMS、PKBody3、ZIPOCTREE DIVISION/REGION |
 | `blowfish_le.py` | PKBody3 Blowfish 小端变体 ECB（`blowfish_tables.py`） |
 | `pphxml.py` | main.xml 方言净化、prp、xenv、js |
+| `gphstats.py` | 仓库内轻量 GPH 统计（gphdecoding 仓不可用时的降级路径） |
+| `parasolid.py` | Parasolid 传输流部分提取（schema/字段名/实体类型） |
+| `pphwriter.py` | 写端：LZMS 压缩 + Blowfish 加密 + ZIP 容器 round-trip |
 
 关键 API：`ZipBlob.decompress()` / `decompress_body()` /
 `PKBody3.decrypt()` / `SctSnapshot.decompress_octree()` /
 `octree_crdlfld_bytes()` / `octree_division_bits()` /
 `octree_region_as_oct_order()` / `decompress_faceting_rules()`
-（LZMS 需 Windows `cabinet.dll`）。
+（LZMS 解压 Windows `cabinet.dll`，非 Windows 回退 wimlib；压缩需
+Windows `cabinet.dll`）。写端：`pphwriter.lzms_compress()` /
+`encrypt_pkbody3()` / `clone_pph()`。
 
 开发过程与版本状态见 [DEV_SUMMARY.md](DEV_SUMMARY.md)。
-

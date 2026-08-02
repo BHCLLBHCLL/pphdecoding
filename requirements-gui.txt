@@ -1,0 +1,5 @@
+# PPH GUI（查看/修改）运行依赖
+# 自动安装：python -m pip install -r requirements-gui.txt
+PyQt5>=5.15
+vtk>=9.3
+numpy>=1.24
