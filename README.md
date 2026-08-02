@@ -26,18 +26,33 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
 
 ## GUI（pph_gui.py）
 
-基于 **PyQt5 + VTK（OpenGL2 硬件加速）** 的查看/修改界面：
+基于 **PyQt5 + VTK（OpenGL2 硬件加速）** 的查看/修改界面，
+参照 scFLOW Pre 手册（`CradleCFD2025.2/Manuals/scFLOW/HTML/Pre_eng`）
+重新设计：
 
-- 成员树（文本/快照/网格组）→ 点击切换视图；
+- **Navigation Window**（左上方）：工具按钮行（打开/另存为/重载）+
+  当前文件信息卡片 + 分组导航树（模型数据 / 视图 / 数据），点击即跳转；
+- **Tree Window**（左下方）：成员树（文本/快照/网格组）+ 右键菜单
+  （属性 / 在 3D 中显示 / 在文本中打开 / 解析属性）；**模型树**
+  （第二标签页）按网格组列出闭体（body）与面区域，**复选框控制显隐**
+  （勾选=显示、取消=隐藏），**右键菜单**：仅显示此项 / 隐藏此项 /
+  显示全部 / 隐藏全部 / 在 3D 中查看——不使用单击/双击（避免触发
+  重复解析卡死）；解析后的 MDL 模型缓存复用，重渲染不重新解析；
+- **Property Window**（右侧）：选中树项的解析属性
+  （归档信息、GPH/OCT/MDL 统计、xenv/prp/xml/js 摘要、快照/Parasolid）；
+- **Draw Window**（中央 3D）：分组控制面板（网格组/显示/着色/视图按钮、
+  图层开关、剖面裁剪 X/Y/Z 滑动条），着色/线框模式、网格线叠加、
+  **剖面裁剪**、**橡皮框缩放**、Fit/Reset、坐标方向指示器、Qt 图例
+  （区域名色块 + 渐变条）；**视图类型**（全部 / 仅几何 MDL /
+  仅网格 GPH+OCT）；**拾取面**（点击 MDL 面单独显示）+ 恢复全部；
+  打开文件后 **3D 为默认显示区域**；
+- **看板（Dashboard）**：文件格式数据卡片（归档/压缩率/GPH/OCT/MDL/
+  快照/Parasolid，2×4 网格排布）+ 成员尺寸 Top12 条形图，大网格
+  （>64 MiB）自动跳过深度统计，可手动刷新；
 - **文本编辑**：main.js / main.prp / main.xenv / main.xml 直接编辑，
   "另存为"通过 `pphwriter` 写回新 .pph（未修改的成员原样复制）；
 - **快照**：sctsnapshot 记录树 + PKBody3/Parasolid 摘要；
-- **3D（CFD 风格）**：MDL 面片（frid/csid 着色，区域名图例）、
-  OCT 叶子包围盒（深度着色）、GPH 边界面（owner 着色），轨道相机交互；
-  **网格线叠加**（vtkExtractEdges 暗色线条）、**右上角坐标方向指示器**、
-  **右侧 Qt 图例面板**（离散区域色块行 + 连续渐变条，替代 VTK 色标条，
-  布局确定、文字始终可读）、渐变背景，均可开关；大网格自动限量渲染
-  （MDL 30 万面 / OCT 4 万叶子 / GPH 12 万面，见 `pph_gui.DEFAULT_CAPS`）；
+- 大网格自动限量渲染（MDL 30 万面 / OCT 4 万叶子 / GPH 12 万面）；
 - 兼容 VTK 9.3：`QVTKRenderWindowInteractor` 已无 `start()`，
   交互器在 3D 页首次显示时经 `GetInteractor().Initialize()` + 轨道相机
   样式初始化（`tests/test_gui.py` 有回归测试）；

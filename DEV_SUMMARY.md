@@ -30,7 +30,28 @@
 | Parasolid 部分提取 | ✅ 已交付 | `parasolid.py`：文件头/版本/schema、schema 字段表（token+字段名）、实体类型（PKEdge/PKFace/PKVertex）、SDL 属性 |
 | 平台与依赖 | ✅ 已解 | LZMS 解压非 Windows 回退 wimlib；gph 深度统计内置 `gphstats` 降级（不再依赖同级 gphdecoding 仓） |
 | GUI 查看/修改 | ✅ 已交付 | `pph_gui.py`（PyQt5 + VTK OpenGL2）：成员树、文本编辑+另存写回、快照记录树、MDL/OCT/GPH 3D 视窗（限量渲染）；`pph_vtk.py` 几何构建器离屏可测 |
-| 测试 | ✅ 通过 | 91 项测试全过（laptop + box + GUI/VTK 离屏），CLI 摘要正常 |
+| 测试 | ✅ 通过 | 112 项测试全过（laptop + box + GUI/VTK 离屏），CLI 摘要正常 |
+
+### GUI 2.0（scFLOW Pre 风格，2026-08-02）
+
+- 参照 scFLOW Pre 手册（`CradleCFD2025.2/Manuals/scFLOW/HTML/Pre_eng`）
+  重构界面：**Navigation Window**（工具按钮 + 文件信息卡片 + 分组导航树）、
+  **Tree Window**（成员树 + 右键菜单）、**Property Window**（选中项解析
+  属性）、**Draw Window**（3D：分组控制面板、着色/线框、网格线、剖面
+  裁剪 X/Y/Z、橡皮框缩放、Fit/Reset、坐标指示器、Qt 图例）；
+- 新增 **格式数据看板（Dashboard）**：归档/压缩率/GPH/OCT/MDL/快照/
+  Parasolid 数据卡片（2×4 网格排布）+ 成员尺寸 Top12 条形图；>64 MiB
+  大网格自动跳过深度统计（可手动刷新）；
+- **3D 默认显示 + 模型显隐控制**：打开文件后默认进入 3D；视图类型
+  （全部/仅几何 MDL/仅网格 GPH+OCT）；**模型树改用复选框 + 右键菜单**
+  控制闭体/面区域显隐（取消勾选即从 MDL 掩码中隐藏），不再用单击/双击
+  触发渲染；MDL/OCT/GPH 模型**缓存复用**（`View3DTab._cache`），勾选
+  切换不重新解析；二进制成员单击只显示轻量属性，深度解析移至右键
+  「解析属性（深度）」；**拾取面**（vtkCellPicker 点击 MDL 面隔离显示）
+  + 恢复全部（联动模型树全勾选）；
+- 测试：GUI 相关 30 项（含导航/属性/看板/线框/剖面/橡皮框/模型树复选框/
+  显隐信号/面掩码/视图过滤/默认 3D/真实 View3DTab 信号绑定回归），
+  全量 112 项通过。
 
 主要模块：
 

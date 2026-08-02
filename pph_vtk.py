@@ -50,8 +50,13 @@ def _add_polygons(pd, polys, cells, offsets, scalars=None):
 
 
 def mdl_mesh(model, color_by: str = "frid",
-             max_faces: int = 500_000) -> "vtkPolyData":
-    """MdlModel → vtkPolyData（cell scalars = frid 或 csid 侧 id）。"""
+             max_faces: int = 500_000,
+             face_mask: Optional[np.ndarray] = None) -> "vtkPolyData":
+    """MdlModel → vtkPolyData（cell scalars = frid 或 csid 侧 id）。
+
+    ``face_mask``：布尔数组（长度 n_faces），只保留选中的面
+    （用于"仅显示选中体/区域/面"）。
+    """
     import vtk
 
     if model.xyz.size == 0 or model.n_faces == 0:
@@ -61,6 +66,29 @@ def mdl_mesh(model, color_by: str = "frid",
     pd.GetPoints().SetData(_to_vtk(model.xyz))
     polys = vtk.vtkCellArray()
     n = min(model.n_faces, max_faces)
+    if face_mask is not None:
+        idx = np.flatnonzero(np.asarray(face_mask)[: model.n_faces])
+        if idx.size > max_faces:
+            idx = idx[:max_faces]
+        if idx.size == 0:
+            return pd
+        n = idx.size
+        offsets = np.concatenate(
+            [[0], np.cumsum(model.npe[idx])]).astype(np.int64)
+        conn = np.concatenate([
+            model.conn[model.face_offsets[i]:model.face_offsets[i + 1]]
+            for i in idx])
+        if color_by == "csid":
+            _, b2 = model.csid
+            scalars = b2[idx].astype(np.float64) if b2.size else None
+        else:
+            scalars = model.frid[idx].astype(np.float64)
+        _add_polygons(pd, polys, conn, offsets,
+                      scalars=scalars if scalars is not None
+                      else np.zeros(n, dtype=np.float64))
+        pd.SetPolys(polys)
+        pd.GetCellData().SetActiveScalars("scalars")
+        return pd
     if color_by == "csid":
         _, b2 = model.csid
         scalars = b2[:n].astype(np.float64) if b2.size else None
