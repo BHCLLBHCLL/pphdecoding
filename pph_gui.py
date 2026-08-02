@@ -7,8 +7,9 @@
   Toolbars + 主工作区：
     Navigation | Tree + Property | Draw + Message
 
-PPH 只读/轻量编辑能力映射到对应菜单与导航项；未实现的
-scFLOW 网格生成等操作在 Message 中提示。
+PPH 只读/轻量编辑能力映射到对应菜单与导航项。Prepare Parts /
+Build Analysis Model 点击后弹出子窗口（对齐 scFLOWpre 对话框），
+绑定 xenv/xml/prp；网格生成等执行步骤需在 scFLOWpre 中完成。
 
 用法：``python pph_gui.py [项目.pph]``。
 """
@@ -26,20 +27,22 @@ from PyQt5.QtCore import (
     QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer, pyqtSignal,
 )
 from PyQt5.QtGui import (
-    QBrush, QColor, QFont, QIcon, QPainter, QPalette, QPen, QPixmap,
-    QPolygon,
+    QBrush, QColor, QFont, QIcon, QPainter, QPainterPath, QPalette, QPen,
+    QPixmap, QPolygon,
 )
 from PyQt5.QtWidgets import (
-    QAction, QApplication, QCheckBox, QComboBox, QDoubleSpinBox,
-    QFileDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
-    QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy,
+    QAction, QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
+    QDoubleSpinBox, QFileDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout,
+    QLabel, QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy,
     QSlider, QSplitter, QStackedWidget, QTabWidget, QToolBar, QTreeWidget,
     QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
+import nav_panels
 import pph_parser
 import pph_vtk
 import pphwriter
+import pphxml
 
 try:  # VTK 工厂注册：交互样式 / OpenGL2 后端
     import vtkmodules.vtkInteractionStyle  # noqa: F401
@@ -48,7 +51,8 @@ except Exception:  # noqa: BLE001 - 离屏/无显示环境下不阻塞导入
     pass
 
 
-DEFAULT_CAPS = {"mdl": 300_000, "oct": 40_000, "gph": 120_000}
+# GPH 边界面若按文件序截断会整块缺壁（酷似剖切）；上限需覆盖常见大模型
+DEFAULT_CAPS = {"mdl": 300_000, "oct": 40_000, "gph": 500_000}
 DEFAULT_CAPS["ridge"] = DEFAULT_CAPS["mdl"]
 
 
@@ -78,6 +82,84 @@ def _fmt_size(n: int) -> str:
             return f"{n:.1f} {unit}" if unit != "B" else f"{n} B"
         n /= 1024.0
     return f"{n:.1f} GiB"
+
+
+def _closed_volume_id(text: str) -> Optional[int]:
+    """``ClosedVolume3`` / ``MeshClosedVolume3`` → 3。"""
+    import re
+    m = re.match(r"(?:Mesh)?ClosedVolume(\d+)$", (text or "").strip(), re.I)
+    return int(m.group(1)) if m else None
+
+
+def _mesh_closed_volume_label(text: str) -> str:
+    """XML ``ClosedVolume1`` → 树节点 ``MeshClosedVolume1``（对齐 Pre）。"""
+    cid = _closed_volume_id(text)
+    if cid is not None:
+        return f"MeshClosedVolume{cid}"
+    return text or "MeshClosedVolume"
+
+
+def _extract_part_tree_meta(mx) -> tuple[dict, dict]:
+    """从 main.xml 提取 Part Tree 用的 regions_meta 与按组零件列表。"""
+    regions_meta: dict[str, list] = {
+        "fluid": [], "face": [], "volume": [], "numerical": [],
+        "cross_section": [], "special_face": [],
+    }
+    regs = mx.section("regions")
+    if regs is not None:
+        for fr in (regs.find("fluid").findall("region")
+                   if regs.find("fluid") is not None else []):
+            name = (fr.findtext("name") or "").strip() or "FluidRegion"
+            prop = (fr.findtext("property") or "").strip()
+            sparts = [((s.text or "").strip())
+                      for s in fr.findall("spart") if (s.text or "").strip()]
+            label = f"{prop} ({name})" if prop else name
+            regions_meta["fluid"].append({
+                "name": name, "property": prop, "label": label,
+                "sparts": ", ".join(sparts),
+            })
+        for cat in ("face", "volume", "numerical", "cross_section",
+                    "special_face"):
+            node = regs.find(cat)
+            if node is None:
+                continue
+            for r in node.findall("region"):
+                name = (r.findtext("name") or "").strip()
+                if not name:
+                    continue
+                regions_meta[cat].append({
+                    "name": name, "frid": None, "group": "",
+                })
+
+    # 零件：meshinggroup → part + cvols_for_octmesh
+    parts_by_group: dict[str, list] = {}
+    parts = mx.section("parts")
+    if parts is not None:
+        for mg in parts.findall("meshinggroup"):
+            sgs = (mg.findtext("sgs_name") or "").strip()
+            # MeshingGroup_1 → meshinggroup1
+            key = sgs.replace("MeshingGroup_", "meshinggroup").replace(
+                " ", "").lower()
+            if not key:
+                key = "meshinggroup1"
+            plist = []
+            for part in mg.iter("part"):
+                pname = (part.findtext("name") or "").strip()
+                if not pname:
+                    continue
+                cvols = []
+                cnode = part.find("cvols_for_octmesh")
+                if cnode is not None:
+                    for c in cnode.findall("cvol"):
+                        t = (c.text or "").strip()
+                        if t:
+                            cvols.append(t)
+                plist.append({"name": pname, "cvols": cvols})
+            if plist:
+                parts_by_group[key] = plist
+
+    # 为 face 区域补 frid（按名称在任一 MDL 中匹配——调用方再填 group）
+    return regions_meta, parts_by_group
 
 
 def _gph_mesh(path: str) -> dict:
@@ -285,15 +367,51 @@ class AppIcons:
 
     @classmethod
     def _draw_body(cls, p, r, _s):
-        p.setPen(cls._pen("#2e7d32", 1.2))
-        p.setBrush(QBrush(QColor("#a5d6a7")))
+        # MeshClosedVolume：黄块（对齐 scFLOWpre）
+        p.setPen(cls._pen("#c9a227", 1.2))
+        p.setBrush(QBrush(QColor("#f6e59a")))
         p.drawRoundedRect(r.adjusted(2, 2, -2, -2), 3, 3)
 
     @classmethod
     def _draw_region(cls, p, r, _s):
-        p.setPen(cls._pen("#f9a825", 1.3))
-        p.setBrush(QBrush(QColor("#fff59d")))
-        p.drawEllipse(r.adjusted(1, 1, -1, -1))
+        p.setPen(cls._pen("#2e7d32", 1.3))
+        p.setBrush(QBrush(QColor("#81c784")))
+        # 菱形（Surface Region 项）
+        cx, cy = r.center().x(), r.center().y()
+        w, h = r.width() * 0.42, r.height() * 0.42
+        poly = QPolygon([
+            QPoint(int(cx), int(cy - h)),
+            QPoint(int(cx + w), int(cy)),
+            QPoint(int(cx), int(cy + h)),
+            QPoint(int(cx - w), int(cy)),
+        ])
+        p.drawPolygon(poly)
+
+    @classmethod
+    def _draw_fluid(cls, p, r, _s):
+        p.setPen(cls._pen("#1565c0", 1.3))
+        p.setBrush(Qt.NoBrush)
+        path = QPainterPath()
+        y0 = r.center().y()
+        path.moveTo(r.left() + 1, y0)
+        w = r.width()
+        path.cubicTo(r.left() + w * 0.25, y0 - r.height() * 0.25,
+                     r.left() + w * 0.35, y0 + r.height() * 0.25,
+                     r.left() + w * 0.5, y0)
+        path.cubicTo(r.left() + w * 0.65, y0 - r.height() * 0.25,
+                     r.left() + w * 0.75, y0 + r.height() * 0.25,
+                     r.right() - 1, y0)
+        p.drawPath(path)
+        path2 = QPainterPath()
+        y1 = y0 + r.height() * 0.22
+        path2.moveTo(r.left() + 1, y1)
+        path2.cubicTo(r.left() + w * 0.25, y1 - r.height() * 0.2,
+                      r.left() + w * 0.35, y1 + r.height() * 0.2,
+                      r.left() + w * 0.5, y1)
+        path2.cubicTo(r.left() + w * 0.65, y1 - r.height() * 0.2,
+                      r.left() + w * 0.75, y1 + r.height() * 0.2,
+                      r.right() - 1, y1)
+        p.drawPath(path2)
 
     @classmethod
     def _draw_project(cls, p, r, _s):
@@ -382,9 +500,14 @@ class AppIcons:
 # Navigation / Tree 节点 key → 图标名
 NAV_ICONS = {
     "open": "open", "reload": "reload", "project": "project",
-    "mdl": "part", "regions": "region",
-    "oct": "octree", "oct_param": "param",
-    "gph": "mesh", "mesh_param": "param",
+    "parts_control": "param", "import_part": "open",
+    "create_parts": "part", "modify_parts": "part",
+    "mesher_faceter": "mesh", "regions": "region",
+    "non_solid": "part", "part_material": "project",
+    "conditions": "xml",
+    "build_am": "octree", "oct_param": "octree",
+    "mesh_param": "mesh", "execute": "show_all",
+    "mdl": "part", "oct": "octree", "gph": "mesh",
     "snapshot": "snapshot",
     "view_part": "part", "view_octree": "octree", "view_mesh": "mesh",
     "view_section": "section", "view_show_all": "show_all",
@@ -393,7 +516,6 @@ NAV_ICONS = {
 NAV_SECTION_ICONS = {
     "Prepare Parts": "folder",
     "Build Analysis Model": "octree",
-    "View": "show_all",
     "Data / Script": "script",
 }
 
@@ -607,34 +729,32 @@ class NavigationWindow(QWidget):
 
     navigated = pyqtSignal(str)
 
-    # 对齐 Pre Navigation 流程；key → PphViewer._on_navigate
+    # 对齐 scFLOWpre Navigation；Open/Save/Reload/Draw 在工具栏
+    # key → PphViewer._on_navigate（条件项打开参数面板）
     SECTIONS = [
         ("Prepare Parts", [
-            ("Open Project (PPH)", "open"),
-            ("Reload Project", "reload"),
-            ("Project Info (xenv/prp)", "project"),
-            ("Parts / Geometry (MDL)", "mdl"),
+            ("Parts Control", "parts_control"),
+            ("Import Part File", "import_part"),
+            ("Create Parts", "create_parts"),
+            ("Modify Parts", "modify_parts"),
+            ("Mesher/Faceter Setting", "mesher_faceter"),
             ("Register Region", "regions"),
+            ("Create Non-Solid Part", "non_solid"),
+            ("Part Material", "part_material"),
+            ("Conditions", "conditions"),
         ]),
         ("Build Analysis Model", [
-            ("Octree (OCT)", "oct"),
-            ("Octree Parameter (view)", "oct_param"),
-            ("Mesh (GPH)", "gph"),
-            ("Mesh Parameter (view)", "mesh_param"),
-            ("Snapshot / Parasolid", "snapshot"),
-        ]),
-        ("View", [
-            ("Draw — Part", "view_part"),
-            ("Draw — Octree", "view_octree"),
-            ("Draw — Mesh", "view_mesh"),
-            ("Cross Section of Mesh", "view_section"),
-            ("Show All", "view_show_all"),
+            ("Build Analysis Model", "build_am"),
+            ("Octree Parameter", "oct_param"),
+            ("Mesh Parameter", "mesh_param"),
+            ("Execute", "execute"),
         ]),
         ("Data / Script", [
+            ("Project Info (xenv/prp)", "project"),
             ("Project XML", "xml"),
             ("User Script (JS)", "js"),
+            ("Snapshot / Parasolid", "snapshot"),
             ("Format Dashboard", "dashboard"),
-            ("Save As…", "save"),
         ]),
     ]
 
@@ -785,11 +905,14 @@ class StatusPanel(QWidget):
 
 
 class ModelTree(QWidget):
-    """scFLOW 风格模型树：网格组 → 几何 / 八叉树 / 体网格。
+    """scFLOWpre 风格 Part Tree：
 
-    - 勾选控制显隐（组 / 图层 / 闭体 / 面区域）；
-    - 选中项刷新 Property / Status；
-    - 右键：仅显示 / 显示全部 / 显示 octree·mesh 信息 / 在 3D 中查看。
+    Project → Parts (Whole) → 几何名 / MeshClosedVolume* / Octree / Mesh  
+    Fluid Region → 流体域 / Void Region  
+    Region → Surface / Part Interface / Volume / Numerical / …
+
+    勾选：零件与 MeshClosedVolume → 体域显隐；Surface Region → 面域显隐；
+    Octree/Mesh → 图层总开关。
     """
 
     visibility_changed = pyqtSignal(str, set, set, bool)
@@ -797,11 +920,8 @@ class ModelTree(QWidget):
     layer_visibility_changed = pyqtSignal(str, str, bool)
     # (group, layer in mdl|oct|gph, visible)
     item_selected = pyqtSignal(dict)
-    # 选中项属性（给 Property）
     status_requested = pyqtSignal(str, str)
-    # (group, focus: geometry|octree|mesh|"")
     focus_3d = pyqtSignal(str)
-    # group → 切到 3D 并选中该组
     select_mesh = pyqtSignal(str)
 
     def __init__(self, parent=None):
@@ -810,116 +930,236 @@ class ModelTree(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         self.tree = QTreeWidget(self)
         self.tree.setHeaderLabels(["模型", "状态"])
-        self.tree.setColumnWidth(0, 160)
+        self.tree.setColumnWidth(0, 180)
         self.tree.setIconSize(QSize(16, 16))
         self.tree.itemChanged.connect(self._on_item_changed)
         self.tree.itemSelectionChanged.connect(self._on_selection)
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._context_menu)
         self.tree.setToolTip(
-            "勾选=显示；选中查看状态；右键可显示 octree/mesh 信息")
+            "勾选=显示；零件/闭体控制体域，Surface Region 控制面域；"
+            "Octree/Mesh 为图层开关")
         v.addWidget(self.tree)
         self._info: dict[str, dict] = {}
+        self._project_name = ""
+        self._regions_meta: dict = {}
 
-    def populate(self, groups_info: dict) -> None:
-        """``groups_info[group]`` 含 part / oct_summary / gph_summary / paths。"""
+    def groups(self) -> list[str]:
+        return sorted(self._info)
+
+    def populate(self, groups_info: dict, *, project_name: str = "",
+                 regions_meta: Optional[dict] = None) -> None:
+        """对齐 scFLOWpre Part Tree。
+
+        ``groups_info[group]`` 含 part / oct_summary / gph_summary / paths /
+        ``xml_parts``（[{name, cvols}]）。
+        ``regions_meta`` 含 fluid / face / volume / numerical / …
+        """
         self._info = groups_info
+        self._project_name = project_name or "Project"
+        self._regions_meta = regions_meta or {}
         self.tree.blockSignals(True)
         self.tree.clear()
+
+        proj = QTreeWidgetItem([f"Project ({self._project_name})", ""])
+        proj.setData(0, Qt.UserRole, ("project", "", None))
+        proj.setFlags(proj.flags() | Qt.ItemIsUserCheckable)
+        proj.setCheckState(0, Qt.Checked)
+        proj.setIcon(0, AppIcons.get("project", 16))
+        self.tree.addTopLevelItem(proj)
+
+        parts_root = QTreeWidgetItem(["Parts (Whole)", ""])
+        parts_root.setData(0, Qt.UserRole, ("parts_root", "", None))
+        parts_root.setIcon(0, AppIcons.get("folder", 16))
+        proj.addChild(parts_root)
+
         for group in sorted(groups_info):
             info = groups_info[group]
-            root = QTreeWidgetItem([group, "网格组"])
-            root.setData(0, Qt.UserRole, ("group", group, None))
-            root.setFlags(root.flags() | Qt.ItemIsUserCheckable)
-            root.setCheckState(0, Qt.Checked)
-            root.setIcon(0, AppIcons.get("group", 16))
-            self.tree.addTopLevelItem(root)
+            parent = parts_root
+            if len(groups_info) > 1:
+                gnode = QTreeWidgetItem([group, "meshing group"])
+                gnode.setData(0, Qt.UserRole, ("group", group, None))
+                gnode.setFlags(gnode.flags() | Qt.ItemIsUserCheckable)
+                gnode.setCheckState(0, Qt.Checked)
+                gnode.setIcon(0, AppIcons.get("group", 16))
+                parts_root.addChild(gnode)
+                parent = gnode
 
-            m = info.get("part")
-            geo_status = self._geometry_status_text(info)
-            geo = QTreeWidgetItem(["几何 (MDL)", geo_status])
-            geo.setData(0, Qt.UserRole, ("layer", group, "mdl"))
-            geo.setFlags(geo.flags() | Qt.ItemIsUserCheckable)
-            geo.setCheckState(0, Qt.Checked if info.get("paths", {}).get("part")
-                              else Qt.Unchecked)
-            geo.setIcon(0, AppIcons.get("part", 16))
-            if not info.get("paths", {}).get("part"):
-                geo.setFlags(geo.flags() & ~Qt.ItemIsEnabled)
-            root.addChild(geo)
-            if m is not None:
-                if m.csid[1].size:
-                    bodies = sorted({int(x) for x in m.csid[1] if x > 0})
-                    if bodies:
-                        bnode = QTreeWidgetItem(["闭体", f"{len(bodies)}"])
-                        bnode.setData(0, Qt.UserRole, ("folder", group, "body"))
-                        bnode.setIcon(0, AppIcons.get("folder", 16))
-                        for b in bodies:
-                            item = QTreeWidgetItem([f"body {b}", "closed volume"])
-                            item.setData(0, Qt.UserRole, ("body", group, b))
-                            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-                            item.setCheckState(0, Qt.Checked)
-                            item.setIcon(0, AppIcons.get("body", 16))
-                            bnode.addChild(item)
-                        geo.addChild(bnode)
-                seen: dict[int, str] = {}
-                for r in m.surface_regions:
-                    if not r.name.startswith("@"):
-                        seen.setdefault(r.index, r.name)
-                if seen:
-                    rnode = QTreeWidgetItem(["面区域", f"{len(seen)}"])
-                    rnode.setData(0, Qt.UserRole, ("folder", group, "region"))
-                    rnode.setIcon(0, AppIcons.get("folder", 16))
-                    for idx, name in sorted(seen.items()):
-                        item = QTreeWidgetItem([name, f"frid={idx}"])
-                        item.setData(0, Qt.UserRole, ("region", group, idx))
-                        item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-                        item.setCheckState(0, Qt.Checked)
-                        item.setIcon(0, AppIcons.get("region", 16))
-                        rnode.addChild(item)
-                    geo.addChild(rnode)
+            xml_parts = info.get("xml_parts") or []
+            mdl = info.get("part")
+            if not xml_parts and mdl is not None:
+                xml_parts = self._parts_from_mdl(mdl)
 
-            oct_status = self._oct_status_text(info)
-            oct_item = QTreeWidgetItem(["八叉树 (OCT)", oct_status])
+            for pd in xml_parts:
+                pname = pd["name"]
+                body_id = self._part_body_id(mdl, pname)
+                status = ""
+                if body_id is not None and mdl is not None:
+                    n = int(((mdl.csid[0] == body_id) | (mdl.csid[1] == body_id)).sum()) \
+                        if mdl.csid[1].size else 0
+                    status = f"{n:,} faces" if n else ""
+                pitem = QTreeWidgetItem([pname, status])
+                pitem.setData(0, Qt.UserRole, ("part", group, body_id))
+                pitem.setFlags(pitem.flags() | Qt.ItemIsUserCheckable)
+                pitem.setCheckState(0, Qt.Checked)
+                pitem.setIcon(0, AppIcons.get("part", 16))
+                parent.addChild(pitem)
+                for cvol_txt in pd.get("cvols") or []:
+                    disp = _mesh_closed_volume_label(cvol_txt)
+                    cid = _closed_volume_id(cvol_txt)
+                    # MeshClosedVolume 与零件共用 body 显隐（有体网格的零件）
+                    citem = QTreeWidgetItem([disp, f"cvol={cid}" if cid else ""])
+                    citem.setData(0, Qt.UserRole, ("cvol", group, body_id))
+                    citem.setFlags(citem.flags() | Qt.ItemIsUserCheckable)
+                    citem.setCheckState(0, Qt.Checked)
+                    citem.setIcon(0, AppIcons.get("body", 16))
+                    pitem.addChild(citem)
+                pitem.setExpanded(True)
+
+            # 图层：Octree / Mesh（几何显隐由零件勾选表达，不再单独挂 MDL 层）
+            # 仍保留 mdl 图层逻辑：零件全关时等价隐藏几何；默认 mdl 层开
+            oct_item = QTreeWidgetItem(["Octree", self._oct_status_text(info)])
             oct_item.setData(0, Qt.UserRole, ("layer", group, "oct"))
             oct_item.setFlags(oct_item.flags() | Qt.ItemIsUserCheckable)
-            has_oct = bool(info.get("paths", {}).get("oct"))
-            # 默认不显示八叉树（与 3D 工具栏一致）
             oct_item.setCheckState(0, Qt.Unchecked)
             oct_item.setIcon(0, AppIcons.get("octree", 16))
-            if not has_oct:
+            if not info.get("paths", {}).get("oct"):
                 oct_item.setFlags(oct_item.flags() & ~Qt.ItemIsEnabled)
-            root.addChild(oct_item)
+            parent.addChild(oct_item)
 
-            mesh_status = self._mesh_status_text(info)
-            mesh_item = QTreeWidgetItem(["体网格 (GPH)", mesh_status])
+            mesh_item = QTreeWidgetItem(["Mesh", self._mesh_status_text(info)])
             mesh_item.setData(0, Qt.UserRole, ("layer", group, "gph"))
             mesh_item.setFlags(mesh_item.flags() | Qt.ItemIsUserCheckable)
             has_gph = bool(info.get("paths", {}).get("gph"))
-            # 默认显示体网格（与 Draw 工具栏一致）
-            mesh_item.setCheckState(
-                0, Qt.Checked if has_gph else Qt.Unchecked)
+            mesh_item.setCheckState(0, Qt.Checked if has_gph else Qt.Unchecked)
             mesh_item.setIcon(0, AppIcons.get("mesh", 16))
             if not has_gph:
                 mesh_item.setFlags(mesh_item.flags() & ~Qt.ItemIsEnabled)
-            root.addChild(mesh_item)
+            parent.addChild(mesh_item)
 
-            root.setExpanded(True)
-            geo.setExpanded(True)
+            # 隐式 mdl 层：始终视为开启（由零件勾选过滤）
+            # 同步 layer_hidden 时不把 mdl 放进树
+
+        parts_root.setExpanded(True)
+        proj.setExpanded(True)
+
+        # ── Fluid Region ──────────────────────────────────────────
+        fluid_root = QTreeWidgetItem(["Fluid Region", ""])
+        fluid_root.setData(0, Qt.UserRole, ("fluid_root", "", None))
+        fluid_root.setIcon(0, AppIcons.get("fluid", 16))
+        self.tree.addTopLevelItem(fluid_root)
+        for fr in self._regions_meta.get("fluid") or []:
+            label = fr.get("label") or fr.get("name") or "FluidRegion"
+            item = QTreeWidgetItem([label, fr.get("sparts", "")])
+            item.setData(0, Qt.UserRole, ("fluid", "", fr.get("name")))
+            item.setIcon(0, AppIcons.get("fluid", 16))
+            fluid_root.addChild(item)
+        void_item = QTreeWidgetItem(["(Void Region)", ""])
+        void_item.setData(0, Qt.UserRole, ("fluid", "", "__void__"))
+        void_item.setIcon(0, AppIcons.get("fluid", 16))
+        fluid_root.addChild(void_item)
+        fluid_root.setExpanded(True)
+
+        # ── Region ────────────────────────────────────────────────
+        reg_root = QTreeWidgetItem(["Region", ""])
+        reg_root.setData(0, Qt.UserRole, ("region_root", "", None))
+        reg_root.setIcon(0, AppIcons.get("folder", 16))
+        self.tree.addTopLevelItem(reg_root)
+
+        # Surface Region：XML face + 回退 MDL（排除零件名）
+        surf_node = QTreeWidgetItem(["Surface Region", ""])
+        surf_node.setData(0, Qt.UserRole, ("region_cat", "", "face"))
+        surf_node.setIcon(0, AppIcons.get("folder", 16))
+        reg_root.addChild(surf_node)
+        surf_entries = list(self._regions_meta.get("face") or [])
+        if not surf_entries:
+            surf_entries = self._fallback_surface_regions(groups_info)
+        default_group = sorted(groups_info)[0] if groups_info else ""
+        for se in surf_entries:
+            g = se.get("group") or default_group
+            item = QTreeWidgetItem([se["name"], f"frid={se['frid']}"])
+            item.setData(0, Qt.UserRole, ("region", g, se["frid"]))
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(0, Qt.Checked)
+            item.setIcon(0, AppIcons.get("region", 16))
+            surf_node.addChild(item)
+        surf_node.setExpanded(True)
+
+        for cat, title in (
+            ("special_face", "Part Interface Region"),
+            ("volume", "Volume Region"),
+            ("numerical", "Numerical Region"),
+            ("cross_section", "Cross Section Region"),
+        ):
+            node = QTreeWidgetItem([title, ""])
+            node.setData(0, Qt.UserRole, ("region_cat", "", cat))
+            node.setIcon(0, AppIcons.get("folder", 16))
+            reg_root.addChild(node)
+            for se in self._regions_meta.get(cat) or []:
+                g = se.get("group") or default_group
+                child = QTreeWidgetItem([se["name"], ""])
+                child.setData(0, Qt.UserRole, ("region", g, se.get("frid")))
+                if se.get("frid") is not None:
+                    child.setFlags(child.flags() | Qt.ItemIsUserCheckable)
+                    child.setCheckState(0, Qt.Checked)
+                child.setIcon(0, AppIcons.get("region", 16))
+                node.addChild(child)
+
+        ref = QTreeWidgetItem(["Reference Point", ""])
+        ref.setData(0, Qt.UserRole, ("region_cat", "", "reference"))
+        ref.setIcon(0, AppIcons.get("dashboard", 16))
+        reg_root.addChild(ref)
+        reg_root.setExpanded(True)
+
         self.tree.blockSignals(False)
 
     @staticmethod
-    def _geometry_status_text(info: dict) -> str:
-        m = info.get("part")
-        if m is None:
-            return "—"
-        return f"{m.n_faces:,} 面 · {m.n_closed_volumes} 闭体"
+    def _part_body_id(mdl_model, part_name: str) -> Optional[int]:
+        if mdl_model is None:
+            return None
+        for r in mdl_model.surface_regions:
+            if r.name == part_name or r.name == f"@PartSurface_{part_name}":
+                return int(r.index) + 1
+        return None
+
+    @staticmethod
+    def _parts_from_mdl(mdl_model) -> list[dict]:
+        """无 XML 时从 MDL @PartSurface_* 推导零件列表。"""
+        seen: dict[str, int] = {}
+        for r in mdl_model.surface_regions:
+            if r.name.startswith("@PartSurface_"):
+                seen.setdefault(r.name[len("@PartSurface_"):], r.index)
+        # GPH 有 cvol 的零件才会挂 MeshClosedVolume；此处无 GPH 时不挂
+        return [{"name": n, "cvols": []} for n in seen]
+
+    @staticmethod
+    def _fallback_surface_regions(groups_info: dict) -> list[dict]:
+        """XML 无 face 时：MDL 面域中排除零件名后的项（如 open）。"""
+        out = []
+        for group, info in groups_info.items():
+            mdl = info.get("part")
+            if mdl is None:
+                continue
+            part_names = {r.name[len("@PartSurface_"):]
+                          for r in mdl.surface_regions
+                          if r.name.startswith("@PartSurface_")}
+            seen: dict[int, str] = {}
+            for r in mdl.surface_regions:
+                if r.name.startswith("@"):
+                    continue
+                if r.name in part_names:
+                    continue
+                seen.setdefault(int(r.index), r.name)
+            for frid, name in sorted(seen.items()):
+                out.append({"name": name, "frid": frid, "group": group})
+        return out
 
     @staticmethod
     def _oct_status_text(info: dict) -> str:
         s = info.get("oct_summary") or {}
         if not s:
             return "—"
-        return f"{s.get('n_leaves', 0):,} 叶 · {s.get('n_octants', 0):,} 节点"
+        return f"{s.get('n_leaves', 0):,} leaves"
 
     @staticmethod
     def _mesh_status_text(info: dict) -> str:
@@ -928,8 +1168,7 @@ class ModelTree(QWidget):
             return "—"
         links = s.get("links") or {}
         cells = links.get("n_cells", s.get("n_cells") or 0)
-        faces = links.get("n_faces", 0)
-        return f"{cells:,} 单元 · {faces:,} 面"
+        return f"{cells:,} cells"
 
     def group_status_props(self, group: str) -> dict:
         """供 StatusPanel 使用的结构化状态。"""
@@ -948,6 +1187,7 @@ class ModelTree(QWidget):
                 "闭体 ID": bodies,
                 "体区域": m.volume_regions,
                 "面区域": [f"{n} (frid={i})" for n, i in regions],
+                "零件": [p.get("name") for p in (info.get("xml_parts") or [])],
             }
             if m.xyz.size:
                 lo = m.xyz.min(axis=0)
@@ -981,37 +1221,47 @@ class ModelTree(QWidget):
                 "体区域": gph.get("volume_regions") or [],
                 "面区域": [n for n, _ in (gph.get("surface_regions") or [])],
                 "闭体 cvol": gph.get("cvol_unique") or [],
+                "Parts": gph.get("parts") or [],
             }
         return {"geometry": geo, "octree": octree, "mesh": mesh}
 
-    def _items(self, group: str, kind: str):
-        root = self._group_root(group)
-        if root is None:
-            return []
-        out = []
-        stack = [root.child(i) for i in range(root.childCount())]
+    def _iter_all_items(self):
+        stack = [self.tree.topLevelItem(i)
+                 for i in range(self.tree.topLevelItemCount())]
         while stack:
             node = stack.pop()
-            data = node.data(0, Qt.UserRole)
-            if data and data[0] == kind:
-                out.append(node)
+            yield node
             for j in range(node.childCount()):
                 stack.append(node.child(j))
+
+    def _items(self, group: str, kind: str):
+        out = []
+        for node in self._iter_all_items():
+            data = node.data(0, Qt.UserRole)
+            if data and data[0] == kind and data[1] == group:
+                out.append(node)
         return out
 
-    def _group_root(self, group: str) -> Optional[QTreeWidgetItem]:
+    def _project_item(self) -> Optional[QTreeWidgetItem]:
         for i in range(self.tree.topLevelItemCount()):
             root = self.tree.topLevelItem(i)
             data = root.data(0, Qt.UserRole)
-            if data and data[1] == group:
+            if data and data[0] == "project":
                 return root
         return None
 
     def group_visible(self, group: str) -> bool:
-        root = self._group_root(group)
-        return root is not None and root.checkState(0) == Qt.Checked
+        proj = self._project_item()
+        if proj is not None and proj.checkState(0) != Qt.Checked:
+            return False
+        for item in self._items(group, "group"):
+            return item.checkState(0) == Qt.Checked
+        return True
 
     def layer_visible(self, group: str, layer: str) -> bool:
+        if layer == "mdl":
+            # 几何由零件勾选控制；图层默认开
+            return True
         for item in self._items(group, "layer"):
             if item.data(0, Qt.UserRole)[2] == layer:
                 return item.checkState(0) == Qt.Checked
@@ -1020,13 +1270,28 @@ class ModelTree(QWidget):
     def hidden_sets(self, group: str) -> tuple[set, set]:
         hidden_bodies: set = set()
         hidden_regions: set = set()
-        for item in self._items(group, "body"):
-            if item.checkState(0) != Qt.Checked:
-                hidden_bodies.add(item.data(0, Qt.UserRole)[2])
+        for kind in ("part", "cvol", "body"):
+            for item in self._items(group, kind):
+                if item.checkState(0) != Qt.Checked:
+                    bid = item.data(0, Qt.UserRole)[2]
+                    if bid is not None:
+                        hidden_bodies.add(bid)
         for item in self._items(group, "region"):
             if item.checkState(0) != Qt.Checked:
-                hidden_regions.add(item.data(0, Qt.UserRole)[2])
+                frid = item.data(0, Qt.UserRole)[2]
+                if frid is not None:
+                    hidden_regions.add(frid)
         return hidden_bodies, hidden_regions
+
+    def _emit_visibility(self, group: str) -> None:
+        if not group:
+            for g in self.groups():
+                self._emit_visibility(g)
+            return
+        hidden_bodies, hidden_regions = self.hidden_sets(group)
+        self.visibility_changed.emit(
+            group, hidden_bodies, hidden_regions,
+            self.group_visible(group))
 
     def _on_item_changed(self, item: QTreeWidgetItem, _col: int) -> None:
         data = item.data(0, Qt.UserRole)
@@ -1037,11 +1302,21 @@ class ModelTree(QWidget):
             self.layer_visibility_changed.emit(
                 group, value, item.checkState(0) == Qt.Checked)
             return
-        if kind in ("group", "body", "region"):
-            hidden_bodies, hidden_regions = self.hidden_sets(group)
-            self.visibility_changed.emit(
-                group, hidden_bodies, hidden_regions,
-                self.group_visible(group))
+        if kind == "project":
+            self._emit_visibility("")
+            return
+        if kind in ("group", "part", "cvol", "body", "region"):
+            # 零件取消勾选时同步其子 MeshClosedVolume
+            if kind == "part":
+                self.tree.blockSignals(True)
+                state = item.checkState(0)
+                for i in range(item.childCount()):
+                    ch = item.child(i)
+                    cd = ch.data(0, Qt.UserRole)
+                    if cd and cd[0] == "cvol" and (ch.flags() & Qt.ItemIsUserCheckable):
+                        ch.setCheckState(0, state)
+                self.tree.blockSignals(False)
+            self._emit_visibility(group)
 
     def _on_selection(self) -> None:
         items = self.tree.selectedItems()
@@ -1051,21 +1326,27 @@ class ModelTree(QWidget):
         if not data:
             return
         kind, group, value = data[0], data[1], data[2]
-        props = {"网格组": group, "节点": kind}
-        if kind == "body":
-            props["闭体 csid"] = value
+        props: dict = {"节点": kind, "名称": items[0].text(0)}
+        if group:
+            props["网格组"] = group
+        if kind in ("part", "cvol", "body"):
+            props["闭体 / body"] = value
         elif kind == "region":
             props["面区域 frid"] = value
-            props["名称"] = items[0].text(0)
         elif kind == "layer":
-            props["图层"] = {"mdl": "几何 MDL", "oct": "八叉树 OCT",
-                             "gph": "体网格 GPH"}.get(value, value)
+            props["图层"] = {"oct": "Octree", "gph": "Mesh",
+                             "mdl": "Geometry"}.get(value, value)
             props["状态列"] = items[0].text(1)
-        st = self.group_status_props(group)
-        focus = {"mdl": "geometry", "oct": "octree",
-                 "gph": "mesh"}.get(value if kind == "layer" else "", "")
+        elif kind == "fluid":
+            props["流体域"] = value
+        focus = ""
+        if kind == "layer":
+            focus = {"oct": "octree", "gph": "mesh"}.get(value, "")
+        elif kind in ("part", "cvol", "body", "region"):
+            focus = "geometry"
         self.item_selected.emit(props)
-        self.status_requested.emit(group, focus)
+        if group:
+            self.status_requested.emit(group, focus)
 
     def _context_menu(self, pos) -> None:
         from PyQt5.QtWidgets import QMenu
@@ -1077,6 +1358,8 @@ class ModelTree(QWidget):
         if not data:
             return
         kind, group, value = data[0], data[1], data[2]
+        if not group and self.groups():
+            group = self.groups()[0]
         menu = QMenu(self)
         act_only = menu.addAction("仅显示此项")
         act_hide = menu.addAction("隐藏此项")
@@ -1117,7 +1400,7 @@ class ModelTree(QWidget):
         data = item.data(0, Qt.UserRole)
         if not data:
             return
-        if data[0] == "group":
+        if data[0] in ("project", "group", "parts_root"):
             self._set_all(group, True)
             return
         if data[0] == "layer":
@@ -1125,50 +1408,55 @@ class ModelTree(QWidget):
             for other in self._items(group, "layer"):
                 other.setCheckState(
                     0, Qt.Checked if other is item else Qt.Unchecked)
-            root = self._group_root(group)
-            if root is not None:
-                root.setCheckState(0, Qt.Checked)
             self.tree.blockSignals(False)
-            self.layer_visibility_changed.emit(
-                group, data[2], True)
+            self.layer_visibility_changed.emit(group, data[2], True)
             for other in self._items(group, "layer"):
                 if other is not item:
                     self.layer_visibility_changed.emit(
                         group, other.data(0, Qt.UserRole)[2], False)
             return
-        if data[0] not in ("body", "region"):
+        if data[0] not in ("part", "cvol", "body", "region"):
             return
         self.tree.blockSignals(True)
         kind, _, value = data
-        for other in self._items(group, "body") + self._items(group, "region"):
+        targets = (self._items(group, "part") + self._items(group, "cvol")
+                   + self._items(group, "body") + self._items(group, "region"))
+        for other in targets:
             od = other.data(0, Qt.UserRole)
-            other.setCheckState(
-                0, Qt.Checked if od[0] == kind and od[2] == value
-                else Qt.Unchecked)
-        root = self._group_root(group)
-        if root is not None:
-            root.setCheckState(0, Qt.Checked)
+            match = od[0] == kind and od[2] == value
+            other.setCheckState(0, Qt.Checked if match else Qt.Unchecked)
         self.tree.blockSignals(False)
         self._on_item_changed(item, 0)
 
     def _set_all(self, group: str, checked: bool) -> None:
         state = Qt.Checked if checked else Qt.Unchecked
+        groups = [group] if group else self.groups()
         self.tree.blockSignals(True)
-        root = self._group_root(group)
-        if root is not None:
-            root.setCheckState(0, state)
-            for item in (self._items(group, "body")
-                         + self._items(group, "region")
-                         + self._items(group, "layer")):
-                if item.flags() & Qt.ItemIsEnabled:
-                    item.setCheckState(0, state)
+        proj = self._project_item()
+        if proj is not None:
+            proj.setCheckState(0, state)
+        for g in groups:
+            for item in (self._items(g, "group")
+                         + self._items(g, "part")
+                         + self._items(g, "cvol")
+                         + self._items(g, "body")
+                         + self._items(g, "region")
+                         + self._items(g, "layer")):
+                if item.flags() & Qt.ItemIsUserCheckable and (
+                        item.flags() & Qt.ItemIsEnabled):
+                    # Octree 默认仍保持关：仅在「显示全部」时打开 Mesh，不强制开 Octree
+                    if (not checked) or item.data(0, Qt.UserRole)[2] != "oct":
+                        item.setCheckState(0, state)
+                    if checked and item.data(0, Qt.UserRole)[0] == "layer" \
+                            and item.data(0, Qt.UserRole)[2] == "oct":
+                        item.setCheckState(0, Qt.Unchecked)
         self.tree.blockSignals(False)
-        if root is not None:
-            self._on_item_changed(root, 0)
-            for item in self._items(group, "layer"):
+        for g in groups:
+            self._emit_visibility(g)
+            for item in self._items(g, "layer"):
                 if item.flags() & Qt.ItemIsEnabled:
                     self.layer_visibility_changed.emit(
-                        group, item.data(0, Qt.UserRole)[2],
+                        g, item.data(0, Qt.UserRole)[2],
                         item.checkState(0) == Qt.Checked)
 
 
@@ -1393,11 +1681,27 @@ class TextEditorTab(QWidget):
         for name, text in self._buffers.items():
             orig = self._originals.get(name)
             if orig is not None and text != orig:
-                out[name] = text.encode("utf-8")
+                # xenv 保持 UTF-8 BOM（与 scFLOW 一致）
+                if name.endswith(".xenv"):
+                    out[name] = ("\ufeff" + text.lstrip("\ufeff")).encode("utf-8")
+                else:
+                    out[name] = text.encode("utf-8")
         return out
 
     def set_originals(self, originals: dict[str, bytes]) -> None:
-        self._originals = {n: self._norm(b) for n, b in originals.items()}
+        # 仅跟踪文本成员；切勿对 GPH/OCT/MDL 等二进制做 UTF-8 解码（大文件会卡死）
+        text_ext = (".js", ".prp", ".xenv", ".xml", ".txt", ".csv")
+        self._originals = {
+            n: self._norm(b) for n, b in originals.items()
+            if n.lower().endswith(text_ext)
+        }
+
+    def set_buffer_text(self, name: str, text: str) -> None:
+        """外部写入成员缓冲（如 Condition 面板 Apply xenv）。"""
+        norm = text.replace("\r\n", "\n").lstrip("\ufeff")
+        self._buffers[name] = norm
+        if self.current_name == name:
+            self.editor.setPlainText(norm)
 
     @staticmethod
     def _norm(data: bytes) -> str:
@@ -1882,21 +2186,22 @@ class View3DTab(QWidget):
             import numpy as np
 
             path = group["gph"]
-            mesh = self._cached(("gph_mesh", path), lambda: _gph_mesh(path))
+            aux = self._gph_aux(path)
+            mesh = aux["mesh"]
+            mdl_model = self._mdl_model_for_group(group, name)
+            face_mask = self._gph_visibility_mask(aux, name, mdl_model)
             face_scalars = None
             if self.chk_color_cvol.isChecked():
-                with gphstats.open_buffer(path) as data:
-                    cvol = gphstats.cvol_ids(data)
+                cvol = aux.get("cvol")
                 if cvol is not None and cvol.size:
                     owner = mesh["owner"]
                     face_scalars = np.zeros(mesh["n_faces"], dtype=np.float64)
                     valid = (owner >= 0) & (owner < cvol.size)
                     face_scalars[valid] = cvol[owner[valid]]
-            pd = self._cached(
-                ("gph_all", path, bool(self.chk_color_cvol.isChecked())),
-                lambda: pph_vtk.gph_faces_mesh(
-                    mesh, max_faces=DEFAULT_CAPS["gph"] * 3,
-                    boundary_only=False, face_scalars=face_scalars))
+            pd = pph_vtk.gph_faces_mesh(
+                mesh, max_faces=DEFAULT_CAPS["gph"] * 3,
+                boundary_only=False, face_scalars=face_scalars,
+                face_mask=face_mask)
             plane = self._current_plane()
             self._mesh_section_pd = pph_vtk.cut_polydata(pd, plane)
             self._mesh_section_dirty = False
@@ -2018,10 +2323,13 @@ class View3DTab(QWidget):
                 path = group.get("gph")
                 if not path:
                     return None
-                pd = self._cached(
-                    ("gph_pd", path),
-                    lambda: pph_vtk.gph_boundary_mesh(
-                        _gph_mesh(path), max_faces=cap))
+                aux = self._gph_aux(path)
+                mdl_model = self._mdl_model_for_group(group, group_name)
+                face_mask = self._gph_visibility_mask(
+                    aux, group_name, mdl_model)
+                # 掩码随树勾选变化，不能缓存过滤后的 polydata
+                pd = pph_vtk.gph_boundary_mesh(
+                    aux["mesh"], max_faces=cap, face_mask=face_mask)
                 opacity = self._surface_opacity("gph")
                 wire = self.display_mode.currentText() == "线框"
                 color_by_owner = self.chk_gph_color.isChecked()
@@ -2091,7 +2399,7 @@ class View3DTab(QWidget):
                 and not lines_only):
             layers.append(
                 ("GPH",
-                 self._make_actor("gph", group, overlap_mesh=overlap)))
+                 self._make_actor("gph", group, name, overlap_mesh=overlap)))
 
         mode = self.display_mode.currentText()
         wireframe = mode == "线框"
@@ -2215,7 +2523,7 @@ class View3DTab(QWidget):
         return True
 
     def set_layer_visibility(self, group: str, layer: str,
-                             visible: bool) -> None:
+                             visible: bool, *, refresh: bool = True) -> None:
         hidden = self._layer_hidden.setdefault(group, set())
         if visible:
             hidden.discard(layer)
@@ -2230,7 +2538,8 @@ class View3DTab(QWidget):
                 chk.blockSignals(True)
                 chk.setChecked(visible)
                 chk.blockSignals(False)
-        self.render()
+        if refresh:
+            self.render()
 
     def _mdl_mask(self, model, group: Optional[str] = None) -> Optional[object]:
         import numpy as np
@@ -2268,6 +2577,124 @@ class View3DTab(QWidget):
             mask &= ~np.isin(model.frid, list(hidden_regions))
         return mask
 
+    def _gph_aux(self, path: str) -> dict:
+        """缓存 GPH 网格；区域/cvol 元数据按需加载（首显只需 mesh）。"""
+        import gphstats
+
+        def _load() -> dict:
+            with gphstats.open_buffer(path) as data:
+                mesh = gphstats.parse_mesh(data)
+            return {
+                "mesh": mesh,
+                "path": path,
+                "region_faces": None,
+                "parts": None,
+                "cvol": None,
+                "_meta_loaded": False,
+            }
+
+        return self._cached(("gph_aux", path), _load)
+
+    def _ensure_gph_meta(self, aux: dict) -> None:
+        """加载 GPH 面区域 / cvol / parts（仅勾选过滤体时需要）。"""
+        if aux.get("_meta_loaded"):
+            return
+        import gphstats
+
+        path = aux.get("path")
+        if not path:
+            aux["_meta_loaded"] = True
+            return
+        with gphstats.open_buffer(path) as data:
+            cvol = gphstats.cvol_ids(data)
+            aux["cvol"] = cvol
+            aux["region_faces"] = gphstats.surface_region_face_ids(data)
+            aux["parts"] = gphstats.parts_summary(data, cvol)
+        aux["_meta_loaded"] = True
+
+    def _gph_visibility_mask(self, aux: dict, group_name: Optional[str],
+                             mdl_model) -> Optional[object]:
+        """由 MDL 闭体/面区域勾选生成 GPH 面可见掩码（True=显示）。
+
+        体网格图层总开关仍由 ``chk_gph`` / 树节点「体网格」控制；
+        本掩码只过滤已勾选显示的体网格中的体域/面域。
+        """
+        import numpy as np
+
+        mesh = aux["mesh"]
+        n = int(mesh["n_faces"])
+        if group_name is not None and group_name in self._group_hidden:
+            return np.zeros(n, dtype=bool)
+        hidden_bodies, hidden_regions = self._hidden.get(
+            group_name, (set(), set())) if group_name else (set(), set())
+        if not hidden_bodies and not hidden_regions:
+            return None
+        if mdl_model is None:
+            return None
+
+        self._ensure_gph_meta(aux)
+        hide = np.zeros(n, dtype=bool)
+        region_faces: dict = aux.get("region_faces") or {}
+        parts = aux.get("parts") or []
+        cvol = aux.get("cvol")
+
+        frid_names: dict[int, list[str]] = {}
+        for r in getattr(mdl_model, "surface_regions", None) or []:
+            if r.name.startswith("@"):
+                continue
+            frid_names.setdefault(int(r.index), []).append(r.name)
+
+        def _mark_names(names: list[str]) -> None:
+            for name in names:
+                for key in (name, f"@PartSurface_{name}"):
+                    arr = region_faces.get(key)
+                    if arr is None or arr.size == 0:
+                        continue
+                    valid = arr[(arr >= 0) & (arr < n)]
+                    hide[valid] = True
+
+        part_cvols: dict[str, set[int]] = {}
+        for pname, spec in parts:
+            if isinstance(spec, frozenset):
+                part_cvols[pname] = {int(x) for x in spec}
+            elif isinstance(spec, (int, np.integer)):
+                part_cvols[pname] = {int(spec)}
+
+        b1, b2 = mdl_model.csid
+        for bid in hidden_bodies:
+            frs: set[int] = set()
+            if b2.size:
+                sel = (b1 == bid) | (b2 == bid)
+                if sel.any():
+                    frs.update(int(x) for x in np.unique(mdl_model.frid[sel]))
+            if not frs and int(bid) >= 1:
+                frs.add(int(bid) - 1)
+            names: list[str] = []
+            for fr in frs:
+                names.extend(frid_names.get(fr, []))
+            _mark_names(names)
+            cvols_hide: set[int] = set()
+            for name in names:
+                cvols_hide |= part_cvols.get(name, set())
+            if cvols_hide and cvol is not None and cvol.size:
+                owner = mesh["owner"]
+                valid = (owner >= 0) & (owner < cvol.size)
+                oc = np.full(n, -1, dtype=np.int64)
+                oc[valid] = cvol[owner[valid]].astype(np.int64)
+                hide |= np.isin(oc, list(cvols_hide))
+
+        for frid in hidden_regions:
+            _mark_names(frid_names.get(int(frid), []))
+
+        return ~hide
+
+    def _mdl_model_for_group(self, group: dict, group_name: Optional[str]):
+        path = group.get("part") if group else None
+        if not path:
+            return None
+        import mdl
+        return self._cached(("mdl", path), lambda: mdl.parse_mdl(path))
+
     def set_model_visibility(self, group: str, hidden_bodies,
                              hidden_regions, group_visible: bool = True) -> None:
         self._hidden[group] = (set(hidden_bodies), set(hidden_regions))
@@ -2275,6 +2702,9 @@ class View3DTab(QWidget):
             self._group_hidden.discard(group)
         else:
             self._group_hidden.add(group)
+        # 体网格剖切缓存依赖面掩码，勾选变化后需重 Draw
+        self._mesh_section_pd = None
+        self._mesh_section_dirty = True
         self.render()
 
     def set_model_filter(self, filter_: Optional[dict]) -> None:
@@ -2366,6 +2796,11 @@ class PphViewer(QMainWindow):
         self.bin_paths: dict[str, str] = {}
         self.tmp_dir: Optional[str] = None
         self.snap = None
+        self._xenv: Optional[pphxml.XenvSettings] = None
+        self._main_xml: Optional[pphxml.MainXml] = None
+        self._prp: Optional[pphxml.PrpDatabase] = None
+        self._groups_info: dict = {}
+        # NavDialogSession 在 _build_ui 中创建
         self._layout_timer = QTimer(self)
         self._layout_timer.setSingleShot(True)
         self._layout_timer.timeout.connect(self._refresh_layout)
@@ -2462,6 +2897,7 @@ class PphViewer(QMainWindow):
         # ── Property（属性 + 几何/OCT/网格状态）──────────────────
         self.property_panel = PropertyPanel(self)
         self.status_panel = StatusPanel(self)
+        self._nav_dialogs = nav_panels.NavDialogSession()
         prop_tabs = QTabWidget(self)
         prop_tabs.addTab(self.property_panel, "Property")
         prop_tabs.addTab(self.status_panel, "Status")
@@ -2542,6 +2978,8 @@ class PphViewer(QMainWindow):
         add_act(m, "Reload", self.reload, "F5")
         add_act(m, "Save As…", self.save_as_dialog, "Ctrl+Shift+S")
         m.addSeparator()
+        add_act(m, "Import Part File…",
+                lambda: self._on_navigate("import_part"))
         add_act(m, "Open Project Folder", self._open_project_folder)
         add_act(m, "Export Member…", self._export_member)
         m.addSeparator()
@@ -2549,8 +2987,12 @@ class PphViewer(QMainWindow):
 
         # Edit
         m = mb.addMenu("Edit(&E)")
-        add_act(m, "Create Parts")
-        add_act(m, "Modify Parts")
+        add_act(m, "Create Parts",
+                lambda: self._on_navigate("create_parts"))
+        add_act(m, "Modify Parts",
+                lambda: self._on_navigate("modify_parts"))
+        add_act(m, "Create Non-Solid Part",
+                lambda: self._on_navigate("non_solid"))
         add_act(m, "Register Region",
                 lambda: self._on_navigate("regions"))
         add_act(m, "Edit Project XML / JS",
@@ -2584,19 +3026,28 @@ class PphViewer(QMainWindow):
         # Condition
         m = mb.addMenu("Condition(&C)")
         add_act(m, "Parts Control",
-                lambda: self._on_navigate("mdl"))
+                lambda: self._on_navigate("parts_control"))
+        add_act(m, "Mesher/Faceter Setting",
+                lambda: self._on_navigate("mesher_faceter"))
+        add_act(m, "Part Material",
+                lambda: self._on_navigate("part_material"))
+        add_act(m, "Conditions",
+                lambda: self._on_navigate("conditions"))
         add_act(m, "Octree Parameter",
                 lambda: self._on_navigate("oct_param"))
         add_act(m, "Mesh Parameter",
                 lambda: self._on_navigate("mesh_param"))
-        add_act(m, "Part Material / Conditions")
 
         # Execute
         m = mb.addMenu("Execute(&X)")
-        add_act(m, "Build Analysis Model")
-        add_act(m, "Generate Octree for Meshing")
-        add_act(m, "Generate Mesh")
-        add_act(m, "Execute Solver")
+        add_act(m, "Build Analysis Model",
+                lambda: self._on_navigate("build_am"))
+        add_act(m, "Generate Octree for Meshing",
+                lambda: self._on_navigate("oct_param"))
+        add_act(m, "Generate Mesh",
+                lambda: self._on_navigate("mesh_param"))
+        add_act(m, "Execute…",
+                lambda: self._on_navigate("execute"))
 
         # Option
         m = mb.addMenu("Option(&O)")
@@ -2713,10 +3164,26 @@ class PphViewer(QMainWindow):
         os.startfile(folder)  # noqa: S606
         self.log(f"Opened folder: {folder}")
 
+    def _member_raw(self, name: str) -> Optional[bytes]:
+        """读取成员字节：文本缓冲 / 落盘二进制 / 原归档。"""
+        if name in self.member_bytes:
+            return self.member_bytes[name]
+        bp = self.bin_paths.get(name)
+        if bp and os.path.isfile(bp):
+            with open(bp, "rb") as f:
+                return f.read()
+        if self.arch is not None:
+            try:
+                return self.arch.read_member(name)
+            except Exception:  # noqa: BLE001
+                return None
+        return None
+
     def _export_member(self) -> None:
         item = self.member_tree.currentItem()
         name = item.data(0, Qt.UserRole) if item else None
-        if not name or name not in self.member_bytes:
+        data = self._member_raw(name) if name else None
+        if not name or data is None:
             self.log("Select an archive member first.", "WARN")
             return
         path, _ = QFileDialog.getSaveFileName(
@@ -2724,7 +3191,7 @@ class PphViewer(QMainWindow):
         if not path:
             return
         with open(path, "wb") as f:
-            f.write(self.member_bytes[name])
+            f.write(data)
         self.log(f"Exported {name} → {path}")
 
     def _toggle_pick_face(self) -> None:
@@ -2800,25 +3267,38 @@ class PphViewer(QMainWindow):
             QMessageBox.critical(self, "打开失败", str(exc))
             return False
         self.archive_path = path
-        self.member_bytes = {
-            m.name: self.arch.read_member(m.name) for m in self.arch.members}
-        self.editor_tab.set_originals(self.member_bytes)
+        self.log(f"Opening {os.path.basename(path)} …")
+        QApplication.processEvents()
+
+        text_ext = (".js", ".prp", ".xenv", ".xml")
+        bin_roles = (pph_parser.ROLE_SNAPSHOT, pph_parser.ROLE_GPH,
+                     pph_parser.ROLE_OCT, pph_parser.ROLE_MDL_PART,
+                     pph_parser.ROLE_MDL_RIDGE)
+        self.member_bytes = {}
         self.tmp_dir = tempfile.mkdtemp(prefix="pph_gui_")
         self.bin_paths = {}
         for m in self.arch.members:
-            if m.role in (pph_parser.ROLE_SNAPSHOT, pph_parser.ROLE_GPH,
-                          pph_parser.ROLE_OCT, pph_parser.ROLE_MDL_PART,
-                          pph_parser.ROLE_MDL_RIDGE):
+            data = self.arch.read_member(m.name)
+            # 文本常驻内存供编辑；大二进制只落盘，避免重复占 RAM / 误当文本解码
+            if m.name.lower().endswith(text_ext):
+                self.member_bytes[m.name] = data
+            if m.role in bin_roles:
                 p = os.path.join(self.tmp_dir, m.name)
                 os.makedirs(os.path.dirname(p), exist_ok=True)
                 with open(p, "wb") as f:
-                    f.write(self.member_bytes[m.name])
+                    f.write(data)
                 self.bin_paths[m.name] = p
+                del data  # 尽早释放大块
+            QApplication.processEvents()
+
+        self.editor_tab.set_originals(self.member_bytes)
         self._populate_tree()
         self._populate_3d()
         self._load_snapshot_member()
         self.dashboard.populate()
+        QApplication.processEvents()
         self._build_model_tree()
+        self._load_text_project_data()
         self.property_panel.set_properties(self._archive_properties())
         self.navigation.set_file_info(
             path, len(self.arch.members),
@@ -2826,7 +3306,104 @@ class PphViewer(QMainWindow):
         self.show_page("draw")
         self.setWindowTitle(f"PPH Viewer — {os.path.basename(path)}")
         self.log(f"Opened {path} ({len(self.arch.members)} members)")
+        # 大 GPH：默认只显示几何，勾选「体网格」再加载（避免打开即解析数千万面）
+        large_gph = any(
+            n.lower().endswith(".gph")
+            and os.path.getsize(p) > 64 * 1024 * 1024
+            for n, p in self.bin_paths.items())
+        if large_gph:
+            for g in self.view3d.groups:
+                self.view3d.set_layer_visibility(g, "gph", False, refresh=False)
+            self.view3d.chk_gph.blockSignals(True)
+            self.view3d.chk_gph.setChecked(False)
+            self.view3d.chk_gph.blockSignals(False)
+            for g in self.model_tree.groups():
+                for item in self.model_tree._items(g, "layer"):
+                    if item.data(0, Qt.UserRole)[2] == "gph":
+                        self.model_tree.tree.blockSignals(True)
+                        item.setCheckState(0, Qt.Unchecked)
+                        self.model_tree.tree.blockSignals(False)
+            self.log("大体积网格：已显示几何；勾选「体网格」后再加载（可能需数十秒）")
+        self.view3d.render()
         return True
+
+    def _load_text_project_data(self) -> None:
+        """解析 xenv/xml/prp，刷新 Condition 参数面板上下文。"""
+        self._xenv = None
+        self._main_xml = None
+        self._prp = None
+        try:
+            if "main.xenv" in self.member_bytes:
+                self._xenv = pphxml.parse_xenv(self.member_bytes["main.xenv"])
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"xenv 解析失败: {exc}", "WARN")
+        try:
+            if "main.xml" in self.member_bytes:
+                self._main_xml = pphxml.parse_main_xml(
+                    self.member_bytes["main.xml"])
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"xml 解析失败: {exc}", "WARN")
+        try:
+            if "main.prp" in self.member_bytes:
+                self._prp = pphxml.parse_prp(self.member_bytes["main.prp"])
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"prp 解析失败: {exc}", "WARN")
+    def _nav_context(self) -> dict:
+        groups = dict(self._groups_info)
+        for g in groups:
+            groups[g] = dict(groups[g])
+            groups[g]["status"] = self.model_tree.group_status_props(g)
+        return self._nav_dialogs.build_ctx(
+            xenv=self._xenv,
+            xml=self._main_xml,
+            prp=self._prp,
+            groups_info=groups,
+        )
+
+    def _commit_nav_ctx(self, key: str, ctx: dict) -> None:
+        """对话框 Apply/OK 后提交 xenv / xml 到 Save As 缓冲。"""
+        msgs = []
+        if ctx.get("xenv_dirty") and self._xenv is not None:
+            data = pphxml.serialize_xenv(self._xenv)
+            self.member_bytes["main.xenv"] = data
+            self.editor_tab.set_buffer_text(
+                "main.xenv", data.decode("utf-8-sig"))
+            ctx["xenv_dirty"] = False
+            msgs.append("main.xenv")
+        if ctx.get("xml_dirty") and self._main_xml is not None:
+            text = pphxml.serialize_main_xml(self._main_xml.root)
+            if not text.lstrip().startswith("<?xml"):
+                text = '<?xml version="1.0" encoding="utf-8"?>\n' + text
+            data = text.encode("utf-8")
+            self.member_bytes["main.xml"] = data
+            self.editor_tab.set_buffer_text("main.xml", text)
+            ctx["xml_dirty"] = False
+            msgs.append("main.xml")
+        if msgs:
+            self.log(f"[{key}] 已应用: {', '.join(msgs)}（Save As 可写出）")
+        else:
+            self.log(f"[{key}] 会话参数已保存")
+
+    def _show_condition(self, key: str) -> None:
+        """弹出 scFLOWpre 风格参数子窗口（模态）。"""
+        if key not in nav_panels.DIALOG_KEYS:
+            return
+        if not self.arch:
+            QMessageBox.information(self, "提示", "请先打开 PPH 工程")
+            return
+        ctx = self._nav_context()
+        dlg = self._nav_dialogs.open(key, ctx, self)
+        if dlg is None:
+            return
+        bbox = dlg.findChild(QDialogButtonBox)
+        if bbox is not None:
+            ab = bbox.button(QDialogButtonBox.Apply)
+            if ab is not None:
+                ab.clicked.connect(
+                    lambda _=False, k=key, c=ctx: self._commit_nav_ctx(k, c))
+        self.log(f"Dialog — {dlg.windowTitle()}")
+        if dlg.exec_() == QDialog.Accepted:
+            self._commit_nav_ctx(key, ctx)
 
     def reload(self) -> None:
         if self.archive_path:
@@ -2905,24 +3482,16 @@ class PphViewer(QMainWindow):
         elif key == "snapshot":
             self.show_page("snapshot")
             self.log("Snapshot / Parasolid")
-        elif key == "regions":
-            self.show_page("draw")
-            self._focus_status("geometry")
-            self.log("Register Region — surface/volume regions in Status")
-        elif key in ("oct_param",):
-            self.show_page("draw")
-            self._focus_status("octree")
-            name = self._member_for_nav("oct")
-            if name:
-                self._select_member(name)
-            self.log("Octree Parameter (status / member props)")
-        elif key in ("mesh_param",):
-            self.show_page("draw")
-            self._focus_status("mesh")
-            name = self._member_for_nav("gph")
-            if name:
-                self._select_member(name)
-            self.log("Mesh Parameter (status / member props)")
+        elif key in nav_panels.PANEL_CLASSES:
+            self._show_condition(key)
+            if key == "regions":
+                self._focus_status("geometry")
+            elif key == "oct_param":
+                self._focus_status("octree")
+            elif key == "mesh_param":
+                self._focus_status("mesh")
+            elif key == "build_am":
+                self.show_page("draw")
         elif key in ("project", "gph", "oct", "mdl", "xml", "js", "groups"):
             name = self._member_for_nav(key)
             if name:
@@ -2995,19 +3564,13 @@ class PphViewer(QMainWindow):
                 try:
                     import oct
                     om = oct.parse_oct(oct_path)
-                    max_depth = 0
-                    try:
-                        for _mn, _mx, d in om.iter_leaves():
-                            if d > max_depth:
-                                max_depth = d
-                    except Exception:  # noqa: BLE001
-                        max_depth = -1
+                    # 不遍历全部叶子求深度（百万级叶子可达数秒）
                     info["oct_summary"] = {
                         "n_octants": om.n_octants,
                         "n_internal": om.n_internal,
                         "n_leaves": om.n_leaves,
                         "unit": om.unit,
-                        "max_depth": max_depth if max_depth >= 0 else "—",
+                        "max_depth": "—",
                     }
                 except Exception:  # noqa: BLE001
                     info["oct_summary"] = None
@@ -3015,18 +3578,69 @@ class PphViewer(QMainWindow):
             if gph_path:
                 try:
                     import gphstats
+                    large = os.path.getsize(gph_path) > 32 * 1024 * 1024
+                    if large:
+                        self.log(f"解析网格摘要 {g} …")
+                        QApplication.processEvents()
                     with gphstats.open_buffer(gph_path) as data:
-                        info["gph_summary"] = gphstats.summarize(data)
+                        # 大文件用 quick，避免 nodes 全表扫描卡死 UI
+                        if large:
+                            info["gph_summary"] = gphstats.summarize_quick(data)
+                        else:
+                            info["gph_summary"] = gphstats.summarize(data)
                 except Exception:  # noqa: BLE001
                     info["gph_summary"] = None
-        self.model_tree.populate(groups)
+            QApplication.processEvents()
+
+        project_name = ""
+        regions_meta: dict = {}
+        xml_parts_by_group: dict[str, list] = {}
+        if "main.xml" in self.member_bytes:
+            try:
+                mx = pphxml.parse_main_xml(self.member_bytes["main.xml"])
+                project_name = mx.project_name or ""
+                regions_meta, xml_parts_by_group = _extract_part_tree_meta(mx)
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"Part Tree XML 解析失败: {exc}", "WARN")
+        if not project_name and self.archive_path:
+            project_name = os.path.splitext(
+                os.path.basename(self.archive_path))[0]
+        # 将 XML 零件挂到网格组（名粗匹配 meshinggroup*）
+        for g, info in groups.items():
+            parts_list = xml_parts_by_group.get(g)
+            if parts_list is None and len(xml_parts_by_group) == 1:
+                parts_list = next(iter(xml_parts_by_group.values()))
+            if parts_list is None:
+                # 按 sgs / 组名模糊匹配
+                for key, plist in xml_parts_by_group.items():
+                    if key.replace("_", "").lower() in g.replace("_", "").lower() \
+                            or g.replace("_", "").lower() in key.replace("_", "").lower():
+                        parts_list = plist
+                        break
+            info["xml_parts"] = parts_list or []
+
+        # Surface Region：用 MDL 名称匹配 frid
+        for se in regions_meta.get("face") or []:
+            for g, info in groups.items():
+                m = info.get("part")
+                if m is None:
+                    continue
+                for r in m.surface_regions:
+                    if r.name == se["name"]:
+                        se["frid"] = int(r.index)
+                        se["group"] = g
+                        break
+
+        self.model_tree.populate(
+            groups, project_name=project_name, regions_meta=regions_meta)
+        self._groups_info = groups
         for g in groups:
             self.status_panel.set_group_status(
                 g, self.model_tree.group_status_props(g))
-            # 与默认图层一致：MDL/GPH 可见，OCT 隐藏
-            self.view3d.set_layer_visibility(g, "mdl", True)
-            self.view3d.set_layer_visibility(g, "gph", True)
-            self.view3d.set_layer_visibility(g, "oct", False)
+            # 批量设置图层，避免三次完整 Render（大 GPH 极慢）
+            self.view3d.set_layer_visibility(g, "mdl", True, refresh=False)
+            self.view3d.set_layer_visibility(g, "gph", True, refresh=False)
+            self.view3d.set_layer_visibility(g, "oct", False, refresh=False)
         if groups:
             self.status_panel.show_group(sorted(groups)[0])
         self.view3d.precache(self.model_models)
@@ -3079,11 +3693,7 @@ class PphViewer(QMainWindow):
 
     def _show_all_models(self) -> None:
         """3D「恢复全部」→ 模型树全部勾选。"""
-        for i in range(self.model_tree.tree.topLevelItemCount()):
-            root = self.model_tree.tree.topLevelItem(i)
-            data = root.data(0, Qt.UserRole)
-            if data:
-                self.model_tree._set_all(data[1], True)
+        self.model_tree._set_all("", True)
         self.log("Show All")
 
     def _find_tree_item(self, name: str) -> Optional[QTreeWidgetItem]:

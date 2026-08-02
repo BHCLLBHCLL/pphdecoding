@@ -96,6 +96,43 @@ def parse_xenv(data: bytes) -> XenvSettings:
     return out
 
 
+def serialize_xenv(xenv: XenvSettings) -> bytes:
+    """将 :class:`XenvSettings` 写回 main.xenv（UTF-8 BOM + CRLF）。
+
+    注释节点不会保留；值与 Section/Key 层次与读端一致，可供 Save As 覆盖。
+    """
+    lines = [
+        '<?xml version="1.0" encoding="utf-8"?>',
+        '<Data type="env">',
+    ]
+    for sec_name, keys in xenv.sections.items():
+        lines.append(f'    <Section name="{_xml_attr(sec_name)}">')
+        for kname, val in keys.items():
+            lines.append(f'        <Key name="{_xml_attr(kname)}">')
+            lines.append(f"            {_xml_text(val)}")
+            lines.append("        </Key>")
+        lines.append("    </Section>")
+    lines.append("</Data>")
+    lines.append("")
+    body = "\r\n".join(lines)
+    return ("\ufeff" + body).encode("utf-8")
+
+
+def _xml_attr(s: str) -> str:
+    return (s.replace("&", "&amp;").replace('"', "&quot;")
+            .replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _xml_text(s: str) -> str:
+    return (s.replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;"))
+
+
+def set_xenv_value(xenv: XenvSettings, section: str, key: str, value: str) -> None:
+    """设置/新增 Section.Key。"""
+    xenv.sections.setdefault(section, {})[key] = value
+
+
 @dataclass
 class PrpDatabase:
     """main.prp：材料物性库。"""

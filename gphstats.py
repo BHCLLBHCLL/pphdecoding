@@ -28,17 +28,26 @@ import numpy as np
 import crdlfld
 
 
+# 同一 buffer 上反复 _find_section 时复用节表（laptop GPH 上 scan≈2s）
+_sections_cache: dict[int, list] = {}
+
+
 @contextmanager
 def open_buffer(path: str):
     """读取 GPH 文件（大文件用 mmap），用法同 gph_model.open_gph_buffer。"""
     from pathlib import Path
+    import mmap
 
     size = Path(path).stat().st_size
-    if size <= 512 * 1024 * 1024:
+    # >32 MiB 用 mmap，避免把数百 MB 再拷进进程堆（打开工程时会卡死）
+    if size <= 32 * 1024 * 1024:
         with open(path, "rb") as f:
-            yield f.read()
+            data = f.read()
+        try:
+            yield data
+        finally:
+            _sections_cache.pop(id(data), None)
         return
-    import mmap
 
     f = open(path, "rb")
     try:
@@ -46,9 +55,19 @@ def open_buffer(path: str):
         try:
             yield mm
         finally:
+            _sections_cache.pop(id(mm), None)
             mm.close()
     finally:
         f.close()
+
+
+def _all_sections(data) -> list:
+    key = id(data)
+    secs = _sections_cache.get(key)
+    if secs is None:
+        secs = crdlfld.scan_sections(data)
+        _sections_cache[key] = secs
+    return secs
 
 
 def _find_section(data, name: str) -> Optional[crdlfld.Section]:
@@ -56,7 +75,7 @@ def _find_section(data, name: str) -> Optional[crdlfld.Section]:
     sec_start = crdlfld.find_section(data, name)
     if sec_start < 0:
         return None
-    sections = crdlfld.scan_sections(data)
+    sections = _all_sections(data)
     for i, s in enumerate(sections):
         if s.start == sec_start:
             end = sections[i + 1].start if i + 1 < len(sections) else len(data)
@@ -168,14 +187,13 @@ def nodes_vertex_count(data) -> tuple[Optional[int], str]:
     return None, ""
 
 
-def surface_regions_summary(data) -> list[tuple[str, int]]:
-    """LS_SurfaceRegions → [(name, n_faces)]。"""
+def _iter_surface_region_blocks(data):
+    """LS_SurfaceRegions → 迭代 ``(name, face_ids_i32_be_offset, n_faces)``。"""
     section = _find_section(data, "LS_SurfaceRegions")
     if section is None:
-        return []
+        return
     blocks = [(b.offset, b.byte_count)
               for b in crdlfld.iter_data_blocks(data, section)]
-    out: list[tuple[str, int]] = []
     i = 0
     while i + 2 < len(blocks):
         p_n, bc_n = blocks[i]
@@ -190,10 +208,23 @@ def surface_regions_summary(data) -> list[tuple[str, int]]:
             i += 1
             continue
         if bc_i > 0 and bc_i == bc_w and bc_i % 4 == 0:
-            out.append((name, bc_i // 4))
+            yield name, p_i, bc_i // 4
             i += 3
         else:
             i += 1
+
+
+def surface_regions_summary(data) -> list[tuple[str, int]]:
+    """LS_SurfaceRegions → [(name, n_faces)]。"""
+    return [(name, n) for name, _off, n in _iter_surface_region_blocks(data)]
+
+
+def surface_region_face_ids(data) -> dict[str, np.ndarray]:
+    """LS_SurfaceRegions → ``{name: face_index_i32}``（0-based 面号）。"""
+    out: dict[str, np.ndarray] = {}
+    for name, off, n in _iter_surface_region_blocks(data):
+        out[name] = np.frombuffer(
+            data, dtype=">i4", count=n, offset=off).astype(np.int64, copy=True)
     return out
 
 
@@ -308,6 +339,25 @@ def summarize(data) -> dict:
         "surface_regions": surface_regions_summary(data),
         "volume_regions": string_list(data, "LS_VolumeRegions"),
         "parts": parts_summary(data, cvol),
+    }
+
+
+def summarize_quick(data) -> dict:
+    """打开工程用的快速摘要：跳过耗时的节点扫描 / 全量 cvol unique。
+
+    laptop 级 GPH 上 ``nodes_vertex_count`` 可达十余秒；Part Tree 只需
+    面/单元数与零件名。
+    """
+    links = links_summary(data)
+    return {
+        "links": links,
+        "cvol_unique": None,
+        "n_cells": links.get("n_cells"),
+        "n_vertices": 0,
+        "dialect": "",
+        "surface_regions": surface_regions_summary(data),
+        "volume_regions": string_list(data, "LS_VolumeRegions"),
+        "parts": parts_summary(data, None),
     }
 
 

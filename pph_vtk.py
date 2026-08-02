@@ -67,14 +67,30 @@ def mdl_mesh(model, color_by: str = "frid",
     pd.SetPoints(vtk.vtkPoints())
     pd.GetPoints().SetData(_to_vtk(model.xyz))
     polys = vtk.vtkCellArray()
-    n = min(model.n_faces, max_faces)
     if face_mask is not None:
         idx = np.flatnonzero(np.asarray(face_mask)[: model.n_faces])
-        if idx.size > max_faces:
-            idx = idx[:max_faces]
-        if idx.size == 0:
-            return pd
-        n = idx.size
+    else:
+        idx = np.arange(model.n_faces, dtype=np.int64)
+    idx = _subsample_indices(idx, max_faces)
+    if idx.size == 0:
+        return pd
+    n = idx.size
+    # 连续前缀可用 offset 切片；否则按面拼接
+    contiguous = (idx.size == model.n_faces
+                  or (idx.size > 0 and idx[0] == 0
+                      and idx[-1] == idx.size - 1
+                      and np.all(idx == np.arange(idx.size))))
+    if contiguous and face_mask is None:
+        if color_by == "csid":
+            _, b2 = model.csid
+            scalars = b2[:n].astype(np.float64) if b2.size else None
+        else:
+            scalars = model.frid[:n].astype(np.float64)
+        if scalars is None:
+            scalars = np.zeros(n, dtype=np.float64)
+        _add_polygons(pd, polys, model.conn[: int(model.face_offsets[n])],
+                      model.face_offsets[: n + 1], scalars=scalars)
+    else:
         offsets = np.concatenate(
             [[0], np.cumsum(model.npe[idx])]).astype(np.int64)
         conn = np.concatenate([
@@ -88,21 +104,18 @@ def mdl_mesh(model, color_by: str = "frid",
         _add_polygons(pd, polys, conn, offsets,
                       scalars=scalars if scalars is not None
                       else np.zeros(n, dtype=np.float64))
-        pd.SetPolys(polys)
-        pd.GetCellData().SetActiveScalars("scalars")
-        return pd
-    if color_by == "csid":
-        _, b2 = model.csid
-        scalars = b2[:n].astype(np.float64) if b2.size else None
-    else:
-        scalars = model.frid[:n].astype(np.float64)
-    if scalars is None:
-        scalars = np.zeros(n, dtype=np.float64)
-    _add_polygons(pd, polys, model.conn[: int(model.face_offsets[n])],
-                  model.face_offsets[: n + 1], scalars=scalars)
     pd.SetPolys(polys)
     pd.GetCellData().SetActiveScalars("scalars")
     return pd
+
+
+def _subsample_indices(idx: np.ndarray, max_n: int) -> np.ndarray:
+    """超出上限时均匀抽样，避免 ``idx[:max_n]`` 按文件序整块丢掉几何。"""
+    idx = np.asarray(idx, dtype=np.int64)
+    if idx.size <= max_n:
+        return idx
+    sel = np.linspace(0, idx.size - 1, max_n)
+    return idx[np.round(sel).astype(np.int64)]
 
 
 def oct_leaves(oct_model, max_leaves: int = 50_000,
@@ -166,18 +179,22 @@ def oct_leaves(oct_model, max_leaves: int = 50_000,
     return pd
 
 
-def gph_boundary_mesh(mesh: dict, max_faces: int = 200_000) -> "vtkPolyData":
+def gph_boundary_mesh(mesh: dict, max_faces: int = 200_000,
+                      face_mask: Optional[np.ndarray] = None) -> "vtkPolyData":
     """gphstats.parse_mesh → 边界面 vtkPolyData（cell scalars = owner）。"""
-    return gph_faces_mesh(mesh, max_faces=max_faces, boundary_only=True)
+    return gph_faces_mesh(mesh, max_faces=max_faces, boundary_only=True,
+                          face_mask=face_mask)
 
 
 def gph_faces_mesh(mesh: dict, max_faces: int = 200_000,
                    boundary_only: bool = False,
-                   face_scalars: Optional[np.ndarray] = None) -> "vtkPolyData":
+                   face_scalars: Optional[np.ndarray] = None,
+                   face_mask: Optional[np.ndarray] = None) -> "vtkPolyData":
     """GPH 面 → vtkPolyData。
 
     ``boundary_only``：仅边界面；否则含内部面（供体网格剖切）。
     ``face_scalars``：每面标量（如闭体 cvol）；缺省用 owner。
+    ``face_mask``：长度 ``n_faces`` 的布尔掩码（与 MDL 勾选同步显隐）。
     """
     import vtk
 
@@ -188,18 +205,33 @@ def gph_faces_mesh(mesh: dict, max_faces: int = 200_000,
     pd.GetPoints().SetData(_to_vtk(mesh["vertices"]))
     polys = vtk.vtkCellArray()
     if boundary_only:
-        mask = mesh["boundary_mask"]
-        idx = np.flatnonzero(mask)[:max_faces]
+        mask = np.asarray(mesh["boundary_mask"], dtype=bool)
     else:
-        n = min(int(mesh["n_faces"]), max_faces)
-        idx = np.arange(n, dtype=np.int64)
+        mask = np.ones(int(mesh["n_faces"]), dtype=bool)
+    if face_mask is not None:
+        fm = np.asarray(face_mask, dtype=bool)
+        if fm.size == mask.size:
+            mask = mask & fm
+    idx = np.flatnonzero(mask)
+    # 勿取前 N 个：GPH 面序常按区域聚集，截断会整块缺壁（像被剖切）
+    idx = _subsample_indices(idx, max_faces)
     if idx.size == 0:
         return pd
-    offsets = np.concatenate(
-        [[0], np.cumsum(mesh["npe"][idx])]).astype(np.int64)
-    conn = np.concatenate([
-        mesh["conn"][mesh["face_offsets"][i]:mesh["face_offsets"][i + 1]]
-        for i in idx])
+    npe = mesh["npe"][idx].astype(np.int64, copy=False)
+    offsets = np.empty(idx.size + 1, dtype=np.int64)
+    offsets[0] = 0
+    np.cumsum(npe, out=offsets[1:])
+    # 避免 ``concatenate([conn[a:b] for ...])`` 在数十万面上极慢
+    fo = mesh["face_offsets"]
+    src = mesh["conn"]
+    conn = np.empty(int(offsets[-1]), dtype=src.dtype)
+    pos = 0
+    for i in idx:
+        a = int(fo[i])
+        b = int(fo[i + 1])
+        n = b - a
+        conn[pos:pos + n] = src[a:b]
+        pos += n
     if face_scalars is not None:
         scalars = np.asarray(face_scalars)[idx].astype(np.float64)
     else:
