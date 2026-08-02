@@ -174,7 +174,9 @@ def preset_colors(n: int) -> list[tuple[float, float, float]]:
 
 def polydata_actor(pd, scalar_range: Optional[tuple[float, float]] = None,
                    opacity: float = 1.0, wireframe: bool = False,
-                   color: Optional[tuple[float, float, float]] = None):
+                   color: Optional[tuple[float, float, float]] = None,
+                   discrete: bool = False,
+                   annotations: Optional[dict] = None) -> "vtkActor":
     """生成 vtkActor：有 cell scalars 时按彩虹 LUT 着色。"""
     import vtk
 
@@ -183,10 +185,7 @@ def polydata_actor(pd, scalar_range: Optional[tuple[float, float]] = None,
     if pd.GetCellData().GetScalars() is not None:
         rng = scalar_range if scalar_range is not None else \
             pd.GetCellData().GetScalars().GetRange()
-        lut = vtk.vtkLookupTable()
-        lut.SetHueRange(0.0, 0.9)
-        lut.SetNumberOfTableValues(256)
-        lut.Build()
+        lut = _make_lut(rng, discrete=discrete, annotations=annotations)
         mapper.SetLookupTable(lut)
         mapper.SetScalarRange(rng[0], rng[1])
         mapper.ScalarVisibilityOn()
@@ -202,12 +201,111 @@ def polydata_actor(pd, scalar_range: Optional[tuple[float, float]] = None,
     return actor
 
 
+def _make_lut(rng: tuple[float, float], discrete: bool = False,
+              annotations: Optional[dict] = None) -> "vtkLookupTable":
+    """分类 LUT（区域/深度等离散标量）或连续彩虹 LUT。"""
+    import vtk
+
+    lut = vtk.vtkLookupTable()
+    if discrete:
+        values = sorted({int(v) for v in annotations} if annotations
+                        else range(int(rng[0]), int(rng[1]) + 1))
+        lo, hi = min(values), max(values)
+        if lo == hi:      # 单值区间（如 box frid 全 0）规范化，避免退化
+            hi = lo + 1
+        lut.SetNumberOfTableValues(len(values))
+        lut.SetRange(lo, hi)
+        colors = preset_colors(len(values))
+        for i, v in enumerate(values):
+            lut.SetTableValue(i, *colors[i], 1.0)
+            if annotations and v in annotations:
+                lut.SetAnnotation(v, annotations[v])
+        lut.Build()
+        return lut
+    lut.SetHueRange(0.0, 0.9)
+    lut.SetNumberOfTableValues(256)
+    lut.SetRange(rng[0], rng[1])
+    lut.Build()
+    return lut
+
+
+def edges_actor(pd, color: tuple[float, float, float] = (0.10, 0.10, 0.14),
+                opacity: float = 0.65, line_width: float = 1.0) -> "vtkActor":
+    """网格线叠加：vtkExtractEdges 提取多边形边，以暗色线条渲染。"""
+    import vtk
+
+    ext = vtk.vtkExtractEdges()
+    ext.SetInputData(pd)
+    ext.Update()
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputConnection(ext.GetOutputPort())
+    mapper.ScalarVisibilityOff()
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    actor.GetProperty().SetColor(*color)
+    actor.GetProperty().SetOpacity(opacity)
+    actor.GetProperty().SetLineWidth(line_width)
+    actor.GetProperty().SetAmbient(1.0)
+    actor.GetProperty().SetDiffuse(0.0)
+    return actor
+
+
+def scalar_bar_actor(title: str, lut, num_labels: int = 5) -> "vtkScalarBarActor":
+    """色标/图例条（放在视口右侧）。"""
+    import vtk
+
+    bar = vtk.vtkScalarBarActor()
+    bar.SetTitle(title)
+    bar.SetLookupTable(lut)
+    bar.SetNumberOfLabels(num_labels)
+    bar.SetMaximumWidthInPixels(90)
+    bar.SetMaximumHeightInPixels(220)
+    bar.SetTextPad(4)
+    bar.GetLabelTextProperty().SetFontSize(10)
+    bar.GetTitleTextProperty().SetFontSize(11)
+    bar.GetTitleTextProperty().SetJustificationToCentered()
+    bar.SetDrawAnnotations(True)
+    bar.SetDrawFrame(True)
+    bar.SetAnnotationTextScaling(False)
+    bar.GetAnnotationTextProperty().SetFontSize(11)
+    bar.GetAnnotationTextProperty().SetJustificationToCentered()
+    return bar
+
+
+def axes_actor(length: float = 1.0) -> "vtkAxesActor":
+    """带 XYZ 标签的坐标轴（供方向指示器使用）。"""
+    import vtk
+
+    axes = vtk.vtkAxesActor()
+    axes.SetTotalLength(length, length, length)
+    axes.SetShaftTypeToCylinder()
+    axes.SetCylinderRadius(0.02 * length)
+    axes.SetConeRadius(0.08 * length)
+    axes.AxisLabelsOn()
+    return axes
+
+
+def orientation_marker_widget(interactor, size_frac: float = 0.16):
+    """右上角坐标方向指示器（不参与相机包围盒）。"""
+    import vtk
+
+    widget = vtk.vtkOrientationMarkerWidget()
+    widget.SetOrientationMarker(axes_actor())
+    widget.SetInteractor(interactor)
+    widget.SetViewport(1.0 - size_frac, 1.0 - size_frac, 1.0, 1.0)
+    widget.SetEnabled(1)
+    widget.InteractiveOff()
+    return widget
+
+
 def make_renderer(actors, background: tuple[float, float, float] = (0.92, 0.92, 0.93)):
-    """组装 renderer（相机自动包围所有 actor）。"""
+    """组装 renderer（渐变背景 + 相机自动包围所有 actor）。"""
     import vtk
 
     ren = vtk.vtkRenderer()
     ren.SetBackground(*background)
+    ren.SetBackground2(0.72, 0.78, 0.90)
+    ren.GradientBackgroundOn()
     for a in actors:
         if a is not None:
             ren.AddActor(a)

@@ -27,16 +27,17 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QColor, QFont, QPainter, QPixmap
 from PyQt5.QtWidgets import (
     QAction, QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout,
     QLabel, QMainWindow, QMessageBox, QPlainTextEdit, QPushButton,
     QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout,
-    QWidget, QDockWidget,
+    QWidget, QDockWidget, QFrame,
 )
 
 import pph_parser
@@ -54,6 +55,88 @@ except Exception:  # noqa: BLE001 - 离屏/无显示环境下不阻塞导入
 DEFAULT_CAPS = {"mdl": 300_000, "oct": 40_000, "gph": 120_000}
 # ridge 细节面片与 part 同规模上限（"ridge" 是 _make_actor 的图层名）
 DEFAULT_CAPS["ridge"] = DEFAULT_CAPS["mdl"]
+
+
+@dataclass
+class LayerRender:
+    """一个 3D 图层的渲染结果。"""
+
+    actor: object
+    title: str
+    annotations: Optional[dict] = None
+    edges: bool = True   # 是否叠加网格线
+    legend_entries: Optional[list[tuple[str, tuple]]] = None  # (标签, RGB)
+
+
+class LegendPanel(QFrame):
+    """Qt 图例面板：离散区域色块行 + 连续渐变条（替代 VTK 色标条）。
+
+    布局固定、文字始终可读，避免 vtkScalarBarActor 尺寸/重叠/离屏
+    文本渲染问题。
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedWidth(180)
+        self.setFrameShape(QFrame.StyledPanel)
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(6, 6, 6, 6)
+        self._layout.setSpacing(6)
+        self.setVisible(False)
+
+    def clear(self) -> None:
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+
+    def set_layers(self, layers) -> None:
+        """``layers``: [(title, lut 或 None, legend_entries 或 None)]。"""
+        self.clear()
+        for title, lut, entries in layers:
+            head = QLabel(f"<b>{title}</b>", self)
+            self._layout.addWidget(head)
+            if entries:
+                for label, rgb in entries:
+                    row = QHBoxLayout()
+                    swatch = QLabel(self)
+                    swatch.setFixedSize(16, 16)
+                    swatch.setStyleSheet(
+                        f"background-color: rgb({int(rgb[0]*255)},"
+                        f"{int(rgb[1]*255)},{int(rgb[2]*255)});"
+                        "border: 1px solid #888;")
+                    row.addWidget(swatch)
+                    row.addWidget(QLabel(label, self), 1)
+                    self._layout.addLayout(row)
+            elif lut is not None:
+                row = QHBoxLayout()
+                pm_label = QLabel(self)
+                pm_label.setPixmap(self._gradient_pixmap(lut))
+                row.addWidget(pm_label)
+                rng = lut.GetRange()
+                row.addWidget(
+                    QLabel(f"{rng[1]:g} … {rng[0]:g}", self), 1)
+                self._layout.addLayout(row)
+            else:
+                self._layout.addWidget(QLabel("—", self))
+        self._layout.addStretch(1)
+        self.setVisible(True)
+
+    @staticmethod
+    def _gradient_pixmap(lut, height: int = 120) -> QPixmap:
+        """从 LUT 采样生成纵向渐变（顶部 = 最大值）。"""
+        pm = QPixmap(18, height)
+        painter = QPainter(pm)
+        n = max(lut.GetNumberOfTableValues(), 1)
+        for y in range(height):
+            idx = int((1 - y / max(height - 1, 1)) * (n - 1))
+            c = lut.GetTableValue(idx)
+            painter.setPen(QColor(int(c[0] * 255), int(c[1] * 255),
+                                  int(c[2] * 255)))
+            painter.drawLine(0, y, 17, y)
+        painter.end()
+        return pm
 
 
 def _member_group(name: str) -> str:
@@ -170,6 +253,12 @@ class View3DTab(QWidget):
         self.chk_oct.setChecked(True)
         self.chk_gph = QCheckBox("GPH 边界面", self)
         self.chk_gph.setChecked(True)
+        self.chk_edges = QCheckBox("网格线", self)
+        self.chk_edges.setChecked(True)
+        self.chk_axes = QCheckBox("坐标轴", self)
+        self.chk_axes.setChecked(True)
+        self.chk_legend = QCheckBox("色标/图例", self)
+        self.chk_legend.setChecked(True)
         self.color_by = QComboBox(self)
         self.color_by.addItems(["frid", "csid"])
         self.btn_render = QPushButton("渲染", self)
@@ -185,6 +274,9 @@ class View3DTab(QWidget):
         controls.addWidget(self.chk_mdl_ridge)
         controls.addWidget(self.chk_oct)
         controls.addWidget(self.chk_gph)
+        controls.addWidget(self.chk_edges)
+        controls.addWidget(self.chk_axes)
+        controls.addWidget(self.chk_legend)
         controls.addWidget(QLabel("MDL 着色:"))
         controls.addWidget(self.color_by)
         controls.addWidget(self.btn_render)
@@ -195,13 +287,18 @@ class View3DTab(QWidget):
         self.renderer = pph_vtk.make_renderer([])
         self.vtk_widget.GetRenderWindow().AddRenderer(self.renderer)
         self._started = False
+        self.legend = LegendPanel(self)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(controls)
-        layout.addWidget(self.vtk_widget, 1)
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.vtk_widget, 1)
+        hbox.addWidget(self.legend, 0)
+        layout.addLayout(hbox, 1)
         layout.addWidget(self.status)
         self.groups: dict[str, dict] = {}
+        self._orientation = None
 
     def showEvent(self, event) -> None:  # noqa: N802 - Qt 命名
         super().showEvent(event)
@@ -228,11 +325,22 @@ class View3DTab(QWidget):
         self.group_box.blockSignals(False)
         if groups:
             self.group_box.setCurrentIndex(0)
+            self.render()  # 显式触发首次渲染（信号可能因索引未变化而不发）
 
     def _on_group_changed(self, _name: str) -> None:
         self.render()
 
-    def _make_actor(self, kind: str, group: dict) -> Optional[object]:
+    @staticmethod
+    def _region_annotations(model) -> Optional[dict]:
+        """frid → 区域名（跳过 @PartSurface 副本）。"""
+        ann: dict[int, str] = {}
+        for r in model.surface_regions:
+            if r.name.startswith("@"):
+                continue
+            ann.setdefault(r.index, r.name)
+        return ann or None
+
+    def _make_actor(self, kind: str, group: dict) -> Optional[LayerRender]:
         cap = DEFAULT_CAPS.get(kind, DEFAULT_CAPS["mdl"])
         try:
             if kind == "mdl":
@@ -244,7 +352,18 @@ class View3DTab(QWidget):
                 pd = pph_vtk.mdl_mesh(
                     model, color_by=self.color_by.currentText(),
                     max_faces=cap)
-                return pph_vtk.polydata_actor(pd)
+                discrete = self.color_by.currentText() == "frid"
+                ann = self._region_annotations(model) if discrete else None
+                legend_entries = None
+                if ann:
+                    vals = sorted(ann)
+                    colors = pph_vtk.preset_colors(len(vals))
+                    legend_entries = [
+                        (ann[v], colors[i]) for i, v in enumerate(vals)]
+                return LayerRender(
+                    pph_vtk.polydata_actor(pd, discrete=discrete,
+                                           annotations=ann),
+                    "MDL part", ann, True, legend_entries)
             if kind == "ridge":
                 path = group.get("ridge")
                 if not path:
@@ -254,7 +373,19 @@ class View3DTab(QWidget):
                 pd = pph_vtk.mdl_mesh(
                     model, color_by=self.color_by.currentText(),
                     max_faces=cap)
-                return pph_vtk.polydata_actor(pd, opacity=0.85)
+                discrete = self.color_by.currentText() == "frid"
+                ann = self._region_annotations(model) if discrete else None
+                legend_entries = None
+                if ann:
+                    vals = sorted(ann)
+                    colors = pph_vtk.preset_colors(len(vals))
+                    legend_entries = [
+                        (ann[v], colors[i]) for i, v in enumerate(vals)]
+                return LayerRender(
+                    pph_vtk.polydata_actor(pd, opacity=0.85,
+                                           discrete=discrete,
+                                           annotations=ann),
+                    "MDL ridge", ann, True, legend_entries)
             if kind == "oct":
                 path = group.get("oct")
                 if not path:
@@ -262,7 +393,9 @@ class View3DTab(QWidget):
                 import oct
                 om = oct.parse_oct(path)
                 pd = pph_vtk.oct_leaves(om, max_leaves=cap)
-                return pph_vtk.polydata_actor(pd, wireframe=True)
+                return LayerRender(
+                    pph_vtk.polydata_actor(pd, wireframe=True),
+                    "OCT 深度", edges=False)
             if kind == "gph":
                 path = group.get("gph")
                 if not path:
@@ -271,7 +404,9 @@ class View3DTab(QWidget):
                 with gphstats.open_buffer(path) as data:
                     mesh = gphstats.parse_mesh(data)
                 pd = pph_vtk.gph_boundary_mesh(mesh, max_faces=cap)
-                return pph_vtk.polydata_actor(pd, opacity=0.9)
+                return LayerRender(
+                    pph_vtk.polydata_actor(pd, opacity=0.9),
+                    "GPH owner")
         except Exception as exc:  # noqa: BLE001 - 渲染尽力而为
             self.status.setText(f"{kind} 渲染失败: {exc}")
             return None
@@ -281,27 +416,50 @@ class View3DTab(QWidget):
         name = self.group_box.currentText()
         group = self.groups.get(name)
         self.renderer.RemoveAllViewProps()
+        if self._orientation is not None:
+            try:
+                self._orientation.SetEnabled(0)
+            except Exception:  # noqa: BLE001
+                pass
+            self._orientation = None
         if not group:
             self.status.setText("无网格组数据")
             self.vtk_widget.GetRenderWindow().Render()
             return
-        actors = []
+        layers: list[tuple[str, Optional[LayerRender]]] = []
         if self.chk_mdl_part.isChecked():
-            actors.append(("MDL part", self._make_actor("mdl", group)))
+            layers.append(("MDL part", self._make_actor("mdl", group)))
         if self.chk_mdl_ridge.isChecked():
-            actors.append(("MDL ridge", self._make_actor("ridge", group)))
+            layers.append(("MDL ridge", self._make_actor("ridge", group)))
         if self.chk_oct.isChecked():
-            actors.append(("OCT", self._make_actor("oct", group)))
+            layers.append(("OCT", self._make_actor("oct", group)))
         if self.chk_gph.isChecked():
-            actors.append(("GPH", self._make_actor("gph", group)))
-        for label, actor in actors:
-            if actor is not None:
-                self.renderer.AddActor(actor)
+            layers.append(("GPH", self._make_actor("gph", group)))
         cells = []
-        for label, actor in actors:
-            if actor is not None:
-                mapper = actor.GetMapper()
-                cells.append(f"{label}={mapper.GetInput().GetNumberOfCells():,}")
+        legend_layers = []
+        for label, layer in layers:
+            if layer is None:
+                continue
+            self.renderer.AddActor(layer.actor)
+            mapper = layer.actor.GetMapper()
+            cells.append(f"{label}={mapper.GetInput().GetNumberOfCells():,}")
+            lut = mapper.GetLookupTable()
+            legend_layers.append((layer.title, lut, layer.legend_entries))
+            if self.chk_edges.isChecked() and layer.edges:
+                edges = pph_vtk.edges_actor(mapper.GetInput())
+                self.renderer.AddActor(edges)
+        # Qt 图例面板（右缘，替代 VTK 色标条）
+        if self.chk_legend.isChecked():
+            self.legend.set_layers(legend_layers)
+        else:
+            self.legend.setVisible(False)
+        # 坐标方向指示器（右上角）
+        if self.chk_axes.isChecked():
+            try:
+                self._orientation = pph_vtk.orientation_marker_widget(
+                    self.vtk_widget.GetRenderWindow().GetInteractor())
+            except Exception as exc:  # noqa: BLE001
+                self.status.setText(f"坐标轴失败: {exc}")
         self.renderer.ResetCamera()
         self.vtk_widget.GetRenderWindow().Render()
         self.status.setText(

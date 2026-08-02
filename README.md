@@ -32,8 +32,11 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
 - **文本编辑**：main.js / main.prp / main.xenv / main.xml 直接编辑，
   "另存为"通过 `pphwriter` 写回新 .pph（未修改的成员原样复制）；
 - **快照**：sctsnapshot 记录树 + PKBody3/Parasolid 摘要；
-- **3D**：MDL 面片（frid/csid 着色）、OCT 叶子包围盒（深度着色）、
-  GPH 边界面（owner 着色），轨道相机交互；大网格自动限量渲染
+- **3D（CFD 风格）**：MDL 面片（frid/csid 着色，区域名图例）、
+  OCT 叶子包围盒（深度着色）、GPH 边界面（owner 着色），轨道相机交互；
+  **网格线叠加**（vtkExtractEdges 暗色线条）、**右上角坐标方向指示器**、
+  **右侧 Qt 图例面板**（离散区域色块行 + 连续渐变条，替代 VTK 色标条，
+  布局确定、文字始终可读）、渐变背景，均可开关；大网格自动限量渲染
   （MDL 30 万面 / OCT 4 万叶子 / GPH 12 万面，见 `pph_gui.DEFAULT_CAPS`）；
 - 兼容 VTK 9.3：`QVTKRenderWindowInteractor` 已无 `start()`，
   交互器在 3D 页首次显示时经 `GetInteractor().Initialize()` + 轨道相机
