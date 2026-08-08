@@ -9,7 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from automation.history_vbs import parse_history_file  # noqa: E402
+from automation.history_vbs import (decode_vbs,  # noqa: E402
+                                    parse_history_file)
 from automation.pipeline_plan import (LOCKED_COMMANDS,  # noqa: E402
                                       PipelinePlan)
 from automation.vbs_bridge import read_vbs_lines  # noqa: E402
@@ -41,6 +42,25 @@ class TestLockedCommands(unittest.TestCase):
             self.assertIn(command, self.commands,
                           f"locked command {key} missing in box_vbs.vbs")
         self.assertIn("Doc_.WaitForWorker", self.commands)
+
+    def test_locked_command_line_numbers(self):
+        # 行号证据锁定：与 automation/pipeline_plan.py 中的注释一一对应，
+        # 录制文件或命令映射变更时此处必须同步更新。
+        lines = decode_vbs(BOX_VBS.read_bytes()).splitlines()
+        expected = {
+            "open_cad_file": (14, "Doc_.OpenCadFile"),
+            "parts_control": (18, "Conditions_.SetPartsControl"),
+            "generate_octree": (3110, "MeshingGroup_.CreateOctree"),
+            "set_mode_octree": (3112, "Doc_.SetModeOctree"),
+            "generate_mesh": (5276, "MeshingGroup_.CreateMeshMonitor"),
+            "generate_mesh_wait": (5283, "Doc_.WaitForWorker"),
+            "set_mode_mesh": (5285, "Doc_.SetModeMesh"),
+            "save_project": (7209, "Doc_.SaveProject"),
+        }
+        for key, (lineno, command) in expected.items():
+            with self.subTest(key=key, lineno=lineno):
+                self.assertIn(command, lines[lineno - 1],
+                              f"line {lineno} does not contain {command}")
 
     def test_unlocked_commands_not_recorded(self):
         # 未录制命令保持“未验证”状态：它们不应出现在锁定表中
