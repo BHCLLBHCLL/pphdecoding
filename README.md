@@ -120,6 +120,20 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
   `--pipeline-create-set / --pipeline-create-group / --pipeline-create-mdl`；
   SCTprime 宿主文档上下文（`[ctx+0xF8]`）未就绪时返回
   `SCF_ERR_CONTEXT_NOT_READY`，不会崩溃。
+- `automation/host_pipeline.py`：把桥注册为进程内 COM 组件
+  （`pphdecoding.ScflowPipeline`，HKCU，无需管理员）并生成宿主 VBS；
+  在 scFLOWpre 中 `File → Execute VBScript` 运行该脚本后，桥在宿主进程内
+  直接调用 `CreateShapeGroupSet / CreateShapeGroup / CreateMDL`。用法：
+
+  ```powershell
+  python -m automation.host_pipeline --register
+  python -m automation.host_pipeline --write-vbs host_pipeline.vbs
+  # 在 scFLOWpre 中执行 host_pipeline.vbs
+  # 结果写入 host_pipeline_result.txt（与 --result 指定路径一致）
+  ```
+
+  自动 GUI 后端（`--run --backend gui`）为尽力而为；宿主窗口不稳定时以
+  手动执行 VBS 为准。
 - `automation/batch_bridge.py`：Windows CLI 批处理桥（`scFLOWpreCLI` /
   `SCTpreCLI` / `SCTcombCLI` bat + `SCTpreCLIHelper`），支持命令构造与
   `all-cmdline` dry-run。

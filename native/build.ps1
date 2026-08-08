@@ -28,12 +28,16 @@ if (-not (Test-Path $VcVars)) {
 }
 
 $Src = Join-Path $Root "native\scflow_bridge.cpp"
+$SrcCom = Join-Path $Root "native\scflow_com.cpp"
 $Dll = Join-Path $OutDir "scflow_bridge.dll"
 
 $ClArgs = @(
     "/nologo", "/LD", "/EHsc", "/O2",
     "/D", "SCF_BRIDGE_BUILD",
     "`"$Src`"",
+    "`"$SrcCom`"",
+    "oleaut32.lib",
+    "advapi32.lib",
     "/Fe:`"$Dll`""
 )
 $Cmd = "`"$VcVars`" && cl $($ClArgs -join ' ')"
