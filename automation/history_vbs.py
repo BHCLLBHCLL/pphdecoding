@@ -8,6 +8,20 @@ from pathlib import Path
 from typing import Optional
 
 
+def decode_vbs(data: bytes) -> str:
+    """按 BOM 解码 scFLOWpre 录制的 VBS（UTF-8 / UTF-16LE / UTF-16BE）。"""
+    if data.startswith(b"\xff\xfe"):
+        return data.decode("utf-16-le", errors="replace")
+    if data.startswith(b"\xfe\xff"):
+        return data.decode("utf-16-be", errors="replace")
+    if data.startswith(b"\xef\xbb\xbf"):
+        return data.decode("utf-8-sig", errors="replace")
+    try:
+        return data.decode("utf-8-sig", errors="strict")
+    except UnicodeDecodeError:
+        return data.decode("cp1252", errors="replace")
+
+
 def _split_args(text: str) -> list[str]:
     """按逗号切分参数，尊重双引号与括号。"""
     args: list[str] = []
@@ -40,6 +54,13 @@ def _parse_line(line: str) -> Optional[dict]:
     text = line.strip()
     if not text or text.startswith("'") or text.lower().startswith("rem "):
         return None
+    set_match = re.match(r"^Set\s+(\w+)\s*=\s*(.+)$", text, re.S)
+    if set_match:
+        rhs = set_match.group(2).strip()
+        m = re.match(r"^([A-Za-z_][\w.]*)\s*\((.*)\)\s*$", rhs, re.S)
+        if m:
+            return {"command": m.group(1), "args": _split_args(m.group(2))}
+        return None
     m = re.match(r"^Call\s+([A-Za-z_][\w.]*)\s*\((.*)\)\s*$", text, re.S)
     if m:
         return {"command": m.group(1), "args": _split_args(m.group(2))}
@@ -65,8 +86,8 @@ def parse_history(text: str) -> list[dict]:
         if pending:
             line = pending + " " + line
             pending = ""
-        if line.rstrip().endswith("_"):
-            pending = line.rstrip()[:-1].rstrip()
+        if line.rstrip()[-2:] == " _":
+            pending = line.rstrip()[:-2].rstrip()
             continue
         parsed = _parse_line(line)
         if parsed is not None:
@@ -79,8 +100,7 @@ def parse_history(text: str) -> list[dict]:
 
 
 def parse_history_file(path: str | Path) -> list[dict]:
-    return parse_history(Path(path).read_text(encoding="utf-8-sig",
-                                              errors="replace"))
+    return parse_history(decode_vbs(Path(path).read_bytes()))
 
 
 def actions_to_hints(actions: list[dict]) -> dict:

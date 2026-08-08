@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """M2 预处理管线计划与 VBS 验收脚本生成。
 
-把“Prepare Parts → Wrapping → Build Analysis Model → Octree → Mesh →
-Save”的步骤序列化为 scFLOWpre VBScript 动作；命令名以 scFLOWpre
-history.vbs 录制的实际名称为准，本模块提供默认映射并允许覆盖。
+命令名以 scFLOWpre 真实录制的 ``tests/box_vbs.vbs`` 为准：
+
+- ``LOCKED_COMMANDS``：已在录制中出现并锁定的命令（含行号证据）；
+- ``UNLOCKED_COMMANDS``：录制中未出现、仍待验证的占位命令。
 """
 
 from __future__ import annotations
@@ -16,33 +17,55 @@ from typing import Optional
 
 from pph_parser import PphArchive
 
-DEFAULT_STEPS = [
-    "prepare_parts",
-    "begin_wrapping",
-    "execute_wrapping",
-    "build_analysis_model",
-    "generate_octree",
-    "generate_mesh",
-]
-
-# 默认命令映射（待用真实 history.vbs 录制校准后锁定）
-DEFAULT_COMMANDS: dict[str, str] = {
-    "open_project": 'scFLOWpre.OpenProject "{path}"',
-    "prepare_parts": "scFLOWpre.ReturnToPrepareParts",
-    "begin_wrapping": "scFLOWpre.BeginWrapping",
-    "execute_wrapping": "scFLOWpre.ExecuteWrapping",
-    "build_analysis_model": "scFLOWpre.BuildAnalysisModel",
-    "generate_octree": "scFLOWpre.GenerateOctree",
-    "generate_mesh": "scFLOWpre.GenerateMesh",
-    "save": 'scFLOWpre.SaveProject "{path}"',
-    "quit": "scFLOWpre.Quit",
+# 实测锁定命令（来源 tests/box_vbs.vbs，括号内为行号）
+LOCKED_COMMANDS: dict[str, str] = {
+    "open_cad_file": 'Doc_.OpenCadFile "{path}"',                    # :14
+    "parts_control": (                                               # :16-18
+        'Conditions_.SetPartsControl "Wrapping", False'),
+    "generate_octree": "MeshingGroup_.CreateOctree",                 # :3110
+    "set_mode_octree": "Doc_.SetModeOctree",                         # :3112
+    "generate_mesh": (                                               # :5276,5283
+        "MeshingGroup_.CreateMeshMonitor\nDoc_.WaitForWorker"),
+    "set_mode_mesh": "Doc_.SetModeMesh",                             # :5285
+    "save_project": 'Doc_.SaveProject "{path}"',                     # :7209
 }
+
+# 录制中未出现、仍为待验证的默认命令（实机录制后移入 LOCKED_COMMANDS）
+UNLOCKED_COMMANDS: dict[str, str] = {
+    "open_project": 'Doc_.OpenProject "{path}"',
+    "prepare_parts": "Doc_.ReturnToPrepareParts",
+    "begin_wrapping": "Doc_.BeginWrapping",
+    "execute_wrapping": "Doc_.ExecuteWrapping",
+    "build_analysis_model": "Doc_.BuildAnalysisModel",
+    "quit": "App_.Quit",
+}
+
+DEFAULT_COMMANDS: dict[str, str] = {
+    **UNLOCKED_COMMANDS,
+    **LOCKED_COMMANDS,
+}
+
+# 默认执行步骤（来自 box_vbs.vbs 的实际流程；打开命令按文件类型自动选择）
+DEFAULT_STEPS = [
+    "parts_control",
+    "generate_octree",
+    "set_mode_octree",
+    "generate_mesh",
+    "set_mode_mesh",
+    "save_project",
+]
 
 ROLE_MAP: dict[str, tuple[str, ...]] = {
     "mdl": ("surface_part_mdl", "surface_ridge_mdl"),
     "oct": ("octree",),
     "gph": ("volume_mesh_gph",),
 }
+
+CAD_EXTENSIONS = {".x_t", ".x_b", ".step", ".stp", ".iges", ".igs", ".stl"}
+
+
+def _looks_like_cad(path: str) -> bool:
+    return Path(path).suffix.lower() in CAD_EXTENSIONS
 
 
 @dataclass
@@ -59,13 +82,22 @@ class PipelinePlan:
         merged.update(self.commands)
         return merged
 
+    def open_command(self) -> str:
+        cmds = self.resolve_commands()
+        key = "open_cad_file" if _looks_like_cad(self.project_path) \
+            else "open_project"
+        return cmds[key].format(path=self.project_path)
+
     def to_vbs_actions(self) -> list[str]:
         cmds = self.resolve_commands()
-        actions = [cmds["open_project"].format(path=self.project_path)]
+        actions = [self.open_command()]
         for step in self.steps:
             if step not in cmds:
                 raise ValueError(f"unknown pipeline step: {step}")
-            actions.append(cmds[step])
+            template = cmds[step]
+            if "{path}" in template:
+                template = template.format(path=self.project_path)
+            actions.extend(line for line in template.splitlines() if line)
         if self.include_quit:
             actions.append(cmds["quit"])
         return actions
@@ -74,7 +106,7 @@ class PipelinePlan:
         from automation.vbs_bridge import write_vbs_file
 
         return write_vbs_file(self.to_vbs_actions(), path,
-                              title="scFLOWpre M2 pipeline plan")
+                              title="scFLOWpre M2 pipeline plan (locked)")
 
     def verify_outputs(self, pph_path: Optional[str | Path] = None,
                        roles: tuple[str, ...] = ("mdl", "oct", "gph")) -> dict:
@@ -91,9 +123,9 @@ class PipelinePlan:
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(
         description="生成 scFLOWpre M2 预处理管线 VBS 计划")
-    ap.add_argument("project", help="PPH 项目路径")
+    ap.add_argument("project", help="PPH 或 CAD 路径")
     ap.add_argument("--steps", nargs="*", default=list(DEFAULT_STEPS),
-                    help="管线步骤（默认全流程）")
+                    help="管线步骤（默认：录制锁定的 box 流程）")
     ap.add_argument("--output", required=True, help="输出 .vbs 路径")
     ap.add_argument("--verify", action="store_true",
                     help="校验项目是否已有 MDL/OCT/GPH 成员")

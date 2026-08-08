@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import scflowpre_probe
+from automation.history_vbs import decode_vbs
 
 DEFAULT_SCRIPT_ARG = "-vbs"
 
@@ -46,7 +47,7 @@ def write_vbs_file(actions: list[str], path: str | Path,
 
 def read_vbs_lines(path: str | Path) -> list[str]:
     """读取 VBS 文件，去掉注释/空行，并拼接续行（行尾 ``_``）。"""
-    text = Path(path).read_text(encoding="utf-8-sig", errors="replace")
+    text = decode_vbs(Path(path).read_bytes())
     logical: list[str] = []
     pending = ""
     for raw in text.splitlines():
@@ -56,8 +57,8 @@ def read_vbs_lines(path: str | Path) -> list[str]:
         if pending:
             line = pending + " " + line
             pending = ""
-        if line.rstrip().endswith("_"):
-            pending = line.rstrip()[:-1].rstrip()
+        if line.rstrip()[-2:] == " _":
+            pending = line.rstrip()[:-2].rstrip()
             continue
         logical.append(line)
     if pending:
