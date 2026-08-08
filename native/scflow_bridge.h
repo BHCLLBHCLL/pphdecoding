@@ -36,6 +36,20 @@ SCF_API int scf_resolve_symbol(const wchar_t* dll_name, const char* symbol);
  */
 SCF_API int scf_status(wchar_t* buffer, int buffer_len);
 
+/*
+ * Preprocessing pipeline symbol probe: outputs "module|symbol=1/0" per line.
+ * Returns the number of wide chars written (excluding trailing NUL).
+ */
+SCF_API int scf_pipeline_probe(wchar_t* buffer, int buffer_len);
+
+/*
+ * Actually call ZipLibrary ?ExpandZip@@YAHPEB_W0@Z.
+ * Returns the callee's return value, or -2 when the symbol is unresolved.
+ */
+SCF_API int scf_call_zip_expand(const wchar_t* zip_path,
+                                const wchar_t* out_dir);
+
+
 /* 释放全部已加载模块。 */
 SCF_API void scf_finalize(void);
 

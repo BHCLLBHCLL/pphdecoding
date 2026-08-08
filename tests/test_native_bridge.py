@@ -28,6 +28,25 @@ class TestNativeBridgeFallback(unittest.TestCase):
         self.assertFalse(st["bridge_compiled"])
         self.assertFalse(st["fallback"]["installed"])
 
+    def test_pipeline_status_fallback(self):
+        orig_dll = native_bridge.BRIDGE_DLL
+        native_bridge.BRIDGE_DLL = Path(r"C:\nonexistent\bridge.dll")
+        try:
+            st = native_bridge.pipeline_status()
+        finally:
+            native_bridge.BRIDGE_DLL = orig_dll
+        self.assertFalse(st["bridge_compiled"])
+        self.assertFalse(any(st["symbols"].values()))
+
+    def test_expand_zip_requires_bridge(self):
+        orig_dll = native_bridge.BRIDGE_DLL
+        native_bridge.BRIDGE_DLL = Path(r"C:\nonexistent\bridge.dll")
+        try:
+            with self.assertRaises(RuntimeError):
+                native_bridge.expand_zip("a.zip", "out")
+        finally:
+            native_bridge.BRIDGE_DLL = orig_dll
+
 
 @unittest.skipUnless(native_bridge.is_compiled(),
                      "native/out/scflow_bridge.dll 未编译")
@@ -37,6 +56,12 @@ class TestNativeBridgeReal(unittest.TestCase):
         self.assertTrue(st["bridge_compiled"])
         self.assertGreaterEqual(st["loaded_modules"], 1)
         self.assertIn("programs_dir", st["status"])
+
+    def test_pipeline_status(self):
+        st = native_bridge.pipeline_status()
+        self.assertTrue(st["bridge_compiled"])
+        self.assertGreaterEqual(len(st["symbols"]), 9)
+        self.assertTrue(all(st["symbols"].values()))
 
 
 if __name__ == "__main__":
