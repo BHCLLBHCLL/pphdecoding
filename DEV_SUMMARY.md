@@ -1,6 +1,6 @@
 # PPH 解析功能开发状态总结
 
-> 更新日期：2026-08-02 ｜ 仓库：`pphdecoding` ｜ 格式细节见
+> 更新日期：2026-08-09（新增第 6 节）｜ 仓库：`pphdecoding` ｜ 格式细节见
 > [PPH_FORMAT_SPEC.md](PPH_FORMAT_SPEC.md)
 
 ## 1. 总体判断
@@ -217,3 +217,96 @@
 测试：`python -m pytest tests -q`（91 项，约 68 s；laptop 样例解析较慢）。
 GUI 运行：`python pph_gui.py [项目.pph]`；依赖缺失时
 `python -m pip install -r requirements-gui.txt`。
+
+## 6. scFLOWpre 宿主自动化：沙箱排查结论与 COM 激活分析（2026-08-09）
+
+> 相关代码：`automation/host_pipeline.py`（in-proc COM 桥 + 宿主内 VBS）、
+> `automation/vbs_bridge.py`、`automation/batch_bridge.py`、
+> `native_bridge.py`。本节固化沙箱内 scFLOWpre 宿主排查的最终结论，
+> 以及"回到正常桌面会话后是否需要解决 COM 激活问题"的分析。
+
+### 6.1 沙箱排查结论：宿主无法在本环境稳定运行
+
+- ❌ **直接启动 `scFLOWpre_Bx64net.exe` 必崩**：多份错误报告栈完全
+  一致——`KERNELBASE.RaiseException(0xE0000000)` ←
+  `SCTpreLib_Dx64.dll!SetupSCTpreLib()+0x21` ←
+  `scFLOWpreCmd_Bx64net.dll!InitializescFLOWpreCmd()+0x557` ←
+  `scFLOWpreGUI_Bx64net.dll!scFLOWpreAddin_Initialize()` ← exe 主流程。
+- ✅ **根因已逆向钉死**：`SetupSCTpreLib`（RVA 0x4847B0）逻辑为
+  `call 0x1800531E0; test eax,eax; je RaiseException`；其内部初始化子步骤
+  （0x2E2D60 等）在独立进程中按序直接调用时访问违例/返回 0，说明依赖
+  **Kicker 启动时注入的进程级状态**（license mode / product key），
+  直接启动 exe 不是受支持路径。
+- ✅ **手册佐证**（`Manuals\scFLOW\HTML\VB_Interface_eng\`）：
+  Application 对象的文档化获取方式是
+  `CreateObject("scFLOWpre_Bx64net.Application.2025")`；Application 类
+  提供 `ExecuteVBS / ExecuteVBSWithFile`（宿主内脚本通道，正是本仓
+  NativeBridge 想走的路）；Kicker 类负责许可证检出与启动设置
+  （`GetLicenseStatus / GetApplicationLaunchSetting / SetProductType`）。
+- ✅ **许可证因素已排除**：`CRADLE_LICENSE_FILE=27891@localhost` 指向
+  未监听端口；实际许可证服务器 localhost:27500 在线（lmstat：SCFLOWPP
+  32 许可、0 占用）。把变量改指 27500@localhost、license.dat、或删除
+  变量后重试均同样崩溃 → 不是"服务器不可达"，而是 Kicker 注入的
+  进程状态缺失。
+- 三个现象由此全部归因：「Warnning」框 = SetupSCTpreLib 抛出的自绘
+  错误报告对话框；主窗口消失 = 错误框确认后应用退出；**COM LocalServer
+  激活挂起** = 激活出的新实例卡在同一个模态错误框上，COM 永远等不到
+  类工厂注册完成。沙箱无稳定交互桌面会话（Kicker 窗口在本会话也会
+  消失），无法在本环境继续验证。
+
+### 6.2 COM 激活分析：不需要"解决"，需要"规避"
+
+**注册表实测**（本机，HKLM）：`scFLOWpre_Bx64net.Application.2025`
+→ CLSID `{6FDA4768-C96A-478C-BCE1-96B2216D99E8}` →
+`LocalServer32 = C:\Program Files\Cradle\CradleCFD2025.2\Programs_x64\scFLOWpre_Bx64net.exe`
+——即外部 `CreateObject` 激活**必然拉起不经 Kicker 的裸 exe**，这是
+结构性事实，与沙箱无关。
+
+分路径结论：
+
+| 路径 | 是否涉及 LocalServer 激活 | 结论 |
+|------|--------------------------|------|
+| A. Kicker 启动宿主 → 宿主内 File → Execute VBScript（当前 `--write-vbs` + manual 主路径） | 否 | **无需解决** |
+| B. 外部脚本驱动 `app.ExecuteVBSWithFile`（后续全自动化目标） | 取决于 `app` 的获取方式 | **不需"修"，需"绕"**（见 6.3） |
+
+沙箱挂起三因素中哪些会跟到原生桌面：
+
+1. **LocalServer32 直指裸 exe（会跟到原生）**：按 6.1 的逆向结论，
+   原生机器上 COM 激活出**新实例**大概率复现同样的 0xE0000000 崩溃；
+2. **模态框无人确认 → 永久挂起（沙箱特有）**：原生上表现为激活
+   失败/超时返回而非死等，可诊断性好，但激活本身依然失败；
+3. **交互桌面会话不稳、Kicker 窗口消失（纯沙箱特有）**：原生不存在。
+
+路径 A 免疫的机理（对照 `host_pipeline.py` 生成的 VBS）：
+`GetApplication()` 是宿主 VBS 引擎内建函数，直接返回宿主自身对象，
+不触发任何激活（116 行的 `CreateObject(...Application...)` 只是兜底，
+宿主内正常走不到）；`CreateObject("pphdecoding.ScflowPipeline")` 是
+**InprocServer32**（`--register` 注册到 HKCU），DLL 加载进已初始化好的
+宿主进程，`SetupSCTpreLib` 早已完成，不存在状态缺失问题。
+
+### 6.3 原生桌面验证清单（按序执行）
+
+1. 经 **Kicker** 正常启动宿主（不要直接启动裸 exe）；
+2. `python -m automation.host_pipeline --register` +
+   `--write-vbs host_pipeline.vbs --project <pph>`，宿主内
+   File → Execute VBScript 执行 → 验证结果文件
+   `context_ready=True`、`set_handle / group_handle > 0`、`mdl=True`
+   （此步完全不碰 COM 激活）；
+3. 外部脚本试 `GetObject(, "scFLOWpre_Bx64net.Application.2025")`
+   **ROT 附加**（前提：宿主把 Application 注册进 ROT，需实机确认）；
+4. 再试 `CreateObject`：若类工厂注册为 MULTIPLEUSE 且已有实例在跑，
+   激活会直接附加到运行中进程——对比激活前后
+   `Get-Process scFLOWpre_Bx64net` 的 PID 数即可判断是"附加"还是
+   "拉新进程崩溃"；
+5. 若 3、4 均不可行，放弃外部 COM 驱动：求证 `vbs_bridge.py` 中
+   `-vbs` CLI 参数是否真实存在（代码标注"待实机确认"），或停在
+   "Kicker 启动 + GUI 菜单后端"的半自动方案。
+
+### 6.4 代码层待修隐患（原生实测前建议处理）
+
+- ⚠️ `host_pipeline.py:116`：VBS 内的 `CreateObject` 兜底若被
+  wscript/cscript 在**宿主外**执行，会触发 LocalServer 激活 → 原生上
+  同样崩。建议加注释"仅限宿主内执行"，或删掉兜底让错误显式暴露；
+- ⚠️ `host_pipeline.py:_run_gui`（约 236 行）：无进程时直接
+  `Application.start(exe)` 拉起裸 exe，同样绕过 Kicker。gui 后端应
+  改为"要求先经 Kicker 启动实例在跑"，否则复现同样崩溃。
