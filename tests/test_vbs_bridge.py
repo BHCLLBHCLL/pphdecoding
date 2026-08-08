@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""VBScript 桥测试（纯函数 + 模拟执行后端）。"""
+
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from automation.vbs_bridge import (VbsBridge, build_vbs, read_vbs_lines,  # noqa: E402
+                                   write_vbs_file)
+
+
+class TestVbsBuild(unittest.TestCase):
+    def test_build_vbs(self):
+        text = build_vbs(['scFLOWpre.OpenProject "box.pph"',
+                          "scFLOWpre.ExecuteWrapping"])
+        self.assertIn("OpenProject", text)
+        self.assertIn("ExecuteWrapping", text)
+        self.assertTrue(text.endswith("\r\n"))
+
+    def test_write_read_roundtrip(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = write_vbs_file(
+                ['scFLOWpre.OpenProject "box.pph"',
+                 "scFLOWpre.ExportMesh _",
+                 '  "mesh.gph"'],
+                Path(td) / "run.vbs")
+            lines = read_vbs_lines(p)
+        self.assertEqual(
+            lines,
+            ['scFLOWpre.OpenProject "box.pph"',
+             'scFLOWpre.ExportMesh "mesh.gph"'])
+
+    def test_read_ignores_comments(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "run.vbs"
+            p.write_text("' comment\nRem another\nscFLOWpre.Quit\n",
+                         encoding="utf-8-sig")
+            self.assertEqual(read_vbs_lines(p), ["scFLOWpre.Quit"])
+
+
+class TestVbsBridge(unittest.TestCase):
+    def test_launch_command_default_and_custom(self):
+        bridge = VbsBridge(install_dir=str(Path("C:/cradle")), _exe_cache=None)
+        bridge._exe_cache = Path(r"C:\cradle\Programs_x64\scFLOWpre_Bx64net.exe")
+        self.assertEqual(
+            bridge.launch_command("run.vbs"),
+            [r"C:\cradle\Programs_x64\scFLOWpre_Bx64net.exe",
+             "-vbs", "run.vbs"])
+        self.assertEqual(
+            bridge.launch_command("run.vbs", script_args=["/script", "run.vbs"]),
+            [r"C:\cradle\Programs_x64\scFLOWpre_Bx64net.exe",
+             "/script", "run.vbs"])
+
+    def test_execute_manual(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = write_vbs_file(["scFLOWpre.Quit"], Path(td) / "run.vbs")
+            bridge = VbsBridge()
+            result = bridge.execute(p, backend="manual")
+        self.assertEqual(result["backend"], "manual")
+        self.assertIn("Execute VBScript", result["hint"])
+
+    def test_execute_cli(self, monkeypatch=None):
+        import subprocess
+
+        calls = {}
+
+        def fake_run(cmd, **kwargs):
+            calls["cmd"] = cmd
+            return type("P", (), {"returncode": 0, "stdout": "ok",
+                                  "stderr": ""})()
+
+        orig = subprocess.run
+        subprocess.run = fake_run
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                p = write_vbs_file(["scFLOWpre.Quit"], Path(td) / "run.vbs")
+                bridge = VbsBridge()
+                bridge._exe_cache = Path("scFLOWpre.exe")
+                result = bridge.execute(p, backend="cli")
+        finally:
+            subprocess.run = orig
+        self.assertEqual(result["backend"], "cli")
+        self.assertEqual(calls["cmd"][-1], str(p))
+
+    def test_execute_gui_hooks(self):
+        import sys as _sys
+
+        class FakeApp:
+            def __init__(self, *a, **k):
+                pass
+
+            @staticmethod
+            def start(*a, **k):
+                return FakeApp()
+
+            def window(self, **k):
+                return FakeWindow()
+
+        class FakeWindow:
+            def wait(self, *a, **k):
+                return None
+
+            def menu_select(self, *a, **k):
+                return None
+
+            def child_window(self, **k):
+                return FakeChild()
+
+        class FakeChild:
+            def set_edit_text(self, *a, **k):
+                return None
+
+            def click(self, *a, **k):
+                return None
+
+        import pywinauto
+        from pywinauto import application as _app
+        orig_start = _app.Application
+        _app.Application = FakeApp
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                p = write_vbs_file(["scFLOWpre.Quit"], Path(td) / "run.vbs")
+                bridge = VbsBridge()
+                bridge._exe_cache = Path("scFLOWpre.exe")
+                result = bridge._execute_gui(p, hooks={})
+        finally:
+            _app.Application = orig_start
+        self.assertEqual(result["backend"], "gui")
+        self.assertEqual(result["status"], "submitted")
+
+
+if __name__ == "__main__":
+    unittest.main()
