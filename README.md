@@ -100,6 +100,25 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
 新增测试：`tests/test_schema_extract.py`、`tests/test_condition_registry.py`、
 `tests/test_units.py`、`tests/test_scflowpre_probe.py`、`tests/test_corpus.py`。
 
+## M2 自动化桥与批处理
+
+- `automation/vbs_bridge.py`：VBScript 桥——构建/写出/读取 `.vbs`，
+  `VbsBridge` 提供 manual / cli / gui（pywinauto）三种执行后端；
+  实测本机 `scFLOWpreAPI.ExecuteVBS` 可由 NativeBridge 加载。
+- `automation/history_vbs.py`：解析 scFLOWpre 录制的 `history.vbs`
+  （续行拼接、Call/方法调用、参数切分），输出结构化动作序列，
+  供条件 Schema 补全与自动化回放使用。
+- `native/scflow_bridge.{h,cpp}` + `native/build.ps1`：C ABI 桥原型，
+  MSVC 编译后由 `native_bridge.py` 加载；已实测 11 个关键 DLL 全部
+  可加载，`ExecuteVBS` / `CreateShapeGroupSet` / `ExpandZip` 符号命中。
+  编译：`powershell -ExecutionPolicy Bypass -File native\build.ps1`。
+- `automation/batch_bridge.py`：Windows CLI 批处理桥（`scFLOWpreCLI` /
+  `SCTpreCLI` / `SCTcombCLI` bat + `SCTpreCLIHelper`），支持命令构造与
+  `all-cmdline` dry-run。
+
+新增测试：`tests/test_vbs_bridge.py`、`tests/test_history_vbs.py`、
+`tests/test_batch_bridge.py`、`tests/test_native_bridge.py`。
+
 依赖：仅 `numpy`（Python 3.10+）。体网格 `.gph` 的深度统计在检测到
 [gphdecoding](https://github.com/) 仓（同级目录）时自动调用其 `gph_model`，
 否则回退到仓库内 `gphstats.py`。
