@@ -105,12 +105,20 @@ def unregister_com() -> dict:
 def build_pipeline_vbs(result_path: str | Path,
                        set_name: str = "Probe",
                        group_name: str = "ProbeGroup",
+                       project_path: Optional[str | Path] = None,
                        output: Optional[str | Path] = None) -> Path:
     """Write the VBS that drives the COM bridge inside the host."""
     result_path = Path(result_path).resolve()
     lines = [
         "' pphdecoding NativeBridge host pipeline",
         "On Error Resume Next",
+        "Set App_ = GetApplication()",
+        'If App_ Is Nothing Then Set App_ = CreateObject("scFLOWpre_Bx64net.Application.2025")',
+        "Set Doc_ = App_.GetDocument",
+    ]
+    if project_path is not None:
+        lines.append(f'Doc_.OpenProject "{Path(project_path)}", False')
+    lines += [
         'Set fso = CreateObject("Scripting.FileSystemObject")',
         f'Set log = fso.CreateTextFile("{result_path}", True)',
         'Set Pipe = CreateObject("pphdecoding.ScflowPipeline")',
@@ -264,6 +272,7 @@ def _run_gui(vbs_path: Path, timeout: float, menu: dict) -> dict:
 
 def run_pipeline(set_name: str = "Probe",
                  group_name: str = "ProbeGroup",
+                 project_path: Optional[str | Path] = None,
                  result_path: Optional[str | Path] = None,
                  vbs_path: Optional[str | Path] = None,
                  backend: str = "manual",
@@ -277,6 +286,7 @@ def run_pipeline(set_name: str = "Probe",
         Path.cwd() / "host_pipeline_result.txt"
     vbs = Path(vbs_path) if vbs_path else result.with_suffix(".vbs")
     build_pipeline_vbs(result, set_name=set_name, group_name=group_name,
+                       project_path=project_path,
                        output=vbs)
     run = run_in_host(vbs, backend=backend, timeout=timeout, menu=menu)
     if backend == "manual":
@@ -309,6 +319,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                     help="run the pipeline in the host")
     ap.add_argument("--backend", choices=["manual", "gui"], default="manual")
     ap.add_argument("--set-name", default="Probe")
+    ap.add_argument("--project", default=None,
+                    help="PPH/CAD path to open in the host before the pipeline")
     ap.add_argument("--result", default=None,
                     help="result file path (default: cwd/host_pipeline_result.txt)")
     args = ap.parse_args(argv)
@@ -320,11 +332,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     elif args.write_vbs:
         out = Path(args.write_vbs)
         result_path = out.with_name(out.stem + "_result.txt")
-        build_pipeline_vbs(result_path, set_name=args.set_name, output=out)
+        build_pipeline_vbs(result_path, set_name=args.set_name,
+                           project_path=args.project, output=out)
         result = {"written": str(out), "result_path": str(result_path)}
     elif args.run:
         result = run_pipeline(set_name=args.set_name, backend=args.backend,
-                              result_path=args.result)
+                              result_path=args.result, project_path=args.project)
     else:
         ap.print_help()
         return 1

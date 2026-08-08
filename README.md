@@ -127,7 +127,8 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
 
   ```powershell
   python -m automation.host_pipeline --register
-  python -m automation.host_pipeline --write-vbs host_pipeline.vbs
+  python -m automation.host_pipeline --write-vbs host_pipeline.vbs `
+      --project D:\training\cradle\box\box.pph
   # 在 scFLOWpre 中执行 host_pipeline.vbs
   # 结果写入 host_pipeline_result.txt（与 --result 指定路径一致）
   ```

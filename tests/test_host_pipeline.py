@@ -20,8 +20,10 @@ class TestBuildAndParse(unittest.TestCase):
             result = td / "result.txt"
             vbs = host_pipeline.build_pipeline_vbs(
                 result, set_name="Box", group_name="BoxGroup",
+                project_path=r"D:\training\cradle\box\box.pph",
                 output=td / "host.vbs")
             text = vbs.read_text(encoding="utf-8-sig")
+            self.assertIn('Doc_.OpenProject "D:\\training\\cradle\\box\\box.pph", False', text)
             self.assertIn('CreateObject("pphdecoding.ScflowPipeline")', text)
             self.assertIn('CreateShapeGroupSet("Box")', text)
             self.assertIn('CreateShapeGroup(hSet, "BoxGroup")', text)
