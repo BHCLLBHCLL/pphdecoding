@@ -15,6 +15,10 @@ python pph_parser.py tests\laptop_thermal_steady_scaled_v3_fanonly_simple.pph
 python pph_parser.py 项目.pph --extract out_dir   # 解包
 python pph_parser.py 项目.pph --snapshot          # sctsnapshot 完整记录树
 python pph_parser.py 项目.pph --octree            # 八叉树叶子深度统计
+python tools/extract_schema.py box.pph -o schemas/box.json   # 抽取条件/环境/物性 Schema
+python tools/extract_schema.py a.pph b.pph --merge -o schemas/merged.json
+python tools/build_corpus.py . -o corpus.json --limit 1      # 黄金语料清单（成员哈希）
+python -m scflowpre_probe                          # 探测 scFLOWpre 安装与 DLL 导出
 python tests/test_pph_parser.py                   # 健全性测试（含 LZMS / DIVISION）
 python tests/test_samples.py                      # 跨样例结构不变式
 python tests/test_gui.py                          # GUI/VTK 离屏测试
@@ -75,6 +79,26 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
 | `pphwriter.py` | 写端：LZMS 压缩 + Blowfish 加密 + ZIP 容器 round-trip |
 | `pph_vtk.py` | VTK 几何构建器（MDL/OCT/GPH → vtkPolyData，离屏可测） |
 | `pph_gui.py` | PyQt5 + VTK 查看/修改 GUI（成员树/文本编辑/快照/3D） |
+| `schema_extract.py` | 从 PPH 抽取条件/环境键/物性组 Schema（JSON） |
+| `condition_registry.py` | 条件类型注册表（跨项目合并、校验、JSON 持久化） |
+| `units.py` | xenv UNIT 键注册表 + 单位换算引擎（含复合单位/温度） |
+| `scflowpre_probe.py` | scFLOWpre 安装与 DLL 导出探测（纯 PE 解析，只读） |
+| `tools/build_corpus.py` | 黄金语料清单（成员角色/大小/压缩比/SHA-256） |
+
+## Phase 0/1 工具（scFLOWpre 功能对照开发前置）
+
+- `tools/extract_schema.py`：把 `main.xml` 条件树、`main.xenv` Section/Key、
+  `main.prp` 物性组转成 JSON 注册表；支持多项目合并。输出示例见 `schemas/box.json`。
+- `condition_registry.py`：按 `Cond*` 类型汇总字段/区域/样本值，供通用条件编辑器
+  与“未知字段/类型不匹配”校验使用。
+- `units.py`：覆盖 xenv UNIT 键（长度/速度/压力/温度/复合单位等）与快照
+  `unit_type` 解析；`convert()` 支持 SI 因子换算与温度偏移换算。
+- `scflowpre_probe.py`：探测本机 Cradle 安装、关键 DLL 导出数量与
+  `SCTpreCLIHelper`/`scConverter` 等批处理工具，为自动化桥提供可行性证据。
+- `tools/build_corpus.py`：生成语料清单（含成员 SHA-256），作为字节级回归基线。
+
+新增测试：`tests/test_schema_extract.py`、`tests/test_condition_registry.py`、
+`tests/test_units.py`、`tests/test_scflowpre_probe.py`、`tests/test_corpus.py`。
 
 依赖：仅 `numpy`（Python 3.10+）。体网格 `.gph` 的深度统计在检测到
 [gphdecoding](https://github.com/) 仓（同级目录）时自动调用其 `gph_model`，
