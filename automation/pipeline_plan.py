@@ -60,6 +60,24 @@ DEFAULT_STEPS = [
     "save_project",
 ]
 
+# GUI Execute 面板复选框 -> PipelinePlan 步骤（顺序固定为 BAM → Octree → Mesh）
+EXECUTE_STEP_MAP: dict[str, list[str]] = {
+    "bam": ["build_analysis_model"],
+    "oct": ["generate_octree", "set_mode_octree"],
+    "mesh": ["generate_mesh", "set_mode_mesh"],
+}
+DEFAULT_EXECUTE_ORDER = ["bam", "oct", "mesh"]
+
+
+def steps_from_execute_plan(plan: dict) -> list[str]:
+    """把 Execute 面板勾选结果映射为管线步骤列表。"""
+    steps: list[str] = []
+    for key in DEFAULT_EXECUTE_ORDER:
+        if plan.get(key):
+            steps.extend(EXECUTE_STEP_MAP[key])
+    return steps
+
+
 ROLE_MAP: dict[str, tuple[str, ...]] = {
     "mdl": ("surface_part_mdl", "surface_ridge_mdl"),
     "oct": ("octree",),
@@ -102,7 +120,16 @@ class PipelinePlan:
             template = cmds[step]
             if "{path}" in template:
                 template = template.format(path=self.project_path)
-            actions.extend(line for line in template.splitlines() if line)
+            for line in template.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                # 生成可在 scFLOWpre 宿主中直接运行的 VBS：
+                # MeshingGroup_* 调用前先取 meshing group 对象。
+                if line.startswith("MeshingGroup_."):
+                    actions.append(
+                        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)")
+                actions.append(line)
         if self.include_quit:
             actions.append(cmds["quit"])
         return actions

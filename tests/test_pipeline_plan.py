@@ -13,7 +13,8 @@ from automation.history_vbs import (decode_vbs,  # noqa: E402
                                     parse_history_file)
 from automation.pipeline_plan import (LOCKED_COMMANDS,  # noqa: E402
                                       UNLOCKED_COMMANDS,
-                                      PipelinePlan)
+                                      PipelinePlan,
+                                      steps_from_execute_plan)
 from automation.vbs_bridge import read_vbs_lines  # noqa: E402
 
 BOX_PPH = ROOT / "box.pph"
@@ -108,8 +109,26 @@ class TestPipelinePlan(unittest.TestCase):
                             steps=["generate_mesh"])
         actions = plan.to_vbs_actions()
         self.assertEqual(actions[0], 'Doc_.OpenCadFile "C:\\case\\case.x_t"')
+        self.assertIn("Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
+                      actions)
         self.assertIn("MeshingGroup_.CreateMeshMonitor", actions)
         self.assertIn("Doc_.WaitForWorker", actions)
+        i = actions.index("MeshingGroup_.CreateMeshMonitor")
+        self.assertEqual(
+            actions[i - 1],
+            "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)")
+
+    def test_steps_from_execute_plan(self):
+        self.assertEqual(
+            steps_from_execute_plan(
+                {"bam": True, "oct": True, "mesh": True}),
+            ["build_analysis_model",
+             "generate_octree", "set_mode_octree",
+             "generate_mesh", "set_mode_mesh"])
+        self.assertEqual(
+            steps_from_execute_plan({"oct": True}),
+            ["generate_octree", "set_mode_octree"])
+        self.assertEqual(steps_from_execute_plan({}), [])
 
     def test_default_steps_use_locked_commands(self):
         plan = PipelinePlan(project_path="box.x_t")

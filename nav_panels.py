@@ -1122,9 +1122,12 @@ class ExecuteBody(_Body):
         self.chk_bam.setChecked(True)
         self.chk_oct.setChecked(True)
         self.chk_mesh.setChecked(True)
+        self.chk_use_api = QCheckBox(
+            "使用 scFLOWpre API 构建 Model / Octree / Mesh")
         for w in (self.chk_bam, self.chk_oct, self.chk_mesh,
                   self.chk_files, self.chk_save, self.chk_solver):
             bv.addWidget(w)
+        bv.addWidget(self.chk_use_api)
         v.addWidget(box)
         self.cb_mesh_mode = QComboBox()
         self.cb_mesh_mode.addItems(["Create", "Use existing"])
@@ -1143,6 +1146,7 @@ class ExecuteBody(_Body):
         self.chk_files.setChecked(ex.get("files", False))
         self.chk_save.setChecked(ex.get("save", False))
         self.chk_solver.setChecked(ex.get("solver", False))
+        self.chk_use_api.setChecked(bool(ex.get("use_api", False)))
         if ex.get("mesh_mode"):
             i = self.cb_mesh_mode.findText(ex["mesh_mode"])
             if i >= 0:
@@ -1165,6 +1169,7 @@ class ExecuteBody(_Body):
             "save": self.chk_save.isChecked(),
             "solver": self.chk_solver.isChecked(),
             "mesh_mode": self.cb_mesh_mode.currentText(),
+            "use_api": self.chk_use_api.isChecked(),
         }
         return True
 
@@ -1272,4 +1277,3 @@ class NavDialogSession:
 
         dlg.finished.connect(_clear)
         return dlg
-

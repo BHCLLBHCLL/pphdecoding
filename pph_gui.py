@@ -21,6 +21,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from PyQt5.QtCore import (
@@ -3424,6 +3425,35 @@ class PphViewer(QMainWindow):
         self.log(f"Dialog — {dlg.windowTitle()}")
         if dlg.exec_() == QDialog.Accepted:
             self._commit_nav_ctx(key, ctx)
+            if key == "execute":
+                self._run_scflow_pipeline(ctx)
+
+    def _run_scflow_pipeline(self, ctx: dict) -> None:
+        """Execute 开关打开时：用 scFLOWpre API 构建 Model/Octree/Mesh。"""
+        plan = (ctx.get("session") or {}).get("execute") or {}
+        if not plan.get("use_api"):
+            return
+        if not self.archive_path:
+            QMessageBox.information(self, "提示", "请先打开 PPH 项目")
+            return
+        from automation import host_pipeline
+        from automation.pipeline_plan import (PipelinePlan,
+                                              steps_from_execute_plan)
+        steps = steps_from_execute_plan(plan)
+        if not steps:
+            QMessageBox.information(self, "提示", "Execute 计划未选择任何步骤")
+            return
+        out = Path(self.archive_path).with_suffix(".scflow_api.vbs")
+        PipelinePlan(project_path=self.archive_path,
+                     steps=steps).write_vbs(out)
+        run = host_pipeline.run_in_host(out, backend="manual")
+        self.log(f"scFLOWpre API plan -> {out}")
+        QMessageBox.information(
+            self, "scFLOWpre API",
+            f"已生成脚本：{out}\n\n"
+            f"请在 scFLOWpre 中 File → Execute VBScript 运行该脚本，\n"
+            f"完成后再点 Reload 查看 Model / Octree / Mesh。\n\n"
+            f"{run.get('hint', '')}")
 
     def reload(self) -> None:
         if self.archive_path:
