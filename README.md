@@ -114,6 +114,12 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
   新增管线符号探测（`--pipeline`，9 个 SCTprime/Zip/API 入口全部可解析）
   与 ZipLibrary 真实调用（`--expand-zip`，实验性）。
   编译：`powershell -ExecutionPolicy Bypass -File native\build.ps1`。
+  NativeBridge 第一批真实管线调用已实现：`CreateShapeGroupSet` /
+  `CreateShapeGroup` / `CreateMDL` 按 MSVC ABI 封装（16 字节
+  `{ptr, id}` 接口包装对象、sret/this 实参顺序），CLI 入口为
+  `--pipeline-create-set / --pipeline-create-group / --pipeline-create-mdl`；
+  SCTprime 宿主文档上下文（`[ctx+0xF8]`）未就绪时返回
+  `SCF_ERR_CONTEXT_NOT_READY`，不会崩溃。
 - `automation/batch_bridge.py`：Windows CLI 批处理桥（`scFLOWpreCLI` /
   `SCTpreCLI` / `SCTcombCLI` bat + `SCTpreCLIHelper`），支持命令构造与
   `all-cmdline` dry-run。

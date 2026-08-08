@@ -68,6 +68,101 @@ const PipelineSymbol kPipelineSymbols[] = {
     {L"scFLOWpreAPI_Bx64.dll", "?ExecuteVBS@scFLOWpre@@YA_NPEB_W@Z"},
 };
 
+const char* kCreateShapeGroupSetSymbol =
+    "?CreateShapeGroupSet@SCTprime@@YA?AVIShapeGroupSet@1@PEB_W@Z";
+const char* kCreateShapeGroupSymbol =
+    "?CreateShapeGroup@IShapeGroupSet@SCTprime@@QEAA?AVIShapeGroup@2@PEB_WAEAV?$vector@VISNode@SCTprime@@V?$allocator@VISNode@SCTprime@@@std@@@std@@@Z";
+const char* kCreateMDLSymbol =
+    "?CreateMDL@IShapeGroup@SCTprime@@QEAA_NXZ";
+
+struct PipelineApi {
+    void* create_set = nullptr;
+    void* create_group = nullptr;
+    void* create_mdl = nullptr;
+};
+
+PipelineApi g_pipeline_api;
+
+// SCTprime 5225.20302.20251223 private globals (module base + RVA).
+const unsigned __int64 kSctGlobalRva = 0xD212B8ull;
+const unsigned __int64 kCtxDocOffset = 0xF8ull;
+const int kInterfaceObjSize = 16;
+
+int g_last_exception_code = 0;
+void* g_last_exception_addr = nullptr;
+
+HMODULE find_module_handle(const wchar_t* name) {
+    for (const ModuleEntry& entry : g_modules) {
+        if (entry.handle != nullptr && entry.name == name) {
+            return entry.handle;
+        }
+    }
+    return nullptr;
+}
+
+int seh_filter(unsigned long code, PEXCEPTION_POINTERS ep) {
+    g_last_exception_code = static_cast<int>(code);
+    g_last_exception_addr = ep->ExceptionRecord->ExceptionAddress;
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+bool call_create_set_guarded(const wchar_t* name, void* out_obj) {
+    __try {
+        typedef void* (*CreateSetFn)(void* ret, const wchar_t* name);
+        CreateSetFn fn = reinterpret_cast<CreateSetFn>(g_pipeline_api.create_set);
+        fn(out_obj, name);
+        return true;
+    } __except (seh_filter(GetExceptionInformation()->ExceptionRecord->ExceptionCode,
+                           GetExceptionInformation())) {
+        return false;
+    }
+}
+
+bool call_create_group_guarded(void* thisptr, const wchar_t* name,
+                               void* out_obj, void* nodes) {
+    __try {
+        typedef void* (*CreateGroupFn)(void* thisptr, void* ret,
+                                       const wchar_t* name, void* nodes);
+        CreateGroupFn fn =
+            reinterpret_cast<CreateGroupFn>(g_pipeline_api.create_group);
+        fn(thisptr, out_obj, name, nodes);
+        return true;
+    } __except (seh_filter(GetExceptionInformation()->ExceptionRecord->ExceptionCode,
+                           GetExceptionInformation())) {
+        return false;
+    }
+}
+
+bool call_create_mdl_guarded(void* thisptr, bool* result) {
+    __try {
+        typedef bool (*CreateMdlFn)(void* thisptr);
+        CreateMdlFn fn =
+            reinterpret_cast<CreateMdlFn>(g_pipeline_api.create_mdl);
+        *result = fn(thisptr);
+        return true;
+    } __except (seh_filter(GetExceptionInformation()->ExceptionRecord->ExceptionCode,
+                           GetExceptionInformation())) {
+        return false;
+    }
+}
+
+int pipeline_context_ready_raw() {
+    HMODULE sct = find_module_handle(L"SCTprime_Bx64.dll");
+    if (sct == nullptr || g_pipeline_api.create_set == nullptr) {
+        return -1;
+    }
+    const unsigned char* global =
+        reinterpret_cast<const unsigned char*>(sct) + kSctGlobalRva;
+    const void* ctx = *reinterpret_cast<void* const*>(global + 8);
+    if (ctx == nullptr) {
+        return 0;
+    }
+    const void* doc =
+        *reinterpret_cast<void* const*>(reinterpret_cast<const unsigned char*>(ctx) +
+                                        kCtxDocOffset);
+    return doc != nullptr ? 1 : 0;
+}
+
 
 }  // namespace
 
@@ -95,6 +190,15 @@ SCF_API int scf_initialize(const wchar_t* programs_dir) {
             ++loaded;
         }
         g_modules.push_back(entry);
+    }
+    HMODULE sct = find_module_handle(L"SCTprime_Bx64.dll");
+    if (sct != nullptr) {
+        g_pipeline_api.create_set =
+            reinterpret_cast<void*>(GetProcAddress(sct, kCreateShapeGroupSetSymbol));
+        g_pipeline_api.create_group =
+            reinterpret_cast<void*>(GetProcAddress(sct, kCreateShapeGroupSymbol));
+        g_pipeline_api.create_mdl =
+            reinterpret_cast<void*>(GetProcAddress(sct, kCreateMDLSymbol));
     }
     return loaded;
 }
@@ -174,6 +278,98 @@ SCF_API int scf_call_zip_expand(const wchar_t* zip_path,
     return -3;
 }
 
+SCF_API int scf_pipeline_context_ready(void) {
+    return pipeline_context_ready_raw();
+}
+
+SCF_API int scf_pipeline_create_shape_group_set(const wchar_t* name,
+                                                void* out_obj, int* err) {
+    if (out_obj == nullptr || err == nullptr) {
+        return 0;
+    }
+    *err = SCF_ERR_ARG;
+    if (name == nullptr) {
+        return 0;
+    }
+    if (g_pipeline_api.create_set == nullptr) {
+        *err = SCF_ERR_SYMBOL;
+        return 0;
+    }
+    int ready = pipeline_context_ready_raw();
+    if (ready != 1) {
+        *err = SCF_ERR_CONTEXT_NOT_READY;
+        return 0;
+    }
+    memset(out_obj, 0, kInterfaceObjSize);
+    g_last_exception_code = 0;
+    g_last_exception_addr = nullptr;
+    if (!call_create_set_guarded(name, out_obj)) {
+        *err = SCF_ERR_EXCEPTION;
+        return 0;
+    }
+    if (*reinterpret_cast<void**>(out_obj) == nullptr) {
+        *err = SCF_ERR_NULL_OBJECT;
+        return 0;
+    }
+    *err = SCF_ERR_OK;
+    return 1;
+}
+
+SCF_API int scf_pipeline_create_shape_group(unsigned __int64 set_handle,
+                                            const wchar_t* name,
+                                            void* out_obj, int* err) {
+    if (set_handle == 0 || out_obj == nullptr || err == nullptr) {
+        return 0;
+    }
+    *err = SCF_ERR_ARG;
+    if (name == nullptr) {
+        return 0;
+    }
+    if (g_pipeline_api.create_group == nullptr) {
+        *err = SCF_ERR_SYMBOL;
+        return 0;
+    }
+    memset(out_obj, 0, kInterfaceObjSize);
+    // Empty std::vector<ISNode> under MSVC: three null pointers.
+    void* empty_nodes[3] = {nullptr, nullptr, nullptr};
+    g_last_exception_code = 0;
+    g_last_exception_addr = nullptr;
+    if (!call_create_group_guarded(reinterpret_cast<void*>(set_handle),
+                                   name, out_obj, empty_nodes)) {
+        *err = SCF_ERR_EXCEPTION;
+        return 0;
+    }
+    if (*reinterpret_cast<void**>(out_obj) == nullptr) {
+        *err = SCF_ERR_NULL_OBJECT;
+        return 0;
+    }
+    *err = SCF_ERR_OK;
+    return 1;
+}
+
+SCF_API int scf_pipeline_create_mdl(unsigned __int64 group_handle,
+                                    int* ok, int* err) {
+    if (group_handle == 0 || ok == nullptr || err == nullptr) {
+        return 0;
+    }
+    *err = SCF_ERR_ARG;
+    if (g_pipeline_api.create_mdl == nullptr) {
+        *err = SCF_ERR_SYMBOL;
+        return 0;
+    }
+    bool result = false;
+    g_last_exception_code = 0;
+    g_last_exception_addr = nullptr;
+    if (!call_create_mdl_guarded(reinterpret_cast<void*>(group_handle),
+                                 &result)) {
+        *err = SCF_ERR_EXCEPTION;
+        return 0;
+    }
+    *ok = result ? 1 : 0;
+    *err = SCF_ERR_OK;
+    return 1;
+}
+
 SCF_API void scf_finalize(void) {
     for (ModuleEntry& entry : g_modules) {
         if (entry.handle != nullptr) {
@@ -183,6 +379,7 @@ SCF_API void scf_finalize(void) {
     }
     g_modules.clear();
     g_programs_dir.clear();
+    g_pipeline_api = PipelineApi{};
 }
 
 }  // extern "C"
