@@ -46,8 +46,9 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
   （归档信息、GPH/OCT/MDL 统计、xenv/prp/xml/js 摘要、快照/Parasolid）；
 - **Execute 面板开关**：“使用 scFLOWpre API 构建 Model / Octree / Mesh”
   默认关闭；关闭时保持原生查看/解析行为，打开时勾选 BAM/Octree/Mesh 并
-  确认后生成可在 scFLOWpre 宿主中运行的 VBS（BAM → Octree → Mesh），
-  再在宿主中 `File → Execute VBScript` 执行，完成 `Reload` 查看结果。
+  确认/Apply 后生成可在 scFLOWpre 宿主中运行的 VBS（BAM → Octree → Mesh
+  + SaveProject + 完成标记）；在宿主中执行脚本后，GUI 会自动轮询标记并
+  Reload，无需手动刷新。
 - **Draw Window**（中央 3D）：分组控制面板（网格组/显示/着色/视图按钮、
   图层开关、剖面裁剪 X/Y/Z 滑动条），着色/线框模式、网格线叠加、
   **剖面裁剪**、**橡皮框缩放**、Fit/Reset、坐标方向指示器、Qt 图例

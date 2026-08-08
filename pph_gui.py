@@ -3420,8 +3420,11 @@ class PphViewer(QMainWindow):
         if bbox is not None:
             ab = bbox.button(QDialogButtonBox.Apply)
             if ab is not None:
-                ab.clicked.connect(
-                    lambda _=False, k=key, c=ctx: self._commit_nav_ctx(k, c))
+                def _apply(_=False, k=key, c=ctx):
+                    self._commit_nav_ctx(k, c)
+                    if k == "execute":
+                        self._run_scflow_pipeline(c)
+                ab.clicked.connect(_apply)
         self.log(f"Dialog — {dlg.windowTitle()}")
         if dlg.exec_() == QDialog.Accepted:
             self._commit_nav_ctx(key, ctx)
@@ -3432,28 +3435,45 @@ class PphViewer(QMainWindow):
         """Execute 开关打开时：用 scFLOWpre API 构建 Model/Octree/Mesh。"""
         plan = (ctx.get("session") or {}).get("execute") or {}
         if not plan.get("use_api"):
+            self.log(
+                "Execute 计划已保存（未启用 scFLOWpre API，使用原生查看模式）")
             return
         if not self.archive_path:
             QMessageBox.information(self, "提示", "请先打开 PPH 项目")
             return
-        from automation import host_pipeline
-        from automation.pipeline_plan import (PipelinePlan,
+        from automation.pipeline_plan import (build_execute_vbs,
                                               steps_from_execute_plan)
         steps = steps_from_execute_plan(plan)
         if not steps:
-            QMessageBox.information(self, "提示", "Execute 计划未选择任何步骤")
+            self.log("Execute 计划未选择任何步骤")
             return
         out = Path(self.archive_path).with_suffix(".scflow_api.vbs")
-        PipelinePlan(project_path=self.archive_path,
-                     steps=steps).write_vbs(out)
-        run = host_pipeline.run_in_host(out, backend="manual")
-        self.log(f"scFLOWpre API plan -> {out}")
-        QMessageBox.information(
-            self, "scFLOWpre API",
-            f"已生成脚本：{out}\n\n"
-            f"请在 scFLOWpre 中 File → Execute VBScript 运行该脚本，\n"
-            f"完成后再点 Reload 查看 Model / Octree / Mesh。\n\n"
-            f"{run.get('hint', '')}")
+        marker = Path(self.archive_path).with_suffix(".scflow_api.done")
+        try:
+            marker.unlink(missing_ok=True)
+        except OSError:
+            pass
+        build_execute_vbs(self.archive_path, plan, out, marker=marker)
+        self.log(f"scFLOWpre API 脚本已生成：{out}")
+        self.log(
+            "请在 scFLOWpre 中 File → Execute VBScript 运行该脚本；"
+            "完成后将自动刷新 Model / Octree / Mesh。")
+        self._start_api_refresh_poll(marker)
+
+    def _start_api_refresh_poll(self, marker: Path) -> None:
+        """轮询宿主 VBS 写出的完成标记，出现后自动 Reload。"""
+        def poll() -> None:
+            if marker.is_file():
+                self.log("scFLOWpre API 完成，正在刷新项目…")
+                try:
+                    marker.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                self.reload()
+                self.log("已刷新 Model / Octree / Mesh")
+                return
+            QTimer.singleShot(2000, poll)
+        QTimer.singleShot(2000, poll)
 
     def reload(self) -> None:
         if self.archive_path:

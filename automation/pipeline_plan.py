@@ -78,6 +78,29 @@ def steps_from_execute_plan(plan: dict) -> list[str]:
     return steps
 
 
+def build_execute_vbs(project_path: str | Path, plan: dict,
+                      output: str | Path,
+                      marker: Optional[str | Path] = None,
+                      include_save: bool = True) -> Path:
+    """生成可在 scFLOWpre 宿主中执行的 BAM→Octree→Mesh VBS。
+
+    PPH 项目默认在末尾追加 ``Doc_.SaveProject``；传入 ``marker`` 时在脚本
+    末尾写一个完成标记文件，供 GUI 轮询后自动 Reload。
+    """
+    steps = steps_from_execute_plan(plan)
+    if include_save and Path(project_path).suffix.lower() == ".pph":
+        steps.append("save_project")
+    actions = PipelinePlan(project_path=str(project_path),
+                           steps=steps).to_vbs_actions()
+    if marker is not None:
+        actions.append('Set fso_ = CreateObject("Scripting.FileSystemObject")')
+        actions.append(f'Set tf_ = fso_.CreateTextFile("{marker}", True)')
+        actions.append("tf_.Close")
+    from automation.vbs_bridge import write_vbs_file
+    return write_vbs_file(actions, output,
+                          title="pph_gui scFLOWpre API execute")
+
+
 ROLE_MAP: dict[str, tuple[str, ...]] = {
     "mdl": ("surface_part_mdl", "surface_ridge_mdl"),
     "oct": ("octree",),

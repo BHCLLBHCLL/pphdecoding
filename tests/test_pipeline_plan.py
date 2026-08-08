@@ -14,6 +14,7 @@ from automation.history_vbs import (decode_vbs,  # noqa: E402
 from automation.pipeline_plan import (LOCKED_COMMANDS,  # noqa: E402
                                       UNLOCKED_COMMANDS,
                                       PipelinePlan,
+                                      build_execute_vbs,
                                       steps_from_execute_plan)
 from automation.vbs_bridge import read_vbs_lines  # noqa: E402
 
@@ -129,6 +130,37 @@ class TestPipelinePlan(unittest.TestCase):
             steps_from_execute_plan({"oct": True}),
             ["generate_octree", "set_mode_octree"])
         self.assertEqual(steps_from_execute_plan({}), [])
+
+    def test_build_execute_vbs_pph_with_marker(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            out = td / "execute.vbs"
+            marker = td / "execute.done"
+            build_execute_vbs(
+                r"D:\case\box.pph",
+                {"bam": True, "oct": True, "mesh": True},
+                out, marker=marker)
+            text = out.read_text(encoding="utf-8-sig")
+            self.assertIn('Doc_.OpenProject "D:\\case\\box.pph", False', text)
+            self.assertIn("MeshingGroup_.BuildAnalysisModel", text)
+            self.assertIn("MeshingGroup_.CreateOctree", text)
+            self.assertIn("MeshingGroup_.CreateMeshMonitor", text)
+            self.assertIn('Doc_.SaveProject "D:\\case\\box.pph"', text)
+            self.assertIn(f'Set tf_ = fso_.CreateTextFile("{marker}", True)',
+                          text)
+
+    def test_build_execute_vbs_cad_no_save(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            out = td / "execute.vbs"
+            build_execute_vbs(r"D:\case\box.x_t",
+                              {"bam": True, "oct": True, "mesh": True},
+                              out)
+            text = out.read_text(encoding="utf-8-sig")
+            self.assertIn('Doc_.OpenCadFile "D:\\case\\box.x_t"', text)
+            self.assertNotIn("Doc_.SaveProject", text)
 
     def test_default_steps_use_locked_commands(self):
         plan = PipelinePlan(project_path="box.x_t")
