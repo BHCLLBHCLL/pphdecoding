@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PipelinePlan / VBS 验收脚本测试（含 box_vbs.vbs 锁定回归）。"""
+"""PipelinePlan / VBS 验收脚本测试（含 box_vbs*.vbs 锁定回归）。"""
 
 import sys
 import tempfile
@@ -12,11 +12,14 @@ sys.path.insert(0, str(ROOT))
 from automation.history_vbs import (decode_vbs,  # noqa: E402
                                     parse_history_file)
 from automation.pipeline_plan import (LOCKED_COMMANDS,  # noqa: E402
+                                      UNLOCKED_COMMANDS,
                                       PipelinePlan)
 from automation.vbs_bridge import read_vbs_lines  # noqa: E402
 
 BOX_PPH = ROOT / "box.pph"
 BOX_VBS = ROOT / "tests" / "box_vbs.vbs"
+BOX_VBS_V3 = ROOT / "tests" / "box_vbs_v3.vbs"
+BOX_VBS_V4 = ROOT / "tests" / "box_vbs_v4.vbs"
 
 
 class TestLockedCommands(unittest.TestCase):
@@ -24,49 +27,69 @@ class TestLockedCommands(unittest.TestCase):
     def setUpClass(cls):
         cls.actions = parse_history_file(str(BOX_VBS))
         cls.commands = {a["command"] for a in cls.actions}
+        cls.commands_v3 = {
+            a["command"] for a in parse_history_file(str(BOX_VBS_V3))}
+        cls.commands_v4 = {
+            a["command"] for a in parse_history_file(str(BOX_VBS_V4))}
 
     def test_recording_present(self):
         self.assertGreater(len(self.actions), 1000)
 
     def test_locked_commands_are_recorded(self):
         expected = {
-            "open_cad_file": "Doc_.OpenCadFile",
-            "parts_control": "Conditions_.SetPartsControl",
-            "generate_octree": "MeshingGroup_.CreateOctree",
-            "set_mode_octree": "Doc_.SetModeOctree",
-            "generate_mesh": "MeshingGroup_.CreateMeshMonitor",
-            "set_mode_mesh": "Doc_.SetModeMesh",
-            "save_project": "Doc_.SaveProject",
+            "open_cad_file": ("Doc_.OpenCadFile", self.commands),
+            "parts_control": ("Conditions_.SetPartsControl", self.commands),
+            "open_project": ("Doc_.OpenProject", self.commands_v4),
+            "begin_solid_edit": ("MeshingGroup_.BeginSolidEdit",
+                                 self.commands_v4),
+            "build_analysis_model": ("MeshingGroup_.BuildAnalysisModel",
+                                     self.commands_v3),
+            "generate_octree": ("MeshingGroup_.CreateOctree", self.commands),
+            "set_mode_octree": ("Doc_.SetModeOctree", self.commands),
+            "generate_mesh": ("MeshingGroup_.CreateMeshMonitor",
+                              self.commands),
+            "set_mode_mesh": ("Doc_.SetModeMesh", self.commands),
+            "save_project": ("Doc_.SaveProject", self.commands),
         }
-        for key, command in expected.items():
-            self.assertIn(command, self.commands,
-                          f"locked command {key} missing in box_vbs.vbs")
+        for key, (command, cmds) in expected.items():
+            self.assertIn(command, cmds,
+                          f"locked command {key} missing in box_vbs*.vbs")
         self.assertIn("Doc_.WaitForWorker", self.commands)
 
     def test_locked_command_line_numbers(self):
         # 行号证据锁定：与 automation/pipeline_plan.py 中的注释一一对应，
         # 录制文件或命令映射变更时此处必须同步更新。
-        lines = decode_vbs(BOX_VBS.read_bytes()).splitlines()
-        expected = {
-            "open_cad_file": (14, "Doc_.OpenCadFile"),
-            "parts_control": (18, "Conditions_.SetPartsControl"),
-            "generate_octree": (3110, "MeshingGroup_.CreateOctree"),
-            "set_mode_octree": (3112, "Doc_.SetModeOctree"),
-            "generate_mesh": (5276, "MeshingGroup_.CreateMeshMonitor"),
-            "generate_mesh_wait": (5283, "Doc_.WaitForWorker"),
-            "set_mode_mesh": (5285, "Doc_.SetModeMesh"),
-            "save_project": (7209, "Doc_.SaveProject"),
+        lines = {
+            BOX_VBS: decode_vbs(BOX_VBS.read_bytes()).splitlines(),
+            BOX_VBS_V3: decode_vbs(BOX_VBS_V3.read_bytes()).splitlines(),
+            BOX_VBS_V4: decode_vbs(BOX_VBS_V4.read_bytes()).splitlines(),
         }
-        for key, (lineno, command) in expected.items():
-            with self.subTest(key=key, lineno=lineno):
-                self.assertIn(command, lines[lineno - 1],
+        expected = [
+            (BOX_VBS, 14, "Doc_.OpenCadFile"),
+            (BOX_VBS, 18, "Conditions_.SetPartsControl"),
+            (BOX_VBS_V4, 14, "MeshingGroup_.BeginSolidEdit"),
+            (BOX_VBS_V4, 4352, "Doc_.OpenProject"),
+            (BOX_VBS_V3, 210, "MeshingGroup_.BuildAnalysisModel"),
+            (BOX_VBS, 3110, "MeshingGroup_.CreateOctree"),
+            (BOX_VBS, 3112, "Doc_.SetModeOctree"),
+            (BOX_VBS, 5276, "MeshingGroup_.CreateMeshMonitor"),
+            (BOX_VBS, 5283, "Doc_.WaitForWorker"),
+            (BOX_VBS, 5285, "Doc_.SetModeMesh"),
+            (BOX_VBS, 7209, "Doc_.SaveProject"),
+        ]
+        for path, lineno, command in expected:
+            with self.subTest(path=path.name, lineno=lineno,
+                              command=command):
+                self.assertIn(command, lines[path][lineno - 1],
                               f"line {lineno} does not contain {command}")
 
-    def test_unlocked_commands_not_recorded(self):
-        # 未录制命令保持“未验证”状态：它们不应出现在锁定表中
-        for key in ("begin_wrapping", "execute_wrapping",
-                    "build_analysis_model", "quit"):
+    def test_wrapping_commands_removed_from_vbs_defaults(self):
+        # Begin/Execute Wrapping 在 v1-v4 录制中均未出现，
+        # 已从 VBS 默认命令中移除，改走 NativeBridge。
+        for key in ("begin_wrapping", "execute_wrapping"):
             self.assertNotIn(key, LOCKED_COMMANDS)
+            self.assertNotIn(key, UNLOCKED_COMMANDS)
+        self.assertNotIn("quit", LOCKED_COMMANDS)
 
 
 class TestPipelinePlan(unittest.TestCase):
@@ -78,7 +101,7 @@ class TestPipelinePlan(unittest.TestCase):
         plan2 = PipelinePlan(project_path=r"C:\case\case.pph",
                              steps=["generate_octree"])
         self.assertEqual(plan2.open_command(),
-                         'Doc_.OpenProject "C:\\case\\case.pph"')
+                         'Doc_.OpenProject "C:\\case\\case.pph", False')
 
     def test_to_vbs_actions_multiline_mesh(self):
         plan = PipelinePlan(project_path=r"C:\case\case.x_t",
@@ -91,8 +114,10 @@ class TestPipelinePlan(unittest.TestCase):
     def test_default_steps_use_locked_commands(self):
         plan = PipelinePlan(project_path="box.x_t")
         actions = plan.to_vbs_actions()
+        self.assertIn("MeshingGroup_.BeginSolidEdit", actions)
         self.assertTrue(any(a.startswith("Conditions_.SetPartsControl")
                             for a in actions))
+        self.assertIn("MeshingGroup_.BuildAnalysisModel", actions)
         self.assertIn("MeshingGroup_.CreateOctree", actions)
         self.assertIn("Doc_.SetModeOctree", actions)
         self.assertIn("Doc_.SetModeMesh", actions)

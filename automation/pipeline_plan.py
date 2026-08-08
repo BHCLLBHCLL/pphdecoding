@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """M2 预处理管线计划与 VBS 验收脚本生成。
 
-命令名以 scFLOWpre 真实录制的 ``tests/box_vbs.vbs`` 为准：
+命令名以 scFLOWpre 真实录制的 ``tests/box_vbs*.vbs``（v1/v3/v4）为准：
 
 - ``LOCKED_COMMANDS``：已在录制中出现并锁定的命令（含行号证据）；
-- ``UNLOCKED_COMMANDS``：录制中未出现、仍待验证的占位命令。
+- ``UNLOCKED_COMMANDS``：录制中未出现、仍待验证的占位命令；
+- Wrapping 高层命令（Begin/Execute Wrapping）在 v1-v4 录制中均未出现，
+  由 NativeBridge 走 SCTprime 原生入口，不作为 VBS 默认管线。
 """
 
 from __future__ import annotations
@@ -17,26 +19,27 @@ from typing import Optional
 
 from pph_parser import PphArchive
 
-# 实测锁定命令（来源 tests/box_vbs.vbs，括号内为行号）
+# 实测锁定命令（来源 tests/box_vbs*.vbs，括号内为行号）
 LOCKED_COMMANDS: dict[str, str] = {
-    "open_cad_file": 'Doc_.OpenCadFile "{path}"',                    # :14
-    "parts_control": (                                               # :16-18
+    "open_cad_file": 'Doc_.OpenCadFile "{path}"',                    # :14 (v1)
+    "open_project": 'Doc_.OpenProject "{path}", False',              # :4352 (v4)
+    "begin_solid_edit": "MeshingGroup_.BeginSolidEdit",              # :14 (v4)
+    "parts_control": (                                               # :16-18 (v1)
         'Conditions_.SetPartsControl "Wrapping", False'),
-    "generate_octree": "MeshingGroup_.CreateOctree",                 # :3110
-    "set_mode_octree": "Doc_.SetModeOctree",                         # :3112
-    "generate_mesh": (                                               # :5276,5283
+    "build_analysis_model": "MeshingGroup_.BuildAnalysisModel",      # :210 (v3)
+    "generate_octree": "MeshingGroup_.CreateOctree",                 # :3110 (v1)
+    "set_mode_octree": "Doc_.SetModeOctree",                         # :3112 (v1)
+    "generate_mesh": (                                               # :5276,5283 (v1)
         "MeshingGroup_.CreateMeshMonitor\nDoc_.WaitForWorker"),
-    "set_mode_mesh": "Doc_.SetModeMesh",                             # :5285
-    "save_project": 'Doc_.SaveProject "{path}"',                     # :7209
+    "set_mode_mesh": "Doc_.SetModeMesh",                             # :5285 (v1)
+    "save_project": 'Doc_.SaveProject "{path}"',                     # :7209 (v1)
 }
 
-# 录制中未出现、仍为待验证的默认命令（实机录制后移入 LOCKED_COMMANDS）
+# 录制中未出现、仍为待验证的占位命令（实机录制后移入 LOCKED_COMMANDS）。
+# BeginWrapping / ExecuteWrapping 在 v1-v4 录制中均未出现，VBS 层不暴露，
+# 由 NativeBridge 走 SCTprime 原生入口（CreateWrapOctreeByDefaultParam /
+# ExecuteWrapping），不再作为 VBS 默认管线步骤。
 UNLOCKED_COMMANDS: dict[str, str] = {
-    "open_project": 'Doc_.OpenProject "{path}"',
-    "prepare_parts": "Doc_.ReturnToPrepareParts",
-    "begin_wrapping": "Doc_.BeginWrapping",
-    "execute_wrapping": "Doc_.ExecuteWrapping",
-    "build_analysis_model": "Doc_.BuildAnalysisModel",
     "quit": "App_.Quit",
 }
 
@@ -45,9 +48,11 @@ DEFAULT_COMMANDS: dict[str, str] = {
     **LOCKED_COMMANDS,
 }
 
-# 默认执行步骤（来自 box_vbs.vbs 的实际流程；打开命令按文件类型自动选择）
+# 默认执行步骤（来自 box_vbs*.vbs 的实际流程；打开命令按文件类型自动选择）
 DEFAULT_STEPS = [
+    "begin_solid_edit",
     "parts_control",
+    "build_analysis_model",
     "generate_octree",
     "set_mode_octree",
     "generate_mesh",

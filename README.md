@@ -118,10 +118,12 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
   `SCTpreCLI` / `SCTcombCLI` bat + `SCTpreCLIHelper`），支持命令构造与
   `all-cmdline` dry-run。
 - `automation/pipeline_plan.py`：生成 VBS 验收计划并校验 PPH 中的
-  MDL/OCT/GPH 成员；命令已用 `tests/box_vbs.vbs` 真实录制锁定
-  （`LOCKED_COMMANDS`：OpenCadFile / SetPartsControl / CreateOctree /
+  MDL/OCT/GPH 成员；命令已用 `tests/box_vbs*.vbs`（v1/v3/v4）真实录制锁定
+  （`LOCKED_COMMANDS`：OpenCadFile / OpenProject(path, False) /
+  BeginSolidEdit / SetPartsControl / BuildAnalysisModel / CreateOctree /
   SetModeOctree / CreateMeshMonitor + WaitForWorker / SetModeMesh /
-  SaveProject），未录制步骤保留在 `UNLOCKED_COMMANDS` 待实机验证。
+  SaveProject），未录制步骤保留在 `UNLOCKED_COMMANDS`；Wrapping 高层命令
+  在 v1-v4 录制中均未出现，改由 NativeBridge 走 SCTprime 原生入口。
 
 新增测试：`tests/test_vbs_bridge.py`、`tests/test_history_vbs.py`、
 `tests/test_batch_bridge.py`、`tests/test_native_bridge.py`、
