@@ -110,14 +110,19 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
   供条件 Schema 补全与自动化回放使用。
 - `native/scflow_bridge.{h,cpp}` + `native/build.ps1`：C ABI 桥原型，
   MSVC 编译后由 `native_bridge.py` 加载；已实测 11 个关键 DLL 全部
-  可加载，`ExecuteVBS` / `CreateShapeGroupSet` / `ExpandZip` 符号命中。
+  可加载，`ExecuteVBS` / `CreateShapeGroupSet` / `ExpandZip` 符号命中；
+  新增管线符号探测（`--pipeline`，9 个 SCTprime/Zip/API 入口全部可解析）
+  与 ZipLibrary 真实调用（`--expand-zip`，实验性）。
   编译：`powershell -ExecutionPolicy Bypass -File native\build.ps1`。
 - `automation/batch_bridge.py`：Windows CLI 批处理桥（`scFLOWpreCLI` /
   `SCTpreCLI` / `SCTcombCLI` bat + `SCTpreCLIHelper`），支持命令构造与
   `all-cmdline` dry-run。
+- `automation/pipeline_plan.py`：生成 Prepare→Wrapping→BAM→Octree→Mesh
+  VBS 验收计划并校验 PPH 中的 MDL/OCT/GPH 成员。
 
 新增测试：`tests/test_vbs_bridge.py`、`tests/test_history_vbs.py`、
-`tests/test_batch_bridge.py`、`tests/test_native_bridge.py`。
+`tests/test_batch_bridge.py`、`tests/test_native_bridge.py`、
+`tests/test_pipeline_plan.py`。
 
 依赖：仅 `numpy`（Python 3.10+）。体网格 `.gph` 的深度统计在检测到
 [gphdecoding](https://github.com/) 仓（同级目录）时自动调用其 `gph_model`，
