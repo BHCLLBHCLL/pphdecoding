@@ -1,0 +1,78 @@
+{
+  "schema_version": "1",
+  "generated_at": "2026-08-08T09:01:32.160795+00:00",
+  "root": "D:\\training\\cgns\\pphdecoding",
+  "sample_count": 1,
+  "samples": [
+    {
+      "path": "box.pph",
+      "member_count": 9,
+      "total_size": 4538247,
+      "members": [
+        {
+          "name": "main.js",
+          "role": "script",
+          "size": 27081,
+          "compress_size": 27086,
+          "sha256": "56bfe03a324a05386fcb07b4c5b6cf0345f976d9fa29962a483da10833d8caf6"
+        },
+        {
+          "name": "main.prp",
+          "role": "property_db",
+          "size": 890029,
+          "compress_size": 890169,
+          "sha256": "5096b59a447eaddb6135124f0cf353f2e66d3f2f372b98e7900d6e601d03bd79"
+        },
+        {
+          "name": "main.sctsnapshot",
+          "role": "snapshot",
+          "size": 22741,
+          "compress_size": 22746,
+          "sha256": "cc49a2b5acfcd7bcdc9d370cfd38971d47f1f89f3e8b5adc610761f136d35cd2"
+        },
+        {
+          "name": "main.xenv",
+          "role": "environment",
+          "size": 29449,
+          "compress_size": 29454,
+          "sha256": "fbda61a1dda795e17d5ce167dd5499bd6cfcbe110ad38744d0ddbd7d9345d66f"
+        },
+        {
+          "name": "main.xml",
+          "role": "project_xml",
+          "size": 399671,
+          "compress_size": 399736,
+          "sha256": "4a464c47b3df58a7e0561bc268398f440effef816231bf4b89b40ffd514bb81a"
+        },
+        {
+          "name": "meshinggroup1.gph",
+          "role": "volume_mesh_gph",
+          "size": 141902,
+          "compress_size": 141927,
+          "sha256": "862cabe386090bf5908312fed06665c726d6e103ebfe641e07850a7693bafd14"
+        },
+        {
+          "name": "meshinggroup1.oct",
+          "role": "octree",
+          "size": 12609,
+          "compress_size": 12614,
+          "sha256": "ae518e473afc97053e0ff69ef3dd30f44116b437694304bb987423c7790b8200"
+        },
+        {
+          "name": "meshinggroup1_part.mdl",
+          "role": "surface_part_mdl",
+          "size": 2969210,
+          "compress_size": 2969665,
+          "sha256": "607083f7e5531d318b19682e22621cabb223c1ba49672eb9a0cc1bfb1159b5fa"
+        },
+        {
+          "name": "meshinggroup1_ridge.mdl",
+          "role": "surface_ridge_mdl",
+          "size": 45555,
+          "compress_size": 45565,
+          "sha256": "7b51d6235c5e4ecea0998cea05957c1f7bd86c0c53a220d839193b0ebda63c87"
+        }
+      ]
+    }
+  ]
+}
