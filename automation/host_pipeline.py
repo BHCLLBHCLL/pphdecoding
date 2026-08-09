@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 import scflowpre_probe
+from automation.history_vbs import decode_vbs
 from automation.vbs_bridge import write_vbs_file
 
 CLSID = "{9F8D2C1A-3B4E-4C5D-8E6F-1A2B3C4D5E6F}"
@@ -254,7 +255,37 @@ def _run_com_vbs(vbs_path: Path, timeout: float) -> dict:
         pythoncom.CoInitialize()
         try:
             app = win32com.client.Dispatch(PROGID_HOST)
-            ok = app.ExecuteVBSWithFile(str(vbs_path))
+            code = decode_vbs(Path(vbs_path).read_bytes())
+            last_error: Optional[Exception] = None
+            ok: Optional[bool] = None
+            # 1) 手册方法形式：ExecuteVBSWithFile(path)
+            try:
+                ok = bool(app.ExecuteVBSWithFile(str(vbs_path)))
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+            # 2) 部分 COM 接口把该方法暴露为属性（读返回 bool，写触发执行）
+            if ok is None:
+                try:
+                    app.ExecuteVBSWithFile = str(vbs_path)
+                    ok = True
+                except Exception as exc:  # noqa: BLE001
+                    last_error = exc
+            # 3) ExecuteVBS(code) 直接传脚本文本
+            if ok is None:
+                try:
+                    ok = bool(app.ExecuteVBS(code))
+                except Exception as exc:  # noqa: BLE001
+                    last_error = exc
+            # 4) ExecuteVBS 属性赋值形式
+            if ok is None:
+                try:
+                    app.ExecuteVBS = code
+                    ok = True
+                except Exception as exc:  # noqa: BLE001
+                    last_error = exc
+            if ok is None:
+                raise last_error or RuntimeError(
+                    "no ExecuteVBS strategy worked")
             result["ok"] = bool(ok)
         except Exception as exc:  # noqa: BLE001
             result["error"] = repr(exc)
