@@ -939,6 +939,40 @@ class OctreeParamBody(_Body):
         v.addWidget(mode)
         tabs = QTabWidget()
 
+        # Basic setting（对应手册 Basic Setting）
+        basic = QWidget(); bf = QFormLayout(basic)
+        self.rb_len = QRadioButton("Input by length")
+        self.rb_param = QRadioButton("Input by parameters")
+        self.rb_len.setChecked(True)
+        row_len = QHBoxLayout(); row_len.addWidget(self.rb_len)
+        row_len.addWidget(self.rb_param)
+        self.sp_min_oct = _spin_f(8, 0, 1e6, 0.001)
+        self.chk_max = QCheckBox("Restrict maximum octant size")
+        self.sp_max_oct = _spin_f(8, 0, 1e6, 0.01)
+        self.sp_root_ratio = _spin_f(4, 1.0, 10.0, 1.5)
+        self.sp_max_level = QSpinBox(); self.sp_max_level.setRange(1, 30)
+        self.sp_max_level.setValue(6)
+        self.chk_min_level = QCheckBox("Restrict minimum refinement level")
+        self.sp_min_level = QSpinBox(); self.sp_min_level.setRange(0, 30)
+        self.sp_min_level.setValue(0)
+        self.chk_center = QCheckBox("Specify center of octree")
+        self.sp_cx = _spin_f(8, -1e6, 1e6, 0)
+        self.sp_cy = _spin_f(8, -1e6, 1e6, 0)
+        self.sp_cz = _spin_f(8, -1e6, 1e6, 0)
+        bf.addRow("Input method", row_len)
+        bf.addRow("Minimum octant size", self.sp_min_oct)
+        bf.addRow(self.chk_max, self.sp_max_oct)
+        bf.addRow("Size ratio of root octant", self.sp_root_ratio)
+        bf.addRow("Maximum refinement level", self.sp_max_level)
+        bf.addRow(self.chk_min_level, self.sp_min_level)
+        bf.addRow(self.chk_center,
+                  QLabel("X / Y / Z"))
+        row_center = QHBoxLayout()
+        row_center.addWidget(self.sp_cx); row_center.addWidget(self.sp_cy)
+        row_center.addWidget(self.sp_cz)
+        bf.addRow("", row_center)
+        tabs.addTab(basic, "Basic")
+
         # Octant / solid facet parameters（OCT_MESH）
         d = QWidget(); df = QFormLayout(d)
         self.sp_flen = _spin_f(6, 0, 1e6, 1)      # FACET_LENGTH_FACTOR
@@ -999,6 +1033,70 @@ class OctreeParamBody(_Body):
         of.addRow("OCT length param ITR", self.sp_oct_itr)
         tabs.addTab(o, "OCT Length")
 
+        # Region size settings（手册 Size Settings to Region）
+        rs = QWidget(); rsv = QVBoxLayout(rs)
+        self.cb_rs_region = QComboBox()
+        self.sp_rs_size = _spin_f(8, 0, 1e6, 0.25)
+        self.sp_rs_range = _spin_f(4, 0, 1e6, 2)
+        self.chk_rs_eval = QCheckBox(
+            "Evaluate the influence ranges by the size of basic settings")
+        row_rs = QHBoxLayout()
+        row_rs.addWidget(QLabel("Region")); row_rs.addWidget(self.cb_rs_region, 1)
+        row_rs.addWidget(QLabel("Size")); row_rs.addWidget(self.sp_rs_size)
+        row_rs.addWidget(QLabel("Influence range"))
+        row_rs.addWidget(self.sp_rs_range)
+        self.btn_rs_apply = QPushButton("<<Apply")
+        self.btn_rs_confirm = QPushButton("Confirm Size")
+        row_rs.addWidget(self.btn_rs_apply)
+        row_rs.addWidget(self.btn_rs_confirm)
+        rsv.addLayout(row_rs)
+        rsv.addWidget(self.chk_rs_eval)
+        rsv.addStretch(1)
+        tabs.addTab(rs, "Region Size")
+
+        # Region angle settings（手册 Angle Settings to Region）
+        ra = QWidget(); rav = QVBoxLayout(ra)
+        self.cb_ra_region = QComboBox()
+        self.sp_ra_angle = _spin_f(3, 0, 180, 10)
+        self.sp_ra_range = _spin_f(4, 0, 1e6, 2)
+        self.chk_ra_restrict = QCheckBox("Restrict minimum size")
+        self.sp_ra_min = _spin_f(8, 0, 1e6, 0.001)
+        self.chk_ra_all = QCheckBox("Set minimum size limits for all regions")
+        row_ra = QHBoxLayout()
+        row_ra.addWidget(QLabel("Region")); row_ra.addWidget(self.cb_ra_region, 1)
+        row_ra.addWidget(QLabel("Angle")); row_ra.addWidget(self.sp_ra_angle)
+        row_ra.addWidget(QLabel("Influence range"))
+        row_ra.addWidget(self.sp_ra_range)
+        self.btn_ra_apply = QPushButton("<<Apply")
+        row_ra.addWidget(self.btn_ra_apply)
+        rav.addLayout(row_ra)
+        row_ra_min = QHBoxLayout()
+        row_ra_min.addWidget(self.chk_ra_restrict)
+        row_ra_min.addWidget(self.sp_ra_min)
+        rav.addLayout(row_ra_min)
+        rav.addWidget(self.chk_ra_all)
+        rav.addStretch(1)
+        tabs.addTab(ra, "Region Angle")
+
+        # Region proximity settings（手册 Proximity Settings to Region）
+        rp = QWidget(); rpv = QVBoxLayout(rp)
+        self.cb_rp_region = QComboBox()
+        self.sp_rp_gap = _spin_f(8, 0, 1e6, 0.01)
+        self.sp_rp_count = QSpinBox(); self.sp_rp_count.setRange(1, 1_000_000)
+        self.sp_rp_count.setValue(10)
+        self.sp_rp_min = _spin_f(8, 0, 1e6, 0.001)
+        row_rp = QHBoxLayout()
+        row_rp.addWidget(QLabel("Region")); row_rp.addWidget(self.cb_rp_region, 1)
+        row_rp.addWidget(QLabel("Gap distance to ignore"))
+        row_rp.addWidget(self.sp_rp_gap)
+        row_rp.addWidget(QLabel("Octant count")); row_rp.addWidget(self.sp_rp_count)
+        row_rp.addWidget(QLabel("Minimum size")); row_rp.addWidget(self.sp_rp_min)
+        self.btn_rp_apply = QPushButton("<<Apply")
+        row_rp.addWidget(self.btn_rp_apply)
+        rpv.addLayout(row_rp)
+        rpv.addStretch(1)
+        tabs.addTab(rp, "Region Proximity")
+
         self.result = QTextEdit(); self.result.setReadOnly(True)
         tabs.addTab(self.result, "OCT result")
         v.addWidget(tabs, 1)
@@ -1013,6 +1111,61 @@ class OctreeParamBody(_Body):
             self.sp_target.setValue(int(sess["target"]))
         if "min_size" in sess:
             self.sp_min.setValue(float(sess["min_size"]))
+        self.rb_len.setChecked(sess.get("input_by") != "param")
+        self.rb_param.setChecked(sess.get("input_by") == "param")
+        for sp, key, default in (
+            (self.sp_min_oct, "min_oct_size", 0.001),
+            (self.sp_max_oct, "max_oct_size", 0.01),
+            (self.sp_root_ratio, "root_ratio", 1.5),
+            (self.sp_max_level, "max_level", 6),
+            (self.sp_min_level, "min_level", 0),
+            (self.sp_cx, "center_x", 0),
+            (self.sp_cy, "center_y", 0),
+            (self.sp_cz, "center_z", 0),
+        ):
+            if key in sess:
+                try:
+                    sp.setValue(float(sess[key]))
+                except (TypeError, ValueError):
+                    pass
+        self.chk_max.setChecked(bool(sess.get("restrict_max", False)))
+        self.chk_min_level.setChecked(bool(sess.get("restrict_min_level", False)))
+        self.chk_center.setChecked(bool(sess.get("specify_center", False)))
+        self.sp_max_oct.setEnabled(self.chk_max.isChecked())
+        self.sp_min_level.setEnabled(self.chk_min_level.isChecked())
+        self.sp_cx.setEnabled(self.chk_center.isChecked())
+        self.sp_cy.setEnabled(self.chk_center.isChecked())
+        self.sp_cz.setEnabled(self.chk_center.isChecked())
+        # region 列表
+        regions: list[str] = []
+        for meta in (ctx.get("regions_meta") or {}).values():
+            for r in meta:
+                name = r.get("name") if isinstance(r, dict) else None
+                if name:
+                    regions.append(name)
+        regions = sorted(set(regions)) or ["No slip wall"]
+        for cb in (self.cb_rs_region, self.cb_ra_region, self.cb_rp_region):
+            cb.clear(); cb.addItems(regions)
+        rs = sess.get("region_size", {})
+        ra = sess.get("region_angle", {})
+        rp = sess.get("region_proximity", {})
+        sel = self.cb_rs_region.currentText()
+        if sel in rs:
+            self.sp_rs_size.setValue(float(rs[sel].get("size", 0.25)))
+            self.sp_rs_range.setValue(float(rs[sel].get("range", 2)))
+        self.chk_rs_eval.setChecked(bool(sess.get("region_size_eval", False)))
+        sel = self.cb_ra_region.currentText()
+        if sel in ra:
+            self.sp_ra_angle.setValue(float(ra[sel].get("angle", 10)))
+            self.sp_ra_range.setValue(float(ra[sel].get("range", 2)))
+            self.sp_ra_min.setValue(float(ra[sel].get("min_size", 0.001)))
+            self.chk_ra_restrict.setChecked(bool(ra[sel].get("restrict", False)))
+        self.chk_ra_all.setChecked(bool(sess.get("region_angle_all_min", False)))
+        sel = self.cb_rp_region.currentText()
+        if sel in rp:
+            self.sp_rp_gap.setValue(float(rp[sel].get("gap", 0.01)))
+            self.sp_rp_count.setValue(int(rp[sel].get("count", 10)))
+            self.sp_rp_min.setValue(float(rp[sel].get("min_size", 0.001)))
         xenv = ctx.get("xenv")
         if xenv:
             for sp, sec, key, default in (
@@ -1076,10 +1229,41 @@ class OctreeParamBody(_Body):
     def apply(self, ctx: dict) -> bool:
         mode = ("target" if self.rb_target.isChecked()
                 else "min" if self.rb_min.isChecked() else "octant")
-        ctx.setdefault("session", {})["octree_param"] = {
+        sess = ctx.setdefault("session", {})["octree_param"]
+        sess.update({
             "mode": mode, "target": self.sp_target.value(),
             "min_size": self.sp_min.value(),
+            "input_by": "param" if self.rb_param.isChecked() else "length",
+            "min_oct_size": self.sp_min_oct.value(),
+            "restrict_max": self.chk_max.isChecked(),
+            "max_oct_size": self.sp_max_oct.value(),
+            "root_ratio": self.sp_root_ratio.value(),
+            "max_level": self.sp_max_level.value(),
+            "restrict_min_level": self.chk_min_level.isChecked(),
+            "min_level": self.sp_min_level.value(),
+            "specify_center": self.chk_center.isChecked(),
+            "center_x": self.sp_cx.value(),
+            "center_y": self.sp_cy.value(),
+            "center_z": self.sp_cz.value(),
+            "region_size_eval": self.chk_rs_eval.isChecked(),
+            "region_angle_all_min": self.chk_ra_all.isChecked(),
+        })
+        sess.setdefault("region_size", {})[self.cb_rs_region.currentText()] = {
+            "size": self.sp_rs_size.value(),
+            "range": self.sp_rs_range.value(),
         }
+        sess.setdefault("region_angle", {})[self.cb_ra_region.currentText()] = {
+            "angle": self.sp_ra_angle.value(),
+            "range": self.sp_ra_range.value(),
+            "restrict": self.chk_ra_restrict.isChecked(),
+            "min_size": self.sp_ra_min.value(),
+        }
+        sess.setdefault("region_proximity", {})[
+            self.cb_rp_region.currentText()] = {
+                "gap": self.sp_rp_gap.value(),
+                "count": self.sp_rp_count.value(),
+                "min_size": self.sp_rp_min.value(),
+            }
         xenv = ctx.get("xenv")
         if not xenv:
             return True
@@ -1129,39 +1313,159 @@ class OctreeParamBody(_Body):
         return True
 
 
+_MESH_OTHER_ITEMS = [
+    "Surface Mesh",
+    "Timing of Prism Layer Insertion",
+    "Detailed Settings of Prism Layer",
+    "Smoothing After Prism Layer",
+    "Volume Mesh",
+    "Element Size",
+    "Smoothing After Volume Meshing",
+    "Generation of All Mesh by Sweep",
+    "Mesh Adaptation Analysis",
+]
+
+_MESH_SUB_SPECS: dict[str, list[tuple]] = {
+    "Surface Mesh": [
+        ("chord", "Chord tolerance", "float", 1),
+        ("angle", "Max angle", "float", 5),
+        ("width", "Max width", "float", 5),
+    ],
+    "Timing of Prism Layer Insertion": [
+        ("timing", "Timing", "combo",
+         ["After volume meshing", "Before volume meshing",
+          "After polyhedral conversion"]),
+    ],
+    "Detailed Settings of Prism Layer": [
+        ("thickness", "Thickness coefficient", "float", 0.3),
+        ("layers", "Number of layers", "int", 3),
+    ],
+    "Smoothing After Prism Layer": [
+        ("iterations", "Number of iterations", "int", 5),
+    ],
+    "Volume Mesh": [
+        ("hexa", "Create spatial hexahedral mesh", "bool", True),
+        ("hexa_prev", "Use previous(V2020) method", "bool", False),
+        ("thin", "Generate sweep elements at thin space", "bool", False),
+        ("thin_layers", "Number of layers", "int", 5),
+        ("thin_ratio", "Ratio of thin space to octant size", "float", 0.5),
+    ],
+    "Element Size": [
+        ("enable", "Enable", "bool", False),
+        ("range", "Range of effect", "float", 1.0),
+    ],
+    "Smoothing After Volume Meshing": [
+        ("iterations", "Number of iterations", "int", 5),
+    ],
+    "Generation of All Mesh by Sweep": [
+        ("enable", "Enable", "bool", False),
+    ],
+    "Mesh Adaptation Analysis": [
+        ("enable", "Enable", "bool", False),
+    ],
+}
+
+
+class _MeshSubDialog(QDialog):
+    """通用小参数子对话框（简化版，参数与手册/录制命令对应）。"""
+
+    def __init__(self, title: str, spec: list[tuple],
+                 values: dict, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        form = QFormLayout(self)
+        self._widgets: dict[str, QWidget] = {}
+        for key, label, kind, default in spec:
+            if kind == "float":
+                w = _spin_f(6, 0, 1e6, float(default))
+                if key in values:
+                    w.setValue(float(values[key]))
+            elif kind == "int":
+                w = QSpinBox(); w.setRange(0, 1_000_000)
+                w.setValue(int(values.get(key, default)))
+            elif kind == "bool":
+                w = _bool_combo()
+                _set_combo_data(w, str(values.get(key, default)).lower())
+            elif kind == "combo":
+                w = QComboBox(); w.addItems(list(default))
+                if key in values:
+                    i = w.findText(str(values[key]))
+                    if i >= 0:
+                        w.setCurrentIndex(i)
+            form.addRow(label, w)
+            self._widgets[key] = w
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        form.addRow(bb)
+
+    def values(self) -> dict:
+        out: dict = {}
+        for key, w in self._widgets.items():
+            if isinstance(w, QComboBox):
+                if (w.count() == 2 and
+                        w.itemData(0) in ("true", "false")):
+                    out[key] = w.currentData()
+                else:
+                    out[key] = w.currentText()
+            elif isinstance(w, QDoubleSpinBox):
+                out[key] = w.value()
+            elif isinstance(w, QSpinBox):
+                out[key] = w.value()
+        return out
+
+
 class MeshParamBody(_Body):
     title = "Mesh Parameter"
-    min_size = (580, 520)
+    min_size = (640, 560)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         v = QVBoxLayout(self)
         v.addWidget(_note("[Condition] – [Mesh Parameter]"))
-        tabs = QTabWidget()
-        p = QWidget(); pf = QFormLayout(p)
+
+        prism = QGroupBox("Prism layers")
+        pf = QFormLayout(prism)
         self.sp_prism_t = _spin_f(4, 0, 100, 0.3)
-        self.sp_prism_n = QSpinBox(); self.sp_prism_n.setRange(0, 100); self.sp_prism_n.setValue(3)
-        self.cb_timing = QComboBox()
-        self.cb_timing.addItems([
-            "After volume meshing", "Before volume meshing",
-            "After polyhedral conversion",
-        ])
-        pf.addRow("Prism thickness coeff.", self.sp_prism_t)
-        pf.addRow("Number of prism layers", self.sp_prism_n)
-        pf.addRow("Timing of prism insertion", self.cb_timing)
-        tabs.addTab(p, "Prism layers")
-        o = QWidget(); of = QFormLayout(o)
+        self.sp_prism_n = QSpinBox()
+        self.sp_prism_n.setRange(0, 100); self.sp_prism_n.setValue(3)
+        self.btn_prism_detail = QPushButton("Detail…")
+        row_n = QHBoxLayout()
+        row_n.addWidget(self.sp_prism_n); row_n.addWidget(self.btn_prism_detail)
+        pf.addRow("Thickness coefficient", self.sp_prism_t)
+        pf.addRow("Number of layers", row_n)
+        v.addWidget(prism)
+
+        assign = QGroupBox("Method to assign part to voxel fitting mesh")
+        av = QHBoxLayout(assign)
         self.cb_assign = QComboBox()
         self.cb_assign.addItems(["Ray-tracing", "Wrapping", "Individual"])
-        self.cb_smooth = _bool_combo()
-        self.cb_adapt = _bool_combo()
-        of.addRow("Assign part to voxel mesh", self.cb_assign)
-        of.addRow("Smoothing after volume", self.cb_smooth)
-        of.addRow("Mesh adaptation", self.cb_adapt)
-        tabs.addTab(o, "Other")
+        av.addWidget(self.cb_assign)
+        v.addWidget(assign)
+
+        other = QGroupBox("Other parameters")
+        ov = QVBoxLayout(other)
+        self.cb_other = QComboBox()
+        self.cb_other.addItems(
+            ["Stability-oriented", "Model shape-oriented", "Detailed setting"])
+        row_other = QHBoxLayout()
+        row_other.addWidget(QLabel("Type"))
+        row_other.addWidget(self.cb_other, 1)
+        ov.addLayout(row_other)
+        self.lst_other = QListWidget()
+        self.lst_other.addItems(_MESH_OTHER_ITEMS)
+        self.btn_edit = QPushButton("Edit…")
+        self.btn_edit.clicked.connect(self._edit_other)
+        ov.addWidget(self.lst_other, 1)
+        ov.addWidget(self.btn_edit, 0, Qt.AlignRight)
+        v.addWidget(other, 1)
+
         self.result = QTextEdit(); self.result.setReadOnly(True)
-        tabs.addTab(self.result, "GPH result")
-        v.addWidget(tabs, 1)
+        v.addWidget(self.result)
+        self._other_values: dict[str, dict] = {}
+        self.cb_other.currentIndexChanged.connect(self._toggle_other_list)
+        self.btn_prism_detail.clicked.connect(self._edit_prism_detail)
+        self._toggle_other_list()
 
     def load(self, ctx: dict) -> None:
         sess = ctx.setdefault("session", {}).setdefault("mesh_param", {})
@@ -1177,8 +1481,12 @@ class MeshParamBody(_Body):
             i = self.cb_assign.findText(sess["assign"])
             if i >= 0:
                 self.cb_assign.setCurrentIndex(i)
-        _set_combo_data(self.cb_smooth, sess.get("smooth", "true"))
-        _set_combo_data(self.cb_adapt, sess.get("adapt", "false"))
+        other_type = sess.get("other_type", "Model shape-oriented")
+        i = self.cb_other.findText(other_type)
+        if i >= 0:
+            self.cb_other.setCurrentIndex(i)
+        self._other_values = dict(sess.get("other", {}) or {})
+        self._toggle_other_list()
         lines = []
         for g, info in sorted((ctx.get("groups_info") or {}).items()):
             st = (info.get("status") or {}).get("mesh") or {}
@@ -1188,14 +1496,39 @@ class MeshParamBody(_Body):
                     lines.append(f"  {k}: {val}")
         self.result.setPlainText("\n".join(lines) if lines else "No GPH summary.")
 
+    def _toggle_other_list(self) -> None:
+        detailed = self.cb_other.currentText() == "Detailed setting"
+        self.lst_other.setEnabled(detailed)
+        self.btn_edit.setEnabled(detailed)
+
+    def _edit_other(self) -> None:
+        item = self.lst_other.currentItem()
+        if item is None:
+            return
+        name = item.text()
+        spec = _MESH_SUB_SPECS.get(name, [])
+        dlg = _MeshSubDialog(name, spec, self._other_values.get(name, {}), self)
+        if dlg.exec_() == QDialog.Accepted:
+            self._other_values[name] = dlg.values()
+
+    def _edit_prism_detail(self) -> None:
+        spec = _MESH_SUB_SPECS["Detailed Settings of Prism Layer"]
+        values = {"thickness": self.sp_prism_t.value(),
+                  "layers": self.sp_prism_n.value()}
+        dlg = _MeshSubDialog("Parameters for Prism Layer Insertion",
+                             spec, values, self)
+        if dlg.exec_() == QDialog.Accepted:
+            out = dlg.values()
+            self.sp_prism_t.setValue(float(out.get("thickness", 0.3)))
+            self.sp_prism_n.setValue(int(out.get("layers", 3)))
+
     def apply(self, ctx: dict) -> bool:
         ctx.setdefault("session", {})["mesh_param"] = {
             "prism_t": self.sp_prism_t.value(),
             "prism_n": self.sp_prism_n.value(),
-            "timing": self.cb_timing.currentText(),
             "assign": self.cb_assign.currentText(),
-            "smooth": self.cb_smooth.currentData(),
-            "adapt": self.cb_adapt.currentData(),
+            "other_type": self.cb_other.currentText(),
+            "other": self._other_values,
         }
         return True
 
