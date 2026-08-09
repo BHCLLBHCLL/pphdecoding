@@ -25,6 +25,8 @@ LOCKED_COMMANDS: dict[str, str] = {
     "open_project": 'Doc_.OpenProject "{path}", False',              # :4352 (v4)
     "begin_solid_edit": "MeshingGroup_.BeginSolidEdit",              # :14 (v4)
     "parts_control": (                                               # :16-18 (v1)
+        'Conditions_.SetPartsControl "Discontinuous", False\n'
+        'Conditions_.SetPartsControl "Overset", False\n'
         'Conditions_.SetPartsControl "Wrapping", False'),
     "build_analysis_model": "MeshingGroup_.BuildAnalysisModel",      # :210 (v3)
     "generate_octree": "MeshingGroup_.CreateOctree",                 # :3110 (v1)
@@ -175,29 +177,266 @@ def octree_settings_actions(xenv) -> list[str]:
     return actions
 
 
+def _oct_sect_name(ui_name: str) -> str:
+    """GUI 区域名 → OctParam SECTITEM 名（录制：Part surface (@Part)→@PartSurface_Part）。"""
+    name = (ui_name or "").strip()
+    if name == "Part surface (@Part)":
+        return "@PartSurface_Part"
+    if name.startswith("@PartSurface_"):
+        return name
+    if name.startswith("Part surface ("):
+        inner = name[len("Part surface ("):].rstrip(")")
+        if inner.startswith("@"):
+            return inner
+        return f"@PartSurface_{inner}" if inner else "@PartSurface_Part"
+    return name
+
+
+def _fmt_oct_num(v) -> str:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    return f"{f:.17g}"
+
+
+def build_oct_param_pairs(octree_sess: Optional[dict]) -> list[tuple[str, str]]:
+    """由 GUI session[octree_param] 构造 OctParam_.SetParams 键值对。
+
+    键名/默认布局对齐 ``tests/box_vbs_v4.vbs`` 中 ``GetOctParam`` / ``SetParams``
+    录制（含 ``SECTITEM[*].SIZE`` 区域尺寸）。
+    """
+    sess = dict(octree_sess or {})
+    detail = dict(sess.get("detail") or {})
+    # 兼容旧扁平字段
+    for k in (
+        "input_by", "min_oct_size", "max_oct_size", "restrict_max",
+        "root_ratio", "max_level", "min_level", "restrict_min_level",
+        "specify_center", "center_x", "center_y", "center_z",
+        "region_size", "region_angle", "region_proximity",
+        "region_size_eval", "refine_range", "limit_refine",
+    ):
+        if k not in detail and k in sess:
+            detail[k] = sess[k]
+
+    mode = sess.get("mode", "octant")
+    # 录制中 BASEMODE=2 对应按长度的 Octant parameter
+    basemode = {"target": "0", "min": "1", "octant": "2"}.get(mode, "2")
+    min_oct = float(detail.get("min_oct_size", sess.get("min_size", 0.001))
+                    or 0.001)
+    if mode == "min" and "min_size" in sess:
+        min_oct = float(sess["min_size"])
+    max_oct = float(detail.get("max_oct_size", min_oct) or min_oct)
+    if not detail.get("restrict_max", False):
+        max_oct = min_oct
+    root_fac = float(detail.get("root_ratio", 1.4) or 1.4)
+    max_lev = int(detail.get("max_level", 6) or 6)
+    if detail.get("restrict_min_level"):
+        min_lev = int(detail.get("min_level", 0) or 0)
+    else:
+        min_lev = -1
+    cx = float(detail.get("center_x", 0.005) or 0.005)
+    cy = float(detail.get("center_y", 0.005) or 0.005)
+    cz = float(detail.get("center_z", 0.005) or 0.005)
+    basepos = "1" if detail.get("specify_center", True) else "0"
+    balancing = int(detail.get("refine_range", 3) or 3)
+    if detail.get("limit_refine") is False:
+        balancing = 0
+    boundary = "1" if detail.get("region_size_eval") else "0"
+    target = int(sess.get("target", 100000) or 100000)
+
+    pairs: list[tuple[str, str]] = [
+        ("BALANCING", str(balancing)),
+        ("BASELEV.MAX", str(max_lev)),
+        ("BASELEV.MIN", str(min_lev)),
+        ("BASELEV.ROOTFAC", _fmt_oct_num(root_fac)),
+        ("BASEMODE", basemode),
+        ("BASENAME", ""),
+        ("BASENELEM", "0"),
+        ("BASEPOS", basepos),
+        ("BASEPOS.X", _fmt_oct_num(cx)),
+        ("BASEPOS.Y", _fmt_oct_num(cy)),
+        ("BASEPOS.Z", _fmt_oct_num(cz)),
+        ("BASESIZE.MAX", _fmt_oct_num(max_oct)),
+        ("BASESIZE.MIN", _fmt_oct_num(min_oct)),
+        ("BASESIZEFORAUTOGEN", "0"),
+        ("BOUNDARYRANGE", boundary),
+        ("CHECKONLYFLUID", "0"),
+        ("CSPCGROUPINGTYPE", "0"),
+        ("IGNOREDRATIO", "0.0001"),
+        ("INITIALIZED", "0"),
+        ("NUMERICALREGION.N", "0"),
+        ("OCTNAME", ""),
+        ("PATCHEFFECTMODE", "0"),
+    ]
+
+    # Proximity → PROXIMITYITEM（仅非空项）
+    prox_items: list[tuple[str, dict]] = []
+    for name, rec in (detail.get("region_proximity") or {}).items():
+        if not isinstance(rec, dict):
+            continue
+        gap = float(rec.get("gap", 0) or 0)
+        count = int(rec.get("count", 0) or 0)
+        mins = float(rec.get("min_size", 0) or 0)
+        if gap <= 0 and count <= 0 and mins <= 0:
+            continue
+        prox_items.append((name, rec))
+    pairs.append(("PROXIMITYITEM.N", str(len(prox_items))))
+    for i, (name, rec) in enumerate(prox_items):
+        pairs.append((f"PROXIMITYITEM[{i}].NAME", _oct_sect_name(name)))
+        pairs.append((f"PROXIMITYITEM[{i}].GAP",
+                      _fmt_oct_num(rec.get("gap", 0))))
+        pairs.append((f"PROXIMITYITEM[{i}].COUNT",
+                      str(int(rec.get("count", 1) or 1))))
+        pairs.append((f"PROXIMITYITEM[{i}].MINSIZE",
+                      _fmt_oct_num(rec.get("min_size", 0))))
+
+    pairs.extend([
+        ("REFMODEL.N", "0"),
+        ("REFSECTITEM.N", "0"),
+        ("REGNMODE", "0"),
+        ("REGNNAME", ""),
+        ("SECTAVOIDORDERDEPENDENCY", "1"),
+        ("SECTGRP2", "0"),
+    ])
+
+    # Size Settings to Region → SECTITEM（录制核心）
+    sects: list[tuple[str, dict]] = []
+    for name, rec in (detail.get("region_size") or {}).items():
+        if not isinstance(rec, dict):
+            continue
+        try:
+            size = float(rec.get("size", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        if size <= 0:
+            continue
+        sects.append((name, rec))
+    pairs.append(("SECTITEM.N", str(len(sects))))
+    for i, (name, rec) in enumerate(sects):
+        pairs.append((f"SECTITEM[{i}].NAME", _oct_sect_name(name)))
+        pairs.append((f"SECTITEM[{i}].NEIGHBOR",
+                      _fmt_oct_num(rec.get("range", 0) or 0)))
+        pairs.append((f"SECTITEM[{i}].SIZE",
+                      _fmt_oct_num(rec.get("size", 0))))
+    pairs.extend([
+        ("SECTTYPE", "1"),
+        ("TARGETNUMBER", str(target)),
+    ])
+    return pairs
+
+
+def oct_param_actions(octree_sess: Optional[dict]) -> list[str]:
+    """生成 ``GetOctParam`` / ``Initialize`` / ``SetParams`` VBS 片段。"""
+    pairs = build_oct_param_pairs(octree_sess)
+    n = len(pairs) * 2 - 1
+    actions = [
+        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
+        "Set OctParam_ = MeshingGroup_.GetOctParam(False)",
+        "OctParam_.Initialize",
+        f"Redim ArrayParam1_({n})",
+    ]
+    idx = 0
+    for key, val in pairs:
+        actions.append(f'ArrayParam1_({idx}) = "{key}"')
+        idx += 1
+        # 数值不带引号；空串与名称带引号
+        if val == "" or not _looks_numeric(val):
+            esc = str(val).replace('"', '""')
+            actions.append(f'ArrayParam1_({idx}) = "{esc}"')
+        else:
+            actions.append(f"ArrayParam1_({idx}) = {val}")
+        idx += 1
+    actions.append(
+        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)")
+    actions.append(
+        "Set OctParam_ = MeshingGroup_.GetOctParam(False)")
+    actions.append("OctParam_.SetParams ArrayParam1_")
+    return actions
+
+
+def _looks_numeric(text: str) -> bool:
+    try:
+        float(text)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def oct_param_sect_summary(octree_sess: Optional[dict]) -> list[str]:
+    """可读摘要：将写入 SECTITEM 的区域尺寸。"""
+    out = []
+    for key, val in build_oct_param_pairs(octree_sess):
+        if key.endswith("].NAME") and key.startswith("SECTITEM"):
+            out.append(val)
+        elif key.endswith("].SIZE") and key.startswith("SECTITEM") and out:
+            out[-1] = f"{out[-1]} size={val}"
+    return out
+
+
+def parts_control_actions(pc_sess: Optional[dict] = None) -> list[str]:
+    """GUI ``session['parts_control']`` → ``Conditions_.SetPartsControl``。
+
+    录制证据：``Conditions_.SetPartsControl "Wrapping", False``（box_vbs:16-18）。
+    Discontinuous / Overset 与对话框三项勾选一一对应。
+    """
+    pc = dict(pc_sess or {})
+    pairs = (
+        ("Discontinuous", bool(pc.get("discontinuous"))),
+        ("Overset", bool(pc.get("overset"))),
+        ("Wrapping", bool(pc.get("wrapping"))),
+    )
+    return [
+        f'Conditions_.SetPartsControl "{name}", '
+        f'{"True" if flag else "False"}'
+        for name, flag in pairs
+    ]
+
+
 def build_execute_vbs(project_path: str | Path, plan: dict,
                       output: str | Path,
                       marker: Optional[str | Path] = None,
                       include_save: bool = True,
-                      xenv=None) -> Path:
+                      xenv=None,
+                      octree_sess: Optional[dict] = None,
+                      parts_control_sess: Optional[dict] = None) -> Path:
     """生成可在 scFLOWpre 宿主中执行的 BAM→Octree→Mesh VBS。
 
     PPH 项目默认在末尾追加 ``Doc_.SaveProject``；传入 ``marker`` 时在脚本
     末尾写一个完成标记文件，供 GUI 轮询后自动 Reload。
+
+    ``octree_sess``：GUI ``session['octree_param']``，含 Detail 的
+    ``region_size`` 等；会生成 ``OctParam_.SetParams``（否则区域 Size
+    不会生效，网格与改参前相同）。
+
+    ``parts_control_sess``：GUI ``session['parts_control']``，在打开项目后
+    写入 ``SetPartsControl``（与 Parts Control 对话框勾选一致）。
     """
     steps = steps_from_execute_plan(plan)
     if include_save and Path(project_path).suffix.lower() == ".pph":
         steps.append("save_project")
     actions = PipelinePlan(project_path=str(project_path),
                            steps=steps).to_vbs_actions()
+    # 打开项目后立刻同步 Parts Control（Execute 步骤本身不含 parts_control）
+    if parts_control_sess is not None:
+        insert_at = 0
+        for i, line in enumerate(actions):
+            if line.startswith("Doc_.Open"):
+                insert_at = i + 1
+                break
+        actions[insert_at:insert_at] = parts_control_actions(parts_control_sess)
     if "generate_octree" in steps:
+        idx = actions.index("MeshingGroup_.CreateOctree")
+        insert_at = idx
+        if idx > 0 and actions[idx - 1].startswith("Set MeshingGroup_ ="):
+            insert_at = idx - 1
+        chunk: list[str] = []
         settings = octree_settings_actions(xenv)
         if settings:
-            idx = actions.index("MeshingGroup_.CreateOctree")
-            insert_at = idx
-            if idx > 0 and actions[idx - 1].startswith("Set MeshingGroup_ ="):
-                insert_at = idx - 1
-            actions[insert_at:idx] = settings
+            chunk.extend(settings)
+        # OctParam 必须在 CreateOctree 之前（录制顺序）
+        chunk.extend(oct_param_actions(octree_sess))
+        actions[insert_at:idx] = chunk
     if marker is not None:
         actions.append('Set fso_ = CreateObject("Scripting.FileSystemObject")')
         actions.append(f'Set tf_ = fso_.CreateTextFile("{marker}", True)')

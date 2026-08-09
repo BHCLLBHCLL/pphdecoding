@@ -506,6 +506,10 @@ NAV_ICONS = {
     "mesher_faceter": "mesh", "regions": "region",
     "non_solid": "part", "part_material": "project",
     "conditions": "xml",
+    "specify_disc": "part", "overset_mesh": "octree",
+    "wrap_octree": "octree", "wrap_param": "param",
+    "begin_wrap": "show_all", "cancel_wrap": "show_all",
+    "exec_wrap": "show_all", "retry_wrap": "show_all",
     "build_am": "octree", "oct_param": "octree",
     "mesh_param": "mesh", "execute": "show_all",
     "mdl": "part", "oct": "octree", "gph": "mesh",
@@ -516,9 +520,11 @@ NAV_ICONS = {
 }
 NAV_SECTION_ICONS = {
     "Prepare Parts": "folder",
-    "Build Analysis Model": "octree",
     "Data / Script": "script",
 }
+
+# Navigation 顶层节点：("section"|"leaf", label, key_or_children)
+# leaf 的 key 为 str；section 的 children 为 list[tuple[label, key]]
 
 
 class BarChart(QWidget):
@@ -731,37 +737,54 @@ class NavigationWindow(QWidget):
     navigated = pyqtSignal(str)
 
     # 对齐 scFLOWpre Navigation；Open/Save/Reload/Draw 在工具栏
-    # key → PphViewer._on_navigate（条件项打开参数面板）
-    SECTIONS = [
-        ("Prepare Parts", [
-            ("Parts Control", "parts_control"),
-            ("Import Part File", "import_part"),
-            ("Create Parts", "create_parts"),
-            ("Modify Parts", "modify_parts"),
-            ("Mesher/Faceter Setting", "mesher_faceter"),
-            ("Register Region", "regions"),
-            ("Create Non-Solid Part", "non_solid"),
-            ("Part Material", "part_material"),
-            ("Conditions", "conditions"),
-        ]),
-        ("Build Analysis Model", [
-            ("Build Analysis Model", "build_am"),
-            ("Octree Parameter", "oct_param"),
-            ("Mesh Parameter", "mesh_param"),
-            ("Execute", "execute"),
-        ]),
-        ("Data / Script", [
-            ("Project Info (xenv/prp)", "project"),
-            ("Project XML", "xml"),
-            ("User Script (JS)", "js"),
-            ("Snapshot / Parasolid", "snapshot"),
-            ("Format Dashboard", "dashboard"),
-        ]),
+    # Parts Control 勾选项会动态插入（见 set_parts_control）
+    # Prepare Parts 仅含前期零件准备项；其后多项与 Prepare Parts 同级（叶子）
+    _PREPARE_BASE = [
+        ("Parts Control", "parts_control"),
+        ("Import Part File", "import_part"),
+        ("Create Parts", "create_parts"),
+        ("Modify Parts", "modify_parts"),
+    ]
+    # 与 Prepare Parts 同级的叶子（手册顺序）
+    _PEER_LEAVES = [
+        ("Mesher/Faceter Setting", "mesher_faceter"),
+        ("Register Region", "regions"),
+        ("Create Non-Solid Part", "non_solid"),
+        ("Part Material", "part_material"),
+        ("Conditions", "conditions"),
+        ("Build Analysis Model", "build_am"),
+        ("Octree Parameter", "oct_param"),
+        ("Mesh Parameter", "mesh_param"),
+        ("Execute", "execute"),
+    ]
+    _DATA_BASE = [
+        ("Project Info (xenv/prp)", "project"),
+        ("Project XML", "xml"),
+        ("User Script (JS)", "js"),
+        ("Snapshot / Parasolid", "snapshot"),
+        ("Format Dashboard", "dashboard"),
+    ]
+    # Parts Control → 插入 Navigation 的条件项
+    _PC_DISC = ("Specify Discontinuous Parts", "specify_disc")
+    _PC_OVERSET = ("Overset Mesh", "overset_mesh")
+    _PC_WRAP_PREPARE = [
+        ("Wrapping Octree Parameter", "wrap_octree"),
+        ("Wrapping Parameter", "wrap_param"),
+    ]
+    _PC_WRAP_EXECUTE = [
+        ("Begin Wrapping", "begin_wrap"),
+        ("Cancel Wrapping", "cancel_wrap"),
+        ("Execute Wrapping", "exec_wrap"),
+        ("Retry Wrapping", "retry_wrap"),
     ]
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumWidth(200)
+        self._parts_control = {
+            "discontinuous": False, "overset": False, "wrapping": False}
+        # scFLOWpre：仅 Polyhedral mesher 时显示 Build Analysis Model
+        self._polyhedral_mesher = True
         v = QVBoxLayout(self)
         v.setContentsMargins(4, 4, 4, 4)
         v.setSpacing(4)
@@ -776,23 +799,88 @@ class NavigationWindow(QWidget):
         self.tree.setRootIsDecorated(True)
         self.tree.itemClicked.connect(self._on_clicked)
         self.tree.setObjectName("NavTree")
-        for section, items in self.SECTIONS:
-            root = QTreeWidgetItem([section])
-            root.setFlags(Qt.ItemIsEnabled)
-            font = root.font(0)
-            font.setBold(True)
-            root.setFont(0, font)
-            root.setIcon(0, AppIcons.get(
-                NAV_SECTION_ICONS.get(section, "nav_section"), 16))
-            self.tree.addTopLevelItem(root)
-            for label, key in items:
-                child = QTreeWidgetItem([label])
-                child.setData(0, Qt.UserRole, key)
-                child.setToolTip(0, label)
-                child.setIcon(0, AppIcons.get(NAV_ICONS.get(key, "generic"), 16))
-                root.addChild(child)
-            root.setExpanded(True)
         v.addWidget(self.tree, 1)
+        self._rebuild_tree()
+
+    def _nav_nodes(self) -> list[tuple]:
+        """对齐 scFLOWpre：Prepare Parts 分组 + 同级叶子 + Data/Script。
+
+        返回节点列表，每项为：
+        - ``("section", title, [(label, key), ...])``
+        - ``("leaf", label, key)``
+        """
+        pc = self._parts_control
+        prepare: list[tuple[str, str]] = []
+        for item in self._PREPARE_BASE:
+            prepare.append(item)
+            # Modify Parts 之后插入条件项（手册 Prepare Parts 顺序）
+            if item[1] == "modify_parts":
+                if pc.get("discontinuous"):
+                    prepare.append(self._PC_DISC)
+                if pc.get("overset"):
+                    prepare.append(self._PC_OVERSET)
+                if pc.get("wrapping"):
+                    prepare.extend(self._PC_WRAP_PREPARE)
+
+        nodes: list[tuple] = [("section", "Prepare Parts", prepare)]
+
+        # Wrapping 执行项：手册在 Mesher/Faceter 之前、与 Prepare Parts 同级
+        if pc.get("wrapping"):
+            for label, key in self._PC_WRAP_EXECUTE:
+                nodes.append(("leaf", label, key))
+
+        for label, key in self._PEER_LEAVES:
+            if key == "build_am" and not self._polyhedral_mesher:
+                continue
+            nodes.append(("leaf", label, key))
+
+        nodes.append(("section", "Data / Script", list(self._DATA_BASE)))
+        return nodes
+
+    def _rebuild_tree(self) -> None:
+        self.tree.clear()
+        for kind, a, b in self._nav_nodes():
+            if kind == "section":
+                root = QTreeWidgetItem([a])
+                root.setFlags(Qt.ItemIsEnabled)
+                font = root.font(0)
+                font.setBold(True)
+                root.setFont(0, font)
+                root.setIcon(0, AppIcons.get(
+                    NAV_SECTION_ICONS.get(a, "nav_section"), 16))
+                self.tree.addTopLevelItem(root)
+                for label, key in b:
+                    child = QTreeWidgetItem([label])
+                    child.setData(0, Qt.UserRole, key)
+                    child.setToolTip(0, label)
+                    child.setIcon(
+                        0, AppIcons.get(NAV_ICONS.get(key, "generic"), 16))
+                    root.addChild(child)
+                root.setExpanded(True)
+            else:  # leaf — 与 Prepare Parts 同级
+                leaf = QTreeWidgetItem([a])
+                leaf.setData(0, Qt.UserRole, b)
+                leaf.setToolTip(0, a)
+                leaf.setIcon(
+                    0, AppIcons.get(NAV_ICONS.get(b, "generic"), 16))
+                self.tree.addTopLevelItem(leaf)
+
+    def set_parts_control(self, flags: dict) -> None:
+        """按 Parts Control 勾选刷新 Navigation 子项。"""
+        self._parts_control = {
+            "discontinuous": bool(flags.get("discontinuous")),
+            "overset": bool(flags.get("overset")),
+            "wrapping": bool(flags.get("wrapping")),
+        }
+        self._rebuild_tree()
+
+    def set_polyhedral_mesher(self, enabled: bool) -> None:
+        """Mesher/Faceter：Polyhedral 时显示 Build Analysis Model。"""
+        enabled = bool(enabled)
+        if self._polyhedral_mesher == enabled:
+            return
+        self._polyhedral_mesher = enabled
+        self._rebuild_tree()
 
     def _on_clicked(self, item: QTreeWidgetItem, _col: int) -> None:
         key = item.data(0, Qt.UserRole)
@@ -2821,6 +2909,7 @@ class PphViewer(QMainWindow):
         self._main_xml: Optional[pphxml.MainXml] = None
         self._prp: Optional[pphxml.PrpDatabase] = None
         self._groups_info: dict = {}
+        self._regions_meta: dict = {}
         # NavDialogSession 在 _build_ui 中创建
         self._layout_timer = QTimer(self)
         self._layout_timer.setSingleShot(True)
@@ -3369,6 +3458,60 @@ class PphViewer(QMainWindow):
                 self._prp = pphxml.parse_prp(self.member_bytes["main.prp"])
         except Exception as exc:  # noqa: BLE001
             self.log(f"prp 解析失败: {exc}", "WARN")
+        self._sync_nav_mesher()
+
+    def _sync_nav_mesher(self) -> None:
+        """按 MESH/MESHER 刷新 Navigation 中 Build Analysis Model 可见性。"""
+        mesher = "0"
+        if self._xenv is not None:
+            mesher = self._xenv.get("MESH", "MESHER", "0") or "0"
+        sess = (self._nav_dialogs.session.get("mesher_faceter") or {})
+        if sess.get("mesher") is not None:
+            mesher = str(sess["mesher"])
+        self.navigation.set_polyhedral_mesher(str(mesher) == "0")
+
+    def _build_am_confirm_choice(self) -> str:
+        """确认框：返回 ``ok`` / ``cancel`` / ``detailed``。"""
+        msg = QMessageBox(self)
+        msg.setWindowTitle("scFLOWpre")
+        msg.setIcon(QMessageBox.Question)
+        msg.setText("Build the analysis model from parts.")
+        msg.setInformativeText(
+            "If parts are overlapped, the lower part in the part tree "
+            "will be used.\n\n"
+            "Click [Detailed...] for Analysis Model Wizard settings.")
+        btn_detailed = msg.addButton(
+            "Detailed...", QMessageBox.ActionRole)
+        btn_ok = msg.addButton(QMessageBox.Ok)
+        msg.addButton(QMessageBox.Cancel)
+        msg.setDefaultButton(btn_ok)
+        msg.exec_()
+        clicked = msg.clickedButton()
+        if clicked == btn_detailed:
+            return "detailed"
+        if clicked == btn_ok:
+            return "ok"
+        return "cancel"
+
+    def _confirm_build_analysis_model(self) -> None:
+        """对齐 scFLOWpre：点击 Build Analysis Model 的确认框。
+
+        Detailed… 打开 Analysis Model Wizard（面片精度 / 微小面 / Repair 等）。
+        """
+        choice = self._build_am_confirm_choice()
+        if choice == "detailed":
+            self.log("Build Analysis Model — Detailed (Analysis Model Wizard)")
+            self._show_condition("build_am_detailed")
+            return
+        if choice == "ok":
+            sess = self._nav_dialogs.session.setdefault("build_am", {})
+            sess["build_requested"] = True
+            self.log(
+                "Build Analysis Model — confirmed "
+                "(闭体识别/建面片在 scFLOWpre 中执行)")
+            return
+        self.log("Build Analysis Model — cancelled")
+
     def _nav_context(self) -> dict:
         groups = dict(self._groups_info)
         for g in groups:
@@ -3379,6 +3522,7 @@ class PphViewer(QMainWindow):
             xml=self._main_xml,
             prp=self._prp,
             groups_info=groups,
+            regions_meta=getattr(self, "_regions_meta", {}) or {},
         )
 
     def _commit_nav_ctx(self, key: str, ctx: dict) -> None:
@@ -3400,13 +3544,45 @@ class PphViewer(QMainWindow):
             self.editor_tab.set_buffer_text("main.xml", text)
             ctx["xml_dirty"] = False
             msgs.append("main.xml")
+        pc = (ctx.get("session") or {}).get("parts_control") or {}
+        if key == "parts_control" or pc.get("nav_dirty"):
+            self.navigation.set_parts_control(pc)
+            pc["nav_dirty"] = False
+            flags = []
+            if pc.get("discontinuous"):
+                flags.append("Discontinuous")
+            if pc.get("overset"):
+                flags.append("Overset")
+            if pc.get("wrapping"):
+                flags.append("Wrapping")
+            msgs.append(
+                "Navigation: " + (", ".join(flags) if flags else "基础项"))
+        if key == "mesher_faceter":
+            self._sync_nav_mesher()
+            poly = self.navigation._polyhedral_mesher
+            msgs.append(
+                "Build Analysis Model: "
+                + ("显示" if poly else "隐藏 (非 Polyhedral)"))
         if msgs:
-            self.log(f"[{key}] 已应用: {', '.join(msgs)}（Save As 可写出）")
+            self.log(f"[{key}] 已应用: {', '.join(msgs)}")
         else:
             self.log(f"[{key}] 会话参数已保存")
 
     def _show_condition(self, key: str) -> None:
         """弹出 scFLOWpre 风格参数子窗口（模态）。"""
+        if key == "build_am":
+            if not self.arch:
+                QMessageBox.information(self, "提示", "请先打开 PPH 工程")
+                return
+            if not self.navigation._polyhedral_mesher:
+                QMessageBox.information(
+                    self, "scFLOWpre",
+                    "Build Analysis Model is available only when "
+                    "[Mesher/Faceter Setting] – Mesher is "
+                    "Polyhedral mesher.")
+                return
+            self._confirm_build_analysis_model()
+            return
         if key not in nav_panels.DIALOG_KEYS:
             return
         if not self.arch:
@@ -3427,7 +3603,17 @@ class PphViewer(QMainWindow):
                 ab.clicked.connect(_apply)
         self.log(f"Dialog — {dlg.windowTitle()}")
         if dlg.exec_() == QDialog.Accepted:
-            self._commit_nav_ctx(key, ctx)
+            commit_key = (
+                "build_am" if key == "build_am_detailed" else key)
+            self._commit_nav_ctx(commit_key, ctx)
+            if key == "build_am_detailed":
+                sess = ctx.setdefault("session", {}).setdefault(
+                    "build_am", {})
+                if sess.get("build_requested") or sess.get(
+                        "create_facet_requested"):
+                    self.log(
+                        "Analysis Model Wizard — parameters saved; "
+                        "build/facet flagged for scFLOWpre")
             if key == "execute":
                 self._run_scflow_pipeline(ctx)
 
@@ -3441,8 +3627,8 @@ class PphViewer(QMainWindow):
         if not self.archive_path:
             QMessageBox.information(self, "提示", "请先打开 PPH 项目")
             return
-        from automation.pipeline_plan import (build_execute_vbs,
-                                              steps_from_execute_plan)
+        from automation.pipeline_plan import (
+            build_execute_vbs, oct_param_sect_summary, steps_from_execute_plan)
         steps = steps_from_execute_plan(plan)
         if not steps:
             self.log("Execute 计划未选择任何步骤")
@@ -3453,8 +3639,20 @@ class PphViewer(QMainWindow):
             marker.unlink(missing_ok=True)
         except OSError:
             pass
+        sess = ctx.get("session") or {}
+        octree_sess = sess.get("octree_param") or {}
+        pc_sess = sess.get("parts_control") or {}
+        sects = oct_param_sect_summary(octree_sess)
+        if "oct" in plan and plan.get("oct") and not sects:
+            self.log(
+                "警告：Octree Detail 未设置任何区域 Size（SECTITEM 为空）；"
+                "仅改界面未 OK、或 Size=0 时，重新生成的网格会与原来相同",
+                "WARN")
+        elif sects:
+            self.log("OctParam 区域尺寸：" + "; ".join(sects))
         build_execute_vbs(self.archive_path, plan, out, marker=marker,
-                          xenv=ctx.get("xenv"))
+                          xenv=ctx.get("xenv"), octree_sess=octree_sess,
+                          parts_control_sess=pc_sess)
         self.log(f"scFLOWpre API 脚本已生成：{out}")
         self.log(
             "请在 scFLOWpre 中 File → Execute VBScript 运行该脚本；"
@@ -3553,6 +3751,10 @@ class PphViewer(QMainWindow):
         elif key == "snapshot":
             self.show_page("snapshot")
             self.log("Snapshot / Parasolid")
+        elif key == "build_am":
+            # 不在 PANEL_CLASSES（确认框走 QMessageBox，非 NavParamDialog）
+            self._show_condition(key)
+            self.show_page("draw")
         elif key in nav_panels.PANEL_CLASSES:
             self._show_condition(key)
             if key == "regions":
@@ -3561,8 +3763,6 @@ class PphViewer(QMainWindow):
                 self._focus_status("octree")
             elif key == "mesh_param":
                 self._focus_status("mesh")
-            elif key == "build_am":
-                self.show_page("draw")
         elif key in ("project", "gph", "oct", "mdl", "xml", "js", "groups"):
             name = self._member_for_nav(key)
             if name:
@@ -3705,6 +3905,7 @@ class PphViewer(QMainWindow):
         self.model_tree.populate(
             groups, project_name=project_name, regions_meta=regions_meta)
         self._groups_info = groups
+        self._regions_meta = regions_meta
         for g in groups:
             self.status_panel.set_group_status(
                 g, self.model_tree.group_status_props(g))
