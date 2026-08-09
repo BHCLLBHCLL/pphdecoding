@@ -32,14 +32,15 @@ from PyQt5.QtGui import (
     QPixmap, QPolygon,
 )
 from PyQt5.QtWidgets import (
-    QAction, QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
-    QDoubleSpinBox, QFileDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout,
-    QLabel, QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy,
-    QSlider, QSplitter, QStackedWidget, QTabWidget, QToolBar, QTreeWidget,
-    QTreeWidgetItem, QVBoxLayout, QWidget,
+    QAction, QActionGroup, QApplication, QCheckBox, QComboBox, QDialog,
+    QDialogButtonBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout,
+    QGroupBox, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPlainTextEdit,
+    QPushButton, QSizePolicy, QSlider, QSplitter, QStackedWidget, QTabWidget,
+    QToolBar, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 import nav_panels
+import option_dialogs
 import pph_parser
 import pph_vtk
 import pphwriter
@@ -785,6 +786,8 @@ class NavigationWindow(QWidget):
             "discontinuous": False, "overset": False, "wrapping": False}
         # scFLOWpre：仅 Polyhedral mesher 时显示 Build Analysis Model
         self._polyhedral_mesher = True
+        self._show_bam_item = True
+        self._show_mesher_item = True
         v = QVBoxLayout(self)
         v.setContentsMargins(4, 4, 4, 4)
         v.setSpacing(4)
@@ -830,7 +833,10 @@ class NavigationWindow(QWidget):
                 nodes.append(("leaf", label, key))
 
         for label, key in self._PEER_LEAVES:
-            if key == "build_am" and not self._polyhedral_mesher:
+            if key == "build_am" and (
+                    not self._polyhedral_mesher or not self._show_bam_item):
+                continue
+            if key == "mesher_faceter" and not self._show_mesher_item:
                 continue
             nodes.append(("leaf", label, key))
 
@@ -880,6 +886,22 @@ class NavigationWindow(QWidget):
         if self._polyhedral_mesher == enabled:
             return
         self._polyhedral_mesher = enabled
+        self._rebuild_tree()
+
+    def set_show_bam_item(self, enabled: bool) -> None:
+        """Option → Navigation：是否显示 Build Analysis Model 节点。"""
+        enabled = bool(enabled)
+        if self._show_bam_item == enabled:
+            return
+        self._show_bam_item = enabled
+        self._rebuild_tree()
+
+    def set_show_mesher_item(self, enabled: bool) -> None:
+        """Option → Navigation：是否显示 Mesher/Faceter Setting 节点。"""
+        enabled = bool(enabled)
+        if self._show_mesher_item == enabled:
+            return
+        self._show_mesher_item = enabled
         self._rebuild_tree()
 
     def _on_clicked(self, item: QTreeWidgetItem, _col: int) -> None:
@@ -2910,6 +2932,10 @@ class PphViewer(QMainWindow):
         self._prp: Optional[pphxml.PrpDatabase] = None
         self._groups_info: dict = {}
         self._regions_meta: dict = {}
+        self._mouse_mode = "3btn"
+        self._mouse_op_type = "CRADLE 3-Button Mode"
+        self._viewer_mode = False
+        self._ui_language = "en"
         # NavDialogSession 在 _build_ui 中创建
         self._layout_timer = QTimer(self)
         self._layout_timer.setSingleShot(True)
@@ -3159,15 +3185,51 @@ class PphViewer(QMainWindow):
         add_act(m, "Execute…",
                 lambda: self._on_navigate("execute"))
 
-        # Option
+        # Option（对齐 scFLOWpre Option(O)）
         m = mb.addMenu("Option(&O)")
-        add_act(m, "Environment Settings")
-        add_act(m, "Show Geometry Status",
-                lambda: self._focus_status("geometry"))
-        add_act(m, "Show Octree Status",
-                lambda: self._focus_status("octree"))
-        add_act(m, "Show Mesh Status",
-                lambda: self._focus_status("mesh"))
+        self._mouse_mode_group = QActionGroup(self)
+        self._mouse_mode_group.setExclusive(True)
+        self._mouse_acts: dict[str, QAction] = {}
+        for key, label, nbtn in (
+            ("1btn", "1-Button Mode", 1),
+            ("2btn", "2-Button Mode", 2),
+            ("3btn_ctrl", "3-Button Mode (CTRL)", 3),
+            ("3btn", "3-Button Mode", 3),
+        ):
+            act = QAction(option_dialogs.mouse_mode_icon(nbtn), label, self)
+            act.setCheckable(True)
+            act.setData(key)
+            self._mouse_mode_group.addAction(act)
+            m.addAction(act)
+            self._mouse_acts[key] = act
+            act.triggered.connect(
+                lambda _c=False, k=key: self._set_mouse_mode(k))
+        self._mouse_acts["3btn"].setChecked(True)
+        m.addSeparator()
+        add_act(m, "Operation…", self._option_operation)
+        m.addSeparator()
+        add_act(m, "Unit Conversion…", self._option_unit_conversion)
+        m.addSeparator()
+        add_act(m, "Settings…", self._option_settings)
+        self.act_viewer_mode = QAction("Change to Viewer Mode", self)
+        self.act_viewer_mode.setCheckable(True)
+        self.act_viewer_mode.triggered.connect(self._toggle_viewer_mode)
+        m.addAction(self.act_viewer_mode)
+        m.addSeparator()
+        lang_menu = m.addMenu("Change Language")
+        self._lang_group = QActionGroup(self)
+        self._lang_group.setExclusive(True)
+        self._lang_acts: dict[str, QAction] = {}
+        for code, name in option_dialogs.LANGUAGES:
+            act = QAction(name, self)
+            act.setCheckable(True)
+            act.setData(code)
+            self._lang_group.addAction(act)
+            lang_menu.addAction(act)
+            self._lang_acts[code] = act
+            act.triggered.connect(
+                lambda _c=False, c=code: self._set_language(c))
+        self._lang_acts["en"].setChecked(True)
 
         # Help
         m = mb.addMenu("Help(&H)")
@@ -3249,6 +3311,104 @@ class PphViewer(QMainWindow):
             f"[{name}] not available in PPH viewer "
             f"(scFLOWpre-only / not yet mapped).",
             "WARN")
+
+    # ── Option(O) ─────────────────────────────────────────────────
+
+    def _set_mouse_mode(self, mode: str) -> None:
+        """1/2/3-Button Mode：写入会话并提示映射（VTK 仍用 Trackball）。"""
+        self._mouse_mode = mode
+        type_map = {
+            "1btn": "CRADLE 1-Button Mode",
+            "2btn": "CRADLE 2-Button Mode",
+            "3btn_ctrl": "CRADLE 3-Button Mode (CTRL)",
+            "3btn": "CRADLE 3-Button Mode",
+        }
+        self._mouse_op_type = type_map.get(mode, self._mouse_op_type)
+        sess = self._nav_dialogs.session.setdefault("option_mouse", {})
+        sess["mode"] = mode
+        sess["operation_type"] = self._mouse_op_type
+        act = self._mouse_acts.get(mode)
+        if act is not None and not act.isChecked():
+            act.setChecked(True)
+        self.log(f"Option — mouse mode: {self._mouse_op_type}")
+
+    def _option_operation(self) -> None:
+        dlg = option_dialogs.ChangeMouseOperationDialog(
+            self._mouse_op_type, self)
+        if dlg.exec_() != QDialog.Accepted:
+            return
+        typ = dlg.selected_type()
+        self._mouse_op_type = typ
+        mode = "3btn"
+        if "1-Button" in typ:
+            mode = "1btn"
+        elif "2-Button" in typ:
+            mode = "2btn"
+        elif "CTRL" in typ:
+            mode = "3btn_ctrl"
+        self._set_mouse_mode(mode)
+
+    def _option_unit_conversion(self) -> None:
+        option_dialogs.UnitConversionDialog(self).exec_()
+
+    def _option_settings(self) -> None:
+        ctx = self._nav_context()
+        dlg = option_dialogs.EnvironmentSettingsDialog(
+            ctx, self,
+            on_open_mesher=lambda: self._on_navigate("mesher_faceter"))
+        if dlg.exec_() == QDialog.Accepted:
+            self._commit_nav_ctx("option_settings", ctx)
+            self._apply_option_nav()
+            self.log("Option — Settings applied")
+
+    def _apply_option_nav(self) -> None:
+        opt = self._nav_dialogs.session.get("option_nav") or {}
+        self.navigation.set_show_bam_item(opt.get("show_bam_item", True))
+        self.navigation.set_show_mesher_item(
+            opt.get("show_mesher_item", True))
+        # Enable wrapping：仅在 Settings 写过 option_nav 后同步
+        if "enable_wrapping" not in opt:
+            return
+        pc = self._nav_dialogs.session.setdefault("parts_control", {})
+        enable = bool(opt.get("enable_wrapping"))
+        pc["enable_wrapping"] = enable
+        pc["wrapping_allowed"] = enable
+        if not enable and pc.get("wrapping"):
+            pc["wrapping"] = False
+        self.navigation.set_parts_control(pc)
+
+    def _toggle_viewer_mode(self, checked: bool = False) -> None:
+        self._viewer_mode = bool(checked)
+        sess = self._nav_dialogs.session.setdefault("option_env", {})
+        sess["viewer_mode"] = self._viewer_mode
+        # 查看模式：禁用部分编辑菜单入口（导航仍可打开只读/参数对话框）
+        if hasattr(self, "menuBar"):
+            for act in self.menuBar().actions():
+                menu = act.menu()
+                if menu is None:
+                    continue
+                title = act.text().replace("&", "")
+                if title.startswith("Edit") or title.startswith("Condition"):
+                    menu.setEnabled(not self._viewer_mode)
+        self.log(
+            "Option — Viewer Mode "
+            + ("ON (Edit/Condition menus disabled)"
+               if self._viewer_mode else "OFF"))
+
+    def _set_language(self, code: str) -> None:
+        self._ui_language = code
+        sess = self._nav_dialogs.session.setdefault("option_env", {})
+        sess["language"] = code
+        name = dict(option_dialogs.LANGUAGES).get(code, code)
+        act = self._lang_acts.get(code)
+        if act is not None and not act.isChecked():
+            act.setChecked(True)
+        QMessageBox.information(
+            self, "Change Language",
+            f"Language preference set to: {name}\n\n"
+            "UI strings remain English in this viewer; "
+            "the preference is stored for host/scFLOWpre export.")
+        self.log(f"Option — language: {name} ({code})")
 
     def _about(self) -> None:
         QMessageBox.about(
@@ -3469,6 +3629,7 @@ class PphViewer(QMainWindow):
         if sess.get("mesher") is not None:
             mesher = str(sess["mesher"])
         self.navigation.set_polyhedral_mesher(str(mesher) == "0")
+        self._apply_option_nav()
 
     def _build_am_confirm_choice(self) -> str:
         """确认框：返回 ``ok`` / ``cancel`` / ``detailed``。"""
@@ -3506,9 +3667,16 @@ class PphViewer(QMainWindow):
         if choice == "ok":
             sess = self._nav_dialogs.session.setdefault("build_am", {})
             sess["build_requested"] = True
-            self.log(
-                "Build Analysis Model — confirmed "
-                "(闭体识别/建面片在 scFLOWpre 中执行)")
+            opt = self._nav_dialogs.session.get("option_nav") or {}
+            if opt.get("always_show_wizard"):
+                self.log(
+                    "Build Analysis Model — OK + Always show wizard "
+                    "(进入 Analysis Model Wizard)")
+                self._show_condition("build_am_detailed")
+            else:
+                self.log(
+                    "Build Analysis Model — confirmed "
+                    "(闭体识别/建面片在 scFLOWpre 中执行)")
             return
         self.log("Build Analysis Model — cancelled")
 
@@ -3563,6 +3731,9 @@ class PphViewer(QMainWindow):
             msgs.append(
                 "Build Analysis Model: "
                 + ("显示" if poly else "隐藏 (非 Polyhedral)"))
+        if key in ("option_nav", "option_settings"):
+            self._apply_option_nav()
+            msgs.append("Option → Navigation / Settings 已应用")
         if msgs:
             self.log(f"[{key}] 已应用: {', '.join(msgs)}")
         else:
@@ -3614,6 +3785,7 @@ class PphViewer(QMainWindow):
                     self.log(
                         "Analysis Model Wizard — parameters saved; "
                         "build/facet flagged for scFLOWpre")
+                    self._run_bam_pipeline(ctx)
             if key == "execute":
                 self._run_scflow_pipeline(ctx)
 
@@ -3657,6 +3829,30 @@ class PphViewer(QMainWindow):
         self.log(
             "请在 scFLOWpre 中 File → Execute VBScript 运行该脚本；"
             "完成后将自动刷新 Model / Octree / Mesh。")
+        self._start_api_refresh_poll(marker)
+
+    def _run_bam_pipeline(self, ctx: dict) -> None:
+        """Analysis Model Wizard 的 Create Facet / Build → 宿主 VBS 并自动刷新。"""
+        if not self.archive_path:
+            QMessageBox.information(self, "提示", "请先打开 PPH 项目")
+            return
+        from automation.pipeline_plan import build_execute_vbs
+        out = Path(self.archive_path).with_suffix(".bam.vbs")
+        marker = Path(self.archive_path).with_suffix(".bam.done")
+        try:
+            marker.unlink(missing_ok=True)
+        except OSError:
+            pass
+        build_execute_vbs(
+            self.archive_path, {"bam": True}, out, marker=marker,
+            xenv=ctx.get("xenv"),
+            octree_sess=(ctx.get("session") or {}).get("build_am_octree"),
+            parts_control_sess=(ctx.get("session") or {}).get(
+                "parts_control"))
+        self.log(f"Analysis Model Wizard 脚本已生成：{out}")
+        self.log(
+            "请在 scFLOWpre 中 File → Execute VBScript 运行；"
+            "完成后将自动刷新分析模型。")
         self._start_api_refresh_poll(marker)
 
     def _start_api_refresh_poll(self, marker: Path) -> None:

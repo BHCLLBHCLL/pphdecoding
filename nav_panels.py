@@ -36,6 +36,7 @@ DIALOG_KEYS = frozenset({
     "begin_wrap", "cancel_wrap", "exec_wrap", "retry_wrap",
     "mesher_faceter", "regions", "non_solid", "part_material",
     "conditions", "build_am_detailed", "oct_param", "mesh_param", "execute",
+    "option_nav",
 })
 
 
@@ -10813,6 +10814,7 @@ _BAM_WIZARD_PAGES = [
     ("multifold", "Configuration of Multi-fold Edges and Faces"),
     ("acc_whole", "Facet Accuracy for Whole Model"),
     ("acc_part", "Facet Accuracy for Part and Region"),
+    ("influence", "Influence of adjacent part"),
     ("auto_tiny", "Automatic Removal of Tiny Faces"),
     ("face_match", "Create Facet/Face Matching"),
     ("remove_tiny", "Remove Tiny Faces"),
@@ -10838,6 +10840,46 @@ def _bam_slider_row(label: str, spin: QWidget, unit: str = "",
         h.addWidget(QLabel(unit))
     w._slider = sl  # type: ignore[attr-defined]
     return w
+
+
+class _FacetAccuracyEditDialog(QDialog):
+    """Facet Accuracy for Part and Region — Edit 子对话框。
+
+    Solid-based (AF)：角度下限 / 缩减比 1:N / 最大边；
+    Parasolid：distance / angle / max edge。
+    """
+
+    def __init__(self, title: str, af: bool, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Facet Accuracy — {title}")
+        self._af = af
+        form = QFormLayout(self)
+        if af:
+            self.sp_ang = _spin_f(3, 0, 180, 10)
+            self.sp_den = QSpinBox(); self.sp_den.setRange(1, 1000)
+            self.sp_den.setValue(20)
+            self.sp_edge = _spin_f(6, 0, 1e6, 5)
+            form.addRow("Lower limit of angular precision", self.sp_ang)
+            form.addRow("Reduction ratio 1/N", self.sp_den)
+            form.addRow("Maximum edge ×", self.sp_edge)
+        else:
+            self.sp_dist = _spin_f(6, 0, 1e6, 1)
+            self.sp_ang = _spin_f(3, 0, 180, 10)
+            self.sp_edge = _spin_f(6, 0, 1e6, 5)
+            form.addRow("Precision of distance", self.sp_dist)
+            form.addRow("Precision of angle", self.sp_ang)
+            form.addRow("Maximum edge", self.sp_edge)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        form.addRow(bb)
+
+    def label(self) -> str:
+        if self._af:
+            return (f"AF {self.sp_ang.value():g}° "
+                    f"1/{self.sp_den.value()} ×{self.sp_edge.value():g}")
+        return (f"PS d={self.sp_dist.value():g} "
+                f"a={self.sp_ang.value():g} e={self.sp_edge.value():g}")
 
 
 class AnalysisModelWizardBody(_Body):
@@ -10910,6 +10952,7 @@ class AnalysisModelWizardBody(_Body):
         self._pages["multifold"] = self._page_multifold()
         self._pages["acc_whole"] = self._page_acc_whole()
         self._pages["acc_part"] = self._page_acc_part()
+        self._pages["influence"] = self._page_influence()
         self._pages["auto_tiny"] = self._page_auto_tiny()
         self._pages["face_match"] = self._page_face_match()
         self._pages["remove_tiny"] = self._page_remove_tiny()
@@ -10939,7 +10982,11 @@ class AnalysisModelWizardBody(_Body):
         self.cb_acc_type.addItem("Specify value", "0")
         self.cb_acc_type.addItem("Specify octree", "1")
         self.cb_acc_type.setMinimumWidth(160)
+        self.btn_bam_octree = QPushButton("Octree Parameter for BAM…")
+        self.btn_bam_octree.clicked.connect(self._open_bam_octree)
+        self.btn_bam_octree.setVisible(False)
         row.addWidget(self.cb_acc_type)
+        row.addWidget(self.btn_bam_octree)
         row.addStretch(1)
         v.addLayout(row)
 
@@ -11155,6 +11202,52 @@ class AnalysisModelWizardBody(_Body):
         gbv.addLayout(br)
         v.addWidget(gb)
         return w
+
+    def _page_influence(self) -> QWidget:
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(8, 8, 8, 8)
+        self.chk_influence = QCheckBox(
+            "Consider the edge lengths of spatially adjacent facets")
+        v.addWidget(self.chk_influence)
+        lab = QLabel(
+            "Specify the region that affects the edge lengths of the "
+            "spatially adjacent facets. When OFF, the Target column is "
+            "ignored.")
+        lab.setWordWrap(True)
+        v.addWidget(lab)
+        self.tbl_influence = QTableWidget(0, 2)
+        self.tbl_influence.setHorizontalHeaderLabels(
+            ["Region Name", "Target"])
+        self.tbl_influence.horizontalHeader().setStretchLastSection(True)
+        v.addWidget(self.tbl_influence, 1)
+        row = QHBoxLayout()
+        self.btn_inf_set = QPushButton("Set")
+        self.btn_inf_remove = QPushButton("Remove")
+        self.btn_inf_set.clicked.connect(self._influence_set)
+        self.btn_inf_remove.clicked.connect(self._influence_remove)
+        row.addWidget(self.btn_inf_set)
+        row.addWidget(self.btn_inf_remove)
+        row.addStretch(1)
+        v.addLayout(row)
+        return w
+
+    def _influence_set(self) -> None:
+        row = self.tbl_influence.currentRow()
+        if row < 0:
+            return
+        item = self.tbl_influence.item(row, 1)
+        if item is None:
+            item = QTableWidgetItem("Target")
+            self.tbl_influence.setItem(row, 1, item)
+        item.setText("Target")
+
+    def _influence_remove(self) -> None:
+        row = self.tbl_influence.currentRow()
+        if row >= 0:
+            item = self.tbl_influence.item(row, 1)
+            if item is not None:
+                item.setText("")
 
     def _page_auto_tiny(self) -> QWidget:
         w = QWidget()
@@ -11447,6 +11540,7 @@ class AnalysisModelWizardBody(_Body):
         self.row_ps_ang.setVisible(not af)
         self._sync_abs_ui()
         self.chk_abs.setEnabled(not octree)
+        self.btn_bam_octree.setVisible(af and octree)
         self._sync_nav_list_visibility()
         self._sync_nav_buttons()
         # face matching / auto tiny only meaningful for AF
@@ -11454,6 +11548,14 @@ class AnalysisModelWizardBody(_Body):
                     self.btn_match_prev, self.btn_tiny_edit,
                     self.btn_tiny_rerec):
             btn.setEnabled(af)
+
+    def _open_bam_octree(self) -> None:
+        data = self._ctx.setdefault("session", {}).setdefault(
+            "build_am_octree", {})
+        dlg = OctreeDetailDialog(data, self._ctx, self)
+        if dlg.exec_() == QDialog.Accepted:
+            # OctreeDetailDialog 会把参数写回 data（session["build_am_octree"]）
+            self._ctx.setdefault("session", {})["build_am_octree"] = data
 
     def _reset_acc_defaults(self) -> None:
         self.sp_sb_ang.setValue(10)
@@ -11487,14 +11589,12 @@ class AnalysisModelWizardBody(_Body):
         if it is None:
             return
         name = it.text(0)
-        cur = it.text(1) if it.text(1) != "Default" else "Default"
-        text, ok = QInputDialog.getText(
-            self, "Facet Accuracy",
-            f"Facet accuracy for '{name}' (Default or custom label):",
-            text=cur)
-        if ok and text.strip():
-            it.setText(1, text.strip())
-            self._region_acc[name] = text.strip()
+        dlg = _FacetAccuracyEditDialog(
+            name, self.chk_use_af.isChecked(), self)
+        if dlg.exec_() == QDialog.Accepted:
+            label = dlg.label()
+            it.setText(1, label)
+            self._region_acc[name] = label
 
     def _default_part_acc(self) -> None:
         it = self.tree_acc_part.currentItem()
@@ -11731,8 +11831,10 @@ class AnalysisModelWizardBody(_Body):
         self.sp_elem_range.setValue(int(sess.get("elem_range", 5)))
         dir_i = int(sess.get("elem_dir", 0))
         self.cb_elem_dir.setCurrentIndex(0 if dir_i == 0 else 1)
+        self.chk_influence.setChecked(bool(sess.get("influence_enable", False)))
 
         self._fill_part_trees(ctx)
+        self._fill_influence(ctx)
         self._refresh_report()
         self._sync_faceter_ui()
         self._sync_elem_ui()
@@ -11743,6 +11845,22 @@ class AnalysisModelWizardBody(_Body):
                 if not self.nav.item(i).isHidden():
                     self.nav.setCurrentRow(i)
                 break
+
+    def _fill_influence(self, ctx: dict) -> None:
+        names: list[str] = []
+        for meta in (ctx.get("regions_meta") or {}).values():
+            for r in meta:
+                n = r.get("name") if isinstance(r, dict) else None
+                if n and n not in names:
+                    names.append(n)
+        targets = set((self._ctx.get("session") or {})
+                      .get("build_am", {}).get("influence_targets", []))
+        self.tbl_influence.setRowCount(len(names))
+        for i, n in enumerate(names):
+            self.tbl_influence.setItem(i, 0, QTableWidgetItem(n))
+            self.tbl_influence.setItem(
+                i, 1,
+                QTableWidgetItem("Target" if n in targets else ""))
 
     def apply(self, ctx: dict) -> bool:
         self._ctx = ctx
@@ -11782,10 +11900,18 @@ class AnalysisModelWizardBody(_Body):
             "elem_use": self.chk_elem_use.isChecked(),
             "elem_range": self.sp_elem_range.value(),
             "elem_dir": self.cb_elem_dir.currentIndex(),
+            "influence_enable": self.chk_influence.isChecked(),
             "part_acc": part_acc,
             "tiny_ref": tiny_ref,
             "report": True,
         }
+        influence_targets = []
+        for i in range(self.tbl_influence.rowCount()):
+            it0 = self.tbl_influence.item(i, 0)
+            it1 = self.tbl_influence.item(i, 1)
+            if it0 is not None and it1 is not None and it1.text().strip():
+                influence_targets.append(it0.text())
+        sess["influence_targets"] = influence_targets
         prev = ctx.setdefault("session", {}).get("build_am") or {}
         for k in ("create_facet_requested", "build_requested"):
             if k in prev:
@@ -13259,6 +13385,45 @@ class ExecuteBody(_Body):
         return True
 
 
+class OptionNavBody(_Body):
+    """Option → Navigation：Analysis Model Wizard 与导航项显隐。"""
+
+    title = "Option - Navigation"
+    min_size = (480, 240)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        v = QVBoxLayout(self)
+        v.addWidget(_note("[Option] – [Navigation]"))
+        self.chk_always = QCheckBox(
+            "Always show the analysis model wizard")
+        self.chk_show_bam = QCheckBox(
+            "Show [Build Analysis Model] item")
+        self.chk_show_mesher = QCheckBox(
+            "Show [Mesher/Faceter Setting] item")
+        self.chk_show_bam.setChecked(True)
+        self.chk_show_mesher.setChecked(True)
+        v.addWidget(self.chk_always)
+        v.addWidget(self.chk_show_bam)
+        v.addWidget(self.chk_show_mesher)
+        v.addStretch(1)
+
+    def load(self, ctx: dict) -> None:
+        sess = ctx.setdefault("session", {}).setdefault("option_nav", {})
+        self.chk_always.setChecked(bool(sess.get("always_show_wizard", False)))
+        self.chk_show_bam.setChecked(bool(sess.get("show_bam_item", True)))
+        self.chk_show_mesher.setChecked(
+            bool(sess.get("show_mesher_item", True)))
+
+    def apply(self, ctx: dict) -> bool:
+        ctx.setdefault("session", {})["option_nav"] = {
+            "always_show_wizard": self.chk_always.isChecked(),
+            "show_bam_item": self.chk_show_bam.isChecked(),
+            "show_mesher_item": self.chk_show_mesher.isChecked(),
+        }
+        return True
+
+
 BODY_CLASSES: dict[str, type] = {
     "parts_control": PartsControlBody,
     "import_part": ImportPartBody,
@@ -13279,6 +13444,7 @@ BODY_CLASSES: dict[str, type] = {
     "conditions": ConditionsBody,
     # build_am：Navigation 为确认框；Detailed… → Analysis Model Wizard
     "build_am_detailed": AnalysisModelWizardBody,
+    "option_nav": OptionNavBody,
 
     "oct_param": OctreeParamBody,
     "mesh_param": MeshParamBody,

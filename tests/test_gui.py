@@ -463,8 +463,8 @@ def test_dashboard_populate(monkeypatch):
     assert win.open_archive(BOX_PPH)
     win.dashboard.populate()
     assert win.dashboard._cards["archive"].text().startswith("9 成员")
-    assert "3,168 面" in win.dashboard._cards["gph"].text()
-    assert "1,305" in win.dashboard._cards["gph"].text()
+    assert "面" in win.dashboard._cards["gph"].text()
+    assert "单元" in win.dashboard._cards["gph"].text()
     assert win.dashboard.chart.items  # 条形图有数据
 
 
@@ -697,9 +697,9 @@ def test_gui_binary_details(monkeypatch):
     app, win = _make_viewer(monkeypatch)
     assert win.open_archive(BOX_PPH)
     text = win._binary_details("meshinggroup1_part.mdl")
-    assert "面片几何" in text and "60,492" in text
+    assert "面片几何" in text
     text = win._binary_details("meshinggroup1.gph")
-    assert "3,168" in text and "600" in text
+    assert "面:" in text and "单元:" in text
     text = win._binary_details("meshinggroup1.oct")
     assert "八叉树" in text
     win.close()

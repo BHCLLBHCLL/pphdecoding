@@ -460,12 +460,12 @@ build_am:
 
 ## 11. 建议近期迭代顺序（可执行）
 
-1. **补 Influence 页 + 左栏 9 步**（纯 UI，立刻可见“完善”）  
-2. **Acc Part 真 Edit 子对话框 + AF/Parasolid 字段分流**  
-3. **Always show wizard / OK 自动进向导**  
-4. **BAM-Octree 子对话框挂到 Specify octree**  
-5. **Create Facet/Build 接入现有 VBS 管线并 Reload**  
-6. **结果列表从 MDL/报告回填（先 Repair，再 tiny/multifold）**
+- [x] **补 Influence 页 + 左栏 9 步**（纯 UI，立刻可见“完善”）
+- [x] **Acc Part 真 Edit 子对话框 + AF/Parasolid 字段分流**
+- [x] **Always show wizard / OK 自动进向导**
+- [x] **BAM-Octree 子对话框挂到 Specify octree**
+- [x] **Create Facet/Build 接入现有 VBS 管线并 Reload**
+- [ ] **结果列表从 MDL/报告回填（先 Repair，再 tiny/multifold）**（Repair 已回填；tiny/multifold 待宿主/几何结果）
 
 ---
 

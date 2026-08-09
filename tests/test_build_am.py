@@ -18,6 +18,7 @@ _APP = QApplication.instance() or QApplication(sys.argv)
 import pphxml
 from nav_panels import (
     AnalysisModelWizardBody, BODY_CLASSES, DIALOG_KEYS, NavParamDialog,
+    OptionNavBody,
 )
 from pph_gui import NavigationWindow, PphViewer
 
@@ -28,9 +29,28 @@ class TestBuildAmNavigation(unittest.TestCase):
         self.assertNotIn("build_am", BODY_CLASSES)
         self.assertIn("build_am_detailed", DIALOG_KEYS)
         self.assertIs(BODY_CLASSES["build_am_detailed"], AnalysisModelWizardBody)
+        self.assertIn("option_nav", DIALOG_KEYS)
+        self.assertIs(BODY_CLASSES["option_nav"], OptionNavBody)
 
     def test_nav_hidden_for_voxel(self):
         nav = NavigationWindow()
+        keys = [
+            nav.tree.topLevelItem(i).data(0, Qt.UserRole)
+            for i in range(nav.tree.topLevelItemCount())
+            if nav.tree.topLevelItem(i).data(0, Qt.UserRole)
+        ]
+        self.assertIn("build_am", keys)
+
+    def test_nav_show_bam_item_option(self):
+        nav = NavigationWindow()
+        nav.set_show_bam_item(False)
+        keys = [
+            nav.tree.topLevelItem(i).data(0, Qt.UserRole)
+            for i in range(nav.tree.topLevelItemCount())
+            if nav.tree.topLevelItem(i).data(0, Qt.UserRole)
+        ]
+        self.assertNotIn("build_am", keys)
+        nav.set_show_bam_item(True)
         keys = [
             nav.tree.topLevelItem(i).data(0, Qt.UserRole)
             for i in range(nav.tree.topLevelItemCount())
@@ -113,12 +133,39 @@ class TestBuildAmNavigation(unittest.TestCase):
                     win._confirm_build_analysis_model()
         self.assertEqual(opened, ["build_am_detailed"])
 
+    def test_confirm_ok_always_show_wizard(self):
+        win = PphViewer()
+        win.arch = object()
+        win.navigation.set_polyhedral_mesher(True)
+        win._nav_dialogs.session["option_nav"] = {
+            "always_show_wizard": True, "show_bam_item": True,
+            "show_mesher_item": True,
+        }
+        opened = []
+
+        def _fake_open(key, ctx, parent=None):
+            opened.append(key)
+            body = AnalysisModelWizardBody()
+            dlg = NavParamDialog(key, body, ctx, parent)
+            dlg.show()
+            dlg.reject()
+            return dlg
+
+        with patch.object(win, "_build_am_confirm_choice", return_value="ok"):
+            with patch.object(win._nav_dialogs, "open", side_effect=_fake_open):
+                with patch.object(QDialog, "exec_", return_value=QDialog.Rejected):
+                    win._confirm_build_analysis_model()
+        self.assertEqual(opened, ["build_am_detailed"])
+
     def test_wizard_body_layout(self):
         body = AnalysisModelWizardBody()
         self.assertEqual(body.title, "Analysis Model Wizard")
         self.assertEqual(body.dialog_buttons, 0)
-        self.assertEqual(body.nav.count(), 8)
+        self.assertEqual(body.nav.count(), 9)
         self.assertTrue(hasattr(body, "chk_use_af"))
+        self.assertTrue(hasattr(body, "chk_influence"))
+        self.assertTrue(hasattr(body, "tbl_influence"))
+        self.assertTrue(hasattr(body, "btn_bam_octree"))
 
 
 if __name__ == "__main__":
