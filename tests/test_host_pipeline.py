@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from automation import host_pipeline  # noqa: E402
+from automation.history_vbs import decode_vbs  # noqa: E402
 
 
 class TestBuildAndParse(unittest.TestCase):
@@ -22,7 +23,7 @@ class TestBuildAndParse(unittest.TestCase):
                 result, set_name="Box", group_name="BoxGroup",
                 project_path=r"D:\training\cradle\box\box.pph",
                 output=td / "host.vbs")
-            text = vbs.read_text(encoding="utf-8-sig")
+            text = decode_vbs(vbs.read_bytes())
             self.assertIn('Doc_.OpenProject "D:\\training\\cradle\\box\\box.pph", False', text)
             self.assertIn('CreateObject("pphdecoding.ScflowPipeline")', text)
             self.assertIn('CreateShapeGroupSet("Box")', text)

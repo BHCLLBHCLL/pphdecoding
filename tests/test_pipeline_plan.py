@@ -141,7 +141,7 @@ class TestPipelinePlan(unittest.TestCase):
                 r"D:\case\box.pph",
                 {"bam": True, "oct": True, "mesh": True},
                 out, marker=marker)
-            text = out.read_text(encoding="utf-8-sig")
+            text = decode_vbs(out.read_bytes())
             self.assertIn('Doc_.OpenProject "D:\\case\\box.pph", False', text)
             self.assertIn("MeshingGroup_.BuildAnalysisModel", text)
             self.assertIn("MeshingGroup_.CreateOctree", text)
@@ -158,7 +158,7 @@ class TestPipelinePlan(unittest.TestCase):
             build_execute_vbs(r"D:\case\box.x_t",
                               {"bam": True, "oct": True, "mesh": True},
                               out)
-            text = out.read_text(encoding="utf-8-sig")
+            text = decode_vbs(out.read_bytes())
             self.assertIn('Doc_.OpenCadFile "D:\\case\\box.x_t"', text)
             self.assertNotIn("Doc_.SaveProject", text)
 

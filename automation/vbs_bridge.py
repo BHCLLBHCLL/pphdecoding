@@ -41,7 +41,9 @@ def write_vbs_file(actions: list[str], path: str | Path,
                    title: str = "scFLOWpre automation") -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(build_vbs(actions, title), encoding="utf-8-sig")
+    # scFLOWpre 的 VBScript 引擎要求 UTF-16LE + BOM（与 history.vbs 一致）。
+    # 用 write_bytes 避免文本模式把 \r\n 再转成 \r\r\n。
+    path.write_bytes(build_vbs(actions, title).encode("utf-16"))
     return path
 
 

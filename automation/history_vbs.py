@@ -11,9 +11,9 @@ from typing import Optional
 def decode_vbs(data: bytes) -> str:
     """按 BOM 解码 scFLOWpre 录制的 VBS（UTF-8 / UTF-16LE / UTF-16BE）。"""
     if data.startswith(b"\xff\xfe"):
-        return data.decode("utf-16-le", errors="replace")
+        return data.decode("utf-16", errors="replace")
     if data.startswith(b"\xfe\xff"):
-        return data.decode("utf-16-be", errors="replace")
+        return data.decode("utf-16", errors="replace")
     if data.startswith(b"\xef\xbb\xbf"):
         return data.decode("utf-8-sig", errors="replace")
     try:

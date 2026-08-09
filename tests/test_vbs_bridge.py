@@ -87,7 +87,8 @@ class TestVbsBridge(unittest.TestCase):
         self.assertEqual(calls["cmd"][-1], str(p))
 
     def test_execute_gui_hooks(self):
-        import sys as _sys
+        import sys
+        import types
 
         class FakeApp:
             def __init__(self, *a, **k):
@@ -117,10 +118,15 @@ class TestVbsBridge(unittest.TestCase):
             def click(self, *a, **k):
                 return None
 
-        import pywinauto
-        from pywinauto import application as _app
-        orig_start = _app.Application
-        _app.Application = FakeApp
+        fake_py = types.ModuleType("pywinauto")
+        fake_app = types.ModuleType("pywinauto.application")
+        fake_app.Application = FakeApp
+        fake_py.application = fake_app
+        saved = {}
+        for name, mod in (("pywinauto", fake_py),
+                          ("pywinauto.application", fake_app)):
+            saved[name] = sys.modules.get(name)
+            sys.modules[name] = mod
         try:
             with tempfile.TemporaryDirectory() as td:
                 p = write_vbs_file(["scFLOWpre.Quit"], Path(td) / "run.vbs")
@@ -128,7 +134,11 @@ class TestVbsBridge(unittest.TestCase):
                 bridge._exe_cache = Path("scFLOWpre.exe")
                 result = bridge._execute_gui(p, hooks={})
         finally:
-            _app.Application = orig_start
+            for name, mod in saved.items():
+                if mod is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = mod
         self.assertEqual(result["backend"], "gui")
         self.assertEqual(result["status"], "submitted")
 
