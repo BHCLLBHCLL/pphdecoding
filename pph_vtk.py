@@ -345,6 +345,43 @@ def apply_depth_bias(mapper, layer: str = "mid") -> None:
             pass
 
 
+def tris_to_polydata(points: np.ndarray, triangles: np.ndarray):
+    """三角网格 → vtkPolyData（对齐 cabdecoding：clean + 点法线）。"""
+    import vtk
+
+    pts = np.asarray(points, dtype=np.float64).reshape(-1, 3)
+    tris = np.asarray(triangles, dtype=np.int64).reshape(-1, 3)
+    if pts.size == 0 or tris.size == 0:
+        return None
+    pd = vtk.vtkPolyData()
+    vpts = vtk.vtkPoints()
+    vpts.SetDataTypeToDouble()
+    for p in pts:
+        vpts.InsertNextPoint(float(p[0]), float(p[1]), float(p[2]))
+    pd.SetPoints(vpts)
+    cells = vtk.vtkCellArray()
+    for t in tris:
+        tri = vtk.vtkTriangle()
+        tri.GetPointIds().SetId(0, int(t[0]))
+        tri.GetPointIds().SetId(1, int(t[1]))
+        tri.GetPointIds().SetId(2, int(t[2]))
+        cells.InsertNextCell(tri)
+    pd.SetPolys(cells)
+    cleaned = vtk.vtkCleanPolyData()
+    cleaned.SetInputData(pd)
+    cleaned.Update()
+    normals = vtk.vtkPolyDataNormals()
+    normals.SetInputConnection(cleaned.GetOutputPort())
+    normals.ComputePointNormalsOn()
+    normals.ComputeCellNormalsOff()
+    normals.SplittingOn()
+    normals.SetFeatureAngle(45.0)
+    normals.ConsistencyOn()
+    normals.AutoOrientNormalsOn()
+    normals.Update()
+    return normals.GetOutput()
+
+
 def polydata_actor(pd, scalar_range: Optional[tuple[float, float]] = None,
                    opacity: float = 1.0, wireframe: bool = False,
                    color: Optional[tuple[float, float, float]] = None,

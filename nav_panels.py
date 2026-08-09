@@ -1746,14 +1746,19 @@ def _mf_combo(items: list[tuple[str, str]]) -> QComboBox:
 
 
 class MesherFaceterBody(_Body):
-    """[Condition] – [Mesher/Faceter Setting]（对齐 scFLOWpre 属性树）。"""
+    """[Condition] – [Mesher/Faceter Setting]（对齐 scFLOWpre 属性树）。
+
+    ``settings_mode=True`` 时用于 [Option]–[Settings]–[Mesher/Faceter]：
+    隐藏 Condition 专有 / Voxel Fitting Mesher 页专有行，并嵌套 Element/Octree。
+    """
 
     title = "Mesher/Faceter Setting"
     min_size = (600, 620)
     dialog_buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, settings_mode: bool = False):
         super().__init__(parent)
+        self._settings_mode = settings_mode
         self._items: dict[str, QTreeWidgetItem] = {}
         self._editors: dict[str, QWidget] = {}
 
@@ -1796,6 +1801,16 @@ class MesherFaceterBody(_Body):
                 w.currentIndexChanged.connect(self._sync_visibility)
         self._sync_visibility()
 
+    def _add_branch(self, parent, key: str, label: str) -> QTreeWidgetItem:
+        it = QTreeWidgetItem(parent if parent is not None else self.tree,
+                             [label, "", ""])
+        font = it.font(0)
+        font.setBold(True)
+        it.setFont(0, font)
+        it.setExpanded(True)
+        self._items[key] = it
+        return it
+
     def _add_row(self, parent, key: str, label: str, editor: QWidget,
                  unit: str = "", *, branch: bool = False) -> QTreeWidgetItem:
         it = QTreeWidgetItem(parent if parent is not None else self.tree,
@@ -1825,19 +1840,23 @@ class MesherFaceterBody(_Body):
         ])
         self._add_row(mesher, "surf", "Surface mesher", self.cb_surf)
 
-        # Solid-based surface mesher extras
+        # Solid-based：嵌套 Element size / Octree parameter
+        elem = self._add_branch(mesher, "elem", "Element size parameter")
+        self.cb_elem_dir = _mf_combo([
+            ("Fine side", "0"), ("Coarse side", "1")])
         self.sp_elem_effect = _spin_f(3, 0, 100, 1.0)
-        self._add_row(mesher, "elem_dir", "Element size parameter / "
-                      "Direction of effect",
-                      _mf_combo([("Fine side", "0"), ("Coarse side", "1")]))
-        self._add_row(mesher, "elem_range", "Range of effect",
+        self._add_row(elem, "elem_dir", "Direction of effect",
+                      self.cb_elem_dir)
+        self._add_row(elem, "elem_range", "Range of effect",
                       self.sp_elem_effect, "-")
+
+        octp = self._add_branch(mesher, "oct_param", "Octree parameter")
         self.sp_oct_ang = _spin_f(3, 0, 180, 5)
         self.sp_oct_reduce = _spin_f(6, 0, 10, 0.25)
-        self._add_row(mesher, "oct_ang",
-                      "Octree parameter / Angle precision for the whole model",
+        self._add_row(octp, "oct_ang",
+                      "Angle precision for the whole model",
                       self.sp_oct_ang, "deg")
-        self._add_row(mesher, "oct_reduce", "Reduction ratio of edge length",
+        self._add_row(octp, "oct_reduce", "Reduction ratio of edge length",
                       self.sp_oct_reduce, "-")
 
         # Voxel extras
@@ -1847,22 +1866,24 @@ class MesherFaceterBody(_Body):
         self._add_row(mesher, "oct_include",
                       "Inclusion of octree creation process in meshing",
                       self.cb_oct_include)
+        vx_acc = self._add_branch(
+            mesher, "vx_acc",
+            "Facet accuracy for the whole model (relative to default value)")
         self.sp_vx_dist = _spin_f(3, 0, 100, 1)
         self.sp_vx_ang = _spin_f(3, 0, 180, 5)
         self.sp_vx_edge = _spin_f(3, 0, 100, 5)
-        self._add_row(mesher, "vx_dist",
-                      "Facet accuracy for the whole model / "
-                      "Precision of distance",
+        self._add_row(vx_acc, "vx_dist", "Precision of distance",
                       self.sp_vx_dist, "-")
-        self._add_row(mesher, "vx_ang", "Precision of angle",
+        self._add_row(vx_acc, "vx_ang", "Precision of angle",
                       self.sp_vx_ang, "deg")
-        self._add_row(mesher, "vx_edge", "Maximum edge length",
+        self._add_row(vx_acc, "vx_edge", "Maximum edge length",
                       self.sp_vx_edge, "-")
         self.cb_vx_each = _mf_combo([
             ("Do not specify", "false"), ("Specify", "true"),
         ])
         self._add_row(mesher, "vx_each",
                       "Facet accuracy for part and region", self.cb_vx_each)
+        # Condition 对话框遗留项；Settings / Voxel Fitting Mesher 页不显示
         self.cb_rough = _mf_combo([
             ("false", "false"), ("true", "true"),
         ])
@@ -2022,10 +2043,15 @@ class MesherFaceterBody(_Body):
 
         # under Mesher
         self._hide("surf", show=poly)
-        self._hide("elem_dir", "elem_range", "oct_ang", "oct_reduce",
+        self._hide("elem", "elem_dir", "elem_range",
+                   "oct_param", "oct_ang", "oct_reduce",
                    show=poly and solid_surf)
-        self._hide("oct_include", "vx_dist", "vx_ang", "vx_edge", "vx_each",
-                   "rough", "init_div", show=not poly)
+        self._hide("oct_include", "vx_acc", "vx_dist", "vx_ang", "vx_edge",
+                   show=not poly)
+        # Condition 专有：part/region；Voxel 页专有：rough / init
+        show_cond_voxel = (not poly) and (not self._settings_mode)
+        self._hide("vx_each", show=show_cond_voxel)
+        self._hide("rough", "init_div", show=show_cond_voxel)
 
         # Method for BAM：仅 Polyhedral + Facet-based
         show_mdl = poly and facet_surf

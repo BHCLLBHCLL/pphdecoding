@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -1834,6 +1835,10 @@ class SnapshotTab(QWidget):
         layout.addWidget(self.tree, 1)
         layout.addWidget(self.summary, 0)
 
+    def clear(self) -> None:
+        self.tree.clear()
+        self.summary.clear()
+
     def load_snapshot(self, snap, bodies_summary: str) -> None:
         self.tree.clear()
         for r in snap.records:
@@ -1867,6 +1872,10 @@ class View3DTab(QWidget):
         self.group_box.currentTextChanged.connect(self._on_group_changed)
         self.chk_mdl_part = QCheckBox("几何 MDL", self)
         self.chk_mdl_part.setChecked(True)
+        self.chk_cad = QCheckBox("CAD", self)
+        self.chk_cad.setChecked(True)
+        self.chk_cad.setToolTip(
+            "Import 的 Parasolid .x_t 剖分预览（pskernel facet_2）")
         self.chk_mdl_ridge = QCheckBox("ridge", self)
         self.chk_mdl_ridge.setChecked(False)
         self.chk_oct = QCheckBox("八叉树", self)
@@ -1971,9 +1980,9 @@ class View3DTab(QWidget):
         pv.addLayout(row1)
         row2 = QHBoxLayout()
         row2.addWidget(QLabel("图层:", panel))
-        for chk in (self.chk_mdl_part, self.chk_mdl_ridge, self.chk_oct,
-                    self.chk_gph, self.chk_gph_color, self.chk_edges,
-                    self.chk_axes, self.chk_legend):
+        for chk in (self.chk_mdl_part, self.chk_cad, self.chk_mdl_ridge,
+                    self.chk_oct, self.chk_gph, self.chk_gph_color,
+                    self.chk_edges, self.chk_axes, self.chk_legend):
             row2.addWidget(chk)
             if chk is not self.chk_gph_color:
                 chk.toggled.connect(self.render)
@@ -2068,6 +2077,7 @@ class View3DTab(QWidget):
         layout.addWidget(self.status)
 
         self.groups: dict[str, dict] = {}
+        self._cad_meshes: list = []  # cad_import.ImportedBody / TessPart
         self._mdl_filter: Optional[dict] = None
         self._pickable_actors: list = []
         self._picked_status = ""
@@ -2152,6 +2162,7 @@ class View3DTab(QWidget):
         self._layer_hidden.clear()
         # 打开工程默认：几何 + 体网格 + 网格线 + 坐标轴
         self.chk_mdl_part.setChecked(True)
+        self.chk_cad.setChecked(True)
         self.chk_gph.setChecked(True)
         self.chk_edges.setChecked(True)
         self.chk_axes.setChecked(True)
@@ -2166,6 +2177,25 @@ class View3DTab(QWidget):
             # 窗口未 show 前不触发 VTK Render（无 GL/offscreen 会崩）
             if self._started:
                 self.render()
+        elif self._cad_meshes and self._started:
+            self.render()
+
+    def set_cad_meshes(self, bodies: list, *, append: bool = False) -> None:
+        """设置 Import .x_t 剖分结果（cabdecoding TessPart 列表）。"""
+        items = []
+        for b in bodies or []:
+            tess = getattr(b, "tess", b)
+            if tess is None:
+                continue
+            items.append(tess)
+        if append:
+            self._cad_meshes.extend(items)
+        else:
+            self._cad_meshes = items
+        if self._started:
+            self.render()
+            if self._cad_meshes:
+                self.fit()
 
     def select_group(self, name: str) -> None:
         if name in self.groups:
@@ -2486,10 +2516,10 @@ class View3DTab(QWidget):
         group = self.groups.get(name)
         if not self._started:
             # 仅更新状态文案，避免无 GL 时组装 actor/Render 崩溃
-            if not group:
+            if not group and not self._cad_meshes:
                 self.status.setText("无网格组数据")
             else:
-                self.status.setText(f"组 {name}：待显示窗口后渲染")
+                self.status.setText(f"组 {name or 'CAD'}：待显示窗口后渲染")
             return
         self.renderer.RemoveAllViewProps()
         if self._orientation is not None:
@@ -2498,7 +2528,7 @@ class View3DTab(QWidget):
             except Exception:  # noqa: BLE001
                 pass
             self._orientation = None
-        if not group:
+        if not group and not self._cad_meshes:
             self.status.setText("无网格组数据")
             self._safe_vtk_render()
             return
@@ -2506,28 +2536,47 @@ class View3DTab(QWidget):
         mesh_section = (self.chk_section.isChecked()
                         and self.section_target.currentText() == "体网格")
         lines_only = mesh_section and self.chk_lines_only.isChecked()
-        tree_filtered = self._part_tree_filtered(name)
+        tree_filtered = self._part_tree_filtered(name) if group else False
         # 体网格开着时始终叠层：MDL 垫底，网格线只来自 GPH 面网格
-        overlap = self._gph_and_mdl_overlap(name) and not lines_only
+        overlap = (bool(group) and self._gph_and_mdl_overlap(name)
+                   and not lines_only)
 
         layers: list[tuple[str, Optional[LayerRender]]] = []
         self._pickable_actors = []
+        # 绘制顺序：CAD → MDL → GPH → 网格线
+        if self.chk_cad.isChecked() and self._cad_meshes and not lines_only:
+            for tess in self._cad_meshes:
+                try:
+                    pd = pph_vtk.tris_to_polydata(
+                        tess.points, tess.triangles)
+                except Exception:  # noqa: BLE001
+                    pd = None
+                if pd is None:
+                    continue
+                actor = pph_vtk.polydata_actor(
+                    pd, opacity=0.95, color=(0.35, 0.75, 0.45),
+                    depth_bias="back")
+                tname = getattr(tess, "name", "CAD") or "CAD"
+                layers.append((
+                    f"CAD {tname}",
+                    LayerRender(actor=actor, title=tname,
+                                legend_entries=[], edges=False)))
         # 绘制顺序：MDL（后）→ GPH（中）→ 网格线（前，后面单独加）
-        if (self._layer_visible("mdl", name)
-                and self.chk_mdl_part.isChecked() and not lines_only):
+        if group and (self._layer_visible("mdl", name)
+                      and self.chk_mdl_part.isChecked() and not lines_only):
             layers.append(
                 ("MDL part",
                  self._make_actor("mdl", group, name, overlap_mesh=overlap)))
-        if (self._layer_visible("ridge", name)
-                and self.chk_mdl_ridge.isChecked() and not lines_only):
+        if group and (self._layer_visible("ridge", name)
+                      and self.chk_mdl_ridge.isChecked() and not lines_only):
             layers.append(
                 ("MDL ridge",
                  self._make_actor("ridge", group, name, overlap_mesh=overlap)))
-        if (self._layer_visible("oct", name)
-                and self.chk_oct.isChecked() and not lines_only):
+        if group and (self._layer_visible("oct", name)
+                      and self.chk_oct.isChecked() and not lines_only):
             layers.append(("OCT", self._make_actor("oct", group)))
-        if (self._layer_visible("gph", name) and self.chk_gph.isChecked()
-                and not lines_only):
+        if group and (self._layer_visible("gph", name)
+                      and self.chk_gph.isChecked() and not lines_only):
             layers.append(
                 ("GPH",
                  self._make_actor("gph", group, name, overlap_mesh=overlap)))
@@ -2936,13 +2985,17 @@ class PphViewer(QMainWindow):
         self._mouse_op_type = "CRADLE 3-Button Mode"
         self._viewer_mode = False
         self._ui_language = "en"
+        # True=Prepare Parts 模式；False=已 Build Analysis Model（锁定实体编辑）
+        self._prepare_parts_mode = True
+        self._menu_acts: dict[str, QAction] = {}
         # NavDialogSession 在 _build_ui 中创建
         self._layout_timer = QTimer(self)
         self._layout_timer.setSingleShot(True)
         self._layout_timer.timeout.connect(self._refresh_layout)
+        self._untitled = False
         self._build_ui()
         self._apply_style()
-        self.log("Ready. Open a .pph project to begin.")
+        self.log("Ready.")
 
     def resizeEvent(self, event) -> None:  # noqa: N802 - Qt 命名
         super().resizeEvent(event)
@@ -3092,100 +3145,263 @@ class PphViewer(QMainWindow):
         self.statusBar().showMessage("No project")
 
     def _build_menus(self) -> None:
+        """按 scFLOWpre Menu Guide（hh_toc / Pre_eng）重建菜单栏。"""
         mb = self.menuBar()
+        mb.clear()
+        self._menu_acts.clear()
 
-        def add_act(menu, text, slot=None, shortcut=None, tip=None):
+        def add_act(menu, text, slot=None, *, shortcut=None, tip=None,
+                    key: Optional[str] = None, checkable: bool = False):
             act = QAction(text, self)
             if shortcut:
                 act.setShortcut(shortcut)
             if tip:
                 act.setToolTip(tip)
+            if checkable:
+                act.setCheckable(True)
             if slot:
                 act.triggered.connect(slot)
             else:
                 act.triggered.connect(
                     lambda checked=False, t=text: self._nyi(t))
             menu.addAction(act)
+            if key:
+                self._menu_acts[key] = act
             return act
 
-        # File
+        def nav(key: str):
+            return lambda _c=False, k=key: self._on_navigate(k)
+
+        # ── File ──────────────────────────────────────────────────
         m = mb.addMenu("File(&F)")
-        add_act(m, "Open…", self.open_dialog, "Ctrl+O")
-        add_act(m, "Reload", self.reload, "F5")
-        add_act(m, "Save As…", self.save_as_dialog, "Ctrl+Shift+S")
+        add_act(m, "New Project…", self.new_empty_project, key="file_new")
+        add_act(m, "Open…", self.open_dialog, shortcut="Ctrl+O",
+                key="file_open")
+        add_act(m, "Save", self._file_save, shortcut="Ctrl+S",
+                key="file_save")
+        add_act(m, "Save As…", self.save_as_dialog, shortcut="Ctrl+Shift+S",
+                key="file_save_as")
+        add_act(m, "Open Project Folder", self._open_project_folder,
+                key="file_folder")
         m.addSeparator()
-        add_act(m, "Import Part File…",
-                lambda: self._on_navigate("import_part"))
-        add_act(m, "Open Project Folder", self._open_project_folder)
-        add_act(m, "Export Member…", self._export_member)
+        add_act(m, "Import…", nav("import_part"), key="file_import")
+        add_act(m, "Export…", self._export_member, key="file_export")
+        add_act(m, "Create Actran Files…", key="file_actran")
         m.addSeparator()
-        add_act(m, "Exit", self.close, "Alt+F4")
+        add_act(m, "Start Recording VBScript", key="file_vbs_start")
+        add_act(m, "Stop Recording VBScript", key="file_vbs_stop")
+        add_act(m, "Execute VBScript…", key="file_vbs_exec")
+        m.addSeparator()
+        add_act(m, "Exit", self.close, shortcut="Alt+F4", key="file_exit")
 
-        # Edit
+        # ── Edit ──────────────────────────────────────────────────
         m = mb.addMenu("Edit(&E)")
-        add_act(m, "Create Parts",
-                lambda: self._on_navigate("create_parts"))
-        add_act(m, "Modify Parts",
-                lambda: self._on_navigate("modify_parts"))
-        add_act(m, "Create Non-Solid Part",
-                lambda: self._on_navigate("non_solid"))
-        add_act(m, "Register Region",
-                lambda: self._on_navigate("regions"))
-        add_act(m, "Edit Project XML / JS",
-                lambda: self._on_navigate("xml"))
+        add_act(m, "Undo", shortcut="Ctrl+Z", key="edit_undo")
+        m.addSeparator()
+        add_act(m, "Create Parts…", nav("create_parts"),
+                key="edit_create_parts")
+        add_act(m, "Modify Parts…", nav("modify_parts"),
+                key="edit_modify_parts")
+        add_act(m, "Create Non-Solid Part…", nav("non_solid"),
+                key="edit_non_solid")
+        add_act(m, "Define Facet Part…", key="edit_define_facet")
+        add_act(m, "Create Non-Facet/Closed Volume Part…",
+                key="edit_non_facet_cv")
+        m.addSeparator()
+        add_act(m, "Register Region…", nav("regions"),
+                key="edit_register_region")
+        add_act(m, "Create 2D Sub-mesh Meshing Unit…",
+                key="edit_2d_submesh")
+        add_act(m, "Measurement Tool", key="edit_measure")
+        m.addSeparator()
+        ridge = m.addMenu("Ridge")
+        add_act(ridge, "Set Selected Edge to Ridge", key="edit_ridge_set")
+        add_act(ridge, "Set Selected Edge to Non-Ridge",
+                key="edit_ridge_unset")
+        add_act(ridge, "Recalc Ridge", key="edit_ridge_recalc")
+        m.addSeparator()
+        add_act(m, "Refine Octants", key="edit_refine_oct")
+        add_act(m, "Refine Octants (Recursive)…",
+                key="edit_refine_oct_rec")
+        add_act(m, "Refine Octants from Curvature…",
+                key="edit_refine_oct_curv")
+        add_act(m, "Refine Octants from Separation…",
+                key="edit_refine_oct_sep")
+        add_act(m, "Merge Octants", key="edit_merge_oct")
+        add_act(m, "Show Octants by Marked Face",
+                key="edit_oct_by_face")
+        add_act(m, "Show Octants by Marked Edge",
+                key="edit_oct_by_edge")
+        m.addSeparator()
+        add_act(m, "Restore Closed Volume Data…",
+                key="edit_restore_cv")
+        add_act(m, "Fix Marked Element Shape", key="edit_fix_elem")
 
-        # Select
+        # ── Select ────────────────────────────────────────────────
         m = mb.addMenu("Select(&S)")
-        add_act(m, "Pick Face", self._toggle_pick_face)
-        add_act(m, "Clear Selection",
-                lambda: self.view3d.set_model_filter(None))
+        self._select_pick_group = QActionGroup(self)
+        self._select_pick_group.setExclusive(True)
+        for key, label in (
+            ("sel_pick_part", "Mouse Pick (Part)"),
+            ("sel_pick_face", "Mouse Pick (Face)"),
+            ("sel_pick_face_spread", "Mouse Pick (Face & Spread)"),
+            ("sel_pick_face_virtual",
+             "Mouse Pick (Face, Based on virtual part face/"
+             "closed volume face)"),
+            ("sel_pick_edge", "Mouse Pick (Edge)"),
+            ("sel_pick_edge_spread", "Mouse Pick (Edge & Spread)"),
+            ("sel_pick_vertex", "Mouse Pick (Vertex)"),
+        ):
+            act = add_act(m, label, checkable=True, key=key)
+            self._select_pick_group.addAction(act)
+            if key == "sel_pick_face":
+                act.triggered.connect(
+                    lambda c=False: self._toggle_pick_face())
+        self._menu_acts["sel_pick_face"].setChecked(False)
+        m.addSeparator()
+        add_act(m, "Rubber Box (Select)", key="sel_rbox")
+        add_act(m, "Rubber Circle (Select)", key="sel_rcircle")
+        add_act(m, "Rubber Polygon (Select)", key="sel_rpoly")
+        m.addSeparator()
+        add_act(m, "Spread Selected Face to Selected Edge",
+                key="sel_spread")
+        add_act(m, "Select by Element Number…", key="sel_by_elem")
+        add_act(m, "Select Elements by List File…", key="sel_by_list")
+        add_act(m, "Select Faces That Have the Same Area",
+                key="sel_same_area")
+        m.addSeparator()
+        add_act(m, "Select All Parts", key="sel_all_parts")
+        add_act(m, "Select All Faces", key="sel_all_faces")
+        add_act(m, "Select All Edges", key="sel_all_edges")
+        add_act(m, "Select All Ridges", key="sel_all_ridges")
+        m.addSeparator()
+        add_act(m, "Deselect All Parts",
+                lambda: self.view3d.set_model_filter(None),
+                key="sel_desel_parts")
+        add_act(m, "Deselect All Faces",
+                lambda: self.view3d.set_model_filter(None),
+                key="sel_desel_faces")
+        add_act(m, "Deselect All Edges", key="sel_desel_edges")
+        add_act(m, "Deselect All Vertices", key="sel_desel_verts")
+        add_act(m, "Deselect All Elements", key="sel_desel_elems")
+        m.addSeparator()
+        add_act(m, "Element Quality Check…", key="sel_quality")
+        add_act(m, "Check Intersection", key="sel_intersect")
 
-        # View
+        # ── View ──────────────────────────────────────────────────
         m = mb.addMenu("View(&V)")
-        add_act(m, "Part", lambda: self._on_navigate("view_part"))
-        add_act(m, "Octree", lambda: self._on_navigate("view_octree"))
-        add_act(m, "Mesh", lambda: self._on_navigate("view_mesh"))
+        add_act(m, "Part", nav("view_part"), key="view_part")
+        add_act(m, "Octree", nav("view_octree"), key="view_octree")
+        add_act(m, "Mesh", nav("view_mesh"), key="view_mesh")
         m.addSeparator()
-        add_act(m, "Fit to Draw Window",
-                lambda: self.view3d.fit(), "Ctrl+F")
         add_act(m, "Reset Viewpoint",
-                lambda: self.view3d.reset_viewpoint())
-        add_act(m, "Show All", lambda: self._on_navigate("view_show_all"))
+                lambda: self.view3d.reset_viewpoint(),
+                key="view_reset")
+        add_act(m, "Fit to Draw Window",
+                lambda: self.view3d.fit(), shortcut="Ctrl+F",
+                key="view_fit")
+        add_act(m, "Fit to Selected Face (Model)",
+                key="view_fit_face_mdl")
+        add_act(m, "Fit to Selected Face (Mesh)",
+                key="view_fit_face_msh")
+        add_act(m, "Fit to Selected Element (Mesh)",
+                key="view_fit_elem")
         m.addSeparator()
-        add_act(m, "Cross Section View of Mesh",
-                lambda: self._on_navigate("view_section"))
-        add_act(m, "Rubber Box Zoom", self._toggle_rubber)
+        add_act(m, "Show All", nav("view_show_all"), key="view_show_all")
+        add_act(m, "Hide Selected Parts", key="view_hide_parts")
+        add_act(m, "Hide Selected Faces", key="view_hide_faces")
+        add_act(m, "Only Selected Part", key="view_only_part")
+        add_act(m, "Only Selected Face", key="view_only_face")
+        add_act(m, "Only Selected Mesh", key="view_only_mesh")
         m.addSeparator()
-        add_act(m, "Dashboard", lambda: self._on_navigate("dashboard"))
-        add_act(m, "Snapshot", lambda: self._on_navigate("snapshot"))
+        add_act(m, "Change Display Type of Edge", key="view_edge_type")
+        add_act(m, "Switch Display Surface by Orientation",
+                key="view_surf_orient")
+        m.addSeparator()
+        rb = m.addMenu("Rubber Box")
+        add_act(rb, "Rubber Box (Show)", self._toggle_rubber,
+                key="view_rbox_show")
+        add_act(rb, "Rubber Box (Hide)", key="view_rbox_hide")
+        rc = m.addMenu("Rubber Circle")
+        add_act(rc, "Rubber Circle (Show)", key="view_rcirc_show")
+        add_act(rc, "Rubber Circle (Hide)", key="view_rcirc_hide")
+        rp = m.addMenu("Rubber Polygon")
+        add_act(rp, "Rubber Polygon (Show)", key="view_rpoly_show")
+        add_act(rp, "Rubber Polygon (Hide)", key="view_rpoly_hide")
+        m.addSeparator()
+        add_act(m, "Refinement Level…", key="view_refine_level")
+        add_act(m, "Display Octants Connected by Node",
+                key="view_oct_node")
+        add_act(m, "Display Octants Connected by Face",
+                key="view_oct_face")
+        add_act(m, "Display Neighbor Octants by Direction…",
+                key="view_oct_dir")
+        m.addSeparator()
+        add_act(m, "Report Prism Layer", key="view_prism")
+        add_act(m, "Element Types…", key="view_elem_types")
+        add_act(m, "Show Parts List Dialog…", key="view_parts_list")
+        add_act(m, "Show Region Registration Check Dialog…",
+                key="view_region_check")
+        add_act(m, "Cross Section View of Mesh", nav("view_section"),
+                key="view_section")
+        add_act(m, "Element Quality Check…", key="view_quality")
+        m.addSeparator()
+        add_act(m, "Dashboard", nav("dashboard"), key="view_dashboard")
+        add_act(m, "Snapshot", nav("snapshot"), key="view_snapshot")
 
-        # Condition
+        # ── Condition ─────────────────────────────────────────────
         m = mb.addMenu("Condition(&C)")
-        add_act(m, "Parts Control",
-                lambda: self._on_navigate("parts_control"))
-        add_act(m, "Mesher/Faceter Setting",
-                lambda: self._on_navigate("mesher_faceter"))
-        add_act(m, "Part Material",
-                lambda: self._on_navigate("part_material"))
-        add_act(m, "Conditions",
-                lambda: self._on_navigate("conditions"))
-        add_act(m, "Octree Parameter",
-                lambda: self._on_navigate("oct_param"))
-        add_act(m, "Mesh Parameter",
-                lambda: self._on_navigate("mesh_param"))
+        add_act(m, "Parts Control…", nav("parts_control"),
+                key="cond_parts_control")
+        add_act(m, "Discontinuous Mesh…", nav("specify_disc"),
+                key="cond_disc")
+        add_act(m, "Overset Mesh…", nav("overset_mesh"),
+                key="cond_overset")
+        add_act(m, "Part Material…", nav("part_material"),
+                key="cond_part_mat")
+        add_act(m, "Fluid Region Material…", key="cond_fluid_mat")
+        add_act(m, "Conditions…", nav("conditions"), key="cond_wizard")
+        m.addSeparator()
+        add_act(m, "Project Type Setting…", key="cond_project_type")
+        add_act(m, "Mesher/Faceter Setting…", nav("mesher_faceter"),
+                key="cond_mesher")
+        m.addSeparator()
+        add_act(m, "Wrapping Octree Parameter…", nav("wrap_octree"),
+                key="cond_wrap_oct")
+        add_act(m, "Octree Parameter for Building Analysis Model…",
+                key="cond_bam_oct")
+        add_act(m, "Wrapping Parameter…", nav("wrap_param"),
+                key="cond_wrap_param")
+        m.addSeparator()
+        add_act(m, "Octree Parameter…", nav("oct_param"),
+                key="cond_oct")
+        add_act(m, "Mesh Parameter…", nav("mesh_param"),
+                key="cond_mesh")
 
-        # Execute
+        # ── Execute ───────────────────────────────────────────────
         m = mb.addMenu("Execute(&X)")
-        add_act(m, "Build Analysis Model",
-                lambda: self._on_navigate("build_am"))
-        add_act(m, "Generate Octree for Meshing",
-                lambda: self._on_navigate("oct_param"))
-        add_act(m, "Generate Mesh",
-                lambda: self._on_navigate("mesh_param"))
-        add_act(m, "Execute…",
-                lambda: self._on_navigate("execute"))
+        add_act(m, "Begin Wrapping", nav("begin_wrap"),
+                key="exec_begin_wrap")
+        add_act(m, "Cancel Wrapping", nav("cancel_wrap"),
+                key="exec_cancel_wrap")
+        add_act(m, "Execute Wrapping…", nav("exec_wrap"),
+                key="exec_exec_wrap")
+        add_act(m, "Retry Wrapping", nav("retry_wrap"),
+                key="exec_retry_wrap")
+        m.addSeparator()
+        add_act(m, "Prepare Parts", self._execute_prepare_parts,
+                key="exec_prepare")
+        add_act(m, "Build Analysis Model", nav("build_am"),
+                key="exec_bam")
+        m.addSeparator()
+        add_act(m, "Generate Octree for Meshing", nav("oct_param"),
+                key="exec_octree")
+        add_act(m, "Generate Mesh", nav("mesh_param"),
+                key="exec_mesh")
+        add_act(m, "Execute Solver", nav("execute"),
+                key="exec_solver")
 
-        # Option（对齐 scFLOWpre Option(O)）
+        # ── Option ────────────────────────────────────────────────
         m = mb.addMenu("Option(&O)")
         self._mouse_mode_group = QActionGroup(self)
         self._mouse_mode_group.setExclusive(True)
@@ -3202,19 +3418,36 @@ class PphViewer(QMainWindow):
             self._mouse_mode_group.addAction(act)
             m.addAction(act)
             self._mouse_acts[key] = act
+            self._menu_acts[f"opt_mouse_{key}"] = act
             act.triggered.connect(
                 lambda _c=False, k=key: self._set_mouse_mode(k))
         self._mouse_acts["3btn"].setChecked(True)
         m.addSeparator()
-        add_act(m, "Operation…", self._option_operation)
+        self._opt_tool_group = QActionGroup(self)
+        self._opt_tool_group.setExclusive(True)
+        for key, label in (
+            ("opt_3d_rot", "3D Rotation"),
+            ("opt_2d_rot", "2D Rotation"),
+            ("opt_trans", "Translation"),
+            ("opt_zoom", "Zoom In/Out"),
+        ):
+            act = add_act(m, label, checkable=True, key=key)
+            self._opt_tool_group.addAction(act)
+            act.triggered.connect(
+                lambda _c=False, t=label: self.log(
+                    f"Option — {t} (1-Button tool)"))
         m.addSeparator()
-        add_act(m, "Unit Conversion…", self._option_unit_conversion)
+        add_act(m, "Operation…", self._option_operation, key="opt_operation")
         m.addSeparator()
-        add_act(m, "Settings…", self._option_settings)
+        add_act(m, "Unit Conversion…", self._option_unit_conversion,
+                key="opt_unit")
+        m.addSeparator()
+        add_act(m, "Settings…", self._option_settings, key="opt_settings")
         self.act_viewer_mode = QAction("Change to Viewer Mode", self)
         self.act_viewer_mode.setCheckable(True)
         self.act_viewer_mode.triggered.connect(self._toggle_viewer_mode)
         m.addAction(self.act_viewer_mode)
+        self._menu_acts["opt_viewer"] = self.act_viewer_mode
         m.addSeparator()
         lang_menu = m.addMenu("Change Language")
         self._lang_group = QActionGroup(self)
@@ -3231,10 +3464,13 @@ class PphViewer(QMainWindow):
                 lambda _c=False, c=code: self._set_language(c))
         self._lang_acts["en"].setChecked(True)
 
-        # Help
+        # ── Help ──────────────────────────────────────────────────
         m = mb.addMenu("Help(&H)")
-        add_act(m, "About PPH Viewer", self._about)
-        add_act(m, "Open scFLOWpre Manual", self._open_manual)
+        add_act(m, "Tutorial", self._open_tutorial, key="help_tutorial")
+        add_act(m, "Reference", self._open_manual, key="help_ref")
+        add_act(m, "About scFLOWpre", self._about, key="help_about")
+
+        self._update_menus_for_mode()
 
     def _build_toolbars(self) -> None:
         icon_sz = 22
@@ -3330,6 +3566,7 @@ class PphViewer(QMainWindow):
         act = self._mouse_acts.get(mode)
         if act is not None and not act.isChecked():
             act.setChecked(True)
+        self._update_menus_for_mode()
         self.log(f"Option — mouse mode: {self._mouse_op_type}")
 
     def _option_operation(self) -> None:
@@ -3351,15 +3588,101 @@ class PphViewer(QMainWindow):
     def _option_unit_conversion(self) -> None:
         option_dialogs.UnitConversionDialog(self).exec_()
 
-    def _option_settings(self) -> None:
+    def _option_settings(self, page_key: str = "navigation") -> None:
         ctx = self._nav_context()
         dlg = option_dialogs.EnvironmentSettingsDialog(
             ctx, self,
             on_open_mesher=lambda: self._on_navigate("mesher_faceter"))
+        if hasattr(dlg, "_select_key"):
+            dlg._select_key(page_key)
         if dlg.exec_() == QDialog.Accepted:
             self._commit_nav_ctx("option_settings", ctx)
             self._apply_option_nav()
+            self._update_menus_for_mode()
             self.log("Option — Settings applied")
+
+    def _file_save(self) -> None:
+        """File → Save：有路径时另存覆盖提示；否则走 Save As。"""
+        if self._viewer_mode:
+            self.log("Viewer Mode: Save disabled", "WARN")
+            return
+        if not self.archive_path:
+            self.save_as_dialog()
+            return
+        # 查看器默认不覆盖原文件，引导 Save As
+        self.save_as_dialog()
+
+    def _execute_prepare_parts(self) -> None:
+        """Execute → Prepare Parts：回到零件准备模式（解锁实体编辑）。"""
+        if self._viewer_mode:
+            self.log("Viewer Mode: Prepare Parts disabled", "WARN")
+            return
+        if not self._prepare_parts_mode:
+            r = QMessageBox.question(
+                self, "Prepare Parts",
+                "Return to Prepare Parts mode?\n"
+                "The analysis model will be treated as invalid until "
+                "Build Analysis Model is run again.",
+                QMessageBox.Ok | QMessageBox.Cancel,
+                QMessageBox.Ok)
+            if r != QMessageBox.Ok:
+                return
+        self._prepare_parts_mode = True
+        sess = self._nav_dialogs.session.setdefault("build_am", {})
+        sess["prepare_parts_mode"] = True
+        sess.pop("build_requested", None)
+        self._update_menus_for_mode()
+        self.log("Execute — Prepare Parts mode")
+
+    def _update_menus_for_mode(self) -> None:
+        """按 Viewer / Prepare Parts / BAM 状态刷新菜单使能。"""
+        vm = self._viewer_mode
+        prep = self._prepare_parts_mode
+        # File save/export
+        for k in ("file_save", "file_save_as", "file_export", "file_actran"):
+            act = self._menu_acts.get(k)
+            if act:
+                act.setEnabled(not vm)
+        # Edit solid-part ops：仅 Prepare Parts 且非 Viewer
+        for k in (
+            "edit_create_parts", "edit_modify_parts", "edit_define_facet",
+            "edit_non_facet_cv",
+        ):
+            act = self._menu_acts.get(k)
+            if act:
+                act.setEnabled(prep and not vm)
+        # Non-solid / region：BAM 后仍常可用（手册侧重 solid）
+        for k in ("edit_non_solid", "edit_register_region"):
+            act = self._menu_acts.get(k)
+            if act:
+                act.setEnabled(not vm)
+        # Execute BAM / mesh / solver
+        for k in ("exec_bam", "exec_octree", "exec_mesh", "exec_solver"):
+            act = self._menu_acts.get(k)
+            if act:
+                act.setEnabled(not vm)
+        # Octree Create 语义：BAM 后才完整可用（仍可打开参数对话框）
+        act = self._menu_acts.get("cond_oct")
+        if act:
+            act.setEnabled(True)
+        # Wrapping 项：需 Enable wrapping
+        opt = {}
+        if hasattr(self, "_nav_dialogs"):
+            opt = self._nav_dialogs.session.get("option_nav") or {}
+        wrap_on = bool(opt.get("enable_wrapping", False))
+        for k in (
+            "exec_begin_wrap", "exec_cancel_wrap", "exec_exec_wrap",
+            "exec_retry_wrap", "cond_wrap_oct", "cond_wrap_param",
+        ):
+            act = self._menu_acts.get(k)
+            if act:
+                act.setEnabled(wrap_on and not vm)
+        # Option 1-button tools：仅 1-button mode
+        one = self._mouse_mode == "1btn"
+        for k in ("opt_3d_rot", "opt_2d_rot", "opt_trans", "opt_zoom"):
+            act = self._menu_acts.get(k)
+            if act:
+                act.setEnabled(one and not vm)
 
     def _apply_option_nav(self) -> None:
         opt = self._nav_dialogs.session.get("option_nav") or {}
@@ -3381,18 +3704,10 @@ class PphViewer(QMainWindow):
         self._viewer_mode = bool(checked)
         sess = self._nav_dialogs.session.setdefault("option_env", {})
         sess["viewer_mode"] = self._viewer_mode
-        # 查看模式：禁用部分编辑菜单入口（导航仍可打开只读/参数对话框）
-        if hasattr(self, "menuBar"):
-            for act in self.menuBar().actions():
-                menu = act.menu()
-                if menu is None:
-                    continue
-                title = act.text().replace("&", "")
-                if title.startswith("Edit") or title.startswith("Condition"):
-                    menu.setEnabled(not self._viewer_mode)
+        self._update_menus_for_mode()
         self.log(
             "Option — Viewer Mode "
-            + ("ON (Edit/Condition menus disabled)"
+            + ("ON (save/export/BAM/mesh/solid-edit restricted)"
                if self._viewer_mode else "OFF"))
 
     def _set_language(self, code: str) -> None:
@@ -3412,10 +3727,11 @@ class PphViewer(QMainWindow):
 
     def _about(self) -> None:
         QMessageBox.about(
-            self, "About",
+            self, "About scFLOWpre",
             "PPH Viewer\n"
-            "Layout & menus aligned with Cradle scFLOWpre.\n"
-            "Inspect / lightly edit scFLOW .pph archives.")
+            "Menus aligned with Cradle scFLOWpre (2025.2).\n"
+            "Inspect / lightly edit scFLOW .pph archives.\n"
+            "Host mesh/solver execution requires scFLOWpre.")
 
     def _open_manual(self) -> None:
         path = (r"C:\Program Files\Cradle\CradleCFD2025.2"
@@ -3425,6 +3741,18 @@ class PphViewer(QMainWindow):
             self.log(f"Opened manual: {path}")
         else:
             self.log(f"Manual not found: {path}", "ERROR")
+
+    def _open_tutorial(self) -> None:
+        path = (r"C:\Program Files\Cradle\CradleCFD2025.2"
+                r"\Manuals\scFLOW\HTML\Exercise_eng\index.html")
+        if not os.path.isfile(path):
+            path = (r"C:\Program Files\Cradle\CradleCFD2025.2"
+                    r"\Manuals\scFLOW\HTML\Operation_eng\index.html")
+        if os.path.isfile(path):
+            os.startfile(path)  # noqa: S606
+            self.log(f"Opened tutorial: {path}")
+        else:
+            self.log("Tutorial manual not found", "ERROR")
 
     def _open_project_folder(self) -> None:
         if not self.archive_path:
@@ -3529,6 +3857,120 @@ class PphViewer(QMainWindow):
         if path:
             self.open_archive(path)
 
+    @staticmethod
+    def _empty_project_members() -> dict[str, bytes]:
+        """最小可解析空工程：main.xml / xenv / prp / js。"""
+        now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        xml = f"""<?xml version="1.0" encoding="utf-8"?>
+<scFLOWpre>
+  <version>5225.20302.20251223</version>
+  <date>{now}</date>
+  <project>
+    <name>Untitled</name>
+    <showmode>1</showmode>
+  </project>
+  <parts>
+    <meshinggroup>
+      <phase>0</phase>
+      <analysis_model_flag>false</analysis_model_flag>
+      <sgs_name>MeshingGroup_1</sgs_name>
+      <meshonly>false</meshonly>
+      <mesh_visible>true</mesh_visible>
+      <visible>true</visible>
+      <mesh_state>0</mesh_state>
+      <org_name/>
+    </meshinggroup>
+  </parts>
+  <regions/>
+  <conditions>
+    <analysis_type>
+      <Flow>true</Flow>
+    </analysis_type>
+    <basic_param>
+      <steady>true</steady>
+      <end_cycle>100</end_cycle>
+    </basic_param>
+  </conditions>
+</scFLOWpre>
+"""
+        xenv = pphxml.XenvSettings()
+        for sec, key, val in (
+            ("TYPE", "PROJECT_TYPE", "scflow"),
+            ("MESH", "MESHER", "0"),
+            ("MESH", "SURF_MESHER", "0"),
+            ("FACET", "MDL_METHOD", "1"),
+            ("FACET", "USE_FACETTER", "true"),
+            ("FACET", "PROJECT_SOLIDS", "true"),
+            ("FACET", "PROJECT_SHEETS", "true"),
+            ("FACET", "FACET_ACCURACY_SPECIFY_TYPE", "0"),
+            ("FACET", "USE_ABSOLUTE_VALUE", "false"),
+            ("FACET", "SIMPLE_CHORD_TOLERANCE", "1"),
+            ("FACET", "SIMPLE_MAX_ANGLE", "10"),
+            ("FACET", "SIMPLE_MAX_WIDTH", "5"),
+            ("FACET", "SOLID_BASE_MINIMUM_ANGLE", "10"),
+            ("FACET", "SOLID_BASE_LENGTH_FACTOR", "0.05"),
+            ("FACET", "SOLID_BASE_TINY_FACE_WIDTH_RATIO", "0.05"),
+        ):
+            pphxml.set_xenv_value(xenv, sec, key, val)
+        prp = (
+            '<?xml version="1.0" encoding="utf-8"?>\n'
+            '<prp version="1" date="">\n'
+            "</prp>\n"
+        )
+        js = (
+            "//@FormattedScript\n"
+            "function usr_input(nlines)\n{\n\n}\n"
+        )
+        return {
+            "main.xml": xml.encode("utf-8"),
+            "main.xenv": pphxml.serialize_xenv(xenv),
+            "main.prp": prp.encode("utf-8"),
+            "main.js": js.encode("utf-8"),
+        }
+
+    def new_empty_project(self) -> None:
+        """初始化空 PPH 工程（对齐 File → New Project）。"""
+        import zipfile
+
+        self._cleanup()
+        self.tmp_dir = tempfile.mkdtemp(prefix="pph_gui_")
+        path = os.path.join(self.tmp_dir, "Untitled.pph")
+        members = self._empty_project_members()
+        with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as z:
+            for name, data in members.items():
+                z.writestr(name, data)
+
+        self.arch = pph_parser.PphArchive.open(path)
+        self.archive_path = path
+        self._untitled = True
+        self.member_bytes = dict(members)
+        self.bin_paths = {}
+        self._groups_info = {}
+        self._regions_meta = {}
+        self._prepare_parts_mode = True
+        self._nav_dialogs.session.clear()
+
+        self.editor_tab.set_originals(self.member_bytes)
+        self._populate_tree()
+        self.view3d.set_cad_meshes([])
+        self._populate_3d()
+        if hasattr(self, "snapshot_tab"):
+            try:
+                self.snapshot_tab.clear()
+            except Exception:  # noqa: BLE001
+                pass
+        self.dashboard.populate()
+        self._build_model_tree()
+        self._load_text_project_data()
+        self.property_panel.set_properties(self._archive_properties())
+        self.navigation.set_file_info(
+            "Untitled.pph", len(self.arch.members),
+            _fmt_size(sum(m.size for m in self.arch.members)))
+        self.show_page("draw")
+        self.setWindowTitle("PPH Viewer — Untitled")
+        self._update_menus_for_mode()
+        self.log("New empty project (Untitled.pph)")
+
     def open_archive(self, path: str) -> bool:
         try:
             self._cleanup()
@@ -3537,6 +3979,7 @@ class PphViewer(QMainWindow):
             QMessageBox.critical(self, "打开失败", str(exc))
             return False
         self.archive_path = path
+        self._untitled = False
         self.log(f"Opening {os.path.basename(path)} …")
         QApplication.processEvents()
 
@@ -3563,7 +4006,9 @@ class PphViewer(QMainWindow):
 
         self.editor_tab.set_originals(self.member_bytes)
         self._populate_tree()
+        self.view3d.set_cad_meshes([])
         self._populate_3d()
+        self._tessellate_xt_members()
         self._load_snapshot_member()
         self.dashboard.populate()
         QApplication.processEvents()
@@ -3667,6 +4112,10 @@ class PphViewer(QMainWindow):
         if choice == "ok":
             sess = self._nav_dialogs.session.setdefault("build_am", {})
             sess["build_requested"] = True
+            # 对齐 scFLOWpre：BAM 后锁定 Create/Modify Parts，直至 Prepare Parts
+            self._prepare_parts_mode = False
+            sess["prepare_parts_mode"] = False
+            self._update_menus_for_mode()
             opt = self._nav_dialogs.session.get("option_nav") or {}
             if opt.get("always_show_wizard"):
                 self.log(
@@ -3743,8 +4192,7 @@ class PphViewer(QMainWindow):
         """弹出 scFLOWpre 风格参数子窗口（模态）。"""
         if key == "build_am":
             if not self.arch:
-                QMessageBox.information(self, "提示", "请先打开 PPH 工程")
-                return
+                self.new_empty_project()
             if not self.navigation._polyhedral_mesher:
                 QMessageBox.information(
                     self, "scFLOWpre",
@@ -3757,8 +4205,7 @@ class PphViewer(QMainWindow):
         if key not in nav_panels.DIALOG_KEYS:
             return
         if not self.arch:
-            QMessageBox.information(self, "提示", "请先打开 PPH 工程")
-            return
+            self.new_empty_project()
         ctx = self._nav_context()
         dlg = self._nav_dialogs.open(key, ctx, self)
         if dlg is None:
@@ -3788,6 +4235,105 @@ class PphViewer(QMainWindow):
                     self._run_bam_pipeline(ctx)
             if key == "execute":
                 self._run_scflow_pipeline(ctx)
+            if key == "import_part":
+                self._run_import_cad(ctx)
+
+    def _tessellate_xt_members(self) -> None:
+        """打开工程时剖分已归档的 ``.x_t`` 成员（对齐 cab_gui）。"""
+        try:
+            import cad_import
+        except Exception:
+            return
+        if not cad_import.available():
+            return
+        xt_items = [
+            (n, d) for n, d in self.member_bytes.items()
+            if n.lower().endswith((".x_t", ".xmt_txt"))]
+        if not xt_items:
+            return
+        bodies = []
+        for name, data in xt_items:
+            try:
+                bodies.extend(cad_import.import_xt_bytes(
+                    data, adaptive=True, default_name=Path(name).stem))
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"XT tessellation skipped {name}: {exc}", "WARN")
+        if bodies:
+            self.view3d.set_cad_meshes(bodies)
+            self.log(
+                f"CAD tessellation — {len(bodies)} body from "
+                f"{len(xt_items)} .x_t member(s)")
+
+    def _run_import_cad(self, ctx: dict) -> None:
+        """Import Part File → pskernel 剖分 .x_t 并显示 CAD 预览。"""
+        sess = (ctx.get("session") or {}).get("import_part") or {}
+        path = (sess.get("path") or "").strip()
+        if not sess.get("open_requested") or not path:
+            return
+        if not os.path.isfile(path):
+            QMessageBox.warning(self, "Import", f"文件不存在：\n{path}")
+            return
+        suf = os.path.splitext(path)[1].lower()
+        if suf not in (".x_t", ".xmt_txt"):
+            self.log(
+                f"Import：暂仅支持 Parasolid .x_t/.xmt_txt（当前 {suf}）",
+                "WARN")
+            QMessageBox.information(
+                self, "Import",
+                "当前仅实现 Parasolid XT（*.x_t / *.xmt_txt）的 "
+                "pskernel 剖分预览。")
+            return
+        try:
+            import cad_import
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "Import", str(exc))
+            return
+        if not cad_import.available():
+            QMessageBox.warning(
+                self, "Import",
+                "未找到 Cradle pskernel.dll。\n"
+                "请安装 Cradle CFD，或设置环境变量 CRADLE_PROGRAMS\n"
+                r"指向 …\CradleCFD*\Programs_x64")
+            return
+        self.log(f"Import CAD — tessellating {os.path.basename(path)} …")
+        QApplication.processEvents()
+        try:
+            bodies = cad_import.import_xt_file(path, adaptive=True)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "Import 失败", str(exc))
+            self.log(f"Import failed: {exc}", "ERROR")
+            return
+        if not bodies:
+            QMessageBox.warning(
+                self, "Import",
+                "未剖分出任何几何（PK_PART_receive / facet_2 空结果）。")
+            return
+        # 归档原始 .x_t，便于 Save As 后仍可再剖分
+        try:
+            raw = Path(path).read_bytes()
+            base = os.path.basename(path)
+            member = base if base.lower().endswith(".x_t") else f"{base}.x_t"
+            self.member_bytes[member] = raw
+            if self.tmp_dir:
+                out = os.path.join(self.tmp_dir, member)
+                os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+                Path(out).write_bytes(raw)
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"Import：写入工程成员失败: {exc}", "WARN")
+        self.view3d.set_cad_meshes(bodies, append=True)
+        self.show_page("draw")
+        n_tris = sum(len(b.tess.triangles) for b in bodies)
+        n_pts = sum(len(b.tess.points) for b in bodies)
+        names = ", ".join(b.name for b in bodies)
+        self.log(
+            f"Import OK — {len(bodies)} body ({names}); "
+            f"{n_pts} pts / {n_tris} tris")
+        self.property_panel.set_properties({
+            "Imported CAD": os.path.basename(path),
+            "Bodies": str(len(bodies)),
+            "Triangles": f"{n_tris:,}",
+            "Points": f"{n_pts:,}",
+        })
 
     def _run_scflow_pipeline(self, ctx: dict) -> None:
         """Execute 开关打开时：用 scFLOWpre API 构建 Model/Octree/Mesh。"""
@@ -3826,10 +4372,13 @@ class PphViewer(QMainWindow):
                           xenv=ctx.get("xenv"), octree_sess=octree_sess,
                           parts_control_sess=pc_sess)
         self.log(f"scFLOWpre API 脚本已生成：{out}")
+        from automation import host_pipeline
+        self.log(f"自动定位 scFLOWpre: {host_pipeline.locate_scflowpre()}")
         self.log(
-            "请在 scFLOWpre 中 File → Execute VBScript 运行该脚本；"
+            "正在通过 scFLOWpre API 后台执行；"
             "完成后将自动刷新 Model / Octree / Mesh。")
         self._start_api_refresh_poll(marker)
+        self._start_api_execute_thread(out)
 
     def _run_bam_pipeline(self, ctx: dict) -> None:
         """Analysis Model Wizard 的 Create Facet / Build → 宿主 VBS 并自动刷新。"""
@@ -3851,9 +4400,10 @@ class PphViewer(QMainWindow):
                 "parts_control"))
         self.log(f"Analysis Model Wizard 脚本已生成：{out}")
         self.log(
-            "请在 scFLOWpre 中 File → Execute VBScript 运行；"
+            "正在通过 scFLOWpre API 后台执行；"
             "完成后将自动刷新分析模型。")
         self._start_api_refresh_poll(marker)
+        self._start_api_execute_thread(out)
 
     def _start_api_refresh_poll(self, marker: Path) -> None:
         """轮询宿主 VBS 写出的完成标记，出现后自动 Reload。"""
@@ -3869,6 +4419,20 @@ class PphViewer(QMainWindow):
                 return
             QTimer.singleShot(2000, poll)
         QTimer.singleShot(2000, poll)
+
+    def _start_api_execute_thread(self, vbs: Path) -> None:
+        """后台调用宿主 COM API 执行 VBS；失败时回退为手动提示。"""
+        def worker() -> None:
+            try:
+                from automation import host_pipeline
+                result = host_pipeline.run_in_host(vbs, backend="com")
+                self.log(f"scFLOWpre API 执行返回: {result}")
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"scFLOWpre API 自动执行失败: {exc}", "WARN")
+                self.log(
+                    f"请手动在 scFLOWpre 中 File → Execute VBScript 执行 "
+                    f"{vbs}", "WARN")
+        threading.Thread(target=worker, daemon=True).start()
 
     def reload(self) -> None:
         if self.archive_path:
@@ -4465,6 +5029,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if args:
         win.open_archive(args[0])
+    else:
+        # 无命令行工程时初始化空项目，避免“请先打开 PPH 工程”
+        win.new_empty_project()
     return app.exec_()
 
 

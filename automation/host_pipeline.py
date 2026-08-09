@@ -22,6 +22,7 @@ from automation.vbs_bridge import write_vbs_file
 
 CLSID = "{9F8D2C1A-3B4E-4C5D-8E6F-1A2B3C4D5E6F}"
 PROGID = "pphdecoding.ScflowPipeline"
+PROGID_HOST = "scFLOWpre_Bx64net.Application.2025"
 
 _REG_ROOT = r"Software\Classes"
 
@@ -217,8 +218,61 @@ def run_in_host(vbs_path: str | Path, *, backend: str = "manual",
                     "选择该脚本文件",
         }
     if backend != "gui":
+        if backend == "com":
+            return _run_com_vbs(vbs_path, timeout=timeout)
         raise ValueError(f"unknown backend: {backend}")
     return _run_gui(vbs_path, timeout=timeout, menu=menu or {})
+
+
+def locate_scflowpre() -> dict:
+    """自动定位 scFLOWpre 安装目录与 COM ProgID（供 GUI 日志/校验）。"""
+    root = scflowpre_probe.find_install()
+    if root is None:
+        return {"installed": False, "progid": PROGID_HOST}
+    return {
+        "installed": True,
+        "install_dir": str(root),
+        "programs_dir": str(root / scflowpre_probe.PROGRAMS_SUBDIR),
+        "progid": PROGID_HOST,
+    }
+
+
+def _run_com_vbs(vbs_path: Path, timeout: float) -> dict:
+    """通过 COM Application.ExecuteVBSWithFile 在宿主内执行脚本。
+
+    宿主未启动时 Dispatch 会自动拉起 scFLOWpre（LocalServer）。
+    脚本同步执行；这里放到后台线程 + join(timeout) 防 GUI 卡死。
+    """
+    import threading
+
+    import pythoncom
+    import win32com.client
+
+    result: dict = {}
+
+    def _call() -> None:
+        pythoncom.CoInitialize()
+        try:
+            app = win32com.client.Dispatch(PROGID_HOST)
+            ok = app.ExecuteVBSWithFile(str(vbs_path))
+            result["ok"] = bool(ok)
+        except Exception as exc:  # noqa: BLE001
+            result["error"] = repr(exc)
+        finally:
+            pythoncom.CoUninitialize()
+
+    thread = threading.Thread(target=_call, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        return {"backend": "com", "ok": False,
+                "error": "timeout waiting for scFLOWpre",
+                "script": str(vbs_path)}
+    if "error" in result:
+        return {"backend": "com", "ok": False,
+                "error": result["error"], "script": str(vbs_path)}
+    return {"backend": "com", "ok": result.get("ok", False),
+            "script": str(vbs_path)}
 
 
 def _run_gui(vbs_path: Path, timeout: float, menu: dict) -> dict:
