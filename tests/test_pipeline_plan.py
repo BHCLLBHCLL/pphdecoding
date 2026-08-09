@@ -15,6 +15,7 @@ from automation.pipeline_plan import (LOCKED_COMMANDS,  # noqa: E402
                                       UNLOCKED_COMMANDS,
                                       PipelinePlan,
                                       build_execute_vbs,
+                                      octree_settings_actions,
                                       steps_from_execute_plan)
 from automation.vbs_bridge import read_vbs_lines  # noqa: E402
 
@@ -141,11 +142,19 @@ class TestPipelinePlan(unittest.TestCase):
             build_execute_vbs(
                 r"D:\case\box.pph",
                 {"bam": True, "oct": True, "mesh": True},
-                out, marker=marker)
+                out, marker=marker,
+                xenv={"OCT_MESH": {"FACET_LENGTH_FACTOR": "0.5"}})
             text = decode_vbs(out.read_bytes())
             self.assertIn('Doc_.OpenProject "D:\\case\\box.pph", False', text)
             self.assertIn("MeshingGroup_.BuildAnalysisModel", text)
+            self.assertIn(
+                "MeshingGroupSetting_.SetAFFaceterLengthFactorForOctree 0.5",
+                text)
             self.assertIn("MeshingGroup_.CreateOctree", text)
+            self.assertLess(
+                text.index(
+                    "MeshingGroupSetting_.SetAFFaceterLengthFactorForOctree 0.5"),
+                text.index("MeshingGroup_.CreateOctree"))
             self.assertIn("MeshingGroup_.CreateMeshMonitor", text)
             self.assertIn('Doc_.SaveProject "D:\\case\\box.pph"', text)
             self.assertIn(f'Set tf_ = fso_.CreateTextFile("{marker}", True)',
@@ -162,6 +171,26 @@ class TestPipelinePlan(unittest.TestCase):
             text = decode_vbs(out.read_bytes())
             self.assertIn('Doc_.OpenCadFile "D:\\case\\box.x_t"', text)
             self.assertNotIn("Doc_.SaveProject", text)
+
+    def test_octree_settings_actions(self):
+        actions = octree_settings_actions({
+            "OCT_MESH": {"FACET_LENGTH_FACTOR": "0.5",
+                         "FACET_ANGLE": "10"},
+            "FACET": {"OCT_LENGTH_PARAM_FLAG": "true",
+                      "OCT_LENGTH_PARAM_TYPE": "5",
+                      "OCT_LENGTH_PARAM_ITR": "5"},
+        })
+        self.assertIn("Set MeshingGroupSetting_ = "
+                      "MeshingGroup_.GetMeshingGroupSetting", actions)
+        self.assertIn(
+            "MeshingGroupSetting_.SetAFFaceterLengthFactorForOctree 0.5",
+            actions)
+        self.assertIn(
+            "MeshingGroupSetting_.SetAFFaceterMinimumAngleForOctree 10",
+            actions)
+        self.assertIn("MeshingGroupSetting_.SetUseOctLengthParam True",
+                      actions)
+        self.assertEqual(octree_settings_actions(None), [])
 
     def test_default_steps_use_locked_commands(self):
         plan = PipelinePlan(project_path="box.x_t")

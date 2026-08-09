@@ -3453,7 +3453,8 @@ class PphViewer(QMainWindow):
             marker.unlink(missing_ok=True)
         except OSError:
             pass
-        build_execute_vbs(self.archive_path, plan, out, marker=marker)
+        build_execute_vbs(self.archive_path, plan, out, marker=marker,
+                          xenv=ctx.get("xenv"))
         self.log(f"scFLOWpre API 脚本已生成：{out}")
         self.log(
             "请在 scFLOWpre 中 File → Execute VBScript 运行该脚本；"

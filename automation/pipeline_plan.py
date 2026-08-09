@@ -78,10 +78,68 @@ def steps_from_execute_plan(plan: dict) -> list[str]:
     return steps
 
 
+# Octree/Faceter xenv 键 -> scFLOWpre VBS setter（参数值来自 GUI 面板）
+OCTREE_SETTING_MAP: list[tuple[tuple[str, str], str]] = [
+    (("OCT_MESH", "FACET_LENGTH_FACTOR"),
+     "MeshingGroupSetting_.SetAFFaceterLengthFactorForOctree"),
+    (("OCT_MESH", "FACET_ANGLE"),
+     "MeshingGroupSetting_.SetAFFaceterMinimumAngleForOctree"),
+    (("FACET", "OCT_LENGTH_PARAM_FLAG"),
+     "MeshingGroupSetting_.SetUseOctLengthParam"),
+    (("FACET", "OCT_LENGTH_PARAM_TYPE"),
+     "MeshingGroupSetting_.SetOctLengthParamType"),
+    (("FACET", "OCT_LENGTH_PARAM_ITR"),
+     "MeshingGroupSetting_.SetOctLengthParamItr"),
+]
+
+
+def _xenv_get(xenv, section: str, key: str, default=None):
+    if xenv is None:
+        return default
+    getter = getattr(xenv, "get", None)
+    if getter is not None:
+        try:
+            return getter(section, key, default)
+        except TypeError:
+            pass
+    sec = xenv.get(section) if isinstance(xenv, dict) else None
+    if isinstance(sec, dict):
+        return sec.get(key, default)
+    return default
+
+
+def _vbs_value(value) -> str:
+    text = str(value).strip()
+    if text.lower() == "true":
+        return "True"
+    if text.lower() == "false":
+        return "False"
+    return text
+
+
+def octree_settings_actions(xenv) -> list[str]:
+    """把 GUI 的 Octree/Faceter xenv 参数转成宿主 VBS setter 序列。"""
+    pairs: list[tuple[str, str]] = []
+    for (section, key), setter in OCTREE_SETTING_MAP:
+        value = _xenv_get(xenv, section, key)
+        if value is None or str(value).strip() == "":
+            continue
+        pairs.append((setter, _vbs_value(value)))
+    if not pairs:
+        return []
+    actions = [
+        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
+        "Set MeshingGroupSetting_ = MeshingGroup_.GetMeshingGroupSetting",
+    ]
+    actions.extend(f"{setter} {value}" for setter, value in pairs)
+    return actions
+
+
 def build_execute_vbs(project_path: str | Path, plan: dict,
                       output: str | Path,
                       marker: Optional[str | Path] = None,
-                      include_save: bool = True) -> Path:
+                      include_save: bool = True,
+                      xenv=None) -> Path:
     """生成可在 scFLOWpre 宿主中执行的 BAM→Octree→Mesh VBS。
 
     PPH 项目默认在末尾追加 ``Doc_.SaveProject``；传入 ``marker`` 时在脚本
@@ -92,6 +150,14 @@ def build_execute_vbs(project_path: str | Path, plan: dict,
         steps.append("save_project")
     actions = PipelinePlan(project_path=str(project_path),
                            steps=steps).to_vbs_actions()
+    if "generate_octree" in steps:
+        settings = octree_settings_actions(xenv)
+        if settings:
+            idx = actions.index("MeshingGroup_.CreateOctree")
+            insert_at = idx
+            if idx > 0 and actions[idx - 1].startswith("Set MeshingGroup_ ="):
+                insert_at = idx - 1
+            actions[insert_at:idx] = settings
     if marker is not None:
         actions.append('Set fso_ = CreateObject("Scripting.FileSystemObject")')
         actions.append(f'Set tf_ = fso_.CreateTextFile("{marker}", True)')
@@ -158,6 +224,12 @@ class PipelinePlan:
                 if line.startswith("MeshingGroup_."):
                     actions.append(
                         "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)")
+                elif line.startswith("MeshingGroupSetting_."):
+                    actions.append(
+                        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)")
+                    actions.append(
+                        "Set MeshingGroupSetting_ = "
+                        "MeshingGroup_.GetMeshingGroupSetting")
                 actions.append(line)
         if self.include_quit:
             actions.append(cmds["quit"])
