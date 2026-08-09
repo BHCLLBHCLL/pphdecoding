@@ -924,7 +924,7 @@ class OctreeParamBody(_Body):
         super().__init__(parent)
         v = QVBoxLayout(self)
         v.addWidget(_note("[Condition] – [Octree Parameter]"))
-        mode = QGroupBox("Density mode")
+        mode = QGroupBox("Density")
         mv = QVBoxLayout(mode)
         self.rb_target = QRadioButton("Target number of elements")
         self.rb_min = QRadioButton("Minimum size")
@@ -938,24 +938,67 @@ class OctreeParamBody(_Body):
         mv.addLayout(row1); mv.addLayout(row2); mv.addWidget(self.rb_oct)
         v.addWidget(mode)
         tabs = QTabWidget()
+
+        # Octant / solid facet parameters（OCT_MESH）
         d = QWidget(); df = QFormLayout(d)
-        self.sp_flen = _spin_f(6, 0, 1e6, 1)
-        self.sp_fang = _spin_f(3, 0, 180, 5)
-        self.sp_fwidth = _spin_f(6, 0, 1e6, 5)
+        self.sp_flen = _spin_f(6, 0, 1e6, 1)      # FACET_LENGTH_FACTOR
+        self.sp_fang = _spin_f(3, 0, 180, 5)      # FACET_ANGLE
+        self.sp_fwidth = _spin_f(6, 0, 1e6, 5)    # FACET_MAX_WIDTH_FACTOR
+        self.cb_each = _bool_combo()              # FACET_SPECIFY_EACH_REGION
+        self.cb_parallel = _bool_combo()          # COMPLETE_PARALLEL
         self.cb_refine = QComboBox()
         for i in range(6):
             self.cb_refine.addItem(str(i), str(i))
-        self.sp_oct_itr = QSpinBox(); self.sp_oct_itr.setRange(0, 100)
-        self.cb_oct_flag = _bool_combo()
-        self.cb_each = _bool_combo()
+        self.cb_refine.setCurrentIndex(3)
         df.addRow("Facet length factor", self.sp_flen)
         df.addRow("Facet angle", self.sp_fang)
         df.addRow("Facet max width factor", self.sp_fwidth)
         df.addRow("Specify each region", self.cb_each)
+        df.addRow("Complete parallel", self.cb_parallel)
         df.addRow("Voxel oct refine type", self.cb_refine)
-        df.addRow("OCT length param flag", self.cb_oct_flag)
-        df.addRow("OCT length param ITR", self.sp_oct_itr)
-        tabs.addTab(d, "Detail (xenv)")
+        tabs.addTab(d, "Facet (Octree)")
+
+        # AF facetter（FACET/SOLID_BASE_*）
+        af = QWidget(); afv = QFormLayout(af)
+        self.cb_use_facetter = _bool_combo()      # USE_FACETTER
+        self.sp_af_len = _spin_f(6, 0, 1e6, 0.05)
+        self.sp_af_ang = _spin_f(3, 0, 180, 10)
+        self.sp_af_tiny = _spin_f(6, 0, 1e6, 0.05)
+        self.sp_af_oct_len = _spin_f(6, 0, 1e6, 0.25)
+        self.sp_af_oct_ang = _spin_f(3, 0, 180, 10)
+        self.sp_mdl = QSpinBox(); self.sp_mdl.setRange(0, 10)
+        self.sp_mdl.setValue(1)
+        self.sp_intersect = QSpinBox(); self.sp_intersect.setRange(0, 64)
+        self.sp_intersect.setValue(12)
+        self.cb_intersect_as_cvol = QComboBox()
+        self.cb_intersect_as_cvol.addItem("0", "0")
+        self.cb_intersect_as_cvol.addItem("1", "1")
+        self.sp_accuracy = QSpinBox(); self.sp_accuracy.setRange(0, 10)
+        self.sp_accuracy.setValue(0)
+        afv.addRow("Use AF facetter", self.cb_use_facetter)
+        afv.addRow("AF length factor", self.sp_af_len)
+        afv.addRow("AF minimum angle", self.sp_af_ang)
+        afv.addRow("AF tiny face width ratio", self.sp_af_tiny)
+        afv.addRow("AF length factor for octree", self.sp_af_oct_len)
+        afv.addRow("AF minimum angle for octree", self.sp_af_oct_ang)
+        afv.addRow("MDL method", self.sp_mdl)
+        afv.addRow("Intersection detection depth", self.sp_intersect)
+        afv.addRow("Use as closed-volume depth", self.cb_intersect_as_cvol)
+        afv.addRow("Facet accuracy specify type", self.sp_accuracy)
+        tabs.addTab(af, "AF Facetter")
+
+        # OCT length param（FACET/OCT_LENGTH_PARAM_*）
+        o = QWidget(); of = QFormLayout(o)
+        self.cb_oct_flag = _bool_combo()          # OCT_LENGTH_PARAM_FLAG
+        self.sp_oct_type = QSpinBox(); self.sp_oct_type.setRange(0, 100)
+        self.sp_oct_type.setValue(5)
+        self.sp_oct_itr = QSpinBox(); self.sp_oct_itr.setRange(0, 100)
+        self.sp_oct_itr.setValue(5)
+        of.addRow("Use OCT length param", self.cb_oct_flag)
+        of.addRow("OCT length param type", self.sp_oct_type)
+        of.addRow("OCT length param ITR", self.sp_oct_itr)
+        tabs.addTab(o, "OCT Length")
+
         self.result = QTextEdit(); self.result.setReadOnly(True)
         tabs.addTab(self.result, "OCT result")
         v.addWidget(tabs, 1)
@@ -972,13 +1015,21 @@ class OctreeParamBody(_Body):
             self.sp_min.setValue(float(sess["min_size"]))
         xenv = ctx.get("xenv")
         if xenv:
-            for sp, sec, key in (
-                (self.sp_flen, "OCT_MESH", "FACET_LENGTH_FACTOR"),
-                (self.sp_fang, "OCT_MESH", "FACET_ANGLE"),
-                (self.sp_fwidth, "OCT_MESH", "FACET_MAX_WIDTH_FACTOR"),
+            for sp, sec, key, default in (
+                (self.sp_flen, "OCT_MESH", "FACET_LENGTH_FACTOR", 1),
+                (self.sp_fang, "OCT_MESH", "FACET_ANGLE", 5),
+                (self.sp_fwidth, "OCT_MESH", "FACET_MAX_WIDTH_FACTOR", 5),
+                (self.sp_af_len, "FACET", "SOLID_BASE_LENGTH_FACTOR", 0.05),
+                (self.sp_af_ang, "FACET", "SOLID_BASE_MINIMUM_ANGLE", 10),
+                (self.sp_af_tiny, "FACET", "SOLID_BASE_TINY_FACE_WIDTH_RATIO",
+                 0.05),
+                (self.sp_af_oct_len, "FACET",
+                 "SOLID_BASE_LENGTH_FACTOR_FOR_OCTREE", 0.25),
+                (self.sp_af_oct_ang, "FACET",
+                 "SOLID_BASE_MINIMUM_ANGLE_FOR_OCTREE", 10),
             ):
                 try:
-                    sp.setValue(float(xenv.get(sec, key, "0") or 0))
+                    sp.setValue(float(xenv.get(sec, key, default) or default))
                 except ValueError:
                     pass
             _set_combo_data(self.cb_refine,
@@ -986,9 +1037,29 @@ class OctreeParamBody(_Body):
             _set_combo_data(self.cb_each,
                             xenv.get("OCT_MESH", "FACET_SPECIFY_EACH_REGION", "false")
                             or "false")
+            _set_combo_data(self.cb_parallel,
+                            xenv.get("OCT_MESH", "COMPLETE_PARALLEL", "false")
+                            or "false")
+            _set_combo_data(self.cb_use_facetter,
+                            xenv.get("FACET", "USE_FACETTER", "true") or "true")
+            _set_combo_data(self.cb_intersect_as_cvol,
+                            xenv.get(
+                                "FACET",
+                                "USE_INTERSECTION_DETECTION_DEPTH_AS_CLOSED_VOLUME_DETECTION_DEPTH",
+                                "0") or "0")
             _set_combo_data(self.cb_oct_flag,
                             xenv.get("FACET", "OCT_LENGTH_PARAM_FLAG", "true") or "true")
             try:
+                self.sp_mdl.setValue(int(float(
+                    xenv.get("FACET", "MDL_METHOD", "1") or 1)))
+                self.sp_intersect.setValue(int(float(
+                    xenv.get("FACET", "INTERSECTION_DETECTION_DEPTH", "12")
+                    or 12)))
+                self.sp_accuracy.setValue(int(float(
+                    xenv.get("FACET", "FACET_ACCURACY_SPECIFY_TYPE", "0")
+                    or 0)))
+                self.sp_oct_type.setValue(int(float(
+                    xenv.get("FACET", "OCT_LENGTH_PARAM_TYPE", "5") or 5)))
                 self.sp_oct_itr.setValue(int(float(
                     xenv.get("FACET", "OCT_LENGTH_PARAM_ITR", "5") or 5)))
             except ValueError:
@@ -1020,10 +1091,38 @@ class OctreeParamBody(_Body):
                               _fmt_float(self.sp_fwidth.value()))
         pphxml.set_xenv_value(xenv, "OCT_MESH", "FACET_SPECIFY_EACH_REGION",
                               self.cb_each.currentData())
+        pphxml.set_xenv_value(xenv, "OCT_MESH", "COMPLETE_PARALLEL",
+                              self.cb_parallel.currentData())
         pphxml.set_xenv_value(xenv, "OCT_MESH", "VOXEL_OCT_REFINE_TYPE",
                               self.cb_refine.currentData())
+        pphxml.set_xenv_value(xenv, "FACET", "USE_FACETTER",
+                              self.cb_use_facetter.currentData())
+        pphxml.set_xenv_value(xenv, "FACET", "SOLID_BASE_LENGTH_FACTOR",
+                              _fmt_float(self.sp_af_len.value()))
+        pphxml.set_xenv_value(xenv, "FACET", "SOLID_BASE_MINIMUM_ANGLE",
+                              _fmt_float(self.sp_af_ang.value()))
+        pphxml.set_xenv_value(xenv, "FACET", "SOLID_BASE_TINY_FACE_WIDTH_RATIO",
+                              _fmt_float(self.sp_af_tiny.value()))
+        pphxml.set_xenv_value(xenv, "FACET",
+                              "SOLID_BASE_LENGTH_FACTOR_FOR_OCTREE",
+                              _fmt_float(self.sp_af_oct_len.value()))
+        pphxml.set_xenv_value(xenv, "FACET",
+                              "SOLID_BASE_MINIMUM_ANGLE_FOR_OCTREE",
+                              _fmt_float(self.sp_af_oct_ang.value()))
+        pphxml.set_xenv_value(xenv, "FACET", "MDL_METHOD",
+                              str(self.sp_mdl.value()))
+        pphxml.set_xenv_value(xenv, "FACET", "INTERSECTION_DETECTION_DEPTH",
+                              str(self.sp_intersect.value()))
+        pphxml.set_xenv_value(
+            xenv, "FACET",
+            "USE_INTERSECTION_DETECTION_DEPTH_AS_CLOSED_VOLUME_DETECTION_DEPTH",
+            self.cb_intersect_as_cvol.currentData())
+        pphxml.set_xenv_value(xenv, "FACET", "FACET_ACCURACY_SPECIFY_TYPE",
+                              str(self.sp_accuracy.value()))
         pphxml.set_xenv_value(xenv, "FACET", "OCT_LENGTH_PARAM_FLAG",
                               self.cb_oct_flag.currentData())
+        pphxml.set_xenv_value(xenv, "FACET", "OCT_LENGTH_PARAM_TYPE",
+                              str(self.sp_oct_type.value()))
         pphxml.set_xenv_value(xenv, "FACET", "OCT_LENGTH_PARAM_ITR",
                               str(self.sp_oct_itr.value()))
         ctx["xenv_dirty"] = True

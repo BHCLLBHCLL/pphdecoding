@@ -143,7 +143,8 @@ class TestPipelinePlan(unittest.TestCase):
                 r"D:\case\box.pph",
                 {"bam": True, "oct": True, "mesh": True},
                 out, marker=marker,
-                xenv={"OCT_MESH": {"FACET_LENGTH_FACTOR": "0.5"}})
+                xenv={"FACET": {
+                    "SOLID_BASE_LENGTH_FACTOR_FOR_OCTREE": "0.5"}})
             text = decode_vbs(out.read_bytes())
             self.assertIn('Doc_.OpenProject "D:\\case\\box.pph", False', text)
             self.assertIn("MeshingGroup_.BuildAnalysisModel", text)
@@ -174,19 +175,30 @@ class TestPipelinePlan(unittest.TestCase):
 
     def test_octree_settings_actions(self):
         actions = octree_settings_actions({
-            "OCT_MESH": {"FACET_LENGTH_FACTOR": "0.5",
-                         "FACET_ANGLE": "10"},
+            "OCT_MESH": {"FACET_LENGTH_FACTOR": "1",
+                         "FACET_ANGLE": "5",
+                         "FACET_MAX_WIDTH_FACTOR": "5",
+                         "FACET_SPECIFY_EACH_REGION": "false",
+                         "COMPLETE_PARALLEL": "false",
+                         "VOXEL_OCT_REFINE_TYPE": "3"},
             "FACET": {"OCT_LENGTH_PARAM_FLAG": "true",
                       "OCT_LENGTH_PARAM_TYPE": "5",
-                      "OCT_LENGTH_PARAM_ITR": "5"},
+                      "OCT_LENGTH_PARAM_ITR": "5",
+                      "SOLID_BASE_LENGTH_FACTOR_FOR_OCTREE": "0.5"},
         })
         self.assertIn("Set MeshingGroupSetting_ = "
                       "MeshingGroup_.GetMeshingGroupSetting", actions)
         self.assertIn(
-            "MeshingGroupSetting_.SetAFFaceterLengthFactorForOctree 0.5",
+            "MeshingGroupSetting_.SetSolidFacetLengthFactor 1",
             actions)
         self.assertIn(
-            "MeshingGroupSetting_.SetAFFaceterMinimumAngleForOctree 10",
+            "MeshingGroupSetting_.SetSolidFacetAngle 5",
+            actions)
+        self.assertIn(
+            "MeshingGroupSetting_.SetVoxelOctRefineType octree",
+            actions)
+        self.assertIn(
+            "MeshingGroupSetting_.SetAFFaceterLengthFactorForOctree 0.5",
             actions)
         self.assertIn("MeshingGroupSetting_.SetUseOctLengthParam True",
                       actions)

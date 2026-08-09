@@ -78,12 +78,41 @@ def steps_from_execute_plan(plan: dict) -> list[str]:
     return steps
 
 
-# Octree/Faceter xenv 键 -> scFLOWpre VBS setter（参数值来自 GUI 面板）
+# Octree/Faceter xenv 键 -> scFLOWpre VBS setter（参数值来自 GUI 面板）。
+# 键与 box_vbs_v3/v4 录制命令一一对应。
 OCTREE_SETTING_MAP: list[tuple[tuple[str, str], str]] = [
     (("OCT_MESH", "FACET_LENGTH_FACTOR"),
-     "MeshingGroupSetting_.SetAFFaceterLengthFactorForOctree"),
+     "MeshingGroupSetting_.SetSolidFacetLengthFactor"),
     (("OCT_MESH", "FACET_ANGLE"),
+     "MeshingGroupSetting_.SetSolidFacetAngle"),
+    (("OCT_MESH", "FACET_MAX_WIDTH_FACTOR"),
+     "MeshingGroupSetting_.SetSolidFacetMaxWidthFactor"),
+    (("OCT_MESH", "FACET_SPECIFY_EACH_REGION"),
+     "MeshingGroupSetting_.SetSolidFacetSpecifyEachRegionFlag"),
+    (("OCT_MESH", "COMPLETE_PARALLEL"),
+     "MeshingGroupSetting_.SetCompleteParallelFlag"),
+    (("OCT_MESH", "VOXEL_OCT_REFINE_TYPE"),
+     "MeshingGroupSetting_.SetVoxelOctRefineType"),
+    (("FACET", "USE_FACETTER"),
+     "MeshingGroupSetting_.SetUseAFFacetter"),
+    (("FACET", "SOLID_BASE_LENGTH_FACTOR"),
+     "MeshingGroupSetting_.SetAFFaceterLengthFactor"),
+    (("FACET", "SOLID_BASE_MINIMUM_ANGLE"),
+     "MeshingGroupSetting_.SetAFFaceterMinimumAngle"),
+    (("FACET", "SOLID_BASE_TINY_FACE_WIDTH_RATIO"),
+     "MeshingGroupSetting_.SetAFFaceterTinyFaceWidthRatio"),
+    (("FACET", "SOLID_BASE_LENGTH_FACTOR_FOR_OCTREE"),
+     "MeshingGroupSetting_.SetAFFaceterLengthFactorForOctree"),
+    (("FACET", "SOLID_BASE_MINIMUM_ANGLE_FOR_OCTREE"),
      "MeshingGroupSetting_.SetAFFaceterMinimumAngleForOctree"),
+    (("FACET", "MDL_METHOD"),
+     "MeshingGroupSetting_.SetMDLMethod"),
+    (("FACET", "USE_INTERSECTION_DETECTION_DEPTH_AS_CLOSED_VOLUME_DETECTION_DEPTH"),
+     "MeshingGroupSetting_.SetUseIntersectionDetectionDepthAsClosedVolumeDetectionDepth"),
+    (("FACET", "INTERSECTION_DETECTION_DEPTH"),
+     "MeshingGroupSetting_.SetIntersectionDetectionDepth"),
+    (("FACET", "FACET_ACCURACY_SPECIFY_TYPE"),
+     "MeshingGroupSetting_.SetFacetAccuracySpecificationType"),
     (("FACET", "OCT_LENGTH_PARAM_FLAG"),
      "MeshingGroupSetting_.SetUseOctLengthParam"),
     (("FACET", "OCT_LENGTH_PARAM_TYPE"),
@@ -91,6 +120,11 @@ OCTREE_SETTING_MAP: list[tuple[tuple[str, str], str]] = [
     (("FACET", "OCT_LENGTH_PARAM_ITR"),
      "MeshingGroupSetting_.SetOctLengthParamItr"),
 ]
+
+# xenv 数值/代号 -> VBS 字符串枚举（录制中仅见过 3 -> "octree"）
+OCTREE_ENUM_MAP: dict[tuple[str, str], dict[str, str]] = {
+    ("OCT_MESH", "VOXEL_OCT_REFINE_TYPE"): {"3": "octree"},
+}
 
 
 def _xenv_get(xenv, section: str, key: str, default=None):
@@ -117,6 +151,12 @@ def _vbs_value(value) -> str:
     return text
 
 
+def _vbs_enum(section: str, key: str, value) -> str:
+    text = str(value).strip()
+    mapping = OCTREE_ENUM_MAP.get((section, key), {})
+    return mapping.get(text, text)
+
+
 def octree_settings_actions(xenv) -> list[str]:
     """把 GUI 的 Octree/Faceter xenv 参数转成宿主 VBS setter 序列。"""
     pairs: list[tuple[str, str]] = []
@@ -124,7 +164,7 @@ def octree_settings_actions(xenv) -> list[str]:
         value = _xenv_get(xenv, section, key)
         if value is None or str(value).strip() == "":
             continue
-        pairs.append((setter, _vbs_value(value)))
+        pairs.append((setter, _vbs_enum(section, key, _vbs_value(value))))
     if not pairs:
         return []
     actions = [
