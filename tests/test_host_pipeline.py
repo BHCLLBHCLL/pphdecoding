@@ -91,6 +91,35 @@ class TestRegistration(unittest.TestCase):
         self.assertEqual(result["backend"], "manual")
         self.assertIn("Execute VBScript", result["hint"])
 
+    def test_run_in_host_com_backend(self):
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            with mock.patch.object(
+                    host_pipeline, "_run_com_vbs",
+                    return_value={"backend": "com", "ok": True,
+                                  "script": str(vbs)}):
+                result = host_pipeline.run_in_host(vbs, backend="com")
+        self.assertEqual(result["backend"], "com")
+        self.assertTrue(result["ok"])
+
+    def test_run_in_host_unknown_backend(self):
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                host_pipeline.run_in_host(vbs, backend="nope")
+
+    def test_locate_scflowpre(self):
+        fake_root = Path(r"C:\Program Files\Cradle\CradleCFD2025.2")
+        with mock.patch.object(host_pipeline.scflowpre_probe,
+                               "find_install",
+                               return_value=fake_root):
+            info = host_pipeline.locate_scflowpre()
+        self.assertTrue(info["installed"])
+        self.assertEqual(info["install_dir"], str(fake_root))
+        self.assertTrue(info["programs_dir"].endswith("Programs_x64"))
+
 
 if __name__ == "__main__":
     unittest.main()
