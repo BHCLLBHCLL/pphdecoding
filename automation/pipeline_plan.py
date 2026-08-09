@@ -136,7 +136,13 @@ class PipelinePlan:
 
     def to_vbs_actions(self) -> list[str]:
         cmds = self.resolve_commands()
-        actions = [self.open_command()]
+        actions = [
+            "Set App_ = GetApplication()",
+            'If App_ Is Nothing Then Set App_ = '
+            'CreateObject("scFLOWpre_Bx64net.Application.2025")',
+            "Set Doc_ = App_.GetDocument",
+            self.open_command(),
+        ]
         for step in self.steps:
             if step not in cmds:
                 raise ValueError(f"unknown pipeline step: {step}")

@@ -109,7 +109,8 @@ class TestPipelinePlan(unittest.TestCase):
         plan = PipelinePlan(project_path=r"C:\case\case.x_t",
                             steps=["generate_mesh"])
         actions = plan.to_vbs_actions()
-        self.assertEqual(actions[0], 'Doc_.OpenCadFile "C:\\case\\case.x_t"')
+        self.assertEqual(actions[0], "Set App_ = GetApplication()")
+        self.assertIn('Doc_.OpenCadFile "C:\\case\\case.x_t"', actions)
         self.assertIn("Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
                       actions)
         self.assertIn("MeshingGroup_.CreateMeshMonitor", actions)
