@@ -197,6 +197,11 @@ class _StubView3D(__import__("PyQt5.QtWidgets", fromlist=["QWidget"]).QWidget):
     def set_groups(self, groups):
         self.groups = groups
 
+    def set_cad_meshes(self, bodies, *, append=False):
+        self.cad_meshes = list(bodies)
+        if append:
+            self.cad_meshes.extend(list(bodies))
+
     def precache(self, group_models):
         pass
 
