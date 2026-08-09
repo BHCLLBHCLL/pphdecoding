@@ -379,6 +379,9 @@ def parts_control_actions(pc_sess: Optional[dict] = None) -> list[str]:
 
     录制证据：``Conditions_.SetPartsControl "Wrapping", False``（box_vbs:16-18）。
     Discontinuous / Overset 与对话框三项勾选一一对应。
+
+    宿主脚本里 ``Conditions_`` 不是隐式全局对象，须先
+    ``Set Conditions_ = Doc_.GetConditions``（COM 实测 err=424 否则）。
     """
     pc = dict(pc_sess or {})
     pairs = (
@@ -387,9 +390,12 @@ def parts_control_actions(pc_sess: Optional[dict] = None) -> list[str]:
         ("Wrapping", bool(pc.get("wrapping"))),
     )
     return [
-        f'Conditions_.SetPartsControl "{name}", '
-        f'{"True" if flag else "False"}'
-        for name, flag in pairs
+        "Set Conditions_ = Doc_.GetConditions",
+        *[
+            f'Conditions_.SetPartsControl "{name}", '
+            f'{"True" if flag else "False"}'
+            for name, flag in pairs
+        ],
     ]
 
 
@@ -499,7 +505,7 @@ class PipelinePlan:
                 if not line:
                     continue
                 # 生成可在 scFLOWpre 宿主中直接运行的 VBS：
-                # MeshingGroup_* 调用前先取 meshing group 对象。
+                # MeshingGroup_* / Conditions_* 调用前先取对象。
                 if line.startswith("MeshingGroup_."):
                     actions.append(
                         "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)")
@@ -509,6 +515,10 @@ class PipelinePlan:
                     actions.append(
                         "Set MeshingGroupSetting_ = "
                         "MeshingGroup_.GetMeshingGroupSetting")
+                elif line.startswith("Conditions_."):
+                    getter = "Set Conditions_ = Doc_.GetConditions"
+                    if getter not in actions[-5:]:
+                        actions.append(getter)
                 actions.append(line)
         if self.include_quit:
             actions.append(cmds["quit"])

@@ -8,6 +8,8 @@ host process where the SCTprime document context is already initialized.
 Backends:
 
 - ``manual``: write the script and ask the user to run it in the host;
+- ``com``: ``Application.ExecuteVBSWithFile`` / ``ExecuteVBS`` via win32com
+  (must ``_FlagAsMethod`` — late binding otherwise exposes them as bool props);
 - ``gui``: best-effort pywinauto automation of File -> Execute VBScript.
 """
 
@@ -239,10 +241,12 @@ def locate_scflowpre() -> dict:
 
 
 def _run_com_vbs(vbs_path: Path, timeout: float) -> dict:
-    """通过 COM Application.ExecuteVBSWithFile 在宿主内执行脚本。
+    """通过 COM Application.ExecuteVBSWithFile / ExecuteVBS 执行脚本。
 
     宿主未启动时 Dispatch 会自动拉起 scFLOWpre（LocalServer）。
-    脚本同步执行；这里放到后台线程 + join(timeout) 防 GUI 卡死。
+    win32com 晚绑定会把这两个成员读成 bool 属性；必须先
+    ``_FlagAsMethod``，切勿 ``app.ExecuteVBS = ...``（会触发
+    ``Property ... can not be set``）。
     """
     import threading
 
@@ -250,43 +254,44 @@ def _run_com_vbs(vbs_path: Path, timeout: float) -> dict:
     import win32com.client
 
     result: dict = {}
+    path = str(Path(vbs_path).resolve())
 
     def _call() -> None:
         pythoncom.CoInitialize()
         try:
             app = win32com.client.Dispatch(PROGID_HOST)
-            code = decode_vbs(Path(vbs_path).read_bytes())
-            last_error: Optional[Exception] = None
-            ok: Optional[bool] = None
-            # 1) 手册方法形式：ExecuteVBSWithFile(path)
             try:
-                ok = bool(app.ExecuteVBSWithFile(str(vbs_path)))
+                app._FlagAsMethod("ExecuteVBSWithFile", "ExecuteVBS")
+            except Exception:  # noqa: BLE001
+                pass
+            last_error: Optional[BaseException] = None
+            method = None
+            ok: Optional[bool] = None
+            # 1) 文件路径（与 File → Execute VBScript 等价）
+            try:
+                ok = bool(app.ExecuteVBSWithFile(path))
+                method = "ExecuteVBSWithFile"
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
-            # 2) 部分 COM 接口把该方法暴露为属性（读返回 bool，写触发执行）
+            # 2) 脚本文本
             if ok is None:
                 try:
-                    app.ExecuteVBSWithFile = str(vbs_path)
-                    ok = True
-                except Exception as exc:  # noqa: BLE001
-                    last_error = exc
-            # 3) ExecuteVBS(code) 直接传脚本文本
-            if ok is None:
-                try:
+                    code = decode_vbs(Path(path).read_bytes())
                     ok = bool(app.ExecuteVBS(code))
-                except Exception as exc:  # noqa: BLE001
-                    last_error = exc
-            # 4) ExecuteVBS 属性赋值形式
-            if ok is None:
-                try:
-                    app.ExecuteVBS = code
-                    ok = True
+                    method = "ExecuteVBS"
                 except Exception as exc:  # noqa: BLE001
                     last_error = exc
             if ok is None:
                 raise last_error or RuntimeError(
-                    "no ExecuteVBS strategy worked")
+                    "ExecuteVBSWithFile / ExecuteVBS unavailable; "
+                    "call _FlagAsMethod before invoke")
             result["ok"] = bool(ok)
+            result["method"] = method
+            if not ok:
+                result["error"] = (
+                    f"{method} returned False "
+                    "(script ran but reported failure; "
+                    "check OpenProject path / host license / log)")
         except Exception as exc:  # noqa: BLE001
             result["error"] = repr(exc)
         finally:
@@ -298,12 +303,13 @@ def _run_com_vbs(vbs_path: Path, timeout: float) -> dict:
     if thread.is_alive():
         return {"backend": "com", "ok": False,
                 "error": "timeout waiting for scFLOWpre",
-                "script": str(vbs_path)}
-    if "error" in result:
-        return {"backend": "com", "ok": False,
-                "error": result["error"], "script": str(vbs_path)}
-    return {"backend": "com", "ok": result.get("ok", False),
-            "script": str(vbs_path)}
+                "script": path}
+    if result.get("ok"):
+        return {"backend": "com", "ok": True, "script": path,
+                "method": result.get("method")}
+    return {"backend": "com", "ok": False,
+            "error": result.get("error", "unknown COM failure"),
+            "script": path, "method": result.get("method")}
 
 
 def _run_gui(vbs_path: Path, timeout: float, menu: dict) -> dict:

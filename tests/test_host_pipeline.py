@@ -103,6 +103,33 @@ class TestRegistration(unittest.TestCase):
         self.assertEqual(result["backend"], "com")
         self.assertTrue(result["ok"])
 
+    def test_run_com_vbs_flags_methods(self):
+        """晚绑定须 FlagAsMethod，禁止属性赋值。"""
+        flagged: list = []
+
+        class _Disp:
+            def _FlagAsMethod(self, *names):
+                flagged.extend(names)
+
+            def ExecuteVBSWithFile(self, path):
+                return True
+
+            def ExecuteVBS(self, code):
+                raise AssertionError("should not fallback")
+
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_bytes(("' noop\r\n").encode("utf-16"))
+            with mock.patch("pythoncom.CoInitialize"), \
+                    mock.patch("pythoncom.CoUninitialize"), \
+                    mock.patch("win32com.client.Dispatch",
+                               return_value=_Disp()):
+                result = host_pipeline._run_com_vbs(vbs, timeout=5.0)
+        self.assertIn("ExecuteVBSWithFile", flagged)
+        self.assertIn("ExecuteVBS", flagged)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result.get("method"), "ExecuteVBSWithFile")
+
     def test_run_in_host_unknown_backend(self):
         with tempfile.TemporaryDirectory() as td:
             vbs = Path(td) / "host.vbs"
