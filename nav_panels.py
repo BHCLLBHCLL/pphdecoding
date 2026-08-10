@@ -121,32 +121,69 @@ def _region_icon(kind: str, size: int = 14) -> QIcon:
 
 
 def _collect_octree_regions(ctx: dict) -> list[dict]:
-    """Detail 区域表行：{name, kind: volume|surface}。"""
+    """Detail「Size for regions」行：对齐 scFLOWpre（fluid / Part / face /
+    Part surface (@PartName)）。
+
+    零件名来自 ``groups_info[*].xml_parts``（main.xml meshinggroup），
+    不再写死 ``Part`` / ``Part surface (@Part)``。
+    """
     rows: list[dict] = []
     seen: set[str] = set()
 
-    def _add(name: str, kind: str) -> None:
+    def _add(name: Optional[str], kind: str) -> None:
         if not name or name in seen:
             return
         seen.add(name)
         rows.append({"name": name, "kind": kind})
 
     meta = ctx.get("regions_meta") or {}
+
+    # 1) FluidRegion：显示 material/property 标签（手册/宿主一致）
     for fr in meta.get("fluid") or []:
-        name = fr.get("name") if isinstance(fr, dict) else None
-        mat = (fr.get("material") or "") if isinstance(fr, dict) else ""
-        label = f"{name}({mat})" if name and mat else (name or "")
-        _add(label or name, "volume")
+        if not isinstance(fr, dict):
+            continue
+        label = (fr.get("label") or "").strip()
+        if not label:
+            name = (fr.get("name") or "").strip()
+            prop = (fr.get("property") or fr.get("material") or "").strip()
+            label = f"{prop} ({name})" if prop and name else name
+        _add(label, "volume")
+
+    # 2) XML volume 区域
     for r in meta.get("volume") or []:
         _add(r.get("name") if isinstance(r, dict) else None, "volume")
-    for r in meta.get("face") or []:
-        _add(r.get("name") if isinstance(r, dict) else None, "surface")
-    # scFLOW 默认项
-    _add("Part", "volume")
-    _add("Part surface (@Part)", "surface")
-    _add("No slip wall", "surface")
+
+    # 3) Parts（Whole）下各零件 → 体积区域行
+    part_names: list[str] = []
+    seen_parts: set[str] = set()
+    for info in (ctx.get("groups_info") or {}).values():
+        for p in info.get("xml_parts") or []:
+            pname = (p.get("name") if isinstance(p, dict) else None) or ""
+            pname = pname.strip()
+            if not pname or pname in seen_parts:
+                continue
+            seen_parts.add(pname)
+            part_names.append(pname)
+    for pname in part_names:
+        _add(pname, "volume")
+
+    # 4) Surface / face 区域（如 open）
+    for cat in ("face", "special_face"):
+        for r in meta.get(cat) or []:
+            _add(r.get("name") if isinstance(r, dict) else None, "surface")
+
+    # 5) 每个 Part 对应 Part surface (@name)
+    for pname in part_names:
+        _add(f"Part surface (@{pname})", "surface")
+
+    # 空工程回退（与 box 单 Part 录制一致）
     if not rows:
-        _add("No slip wall", "surface")
+        _add("Part", "volume")
+        _add("Part surface (@Part)", "surface")
+    elif not part_names and not any(
+            r["name"].startswith("Part surface (") for r in rows):
+        _add("Part", "volume")
+        _add("Part surface (@Part)", "surface")
     return rows
 
 
@@ -256,68 +293,97 @@ class PartsControlBody(_Body):
 
 
 class _PartsControlFollowupBody(_Body):
-    """Parts Control 勾选后插入的 Navigation 项（占位，执行在 scFLOWpre）。"""
+    """Parts Control 勾选后插入的 Navigation 项。
+
+    OK 时写出宿主 VBS 草稿（``session['pending_vbs']``），由 GUI 落盘。
+    """
 
     dialog_buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-    min_size = (420, 160)
+    min_size = (420, 180)
     _hint = ""
+    _vbs_op = ""  # pipeline_plan.wrapping_actions 的 op 键
 
     def __init__(self, parent=None):
         super().__init__(parent)
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 8)
         v.addWidget(_note(self._hint))
+        self.chk_write_vbs = QCheckBox(
+            "写出 scFLOWpre VBS 草稿（PartsControl / Wrapping 占位）")
+        self.chk_write_vbs.setChecked(True)
+        v.addWidget(self.chk_write_vbs)
         v.addStretch(1)
 
     def load(self, ctx: dict) -> None:
         return
 
     def apply(self, ctx: dict) -> bool:
+        if self.chk_write_vbs.isChecked() and self._vbs_op:
+            ctx.setdefault("session", {})["pending_vbs"] = {
+                "op": self._vbs_op,
+                "label": self.title,
+            }
         return True
 
 
 class SpecifyDiscontinuousPartsBody(_PartsControlFollowupBody):
     title = "Specify Discontinuous Parts"
+    _vbs_op = "specify_disc"
     _hint = (
         "[Condition] – [Specify Discontinuous Parts]\n"
-        "自动创建不连续网格用区域与条件（需在 scFLOWpre 中执行）。")
+        "OK 写出 SetPartsControl Discontinuous=True 的 VBS 草稿。")
 
 
 class OversetMeshBody(_PartsControlFollowupBody):
     title = "Overset Mesh"
+    _vbs_op = "overset_mesh"
     _hint = (
         "[Condition] – [Overset Mesh]\n"
-        "创建重叠网格用 meshing unit（需在 scFLOWpre 中执行）。")
+        "OK 写出 SetPartsControl Overset=True 的 VBS 草稿。")
 
 
 class WrappingOctreeParamBody(_PartsControlFollowupBody):
     title = "Wrapping Octree Parameter"
-    _hint = "[Condition] – [Wrapping Octree Parameter]（需 scFLOWpre）。"
+    _vbs_op = "wrap_octree"
+    _hint = (
+        "[Condition] – [Wrapping Octree Parameter]\n"
+        "OK 写出 Wrapping=True + OctParam 占位 VBS（API 待录制锁定）。")
 
 
 class WrappingParamBody(_PartsControlFollowupBody):
     title = "Wrapping Parameter"
-    _hint = "[Condition] – [Wrapping Parameter]（需 scFLOWpre）。"
+    _vbs_op = "wrap_param"
+    _hint = (
+        "[Condition] – [Wrapping Parameter]\n"
+        "OK 写出 Wrapping 参数占位 VBS。")
 
 
 class BeginWrappingBody(_PartsControlFollowupBody):
     title = "Begin Wrapping"
-    _hint = "[Execute] – [Begin Wrapping]（需 scFLOWpre / NativeBridge）。"
+    _vbs_op = "begin_wrap"
+    _hint = (
+        "[Execute] – [Begin Wrapping]\n"
+        "OK 写出 NativeBridge/SCTprime 占位 VBS。")
 
 
 class CancelWrappingBody(_PartsControlFollowupBody):
     title = "Cancel Wrapping"
-    _hint = "[Execute] – [Cancel Wrapping]（需 scFLOWpre）。"
+    _vbs_op = "cancel_wrap"
+    _hint = "[Execute] – [Cancel Wrapping] — VBS 草稿。"
 
 
 class ExecuteWrappingBody(_PartsControlFollowupBody):
     title = "Execute Wrapping"
-    _hint = "[Execute] – [Execute Wrapping]（需 scFLOWpre / NativeBridge）。"
+    _vbs_op = "exec_wrap"
+    _hint = (
+        "[Execute] – [Execute Wrapping]\n"
+        "OK 写出 ExecuteWrapping 占位 VBS（录制未锁定）。")
 
 
 class RetryWrappingBody(_PartsControlFollowupBody):
     title = "Retry Wrapping"
-    _hint = "[Execute] – [Retry Wrapping]（需 scFLOWpre）。"
+    _vbs_op = "retry_wrap"
+    _hint = "[Execute] – [Retry Wrapping] — VBS 草稿。"
 
 
 # scFLOWpre [File]–[Import] 文件类型（手册 Scf_pre_File-Import.html）
@@ -1034,6 +1100,11 @@ class CreatePartsBody(_Body):
                 "test_section": d["test"].isChecked(),
             })
         ctx.setdefault("session", {})["create_parts"] = data
+        ctx.setdefault("session", {})["pending_vbs"] = {
+            "op": "create_parts",
+            "label": f"Create {shape}",
+            "draft": data,
+        }
         return True
 
 
@@ -1717,6 +1788,11 @@ class ModifyPartsBody(_Body):
         if prev.get("execute_requested"):
             data["execute_requested"] = True
         ctx.setdefault("session", {})["modify_parts"] = data
+        ctx.setdefault("session", {})["pending_vbs"] = {
+            "op": "modify_parts",
+            "label": data.get("op_label") or "Modify Parts",
+            "draft": data,
+        }
 
         xenv = ctx.get("xenv")
         if not xenv:
@@ -5929,6 +6005,15 @@ _BC_TYPE_FILTER: dict[str, frozenset[str]] = {
         "CondInitial", "CondInitialValue", "CondInitialField",
         "InitialCondition"}),
 }
+
+# 合并 schemas/conditions.yaml（若存在）扩展 Cond* 过滤器
+try:
+    from conditions_schema import load_bc_filters as _load_bc_filters
+    for _k, _types in _load_bc_filters().items():
+        _BC_TYPE_FILTER[_k] = frozenset(
+            set(_BC_TYPE_FILTER.get(_k, frozenset())) | set(_types))
+except Exception:  # noqa: BLE001
+    pass
 
 
 class ConditionsBody(_Body):
@@ -11596,10 +11681,21 @@ class AnalysisModelWizardBody(_Body):
     # ── page actions ───────────────────────────────────────────────
 
     def _stub_action(self, name: str) -> None:
+        """BAM Wizard 几何动作：记入 session 并生成 VBS 步骤注释。"""
+        sess = self._ctx.setdefault("session", {}).setdefault("build_am", {})
+        steps = list(sess.get("vbs_steps") or [])
+        steps.append(name)
+        sess["vbs_steps"] = steps
+        sess["pending_vbs"] = {
+            "op": "bam_wizard",
+            "label": name,
+            "steps": list(steps),
+        }
         QMessageBox.information(
             self, name,
-            f"{name} is recorded in the session.\n"
-            "Geometry repair / facet creation runs in scFLOWpre.")
+            f"{name} recorded as VBS step "
+            f"({len(steps)} queued).\n"
+            "OK/Build will include these as comments in the host script.")
 
     def _apply_multifold(self) -> None:
         sess = self._ctx.setdefault("session", {}).setdefault("build_am", {})
@@ -12361,7 +12457,28 @@ class OctreeDetailDialog(QDialog):
         self.sp_other_range.setValue(int(d.get("refine_range", 3)))
         self.diagram.set_range(self.sp_other_range.value())
 
+        # 预填 Size for regions：空项用 Minimum octant size（对齐宿主默认）
+        self._prefill_region_sizes()
         self._fill_region_trees()
+
+    def _prefill_region_sizes(self) -> None:
+        """未设置的区域 Size 预填为 min_oct_size / refine_range。"""
+        d = self._data
+        default_size = float(d.get("min_oct_size", 0.001) or 0.001)
+        default_range = float(d.get("refine_range", 0) or 0)
+        rs = d.setdefault("region_size", {})
+        for r in _collect_octree_regions(self._ctx):
+            name = r["name"]
+            cur = rs.get(name)
+            if not isinstance(cur, dict):
+                rs[name] = {"size": default_size, "range": default_range}
+                continue
+            size = cur.get("size")
+            if size is None or size == "" or float(size or 0) == 0:
+                cur["size"] = default_size
+            if cur.get("range") is None or cur.get("range") == "":
+                cur["range"] = default_range
+            rs[name] = cur
 
     def _fill_region_trees(self) -> None:
         regions = _collect_octree_regions(self._ctx)
@@ -13347,7 +13464,9 @@ class ExecuteBody(_Body):
         v = QVBoxLayout(self)
         v.addWidget(_note(
             "[Execute] 批处理\n"
-            "勾选步骤并 OK/Apply 保存计划；本查看器不调用网格器/求解器。"))
+            "勾选步骤并 OK/Apply；默认经 scFLOWpre COM API 执行 "
+            "BAM / Octree / Mesh。\n"
+            "Execute Solver 本查看器不支持（仍为 NYI）。"))
         box = QGroupBox("Process")
         bv = QVBoxLayout(box)
         self.chk_bam = QCheckBox("Build Analysis Model")
@@ -13355,12 +13474,13 @@ class ExecuteBody(_Body):
         self.chk_mesh = QCheckBox("Generate Mesh")
         self.chk_files = QCheckBox("Create files (mesh / condition)")
         self.chk_save = QCheckBox("Save project")
-        self.chk_solver = QCheckBox("Execute Solver")
+        self.chk_solver = QCheckBox("Execute Solver (not available)")
         self.chk_bam.setChecked(True)
         self.chk_oct.setChecked(True)
         self.chk_mesh.setChecked(True)
         self.chk_use_api = QCheckBox(
             "使用 scFLOWpre API 构建 Model / Octree / Mesh")
+        self.chk_use_api.setChecked(True)
         for w in (self.chk_bam, self.chk_oct, self.chk_mesh,
                   self.chk_files, self.chk_save, self.chk_solver):
             bv.addWidget(w)
@@ -13383,7 +13503,8 @@ class ExecuteBody(_Body):
         self.chk_files.setChecked(ex.get("files", False))
         self.chk_save.setChecked(ex.get("save", False))
         self.chk_solver.setChecked(ex.get("solver", False))
-        self.chk_use_api.setChecked(bool(ex.get("use_api", False)))
+        # 默认 True；仅当会话显式 False 时关闭
+        self.chk_use_api.setChecked(bool(ex.get("use_api", True)))
         if ex.get("mesh_mode"):
             i = self.cb_mesh_mode.findText(ex["mesh_mode"])
             if i >= 0:
@@ -13398,13 +13519,18 @@ class ExecuteBody(_Body):
             f"GPH: {'yes' if has_gph else 'no'}")
 
     def apply(self, ctx: dict) -> bool:
+        if self.chk_solver.isChecked():
+            QMessageBox.information(
+                self, "Execute Solver",
+                "Execute Solver is not available in PPH viewer.\n"
+                "Use scFLOWsolver / scPOST separately.")
         ctx.setdefault("session", {})["execute"] = {
             "bam": self.chk_bam.isChecked(),
             "oct": self.chk_oct.isChecked(),
             "mesh": self.chk_mesh.isChecked(),
             "files": self.chk_files.isChecked(),
             "save": self.chk_save.isChecked(),
-            "solver": self.chk_solver.isChecked(),
+            "solver": False,  # 强制不进管线
             "mesh_mode": self.cb_mesh_mode.currentText(),
             "use_api": self.chk_use_api.isChecked(),
         }

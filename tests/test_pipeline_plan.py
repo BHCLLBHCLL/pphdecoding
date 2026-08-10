@@ -15,6 +15,7 @@ from automation.pipeline_plan import (LOCKED_COMMANDS,  # noqa: E402
                                       UNLOCKED_COMMANDS,
                                       PipelinePlan,
                                       build_execute_vbs,
+                                      oct_param_actions,
                                       octree_settings_actions,
                                       steps_from_execute_plan)
 from automation.vbs_bridge import read_vbs_lines  # noqa: E402
@@ -239,12 +240,67 @@ class TestPipelinePlan(unittest.TestCase):
         self.assertIn("Doc_.WaitForWorker", lines)
         self.assertIn("App_.Quit", lines)
 
+    def test_oct_param_actions_set_minsize_and_type(self):
+        """录制要求 SetOctType/SetMinSize；仅 SetParams 不会改边长。"""
+        acts = oct_param_actions({
+            "mode": "octant",
+            "target": 100000,
+            "detail": {
+                "min_oct_size": 0.001,
+                "max_oct_size": 0.001,
+                "restrict_max": True,
+                "region_size": {
+                    "Part surface (@Part)": {"size": 0.001, "range": 0},
+                },
+            },
+        })
+        joined = "\n".join(acts)
+        self.assertIn("MeshingGroup_.DeleteOctree", joined)
+        self.assertIn("OctParam_.SetOctType 3", joined)
+        self.assertIn("OctParam_.SetMinSize 0.001", joined)
+        self.assertIn("OctParam_.SetParams ArrayParam1_", joined)
+        self.assertIn(
+            "MeshingGroup_.SetOctCreateTypeWithSolidBaseOct Param1_", joined)
+        self.assertIn('ArrayParam1_', joined)
+        # 数值按录制写成字符串
+        self.assertRegex(joined, r'ArrayParam1_\(\d+\) = "0\.001"')
+
     def test_verify_outputs(self):
         plan = PipelinePlan(project_path=str(BOX_PPH))
         result = plan.verify_outputs()
         self.assertGreaterEqual(result["role_counts"]["mdl"], 1)
         self.assertGreaterEqual(result["role_counts"]["oct"], 1)
         self.assertGreaterEqual(result["role_counts"]["gph"], 1)
+
+
+class TestWrappingAndCreateVbs(unittest.TestCase):
+    def test_wrapping_sets_parts_control(self):
+        from automation.pipeline_plan import wrapping_actions
+        acts = wrapping_actions("exec_wrap", "proj.pph")
+        joined = "\n".join(acts)
+        self.assertIn('SetPartsControl "Wrapping", True', joined)
+        self.assertIn("TODO", joined)
+
+    def test_create_parts_begin_solid_edit(self):
+        from automation.pipeline_plan import create_parts_actions
+        acts = create_parts_actions(
+            {"shape": "Cuboid", "name": "Box1"}, "proj.pph")
+        self.assertIn("MeshingGroup_.BeginSolidEdit", "\n".join(acts))
+
+    def test_write_nav_vbs_file(self):
+        from automation.pipeline_plan import write_nav_vbs
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "w.vbs"
+            write_nav_vbs("specify_disc", "p.pph", out)
+            text = out.read_text(encoding="utf-16")
+            self.assertIn("Discontinuous", text)
+
+
+class TestConditionsSchema(unittest.TestCase):
+    def test_load_bc_filters(self):
+        from conditions_schema import load_bc_filters
+        f = load_bc_filters()
+        self.assertIn("CondBoundaryFlowIO", f.get("bc_flow", frozenset()))
 
 
 if __name__ == "__main__":

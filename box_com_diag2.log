@@ -1,0 +1,10 @@
+bootstrap err=0 
+open err=0 
+parts err=424 Object required
+bam err=0 
+settings err=0 
+octparam err=0 
+setparams err=0 
+createoctree err=0 
+meshmon err=0 
+save err=0 

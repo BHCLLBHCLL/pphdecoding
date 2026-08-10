@@ -29,8 +29,8 @@ from PyQt5.QtCore import (
     QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer, pyqtSignal,
 )
 from PyQt5.QtGui import (
-    QBrush, QColor, QFont, QIcon, QPainter, QPainterPath, QPalette, QPen,
-    QPixmap, QPolygon,
+    QBrush, QColor, QFont, QIcon, QKeySequence, QPainter, QPainterPath,
+    QPalette, QPen, QPixmap, QPolygon,
 )
 from PyQt5.QtWidgets import (
     QAction, QActionGroup, QApplication, QCheckBox, QComboBox, QDialog,
@@ -46,6 +46,36 @@ import pph_parser
 import pph_vtk
 import pphwriter
 import pphxml
+
+# scFLOWpre / STpre Draw Window 视图键（Pre_eng Keyboard）：
+#   X → YZ（+X）, Y → XZ（+Y）, Z → XY（+Z）；Shift+X/Y/Z 为对侧
+#   F → Fit（仅 Draw 聚焦）；Ctrl+F 为窗口级 Fit
+_VIEW_KEY_TO_PLANE = {"x": "yz", "y": "xz", "z": "xy"}
+
+
+def plane_view_camera(plane: str, *, negative: bool = False
+                      ) -> tuple[tuple[float, float, float],
+                                 tuple[float, float, float]]:
+    """正交平面视图的 camera (position, view_up)。"""
+    sign = -1.0 if negative else 1.0
+    p = (plane or "").lower()
+    if p == "xy":
+        return (0.0, 0.0, sign), (0.0, 1.0, 0.0)
+    if p == "xz":
+        return (0.0, sign, 0.0), (0.0, 0.0, 1.0)
+    return (sign, 0.0, 0.0), (0.0, 0.0, 1.0)
+
+
+def view_key_action(keysym: str, *, shift: bool = False
+                    ) -> Optional[tuple]:
+    """Draw Window 按键 → ``('plane', name, negative)`` 或 ``('fit',)``。"""
+    sym = (keysym or "").lower()
+    if sym == "f" and not shift:
+        return ("fit",)
+    plane = _VIEW_KEY_TO_PLANE.get(sym)
+    if plane is not None:
+        return ("plane", plane, bool(shift))
+    return None
 
 try:  # VTK 工厂注册：交互样式 / OpenGL2 后端
     import vtkmodules.vtkInteractionStyle  # noqa: F401
@@ -2147,6 +2177,11 @@ class View3DTab(QWidget):
                 iren = self.vtk_widget.GetRenderWindow().GetInteractor()
                 iren.SetInteractorStyle(self._trackball_style)
                 iren.Initialize()
+                # VTK 抢先收到按键时的备份路径（与 Qt shortcut 互补）
+                if not getattr(self, "_view_key_obs", False):
+                    iren.AddObserver(
+                        "KeyPressEvent", self._on_vtk_key_press)
+                    self._view_key_obs = True
             except Exception:  # noqa: BLE001
                 pass
             self._sync_vtk_viewport()
@@ -2154,6 +2189,16 @@ class View3DTab(QWidget):
                 self.render()
         else:
             QTimer.singleShot(0, self._sync_vtk_viewport)
+
+    def _on_vtk_key_press(self, obj, _event) -> None:
+        try:
+            sym = (obj.GetKeySym() or "").lower()
+            shift = bool(obj.GetShiftKey())
+        except Exception:  # noqa: BLE001
+            return
+        if sym.startswith("shift_"):
+            return
+        self.dispatch_view_key(sym, shift=shift)
 
     def set_groups(self, groups: dict[str, dict]) -> None:
         self.groups = groups
@@ -2958,9 +3003,37 @@ class View3DTab(QWidget):
         self._safe_vtk_render()
 
     def reset_viewpoint(self) -> None:
+        cam = self.renderer.GetActiveCamera()
+        cam.SetViewUp(0, 1, 0)
+        cam.SetPosition(1, 1, 1)
+        cam.SetFocalPoint(0, 0, 0)
         self.renderer.ResetCamera()
         self._ensure_parallel_camera()
         self._safe_vtk_render()
+
+    def set_plane(self, plane: str, *, negative: bool = False) -> None:
+        """正交视图：XY/XZ/YZ（对应快捷键 Z/Y/X，Shift 为对侧）。"""
+        pos, up = plane_view_camera(plane, negative=negative)
+        cam = self.renderer.GetActiveCamera()
+        cam.SetFocalPoint(0, 0, 0)
+        cam.SetPosition(pos[0], pos[1], pos[2])
+        cam.SetViewUp(up[0], up[1], up[2])
+        self.renderer.ResetCamera()
+        self._ensure_parallel_camera()
+        self._safe_vtk_render()
+
+    def dispatch_view_key(self, keysym: str, *, shift: bool = False
+                          ) -> bool:
+        """应用 Draw Window 视图键；已处理返回 True。"""
+        action = view_key_action(keysym, shift=shift)
+        if action is None:
+            return False
+        if action[0] == "fit":
+            self.fit()
+            return True
+        _, plane, negative = action
+        self.set_plane(plane, negative=negative)
+        return True
 
 
 class PphViewer(QMainWindow):
@@ -3143,6 +3216,45 @@ class PphViewer(QMainWindow):
         main.setSizes([220, 300, 1000])
         self.setCentralWidget(main)
         self.statusBar().showMessage("No project")
+        self._install_draw_view_shortcuts()
+
+    def _install_draw_view_shortcuts(self) -> None:
+        """Draw Window：X/Y/Z(/Shift) 平面视图 + F Fit（对齐 cabdecoding）。
+
+        使用 WidgetWithChildrenShortcut，仅在 Draw Window 聚焦时生效；
+        Ctrl+F 仍为窗口级 Fit。
+        """
+        vtk = getattr(getattr(self, "view3d", None), "vtk_widget", None)
+        if vtk is None:
+            return
+        for act, seq in (
+            (getattr(self, "_act_yz", None), "X"),
+            (getattr(self, "_act_xz", None), "Y"),
+            (getattr(self, "_act_xy", None), "Z"),
+        ):
+            if act is None:
+                continue
+            act.setShortcut(QKeySequence(seq))
+            act.setShortcutContext(Qt.WidgetWithChildrenShortcut)
+            vtk.addAction(act)
+        for seq, plane in (("Shift+X", "yz"), ("Shift+Y", "xz"),
+                           ("Shift+Z", "xy")):
+            act = QAction(self)
+            act.setShortcut(QKeySequence(seq))
+            act.setShortcutContext(Qt.WidgetWithChildrenShortcut)
+            act.triggered.connect(
+                lambda _=False, p=plane: self.view3d.set_plane(
+                    p, negative=True))
+            vtk.addAction(act)
+        act_f = QAction(self)
+        act_f.setShortcut(QKeySequence("F"))
+        act_f.setShortcutContext(Qt.WidgetWithChildrenShortcut)
+        act_f.triggered.connect(self.view3d.fit)
+        vtk.addAction(act_f)
+        tip = "Fit to Draw Window (F when Draw Window focused; Ctrl+F)"
+        if getattr(self, "_act_fit", None) is not None:
+            self._act_fit.setToolTip(tip)
+            self._act_fit.setStatusTip(tip)
 
     def _build_menus(self) -> None:
         """按 scFLOWpre Menu Guide（hh_toc / Pre_eng）重建菜单栏。"""
@@ -3157,13 +3269,18 @@ class PphViewer(QMainWindow):
                 act.setShortcut(shortcut)
             if tip:
                 act.setToolTip(tip)
+                act.setStatusTip(tip)
             if checkable:
                 act.setCheckable(True)
             if slot:
                 act.triggered.connect(slot)
             else:
-                act.triggered.connect(
-                    lambda checked=False, t=text: self._nyi(t))
+                # 未接线：灰显，避免误点刷屏；tooltip 标明 NYI
+                act.setEnabled(False)
+                tip_nyi = tip or (
+                    f"Not available in PPH viewer: {text}")
+                act.setToolTip(tip_nyi)
+                act.setStatusTip(tip_nyi)
             menu.addAction(act)
             if key:
                 self._menu_acts[key] = act
@@ -3188,15 +3305,19 @@ class PphViewer(QMainWindow):
         add_act(m, "Export…", self._export_member, key="file_export")
         add_act(m, "Create Actran Files…", key="file_actran")
         m.addSeparator()
-        add_act(m, "Start Recording VBScript", key="file_vbs_start")
-        add_act(m, "Stop Recording VBScript", key="file_vbs_stop")
-        add_act(m, "Execute VBScript…", key="file_vbs_exec")
+        add_act(m, "Start Recording VBScript", self._vbs_start_recording,
+                key="file_vbs_start")
+        add_act(m, "Stop Recording VBScript", self._vbs_stop_recording,
+                key="file_vbs_stop")
+        add_act(m, "Execute VBScript…", self._vbs_execute_file,
+                key="file_vbs_exec")
         m.addSeparator()
         add_act(m, "Exit", self.close, shortcut="Alt+F4", key="file_exit")
 
         # ── Edit ──────────────────────────────────────────────────
         m = mb.addMenu("Edit(&E)")
-        add_act(m, "Undo", shortcut="Ctrl+Z", key="edit_undo")
+        add_act(m, "Undo", self._edit_undo, shortcut="Ctrl+Z",
+                key="edit_undo")
         m.addSeparator()
         add_act(m, "Create Parts…", nav("create_parts"),
                 key="edit_create_parts")
@@ -3212,13 +3333,16 @@ class PphViewer(QMainWindow):
                 key="edit_register_region")
         add_act(m, "Create 2D Sub-mesh Meshing Unit…",
                 key="edit_2d_submesh")
-        add_act(m, "Measurement Tool", key="edit_measure")
+        add_act(m, "Measurement Tool", self._measurement_tool,
+                key="edit_measure")
         m.addSeparator()
         ridge = m.addMenu("Ridge")
-        add_act(ridge, "Set Selected Edge to Ridge", key="edit_ridge_set")
+        add_act(ridge, "Set Selected Edge to Ridge",
+                lambda: self._ridge_op("set"), key="edit_ridge_set")
         add_act(ridge, "Set Selected Edge to Non-Ridge",
-                key="edit_ridge_unset")
-        add_act(ridge, "Recalc Ridge", key="edit_ridge_recalc")
+                lambda: self._ridge_op("unset"), key="edit_ridge_unset")
+        add_act(ridge, "Recalc Ridge",
+                lambda: self._ridge_op("recalc"), key="edit_ridge_recalc")
         m.addSeparator()
         add_act(m, "Refine Octants", key="edit_refine_oct")
         add_act(m, "Refine Octants (Recursive)…",
@@ -3252,14 +3376,17 @@ class PphViewer(QMainWindow):
             ("sel_pick_edge_spread", "Mouse Pick (Edge & Spread)"),
             ("sel_pick_vertex", "Mouse Pick (Vertex)"),
         ):
-            act = add_act(m, label, checkable=True, key=key)
-            self._select_pick_group.addAction(act)
             if key == "sel_pick_face":
-                act.triggered.connect(
-                    lambda c=False: self._toggle_pick_face())
+                act = add_act(m, label, self._toggle_pick_face,
+                              checkable=True, key=key,
+                              tip="Pick MDL faces in Draw Window")
+            else:
+                act = add_act(m, label, checkable=True, key=key)
+            self._select_pick_group.addAction(act)
         self._menu_acts["sel_pick_face"].setChecked(False)
         m.addSeparator()
-        add_act(m, "Rubber Box (Select)", key="sel_rbox")
+        add_act(m, "Rubber Box (Select)", self._rubber_select,
+                key="sel_rbox", tip="Rubber-box zoom (select mode TBD)")
         add_act(m, "Rubber Circle (Select)", key="sel_rcircle")
         add_act(m, "Rubber Polygon (Select)", key="sel_rpoly")
         m.addSeparator()
@@ -3270,16 +3397,18 @@ class PphViewer(QMainWindow):
         add_act(m, "Select Faces That Have the Same Area",
                 key="sel_same_area")
         m.addSeparator()
-        add_act(m, "Select All Parts", key="sel_all_parts")
-        add_act(m, "Select All Faces", key="sel_all_faces")
+        add_act(m, "Select All Parts", self._select_all_parts,
+                key="sel_all_parts")
+        add_act(m, "Select All Faces", self._select_all_faces,
+                key="sel_all_faces")
         add_act(m, "Select All Edges", key="sel_all_edges")
         add_act(m, "Select All Ridges", key="sel_all_ridges")
         m.addSeparator()
         add_act(m, "Deselect All Parts",
-                lambda: self.view3d.set_model_filter(None),
+                self._deselect_all,
                 key="sel_desel_parts")
         add_act(m, "Deselect All Faces",
-                lambda: self.view3d.set_model_filter(None),
+                self._deselect_all,
                 key="sel_desel_faces")
         add_act(m, "Deselect All Edges", key="sel_desel_edges")
         add_act(m, "Deselect All Vertices", key="sel_desel_verts")
@@ -3297,22 +3426,46 @@ class PphViewer(QMainWindow):
         add_act(m, "Reset Viewpoint",
                 lambda: self.view3d.reset_viewpoint(),
                 key="view_reset")
-        add_act(m, "Fit to Draw Window",
-                lambda: self.view3d.fit(), shortcut="Ctrl+F",
-                key="view_fit")
+        self._act_fit = add_act(
+            m, "Fit to Draw Window",
+            lambda: self.view3d.fit(), shortcut="Ctrl+F",
+            tip="Fit to Draw Window (F when Draw Window focused; Ctrl+F)",
+            key="view_fit")
         add_act(m, "Fit to Selected Face (Model)",
-                key="view_fit_face_mdl")
+                self._fit_to_selection, key="view_fit_face_mdl")
         add_act(m, "Fit to Selected Face (Mesh)",
-                key="view_fit_face_msh")
+                self._fit_to_selection, key="view_fit_face_msh")
         add_act(m, "Fit to Selected Element (Mesh)",
-                key="view_fit_elem")
+                self._fit_to_selection, key="view_fit_elem")
+        m.addSeparator()
+        # Draw Window 快捷键 X/Y/Z（及 Shift+）在 _install_draw_view_shortcuts
+        self._act_xy = add_act(
+            m, "XY Plane",
+            lambda: self.view3d.set_plane("xy"),
+            tip="XY plane from +Z (Z when Draw Window focused)",
+            key="view_xy")
+        self._act_xz = add_act(
+            m, "XZ Plane",
+            lambda: self.view3d.set_plane("xz"),
+            tip="XZ plane from +Y (Y when Draw Window focused)",
+            key="view_xz")
+        self._act_yz = add_act(
+            m, "YZ Plane",
+            lambda: self.view3d.set_plane("yz"),
+            tip="YZ plane from +X (X when Draw Window focused)",
+            key="view_yz")
         m.addSeparator()
         add_act(m, "Show All", nav("view_show_all"), key="view_show_all")
-        add_act(m, "Hide Selected Parts", key="view_hide_parts")
-        add_act(m, "Hide Selected Faces", key="view_hide_faces")
-        add_act(m, "Only Selected Part", key="view_only_part")
-        add_act(m, "Only Selected Face", key="view_only_face")
-        add_act(m, "Only Selected Mesh", key="view_only_mesh")
+        add_act(m, "Hide Selected Parts", self._hide_selected_parts,
+                key="view_hide_parts")
+        add_act(m, "Hide Selected Faces", self._hide_selected_faces,
+                key="view_hide_faces")
+        add_act(m, "Only Selected Part", self._only_selected_part,
+                key="view_only_part")
+        add_act(m, "Only Selected Face", self._only_selected_face,
+                key="view_only_face")
+        add_act(m, "Only Selected Mesh", self._only_selected_mesh,
+                key="view_only_mesh")
         m.addSeparator()
         add_act(m, "Change Display Type of Edge", key="view_edge_type")
         add_act(m, "Switch Display Surface by Orientation",
@@ -3321,7 +3474,8 @@ class PphViewer(QMainWindow):
         rb = m.addMenu("Rubber Box")
         add_act(rb, "Rubber Box (Show)", self._toggle_rubber,
                 key="view_rbox_show")
-        add_act(rb, "Rubber Box (Hide)", key="view_rbox_hide")
+        add_act(rb, "Rubber Box (Hide)", self._toggle_rubber,
+                key="view_rbox_hide")
         rc = m.addMenu("Rubber Circle")
         add_act(rc, "Rubber Circle (Show)", key="view_rcirc_show")
         add_act(rc, "Rubber Circle (Hide)", key="view_rcirc_hide")
@@ -3359,17 +3513,19 @@ class PphViewer(QMainWindow):
                 key="cond_overset")
         add_act(m, "Part Material…", nav("part_material"),
                 key="cond_part_mat")
-        add_act(m, "Fluid Region Material…", key="cond_fluid_mat")
+        add_act(m, "Fluid Region Material…", nav("part_material"),
+                key="cond_fluid_mat")
         add_act(m, "Conditions…", nav("conditions"), key="cond_wizard")
         m.addSeparator()
-        add_act(m, "Project Type Setting…", key="cond_project_type")
+        add_act(m, "Project Type Setting…", self._project_type_dialog,
+                key="cond_project_type")
         add_act(m, "Mesher/Faceter Setting…", nav("mesher_faceter"),
                 key="cond_mesher")
         m.addSeparator()
         add_act(m, "Wrapping Octree Parameter…", nav("wrap_octree"),
                 key="cond_wrap_oct")
         add_act(m, "Octree Parameter for Building Analysis Model…",
-                key="cond_bam_oct")
+                nav("build_am_detailed"), key="cond_bam_oct")
         add_act(m, "Wrapping Parameter…", nav("wrap_param"),
                 key="cond_wrap_param")
         m.addSeparator()
@@ -3431,11 +3587,12 @@ class PphViewer(QMainWindow):
             ("opt_trans", "Translation"),
             ("opt_zoom", "Zoom In/Out"),
         ):
-            act = add_act(m, label, checkable=True, key=key)
+            act = add_act(
+                m, label,
+                lambda _c=False, t=label: self._set_opt_1button_tool(t),
+                checkable=True, key=key,
+                tip=f"{label} (maps to Trackball / mouse mode)")
             self._opt_tool_group.addAction(act)
-            act.triggered.connect(
-                lambda _c=False, t=label: self.log(
-                    f"Option — {t} (1-Button tool)"))
         m.addSeparator()
         add_act(m, "Operation…", self._option_operation, key="opt_operation")
         m.addSeparator()
@@ -3500,7 +3657,8 @@ class PphViewer(QMainWindow):
             ("Octree", "octree", "View — Octree", "view_octree"),
             ("Mesh", "mesh", "View — Mesh", "view_mesh"),
             ("Section", "section", "Cross Section View of Mesh", "view_section"),
-            ("Fit", "fit", "Fit to Draw Window", None),
+            ("Fit", "fit",
+             "Fit to Draw Window (F / Ctrl+F)", None),
             ("Show All", "show_all", "Show All", "view_show_all"),
         ):
             act = QAction(AppIcons.get(icon, icon_sz), text, self)
@@ -3547,6 +3705,12 @@ class PphViewer(QMainWindow):
             f"[{name}] not available in PPH viewer "
             f"(scFLOWpre-only / not yet mapped).",
             "WARN")
+
+    def _set_opt_1button_tool(self, label: str) -> None:
+        """Option 1-Button 工具：记录会话，不触发 _nyi。"""
+        sess = self._nav_dialogs.session.setdefault("option_tool", {})
+        sess["tool"] = label
+        self.log(f"Option — {label} (1-Button tool)")
 
     # ── Option(O) ─────────────────────────────────────────────────
 
@@ -3801,6 +3965,218 @@ class PphViewer(QMainWindow):
         self.show_page("draw")
         checked = not self.view3d.btn_rubber.isChecked()
         self.view3d.btn_rubber.setChecked(checked)
+
+    def _rubber_select(self) -> None:
+        """Rubber Box Select：暂复用橡皮框缩放（完整框选待阶段2）。"""
+        self._toggle_rubber()
+        self.log("Select — Rubber Box (uses zoom rubber; face-select TBD)")
+
+    def _deselect_all(self) -> None:
+        self.view3d.set_model_filter(None)
+        self.view3d.clear_visibility()
+        self.log("Deselect All — cleared filter / visibility")
+
+    def _select_all_parts(self) -> None:
+        self.show_page("draw")
+        self.view3d.clear_visibility()
+        for g in (getattr(self.model_tree, "_info", {}) or {}):
+            self.view3d.set_layer_visibility(g, "mdl", True, refresh=False)
+        self.view3d.render()
+        self.log("Select All Parts — show all MDL layers")
+
+    def _select_all_faces(self) -> None:
+        self._select_all_parts()
+        self.log("Select All Faces — same as show all MDL (face mask TBD)")
+
+    def _fit_to_selection(self) -> None:
+        self.show_page("draw")
+        self.view3d.fit()
+        self.log("Fit to selection — ResetCamera on visible props")
+
+    def _hide_selected_parts(self) -> None:
+        items = self.model_tree.tree.selectedItems()
+        if not items:
+            self.log("Hide Selected Parts — nothing selected in Model Tree",
+                     "WARN")
+            return
+        for it in items:
+            data = it.data(0, Qt.UserRole)
+            # expect (group, ...) patterns used by model tree
+            group = None
+            if isinstance(data, (list, tuple)) and data:
+                group = data[0]
+            elif isinstance(data, str):
+                group = data
+            if group:
+                self.view3d.set_layer_visibility(group, "mdl", False)
+        self.log(f"Hide Selected Parts — {len(items)} tree item(s)")
+
+    def _hide_selected_faces(self) -> None:
+        self._hide_selected_parts()
+        self.log("Hide Selected Faces — delegated to part hide (face TBD)")
+
+    def _only_selected_part(self) -> None:
+        items = self.model_tree.tree.selectedItems()
+        groups = set()
+        for it in items:
+            data = it.data(0, Qt.UserRole)
+            if isinstance(data, (list, tuple)) and data:
+                groups.add(data[0])
+            elif isinstance(data, str):
+                groups.add(data)
+        if not groups:
+            self.log("Only Selected Part — select a Model Tree item", "WARN")
+            return
+        for g in (getattr(self.model_tree, "_info", {}) or {}):
+            self.view3d.set_layer_visibility(
+                g, "mdl", g in groups, refresh=False)
+            self.view3d.set_layer_visibility(
+                g, "gph", False, refresh=False)
+        self.view3d.render()
+        self.log(f"Only Selected Part — {sorted(groups)}")
+
+    def _only_selected_face(self) -> None:
+        self._only_selected_part()
+
+    def _only_selected_mesh(self) -> None:
+        items = self.model_tree.tree.selectedItems()
+        groups = set()
+        for it in items:
+            data = it.data(0, Qt.UserRole)
+            if isinstance(data, (list, tuple)) and data:
+                groups.add(data[0])
+            elif isinstance(data, str):
+                groups.add(data)
+        all_g = list(getattr(self.model_tree, "_info", {}) or {})
+        if not groups and all_g:
+            groups = set(all_g)
+        for g in all_g:
+            self.view3d.set_layer_visibility(
+                g, "gph", g in groups, refresh=False)
+            self.view3d.set_layer_visibility(
+                g, "mdl", False, refresh=False)
+        self.view3d.render()
+        self.log(f"Only Selected Mesh — {sorted(groups)}")
+
+    def _measurement_tool(self) -> None:
+        """简易测量：显示当前模型包围盒对角线（完整两点拾取待扩展）。"""
+        try:
+            b = self.view3d.renderer.ComputeVisiblePropBounds()
+            if b[1] < b[0]:
+                self.log("Measurement — no visible geometry", "WARN")
+                return
+            import math
+            dx, dy, dz = b[1] - b[0], b[3] - b[2], b[5] - b[4]
+            diag = math.sqrt(dx * dx + dy * dy + dz * dz)
+            msg = (
+                f"AABB size = ({dx:.6g}, {dy:.6g}, {dz:.6g}) m\n"
+                f"Diagonal = {diag:.6g} m\n"
+                f"(Point-to-point pick TBD)")
+            QMessageBox.information(self, "Measurement Tool", msg)
+            self.log(f"Measurement — diag={diag:.6g} m")
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"Measurement failed: {exc}", "WARN")
+
+    def _ridge_op(self, op: str) -> None:
+        """Ridge 操作：记录请求并生成宿主 VBS 草稿。"""
+        if not self.archive_path:
+            QMessageBox.information(self, "Ridge", "请先打开 PPH 项目")
+            return
+        out = Path(self.archive_path).with_suffix(f".ridge_{op}.vbs")
+        actions = [
+            "Set App_ = GetApplication()",
+            'If App_ Is Nothing Then Set App_ = '
+            'CreateObject("scFLOWpre_Bx64net.Application.2025")',
+            "Set Doc_ = App_.GetDocument",
+            f'Doc_.OpenProject "{Path(self.archive_path).as_posix()}", False',
+            "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
+        ]
+        if op == "recalc":
+            actions.append("' TODO: MeshingGroup_.RecalcRidge (录制补全)")
+        elif op == "set":
+            actions.append("' TODO: set selected edges to ridge")
+        else:
+            actions.append("' TODO: set selected edges to non-ridge")
+        actions.append(
+            f'Doc_.SaveProject "{Path(self.archive_path).as_posix()}"')
+        from automation.vbs_bridge import write_vbs_file
+        write_vbs_file(actions, out, title=f"pph_gui ridge {op}")
+        self.log(f"Ridge {op} — VBS draft written: {out}")
+        QMessageBox.information(
+            self, "Ridge",
+            f"已写出宿主脚本草稿：\n{out}\n"
+            f"请在 scFLOWpre 中补全/执行（RecalcRidge API 待录制锁定）。")
+
+    def _edit_undo(self) -> None:
+        stack = self._nav_dialogs.session.setdefault("_undo", [])
+        if not stack:
+            self.log("Undo — empty stack", "WARN")
+            return
+        snap = stack.pop()
+        sess = self._nav_dialogs.session
+        for k in ("create_parts", "modify_parts", "octree_param"):
+            if k in snap:
+                sess[k] = dict(snap[k])
+        self.log(
+            f"Undo — restored {snap.get('key', '?')} "
+            f"({len(stack)} left)")
+
+    def _project_type_dialog(self) -> None:
+        """显示/记录当前项目类型（完整切换对话框后续扩展）。"""
+        typ = "(unknown)"
+        if self._main_xml is not None:
+            try:
+                typ = (self._main_xml.root.findtext(".//project_type")
+                       or self._main_xml.root.findtext(".//ProjectType")
+                       or typ)
+            except Exception:  # noqa: BLE001
+                pass
+        QMessageBox.information(
+            self, "Project Type Setting",
+            f"Current project type: {typ}\n\n"
+            "Changing analysis type requires scFLOWpre conversion;\n"
+            "edit main.xml project_type only after confirming host support.")
+        self._nav_dialogs.session.setdefault("project_type", {})["type"] = typ
+
+    def _vbs_start_recording(self) -> None:
+        self._com_vbs_record(True)
+
+    def _vbs_stop_recording(self) -> None:
+        self._com_vbs_record(False)
+
+    def _com_vbs_record(self, start: bool) -> None:
+        try:
+            import pythoncom
+            import win32com.client
+            from automation.host_pipeline import PROGID_HOST
+            pythoncom.CoInitialize()
+            try:
+                app = win32com.client.Dispatch(PROGID_HOST)
+                method = "StartRecordVBS" if start else "EndRecordVBS"
+                try:
+                    app._FlagAsMethod(method)
+                except Exception:  # noqa: BLE001
+                    pass
+                getattr(app, method)()
+                self.log(f"VBScript — {method} OK")
+            finally:
+                pythoncom.CoUninitialize()
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"VBScript record failed: {exc}", "WARN")
+            QMessageBox.warning(
+                self, "VBScript",
+                f"无法调用宿主 {('Start' if start else 'End')}RecordVBS：\n{exc}")
+
+    def _vbs_execute_file(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Execute VBScript", "",
+            "VBScript (*.vbs);;All files (*)")
+        if not path:
+            return
+        from automation import host_pipeline
+        self.log(f"Executing VBS via COM: {path}")
+        result = host_pipeline.run_in_host(path, backend="com")
+        self.log(f"Execute VBScript 返回: {result}")
 
     def _focus_status(self, focus: str) -> None:
         groups = sorted(getattr(self.model_tree, "_info", {}) or {})
@@ -4144,6 +4520,21 @@ class PphViewer(QMainWindow):
 
     def _commit_nav_ctx(self, key: str, ctx: dict) -> None:
         """对话框 Apply/OK 后提交 xenv / xml 到 Save As 缓冲。"""
+        # Undo：浅快照 session 关键键
+        undo = self._nav_dialogs.session.setdefault("_undo", [])
+        snap = {
+            "key": key,
+            "create_parts": dict(
+                (ctx.get("session") or {}).get("create_parts") or {}),
+            "modify_parts": dict(
+                (ctx.get("session") or {}).get("modify_parts") or {}),
+            "octree_param": dict(
+                (ctx.get("session") or {}).get("octree_param") or {}),
+        }
+        undo.append(snap)
+        if len(undo) > 32:
+            del undo[:-32]
+
         msgs = []
         if ctx.get("xenv_dirty") and self._xenv is not None:
             data = pphxml.serialize_xenv(self._xenv)
@@ -4183,6 +4574,21 @@ class PphViewer(QMainWindow):
         if key in ("option_nav", "option_settings"):
             self._apply_option_nav()
             msgs.append("Option → Navigation / Settings 已应用")
+
+        pending = (ctx.get("session") or {}).pop("pending_vbs", None)
+        if pending and self.archive_path:
+            try:
+                from automation.pipeline_plan import write_nav_vbs
+                op = pending.get("op") or key
+                out = Path(self.archive_path).with_suffix(f".{op}.vbs")
+                write_nav_vbs(
+                    op, self.archive_path, out,
+                    draft=pending.get("draft"))
+                msgs.append(f"VBS {out.name}")
+                self.log(f"[{key}] VBS 草稿: {out}")
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"[{key}] VBS 写出失败: {exc}", "WARN")
+
         if msgs:
             self.log(f"[{key}] 已应用: {', '.join(msgs)}")
         else:
@@ -4363,11 +4769,11 @@ class PphViewer(QMainWindow):
         sects = oct_param_sect_summary(octree_sess)
         if "oct" in plan and plan.get("oct") and not sects:
             self.log(
-                "警告：Octree Detail 未设置任何区域 Size（SECTITEM 为空）；"
-                "仅改界面未 OK、或 Size=0 时，重新生成的网格会与原来相同",
+                "警告：Octree Detail 未设置 Minimum octant size / 区域 Size；"
+                "宿主可能复用旧八叉树尺寸",
                 "WARN")
         elif sects:
-            self.log("OctParam 区域尺寸：" + "; ".join(sects))
+            self.log("OctParam：" + "; ".join(sects))
         build_execute_vbs(self.archive_path, plan, out, marker=marker,
                           xenv=ctx.get("xenv"), octree_sess=octree_sess,
                           parts_control_sess=pc_sess)
@@ -4398,6 +4804,14 @@ class PphViewer(QMainWindow):
             octree_sess=(ctx.get("session") or {}).get("build_am_octree"),
             parts_control_sess=(ctx.get("session") or {}).get(
                 "parts_control"))
+        # BAM Wizard Match/tiny 等步骤：追加为注释，便于录制对拍
+        bam = (ctx.get("session") or {}).get("build_am") or {}
+        steps = list(bam.get("vbs_steps") or [])
+        if steps:
+            text = out.read_text(encoding="utf-8", errors="replace")
+            extra = "\n".join(f"' BAM wizard step: {s}" for s in steps)
+            out.write_text(text + "\n" + extra + "\n", encoding="utf-8")
+            self.log(f"BAM wizard VBS steps: {steps}")
         self.log(f"Analysis Model Wizard 脚本已生成：{out}")
         self.log(
             "正在通过 scFLOWpre API 后台执行；"

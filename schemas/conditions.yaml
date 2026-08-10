@@ -1,0 +1,74 @@
+# Condition Wizard schema（阶段4骨架）
+# 由 tools/extract_schema.py --yaml 从 PPH/录制补全；GUI 通过
+# conditions_schema.load_bc_filters() 合并到 _BC_TYPE_FILTER。
+version: 1
+source: "box.pph + scFLOWpre Cond* registry (stub)"
+wizard_leaves:
+  - key: analysis_type
+    title: Analysis Type
+  - key: basic_setting
+    title: Basic Setting
+  - key: initial
+    title: Initial Condition
+  - key: bc_flow
+    title: Flow Boundary
+  - key: bc_wall
+    title: Wall Boundary
+  - key: bc_thermal
+    title: Thermal Boundary
+  - key: bc_sym
+    title: Symmetrical Boundary
+  - key: bc_periodic
+    title: Periodic Boundary
+  - key: source
+    title: Source Condition
+  - key: fixed
+    title: Fixed Condition
+  - key: analysis_control
+    title: Analysis Control
+  - key: out_field
+    title: Output of Field File
+  - key: out_list
+    title: Output of List File
+  - key: out_other
+    title: Other Output
+  - key: file_name
+    title: File Name
+  - key: optional
+    title: Optional Conditions
+
+bc_filters:
+  bc_flow:
+    - CondBoundaryFlowIO
+    - CondBoundaryFan
+    - CondBoundaryPressure
+  bc_wall:
+    - CondBoundaryWallStress
+    - CondBoundaryWallThermal
+  bc_thermal:
+    - CondBoundaryWallThermal
+    - CondBoundaryHeatTransfer
+  bc_sym:
+    - CondBoundarySymmetry
+    - SymmetricalBoundary
+  bc_periodic:
+    - CondBoundaryPeriodic
+    - PeriodicBoundary
+  source:
+    - CondSource
+    - CondSourceVolumetric
+  fixed:
+    - CondFix
+  initial:
+    - CondInitial
+    - CondInitialValue
+    - CondInitialField
+    - InitialCondition
+
+# 常用表单已实现的 Cond*（其余仍为 Detailed/New 占位）
+implemented_forms:
+  - CondBoundaryFlowIO
+  - CondBoundaryWallStress
+  - CondBoundaryWallThermal
+  - CondBoundarySymmetry
+  - CondInitial

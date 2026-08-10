@@ -178,16 +178,18 @@ def octree_settings_actions(xenv) -> list[str]:
 
 
 def _oct_sect_name(ui_name: str) -> str:
-    """GUI 区域名 → OctParam SECTITEM 名（录制：Part surface (@Part)→@PartSurface_Part）。"""
+    """GUI 区域名 → OctParam SECTITEM 名。
+
+    录制：``Part surface (@Part)`` → ``@PartSurface_Part``；
+    多零件：``Part surface (@case1)`` → ``@PartSurface_case1``。
+    """
     name = (ui_name or "").strip()
-    if name == "Part surface (@Part)":
-        return "@PartSurface_Part"
     if name.startswith("@PartSurface_"):
         return name
     if name.startswith("Part surface ("):
         inner = name[len("Part surface ("):].rstrip(")")
         if inner.startswith("@"):
-            return inner
+            inner = inner[1:]
         return f"@PartSurface_{inner}" if inner else "@PartSurface_Part"
     return name
 
@@ -326,32 +328,75 @@ def build_oct_param_pairs(octree_sess: Optional[dict]) -> list[tuple[str, str]]:
     return pairs
 
 
-def oct_param_actions(octree_sess: Optional[dict]) -> list[str]:
-    """生成 ``GetOctParam`` / ``Initialize`` / ``SetParams`` VBS 片段。"""
+def oct_param_actions(octree_sess: Optional[dict] = None) -> list[str]:
+    """生成 ``GetOctParam`` / ``SetOctType`` / ``SetMinSize`` / ``SetParams`` VBS。
+
+    录制（``tests/box_vbs_v2.vbs``）在 ``SetParams`` 之前必须：
+
+    1. ``DeleteOctree``（否则宿主常复用旧八叉树，边长不变）；
+    2. ``Initialize`` → ``SetOctType``（1=target / 2=min / 3=octant）；
+    3. ``SetMeshNum`` / ``SetMinSize``（``SetParams``  alone 不会改全局最小尺寸）。
+
+    COM 实测：仅 ``SetParams`` 时边界边长仍约 0.00022；补齐上述调用后
+    ``SetMinSize 0.001`` → 边长约 0.001、单元数约 1000。
+    """
+    sess = dict(octree_sess or {})
+    detail = dict(sess.get("detail") or {})
+    for k in (
+        "min_oct_size", "max_oct_size", "restrict_max",
+    ):
+        if k not in detail and k in sess:
+            detail[k] = sess[k]
+    mode = sess.get("mode", "octant")
+    oct_type = {"target": 1, "min": 2, "octant": 3}.get(mode, 3)
+    target = int(sess.get("target", 100000) or 100000)
+    min_oct = float(detail.get("min_oct_size", sess.get("min_size", 0.001))
+                    or 0.001)
+    if mode == "min" and "min_size" in sess:
+        min_oct = float(sess["min_size"])
+
     pairs = build_oct_param_pairs(octree_sess)
     n = len(pairs) * 2 - 1
     actions = [
         "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
+        "MeshingGroup_.DeleteOctree",
+        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
         "Set OctParam_ = MeshingGroup_.GetOctParam(False)",
         "OctParam_.Initialize",
+        f"OctParam_.SetOctType {oct_type}",
+        f"OctParam_.SetMeshNum {target}",
+        f"OctParam_.SetMinSize {_fmt_oct_num(min_oct)}",
         f"Redim ArrayParam1_({n})",
     ]
     idx = 0
     for key, val in pairs:
         actions.append(f'ArrayParam1_({idx}) = "{key}"')
         idx += 1
-        # 数值不带引号；空串与名称带引号
-        if val == "" or not _looks_numeric(val):
-            esc = str(val).replace('"', '""')
-            actions.append(f'ArrayParam1_({idx}) = "{esc}"')
-        else:
-            actions.append(f"ArrayParam1_({idx}) = {val}")
+        # 录制把数值也写成字符串；与 history.vbs 一致更稳妥
+        esc = str(val).replace('"', '""')
+        actions.append(f'ArrayParam1_({idx}) = "{esc}"')
         idx += 1
     actions.append(
         "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)")
     actions.append(
         "Set OctParam_ = MeshingGroup_.GetOctParam(False)")
     actions.append("OctParam_.SetParams ArrayParam1_")
+    # CreateOctree 前：与录制一致的创建类型 + 空角度精度
+    actions.extend([
+        "Param1_ = -1",
+        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
+        "Set OctParam_ = MeshingGroup_.GetOctParam(False)",
+        "OctParam_.SetGlobalAngularPrecisionMinOctLimitSize Param1_",
+        "Redim ArrayParam1_(-1)",
+        "Redim ArrayParam2_(-1)",
+        "Redim ArrayParam3_(-1)",
+        "Redim ArrayParam4_(-1)",
+        "OctParam_.SetAngularPrecision ArrayParam1_, ArrayParam2_, "
+        "ArrayParam3_, ArrayParam4_",
+        'Param1_ = "default"',
+        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
+        "MeshingGroup_.SetOctCreateTypeWithSolidBaseOct Param1_",
+    ])
     return actions
 
 
@@ -363,9 +408,14 @@ def _looks_numeric(text: str) -> bool:
         return False
 
 
-def oct_param_sect_summary(octree_sess: Optional[dict]) -> list[str]:
-    """可读摘要：将写入 SECTITEM 的区域尺寸。"""
+def oct_param_sect_summary(octree_sess: Optional[dict] = None) -> list[str]:
+    """可读摘要：将写入 SECTITEM 的区域尺寸与全局最小尺寸。"""
+    sess = dict(octree_sess or {})
+    detail = dict(sess.get("detail") or {})
+    min_oct = detail.get("min_oct_size", sess.get("min_size"))
     out = []
+    if min_oct is not None:
+        out.append(f"min_oct={min_oct}")
     for key, val in build_oct_param_pairs(octree_sess):
         if key.endswith("].NAME") and key.startswith("SECTITEM"):
             out.append(val)
@@ -399,6 +449,101 @@ def parts_control_actions(pc_sess: Optional[dict] = None) -> list[str]:
     ]
 
 
+# Wrapping / Disc / Overset 导航项 → VBS 草稿（高层命令未在 v1–v4 录制锁定）
+_WRAP_OP_COMMENTS: dict[str, str] = {
+    "begin_wrap": "Begin Wrapping — NativeBridge/SCTprime CreateWrap…",
+    "cancel_wrap": "Cancel Wrapping",
+    "exec_wrap": "Execute Wrapping — NativeBridge ExecuteWrapping",
+    "retry_wrap": "Retry Wrapping",
+    "wrap_octree": "Wrapping Octree Parameter — SetWrapOctParam (录制补全)",
+    "wrap_param": "Wrapping Parameter — SetWrapParam (录制补全)",
+    "specify_disc": 'Conditions_.SetPartsControl "Discontinuous", True',
+    "overset_mesh": 'Conditions_.SetPartsControl "Overset", True',
+}
+
+
+def wrapping_actions(op: str, project_path: str | Path) -> list[str]:
+    """生成 Wrapping/Disc/Overset 宿主脚本草稿（含锁定的 PartsControl）。"""
+    path = Path(project_path).as_posix()
+    comment = _WRAP_OP_COMMENTS.get(op, op)
+    actions = [
+        "Set App_ = GetApplication()",
+        'If App_ Is Nothing Then Set App_ = '
+        'CreateObject("scFLOWpre_Bx64net.Application.2025")',
+        "Set Doc_ = App_.GetDocument",
+        f'Doc_.OpenProject "{path}", False',
+        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
+        "Set Conditions_ = Doc_.GetConditions",
+    ]
+    if op == "specify_disc":
+        actions.append(
+            'Conditions_.SetPartsControl "Discontinuous", True')
+    elif op == "overset_mesh":
+        actions.append('Conditions_.SetPartsControl "Overset", True')
+    elif op in ("begin_wrap", "exec_wrap", "retry_wrap",
+                "cancel_wrap", "wrap_octree", "wrap_param"):
+        actions.append('Conditions_.SetPartsControl "Wrapping", True')
+        actions.append(f"' TODO: {comment}")
+    else:
+        actions.append(f"' TODO: {comment}")
+    actions.append(f'Doc_.SaveProject "{path}"')
+    return actions
+
+
+def create_parts_actions(draft: dict, project_path: str | Path) -> list[str]:
+    """Create Parts 参数 → BeginSolidEdit + 形状注释（实体 API 待录制锁定）。"""
+    path = Path(project_path).as_posix()
+    shape = draft.get("shape", "?")
+    name = draft.get("name", "Part")
+    return [
+        "Set App_ = GetApplication()",
+        'If App_ Is Nothing Then Set App_ = '
+        'CreateObject("scFLOWpre_Bx64net.Application.2025")',
+        "Set Doc_ = App_.GetDocument",
+        f'Doc_.OpenProject "{path}", False',
+        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
+        "MeshingGroup_.BeginSolidEdit",
+        f"' Create {shape} name={name} params={draft!r}"[:180],
+        "' TODO: MeshingGroup_ CreateCuboid/Cylinder/Sphere/Rectangle",
+        # EndSolidEdit 未在 v1–v4 录制锁定，仅注释
+        "' MeshingGroup_.EndSolidEdit  # unlock after recording",
+        f'Doc_.SaveProject "{path}"',
+    ]
+
+
+def modify_parts_actions(draft: dict, project_path: str | Path) -> list[str]:
+    """Modify Parts 操作 → BeginSolidEdit + 操作注释。"""
+    path = Path(project_path).as_posix()
+    op = draft.get("op_label") or draft.get("op") or "?"
+    return [
+        "Set App_ = GetApplication()",
+        'If App_ Is Nothing Then Set App_ = '
+        'CreateObject("scFLOWpre_Bx64net.Application.2025")',
+        "Set Doc_ = App_.GetDocument",
+        f'Doc_.OpenProject "{path}", False',
+        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
+        "MeshingGroup_.BeginSolidEdit",
+        f"' Modify op={op} parts={draft.get('parts')!r}"[:180],
+        "' TODO: solid boolean / transform (录制补全)",
+        "' MeshingGroup_.EndSolidEdit  # unlock after recording",
+        f'Doc_.SaveProject "{path}"',
+    ]
+
+
+def write_nav_vbs(op: str, project_path: str | Path,
+                  output: str | Path,
+                  draft: Optional[dict] = None) -> Path:
+    """写出导航/几何相关 VBS 草稿，返回路径。"""
+    from automation.vbs_bridge import write_vbs_file
+    if op in ("create_parts",):
+        actions = create_parts_actions(draft or {}, project_path)
+    elif op in ("modify_parts",):
+        actions = modify_parts_actions(draft or {}, project_path)
+    else:
+        actions = wrapping_actions(op, project_path)
+    return write_vbs_file(actions, output, title=f"pph_gui {op}")
+
+
 def build_execute_vbs(project_path: str | Path, plan: dict,
                       output: str | Path,
                       marker: Optional[str | Path] = None,
@@ -412,8 +557,9 @@ def build_execute_vbs(project_path: str | Path, plan: dict,
     末尾写一个完成标记文件，供 GUI 轮询后自动 Reload。
 
     ``octree_sess``：GUI ``session['octree_param']``，含 Detail 的
-    ``region_size`` 等；会生成 ``OctParam_.SetParams``（否则区域 Size
-    不会生效，网格与改参前相同）。
+    ``region_size`` / ``min_oct_size`` 等；会生成 ``SetOctType`` /
+    ``SetMinSize`` / ``OctParam_.SetParams``（缺前两者时宿主会复用旧
+    八叉树尺寸，改 SECTITEM 也不生效）。
 
     ``parts_control_sess``：GUI ``session['parts_control']``，在打开项目后
     写入 ``SetPartsControl``（与 Parts Control 对话框勾选一致）。
