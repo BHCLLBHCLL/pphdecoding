@@ -2966,6 +2966,13 @@ class RegisterRegionBody(_Body):
             i = self._surf["cb_target"].findText(draft["target"])
             if i >= 0:
                 self._surf["cb_target"].setCurrentIndex(i)
+        # Draw Window 最近一次面拾取 → Selected faces 列表
+        self._surf["sel_faces"].clear()
+        pick = ctx.get("last_pick") or {}
+        if pick.get("face") is not None:
+            gname = pick.get("group") or "(current)"
+            self._surf["sel_faces"].addTopLevelItem(
+                QTreeWidgetItem([str(gname), str(pick["face"])]))
 
     def apply(self, ctx: dict) -> bool:
         ctx.setdefault("session", {})["register_region"] = {
@@ -3077,13 +3084,32 @@ class RegisterRegionBody(_Body):
                     return
             r = ET.SubElement(node, "region")
             ET.SubElement(r, "name").text = name
-            ET.SubElement(r, "face_region_type").text = "faces"
             ET.SubElement(r, "discontinuous_flag").text = "false"
+            ET.SubElement(r, "connection_type").text = "default"
+            # 若 Draw 窗口有面拾取，写入 sface_num（对齐 box 的 open 区域）
+            pick = self._ctx.get("last_pick") or {}
+            face_id = pick.get("face")
+            sface = ET.SubElement(r, "sface_num")
+            if isinstance(face_id, int) and face_id >= 0:
+                num = ET.SubElement(sface, "num")
+                num.set("index", "0")
+                num.text = str(face_id)
+            ET.SubElement(r, "face_region_type").text = "faces"
+            ET.SubElement(r, "color_set").text = "false"
             self._ctx["xml_dirty"] = True
+            tip = (f" + sface={face_id}" if isinstance(face_id, int)
+                   else " (no pick — empty sface_num)")
+        else:
+            tip = ""
         it = QTreeWidgetItem([name, "Surface region", "-"])
         it.setIcon(0, _reg_icon("surface"))
         self._surf["tree"].addTopLevelItem(it)
         self.apply(self._ctx)
+        if tip:
+            QMessageBox.information(
+                self, self.title,
+                f"Registered surface region “{name}”{tip}.\n"
+                "Save project to persist main.xml.")
 
     def _register_interface(self) -> None:
         name = self._iface["ed_name"].text().strip()

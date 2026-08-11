@@ -3453,17 +3453,24 @@ class PphViewer(QMainWindow):
         add_act(ridge, "Recalc Ridge",
                 lambda: self._ridge_op("recalc"), key="edit_ridge_recalc")
         m.addSeparator()
-        add_act(m, "Refine Octants", key="edit_refine_oct")
+        add_act(m, "Refine Octants",
+                lambda: self._octant_op("refine"), key="edit_refine_oct")
         add_act(m, "Refine Octants (Recursive)…",
+                lambda: self._octant_op("refine_rec"),
                 key="edit_refine_oct_rec")
         add_act(m, "Refine Octants from Curvature…",
+                lambda: self._octant_op("refine_curv"),
                 key="edit_refine_oct_curv")
         add_act(m, "Refine Octants from Separation…",
+                lambda: self._octant_op("refine_sep"),
                 key="edit_refine_oct_sep")
-        add_act(m, "Merge Octants", key="edit_merge_oct")
+        add_act(m, "Merge Octants",
+                lambda: self._octant_op("merge"), key="edit_merge_oct")
         add_act(m, "Show Octants by Marked Face",
+                lambda: self._octant_op("show_by_face"),
                 key="edit_oct_by_face")
         add_act(m, "Show Octants by Marked Edge",
+                lambda: self._octant_op("show_by_edge"),
                 key="edit_oct_by_edge")
         m.addSeparator()
         add_act(m, "Restore Closed Volume Data…",
@@ -4249,6 +4256,50 @@ class PphViewer(QMainWindow):
             self, "Ridge",
             f"已写出宿主脚本草稿：\n{out}\n"
             f"请在 scFLOWpre 中补全/执行（RecalcRidge API 待录制锁定）。")
+
+    def _octant_op(self, op: str) -> None:
+        """Refine/Merge/Show Octants → 宿主 VBS 草稿。"""
+        if not self.archive_path:
+            QMessageBox.information(self, "Octants", "请先打开 PPH 项目")
+            return
+        pick = getattr(self.view3d, "last_pick", None) or {}
+        face = pick.get("face")
+        out = Path(self.archive_path).with_suffix(f".octant_{op}.vbs")
+        comments = {
+            "refine": "RefineOctants (selected)",
+            "refine_rec": "RefineOctantsRecursive",
+            "refine_curv": "RefineOctantsFromCurvature",
+            "refine_sep": "RefineOctantsFromSeparation",
+            "merge": "MergeOctants",
+            "show_by_face": "ShowOctantsByMarkedFace",
+            "show_by_edge": "ShowOctantsByMarkedEdge",
+        }
+        label = comments.get(op, op)
+        path = Path(self.archive_path).as_posix()
+        actions = [
+            "Set App_ = GetApplication()",
+            'If App_ Is Nothing Then Set App_ = '
+            'CreateObject("scFLOWpre_Bx64net.Application.2025")',
+            "Set Doc_ = App_.GetDocument",
+            f'Doc_.OpenProject "{path}", False',
+            "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
+            f"' TODO: {label}",
+        ]
+        if face is not None:
+            actions.append(f"' last_pick face={face}")
+        if op.startswith("show"):
+            actions.append("Doc_.SetModeOctree")
+            self.show_page("draw")
+            self.view3d.chk_oct.setChecked(True)
+            self.view3d.render()
+        actions.append(f'Doc_.SaveProject "{path}"')
+        from automation.vbs_bridge import write_vbs_file
+        write_vbs_file(actions, out, title=f"pph_gui octant {op}")
+        self.log(f"Octants {op} — VBS draft: {out}")
+        QMessageBox.information(
+            self, "Octants",
+            f"{label}\n已写出：\n{out}\n"
+            "宿主 API 待录制锁定后可取消注释执行。")
 
     def _edit_undo(self) -> None:
         stack = self._nav_dialogs.session.setdefault("_undo", [])

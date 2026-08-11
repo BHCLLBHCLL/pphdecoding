@@ -3,7 +3,7 @@
 > 由 `tools/scan_nyi_menus.py` 自动生成。
 > 对应日志：`[…] not available in PPH viewer`（现已灰显）。
 
-合计 **34** 项。
+合计 **27** 项。
 
 ## File(&F)
 
@@ -15,13 +15,6 @@
 - Create 2D Sub-mesh Meshing Unit…
 ## Ridge
 
-- Refine Octants
-- Refine Octants (Recursive)…
-- Refine Octants from Curvature…
-- Refine Octants from Separation…
-- Merge Octants
-- Show Octants by Marked Face
-- Show Octants by Marked Edge
 - Restore Closed Volume Data…
 - Fix Marked Element Shape
 ## Select(&S)
