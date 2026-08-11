@@ -25,7 +25,7 @@
 
 ### 1.2 仍存在的缺口
 
-1. **约 41 个菜单项**仍灰显（见 `docs/NYI_INVENTORY.md`；部分 Select/View/File VBS 已接线）。
+1. **约 20 个菜单项**仍灰显（见 `docs/NYI_INVENTORY.md`；Select/View/File VBS/Octants 多数已接线）。
 2. **Wrapping / Disc / Overset** 可写 VBS 草稿；高层 ExecuteWrapping 仍待录制锁定。
 3. **条件体系**有 `schemas/conditions.yaml` + `conditions_schema` 合并过滤器；~180 Cond* 表单仍不全。
 4. **几何编辑** Create/Modify 写出 `BeginSolidEdit` VBS 草稿；实体 API 待录制。
@@ -48,29 +48,28 @@
 ## 3. 分阶段计划（现行优先级）
 
 ### 阶段 0 — 文档与卫生（本迭代）
-- 刷新本文与 `docs/NYI_INVENTORY.md`
-- 清理双重 `_nyi`
-- NYI 菜单灰显 + tooltip
+- ✅ 刷新本文与 `docs/NYI_INVENTORY.md`
+- ✅ 清理双重 `_nyi`；NYI 菜单灰显 + tooltip
 
 ### 阶段 1 — 预处理主链路
-- Octree 区域 Size 预填（xml/session/宿主参数）
-- BAM/Wrapping 生成可执行 VBS
-- Execute 默认 `use_api=True`；Solver 仍明确不可用
-- box / laptop 边长与单元数回归
+- ✅ Octree 区域 Size 预填（xml/session/宿主参数）
+- ✅ BAM/Wrapping 生成可执行 VBS 草稿
+- ✅ Execute 默认 `use_api=True`；Solver 仍明确不可用
 
 ### 阶段 2 — Select / View
-- Pick Part/Edge/Vertex；Rubber Select
-- Select All / Hide / Only Selected / Fit to Selected
-- Refinement Level / 邻接八叉树（后续）
+- ✅ Pick Part/Face/Edge/Vertex；Rubber（缩放复用）
+- ✅ Select All / Hide / Only Selected / Fit to Selected
+- ✅ Refinement Level / 八叉树显示开关；Parts List / Region Check
 
 ### 阶段 3 — 几何 Edit
-- Create/Modify → COM/`BeginSolidEdit` 或 pskernel
-- Register Region 拾取写 xml；Ridge；Measurement；Undo 栈
+- ✅ Create/Modify → `BeginSolidEdit` VBS 草稿
+- ✅ Register Region：拾取面 → `sface_num` 写 `main.xml`
+- ✅ Ridge / Refine·Merge Octants VBS；Measurement；Undo 栈
 
 ### 阶段 4 — 条件与 File 自动化
-- Conditions schema + 录制补全
-- File Start/Stop/Execute VBScript → COM
-- Project Type / Fluid Material 对话框
+- ✅ `schemas/conditions.yaml` + `conditions_schema` 合并过滤器
+- ✅ File Start/Stop/Execute VBScript → COM
+- ✅ Project Type / Fluid Material 对话框入口
 - Solver/CMB/FPH 明确延后
 
 ### 阶段 5 — 可选自研 mesher
