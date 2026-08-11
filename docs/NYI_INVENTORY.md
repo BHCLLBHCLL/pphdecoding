@@ -3,7 +3,7 @@
 > 由 `tools/scan_nyi_menus.py` 自动生成。
 > 对应日志：`[…] not available in PPH viewer`（现已灰显）。
 
-合计 **41** 项。
+合计 **34** 项。
 
 ## File(&F)
 
@@ -26,17 +26,10 @@
 - Fix Marked Element Shape
 ## Select(&S)
 
-- Rubber Circle (Select)
-- Rubber Polygon (Select)
 - Spread Selected Face to Selected Edge
 - Select by Element Number…
 - Select Elements by List File…
 - Select Faces That Have the Same Area
-- Select All Edges
-- Select All Ridges
-- Deselect All Edges
-- Deselect All Vertices
-- Deselect All Elements
 - Element Quality Check…
 - Check Intersection
 ## View(&V)

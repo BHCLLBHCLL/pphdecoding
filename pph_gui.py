@@ -2110,6 +2110,9 @@ class View3DTab(QWidget):
         self._cad_meshes: list = []  # cad_import.ImportedBody / TessPart
         self._mdl_filter: Optional[dict] = None
         self._pickable_actors: list = []
+        self._pickable_meta: dict = {}  # actor -> {group, kind, path}
+        self._pick_mode: str = "face"  # face|part|edge|vertex
+        self.last_pick: Optional[dict] = None
         self._picked_status = ""
         self._cache: dict[tuple, object] = {}
         self._hidden: dict[str, tuple[set, set]] = {}
@@ -2588,6 +2591,7 @@ class View3DTab(QWidget):
 
         layers: list[tuple[str, Optional[LayerRender]]] = []
         self._pickable_actors = []
+        self._pickable_meta = {}
         # 绘制顺序：CAD → MDL → GPH → 网格线
         if self.chk_cad.isChecked() and self._cad_meshes and not lines_only:
             for tess in self._cad_meshes:
@@ -2664,6 +2668,12 @@ class View3DTab(QWidget):
             self.renderer.AddActor(layer.actor)
             if label in ("MDL part", "MDL ridge"):
                 self._pickable_actors.append(layer.actor)
+                kind = "ridge" if label == "MDL ridge" else "mdl"
+                path_key = "ridge" if kind == "ridge" else "part"
+                self._pickable_meta[layer.actor] = {
+                    "group": name, "kind": kind,
+                    "path": (group or {}).get(path_key),
+                }
             mapper = layer.actor.GetMapper()
             cells.append(f"{label}={mapper.GetInput().GetNumberOfCells():,}")
             lut = mapper.GetLookupTable()
@@ -2945,10 +2955,31 @@ class View3DTab(QWidget):
                 self._picked_status = f" | 仅显示 body {value}"
             elif kind == "region":
                 self._picked_status = f" | 仅显示区域 frid={value}"
+            elif kind == "edge":
+                self._picked_status = f" | 拾取边（面 #{value}）"
+            elif kind == "vertex":
+                self._picked_status = f" | 拾取点 #{value}"
         self.render()
+
+    def set_pick_mode(self, mode: str) -> None:
+        """Select 菜单拾取模式：face / part / edge / vertex。"""
+        mode = (mode or "face").lower()
+        if mode not in ("face", "part", "edge", "vertex"):
+            mode = "face"
+        self._pick_mode = mode
+        labels = {
+            "face": "面", "part": "零件(body)",
+            "edge": "边", "vertex": "顶点",
+        }
+        if not self.btn_pick.isChecked():
+            self.btn_pick.setChecked(True)
+        else:
+            self.status.setText(
+                f"拾取模式：点击 MDL 选择{labels.get(mode, mode)}")
 
     def clear_visibility(self) -> None:
         self._mdl_filter = None
+        self.last_pick = None
         self._hidden.clear()
         self._group_hidden.clear()
         self._layer_hidden.clear()
@@ -2960,24 +2991,102 @@ class View3DTab(QWidget):
         iren = self.vtk_widget.GetRenderWindow().GetInteractor()
         if checked:
             iren.AddObserver("LeftButtonPressEvent", self._on_pick)
-            self.status.setText("拾取模式：点击 MDL 面上的一个单元")
+            labels = {
+                "face": "面", "part": "零件(body)",
+                "edge": "边", "vertex": "顶点",
+            }
+            self.status.setText(
+                f"拾取模式：点击 MDL 选择"
+                f"{labels.get(self._pick_mode, '面')}")
         else:
             iren.RemoveObservers("LeftButtonPressEvent")
 
     def _on_pick(self, obj, _event) -> None:
         import vtk
 
-        picker = vtk.vtkCellPicker()
+        mode = self._pick_mode
         x, y = obj.GetEventPosition()
+
+        if mode == "vertex":
+            picker = vtk.vtkPointPicker()
+            if picker.Pick(x, y, 0, self.renderer) == 0:
+                self.status.setText("拾取失败：未命中顶点")
+                return
+            actor = picker.GetActor()
+            if actor is None or actor not in self._pickable_actors:
+                self.status.setText("请在 MDL 面片上拾取顶点")
+                return
+            pid = int(picker.GetPointId())
+            meta = dict(self._pickable_meta.get(actor) or {})
+            self.last_pick = {
+                "mode": "vertex", "point_id": pid, **meta}
+            self.set_model_filter({"kind": "vertex", "value": pid})
+            self.status.setText(f"已拾取顶点 #{pid}")
+            return
+
+        picker = vtk.vtkCellPicker()
         if picker.Pick(x, y, 0, self.renderer) == 0:
             self.status.setText("拾取失败：未命中单元")
             return
         actor = picker.GetActor()
         if actor is None or actor not in self._pickable_actors:
-            self.status.setText("请在 MDL 面片（part/ridge）上拾取面")
+            self.status.setText("请在 MDL 面片（part/ridge）上拾取")
             return
-        cell = picker.GetCellId()
-        self.set_model_filter({"kind": "face", "value": int(cell)})
+        cell = int(picker.GetCellId())
+        meta = dict(self._pickable_meta.get(actor) or {})
+        path = meta.get("path")
+        body_id = None
+        frid = None
+        if path:
+            try:
+                import mdl
+                model = self._cached(
+                    (meta.get("kind") or "mdl", path),
+                    lambda: mdl.parse_mdl(path))
+                if 0 <= cell < model.n_faces:
+                    frid = int(model.frid[cell]) if getattr(
+                        model, "frid", None) is not None else None
+                    b1, b2 = model.csid
+                    if b1 is not None and cell < len(b1):
+                        body_id = int(b1[cell])
+            except Exception:  # noqa: BLE001
+                pass
+
+        if mode == "part":
+            if body_id is None:
+                self.status.setText("无法解析 body id，回退为面拾取")
+                mode = "face"
+            else:
+                self.last_pick = {
+                    "mode": "part", "face": cell, "body": body_id,
+                    "frid": frid, **meta}
+                self.set_model_filter({"kind": "body", "value": body_id})
+                self.status.setText(f"已拾取 Part/body {body_id}（面 #{cell}）")
+                return
+
+        if mode == "edge":
+            # 边：记录命中面，显示模式切线框以强调边
+            self.last_pick = {
+                "mode": "edge", "face": cell, "body": body_id,
+                "frid": frid, **meta}
+            if self.display_mode.currentText() != "线框":
+                self.display_mode.setCurrentText("线框")
+            self.set_model_filter({"kind": "edge", "value": cell})
+            # edge 过滤暂按单面显示（相邻边完整高亮待扩展）
+            self._mdl_filter = {"kind": "face", "value": cell}
+            self._picked_status = f" | 拾取边（面 #{cell}）"
+            self.render()
+            self.status.setText(f"已拾取边（所属面 #{cell}）")
+            return
+
+        # face（默认）
+        self.last_pick = {
+            "mode": "face", "face": cell, "body": body_id,
+            "frid": frid, **meta}
+        self.set_model_filter({"kind": "face", "value": cell})
+        self.status.setText(
+            f"已拾取面 #{cell}"
+            + (f" frid={frid}" if frid is not None else ""))
 
     def _toggle_rubber_zoom(self, checked: bool) -> None:
         from vtkmodules.vtkInteractionStyle import (
@@ -3365,21 +3474,23 @@ class PphViewer(QMainWindow):
         m = mb.addMenu("Select(&S)")
         self._select_pick_group = QActionGroup(self)
         self._select_pick_group.setExclusive(True)
-        for key, label in (
-            ("sel_pick_part", "Mouse Pick (Part)"),
-            ("sel_pick_face", "Mouse Pick (Face)"),
-            ("sel_pick_face_spread", "Mouse Pick (Face & Spread)"),
+        for key, label, mode in (
+            ("sel_pick_part", "Mouse Pick (Part)", "part"),
+            ("sel_pick_face", "Mouse Pick (Face)", "face"),
+            ("sel_pick_face_spread", "Mouse Pick (Face & Spread)", None),
             ("sel_pick_face_virtual",
              "Mouse Pick (Face, Based on virtual part face/"
-             "closed volume face)"),
-            ("sel_pick_edge", "Mouse Pick (Edge)"),
-            ("sel_pick_edge_spread", "Mouse Pick (Edge & Spread)"),
-            ("sel_pick_vertex", "Mouse Pick (Vertex)"),
+             "closed volume face)", None),
+            ("sel_pick_edge", "Mouse Pick (Edge)", "edge"),
+            ("sel_pick_edge_spread", "Mouse Pick (Edge & Spread)", None),
+            ("sel_pick_vertex", "Mouse Pick (Vertex)", "vertex"),
         ):
-            if key == "sel_pick_face":
-                act = add_act(m, label, self._toggle_pick_face,
-                              checkable=True, key=key,
-                              tip="Pick MDL faces in Draw Window")
+            if mode:
+                act = add_act(
+                    m, label,
+                    lambda _c=False, md=mode: self._set_select_pick_mode(md),
+                    checkable=True, key=key,
+                    tip=f"Pick MDL {mode} in Draw Window")
             else:
                 act = add_act(m, label, checkable=True, key=key)
             self._select_pick_group.addAction(act)
@@ -3387,8 +3498,10 @@ class PphViewer(QMainWindow):
         m.addSeparator()
         add_act(m, "Rubber Box (Select)", self._rubber_select,
                 key="sel_rbox", tip="Rubber-box zoom (select mode TBD)")
-        add_act(m, "Rubber Circle (Select)", key="sel_rcircle")
-        add_act(m, "Rubber Polygon (Select)", key="sel_rpoly")
+        add_act(m, "Rubber Circle (Select)", self._rubber_select,
+                key="sel_rcircle")
+        add_act(m, "Rubber Polygon (Select)", self._rubber_select,
+                key="sel_rpoly")
         m.addSeparator()
         add_act(m, "Spread Selected Face to Selected Edge",
                 key="sel_spread")
@@ -3401,8 +3514,10 @@ class PphViewer(QMainWindow):
                 key="sel_all_parts")
         add_act(m, "Select All Faces", self._select_all_faces,
                 key="sel_all_faces")
-        add_act(m, "Select All Edges", key="sel_all_edges")
-        add_act(m, "Select All Ridges", key="sel_all_ridges")
+        add_act(m, "Select All Edges", self._select_all_edges,
+                key="sel_all_edges")
+        add_act(m, "Select All Ridges", self._select_all_ridges,
+                key="sel_all_ridges")
         m.addSeparator()
         add_act(m, "Deselect All Parts",
                 self._deselect_all,
@@ -3410,9 +3525,12 @@ class PphViewer(QMainWindow):
         add_act(m, "Deselect All Faces",
                 self._deselect_all,
                 key="sel_desel_faces")
-        add_act(m, "Deselect All Edges", key="sel_desel_edges")
-        add_act(m, "Deselect All Vertices", key="sel_desel_verts")
-        add_act(m, "Deselect All Elements", key="sel_desel_elems")
+        add_act(m, "Deselect All Edges", self._deselect_all,
+                key="sel_desel_edges")
+        add_act(m, "Deselect All Vertices", self._deselect_all,
+                key="sel_desel_verts")
+        add_act(m, "Deselect All Elements", self._deselect_all,
+                key="sel_desel_elems")
         m.addSeparator()
         add_act(m, "Element Quality Check…", key="sel_quality")
         add_act(m, "Check Intersection", key="sel_intersect")
@@ -3957,9 +4075,19 @@ class PphViewer(QMainWindow):
         self.log(f"Exported {name} → {path}")
 
     def _toggle_pick_face(self) -> None:
+        self._set_select_pick_mode("face")
+
+    def _set_select_pick_mode(self, mode: str) -> None:
         self.show_page("draw")
-        checked = not self.view3d.btn_pick.isChecked()
-        self.view3d.btn_pick.setChecked(checked)
+        key_map = {
+            "part": "sel_pick_part", "face": "sel_pick_face",
+            "edge": "sel_pick_edge", "vertex": "sel_pick_vertex",
+        }
+        act = self._menu_acts.get(key_map.get(mode, ""))
+        if act is not None:
+            act.setChecked(True)
+        self.view3d.set_pick_mode(mode)
+        self.log(f"Select — Mouse Pick ({mode})")
 
     def _toggle_rubber(self) -> None:
         self.show_page("draw")
@@ -3987,6 +4115,21 @@ class PphViewer(QMainWindow):
     def _select_all_faces(self) -> None:
         self._select_all_parts()
         self.log("Select All Faces — same as show all MDL (face mask TBD)")
+
+    def _select_all_edges(self) -> None:
+        self.show_page("draw")
+        self.view3d.chk_edges.setChecked(True)
+        self.view3d.display_mode.setCurrentText("线框")
+        self.view3d.clear_visibility()
+        self.log("Select All Edges — wireframe + edge overlay")
+
+    def _select_all_ridges(self) -> None:
+        self.show_page("draw")
+        self.view3d.chk_mdl_ridge.setChecked(True)
+        for g in (getattr(self.model_tree, "_info", {}) or {}):
+            self.view3d.set_layer_visibility(g, "mdl", True, refresh=False)
+        self.view3d.render()
+        self.log("Select All Ridges — ridge layer on")
 
     def _fit_to_selection(self) -> None:
         self.show_page("draw")
@@ -4516,6 +4659,7 @@ class PphViewer(QMainWindow):
             prp=self._prp,
             groups_info=groups,
             regions_meta=getattr(self, "_regions_meta", {}) or {},
+            last_pick=getattr(self.view3d, "last_pick", None),
         )
 
     def _commit_nav_ctx(self, key: str, ctx: dict) -> None:
