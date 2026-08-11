@@ -3539,7 +3539,8 @@ class PphViewer(QMainWindow):
         add_act(m, "Deselect All Elements", self._deselect_all,
                 key="sel_desel_elems")
         m.addSeparator()
-        add_act(m, "Element Quality Check…", key="sel_quality")
+        add_act(m, "Element Quality Check…", self._element_quality_check,
+                key="sel_quality")
         add_act(m, "Check Intersection", key="sel_intersect")
 
         # ── View ──────────────────────────────────────────────────
@@ -3592,9 +3593,10 @@ class PphViewer(QMainWindow):
         add_act(m, "Only Selected Mesh", self._only_selected_mesh,
                 key="view_only_mesh")
         m.addSeparator()
-        add_act(m, "Change Display Type of Edge", key="view_edge_type")
+        add_act(m, "Change Display Type of Edge",
+                self._toggle_edge_display, key="view_edge_type")
         add_act(m, "Switch Display Surface by Orientation",
-                key="view_surf_orient")
+                self._cycle_display_mode, key="view_surf_orient")
         m.addSeparator()
         rb = m.addMenu("Rubber Box")
         add_act(rb, "Rubber Box (Show)", self._toggle_rubber,
@@ -3602,28 +3604,37 @@ class PphViewer(QMainWindow):
         add_act(rb, "Rubber Box (Hide)", self._toggle_rubber,
                 key="view_rbox_hide")
         rc = m.addMenu("Rubber Circle")
-        add_act(rc, "Rubber Circle (Show)", key="view_rcirc_show")
-        add_act(rc, "Rubber Circle (Hide)", key="view_rcirc_hide")
+        add_act(rc, "Rubber Circle (Show)", self._toggle_rubber,
+                key="view_rcirc_show")
+        add_act(rc, "Rubber Circle (Hide)", self._toggle_rubber,
+                key="view_rcirc_hide")
         rp = m.addMenu("Rubber Polygon")
-        add_act(rp, "Rubber Polygon (Show)", key="view_rpoly_show")
-        add_act(rp, "Rubber Polygon (Hide)", key="view_rpoly_hide")
+        add_act(rp, "Rubber Polygon (Show)", self._toggle_rubber,
+                key="view_rpoly_show")
+        add_act(rp, "Rubber Polygon (Hide)", self._toggle_rubber,
+                key="view_rpoly_hide")
         m.addSeparator()
-        add_act(m, "Refinement Level…", key="view_refine_level")
+        add_act(m, "Refinement Level…", self._view_refinement_level,
+                key="view_refine_level")
         add_act(m, "Display Octants Connected by Node",
-                key="view_oct_node")
+                lambda: self._view_octants("node"), key="view_oct_node")
         add_act(m, "Display Octants Connected by Face",
-                key="view_oct_face")
+                lambda: self._view_octants("face"), key="view_oct_face")
         add_act(m, "Display Neighbor Octants by Direction…",
-                key="view_oct_dir")
+                lambda: self._view_octants("dir"), key="view_oct_dir")
         m.addSeparator()
-        add_act(m, "Report Prism Layer", key="view_prism")
-        add_act(m, "Element Types…", key="view_elem_types")
-        add_act(m, "Show Parts List Dialog…", key="view_parts_list")
+        add_act(m, "Report Prism Layer", self._report_prism_layer,
+                key="view_prism")
+        add_act(m, "Element Types…", self._report_element_types,
+                key="view_elem_types")
+        add_act(m, "Show Parts List Dialog…", self._show_parts_list,
+                key="view_parts_list")
         add_act(m, "Show Region Registration Check Dialog…",
-                key="view_region_check")
+                self._show_region_check, key="view_region_check")
         add_act(m, "Cross Section View of Mesh", nav("view_section"),
                 key="view_section")
-        add_act(m, "Element Quality Check…", key="view_quality")
+        add_act(m, "Element Quality Check…", self._element_quality_check,
+                key="view_quality")
         m.addSeparator()
         add_act(m, "Dashboard", nav("dashboard"), key="view_dashboard")
         add_act(m, "Snapshot", nav("snapshot"), key="view_snapshot")
@@ -4137,6 +4148,113 @@ class PphViewer(QMainWindow):
             self.view3d.set_layer_visibility(g, "mdl", True, refresh=False)
         self.view3d.render()
         self.log("Select All Ridges — ridge layer on")
+
+    def _toggle_edge_display(self) -> None:
+        self.show_page("draw")
+        on = not self.view3d.chk_edges.isChecked()
+        self.view3d.chk_edges.setChecked(on)
+        self.log(f"Change Display Type of Edge — edges={'on' if on else 'off'}")
+
+    def _cycle_display_mode(self) -> None:
+        self.show_page("draw")
+        modes = ["不透明", "半透明", "线框"]
+        cur = self.view3d.display_mode.currentText()
+        nxt = modes[(modes.index(cur) + 1) % len(modes)] if cur in modes else modes[0]
+        self.view3d.display_mode.setCurrentText(nxt)
+        self.log(f"Switch Display Surface — mode={nxt}")
+
+    def _view_refinement_level(self) -> None:
+        """显示当前 OCT 深度直方图（Refinement Level）。"""
+        lines = []
+        for g, info in (self._groups_info or {}).items():
+            path = (info.get("paths") or {}).get("oct") or info.get("oct")
+            if not path:
+                continue
+            try:
+                import oct
+                om = oct.parse_oct(path)
+                summ = om.leaf_stats()
+                hist = summ.get("depth_histogram") or {}
+                n = summ.get("n_leaves", om.n_leaves)
+                lines.append(f"[{g}] leaves={n}")
+                for d, c in sorted(hist.items()):
+                    lines.append(f"  depth {d}: {c}")
+            except Exception as exc:  # noqa: BLE001
+                lines.append(f"[{g}] error: {exc}")
+        if not lines:
+            lines = ["No .oct loaded. Generate Octree first."]
+        QMessageBox.information(
+            self, "Refinement Level", "\n".join(lines))
+        self.log("View — Refinement Level")
+
+    def _view_octants(self, kind: str) -> None:
+        self.show_page("draw")
+        self.view3d.chk_oct.setChecked(True)
+        self.view3d.render()
+        pick = getattr(self.view3d, "last_pick", None)
+        msg = {
+            "node": "Display Octants Connected by Node",
+            "face": "Display Octants Connected by Face",
+            "dir": "Display Neighbor Octants by Direction",
+        }.get(kind, kind)
+        extra = f"\nlast_pick={pick}" if pick else "\n(no face pick — showing all octants)"
+        self.log(f"View — {msg}")
+        QMessageBox.information(
+            self, msg,
+            f"Octree layer enabled.{extra}\n"
+            "Neighbor filtering TBD (uses full leaf display).")
+
+    def _report_prism_layer(self) -> None:
+        self.log("View — Report Prism Layer (stats from GPH if present)")
+        QMessageBox.information(
+            self, "Report Prism Layer",
+            "Prism-layer report requires host mesh metadata.\n"
+            "Use Element Types for basic GPH counts.")
+
+    def _report_element_types(self) -> None:
+        lines = []
+        for g, info in (self._groups_info or {}).items():
+            gs = info.get("gph_summary") or {}
+            lines.append(f"[{g}] {gs or '(no GPH summary)'}")
+        if not lines:
+            lines = ["No mesh groups loaded."]
+        QMessageBox.information(self, "Element Types", "\n".join(lines))
+        self.log("View — Element Types")
+
+    def _show_parts_list(self) -> None:
+        rows = []
+        for g, info in (self._groups_info or {}).items():
+            for p in info.get("xml_parts") or []:
+                name = p.get("name") if isinstance(p, dict) else p
+                rows.append(f"{g} / {name}")
+        if not rows:
+            rows = ["(no parts in main.xml)"]
+        QMessageBox.information(
+            self, "Parts List", "\n".join(rows[:200]))
+        self.log(f"View — Parts List ({len(rows)})")
+
+    def _show_region_check(self) -> None:
+        meta = getattr(self, "_regions_meta", {}) or {}
+        lines = []
+        for cat in ("fluid", "volume", "face", "special_face"):
+            items = meta.get(cat) or []
+            lines.append(f"{cat}: {len(items)}")
+            for r in items[:20]:
+                if isinstance(r, dict):
+                    lines.append(f"  - {r.get('name') or r.get('label')}")
+                else:
+                    lines.append(f"  - {r}")
+        QMessageBox.information(
+            self, "Region Registration Check",
+            "\n".join(lines) if lines else "(no regions_meta)")
+        self.log("View — Region Registration Check")
+
+    def _element_quality_check(self) -> None:
+        QMessageBox.information(
+            self, "Element Quality Check",
+            "Full quality metrics need scFLOWpre.\n"
+            "Basic Element Types dialog is available under View.")
+        self.log("View — Element Quality Check (stub)")
 
     def _fit_to_selection(self) -> None:
         self.show_page("draw")
