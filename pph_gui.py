@@ -20,6 +20,7 @@ import os
 import sys
 import tempfile
 import threading
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -4951,6 +4952,9 @@ class PphViewer(QMainWindow):
                     self.log(
                         "Analysis Model Wizard — parameters saved; "
                         "build/facet flagged for scFLOWpre")
+                    if sess.get("build_requested"):
+                        self._prepare_parts_mode = False
+                        self._update_menus_for_mode()
                     self._run_bam_pipeline(ctx)
             if key == "execute":
                 self._run_scflow_pipeline(ctx)
@@ -5070,6 +5074,7 @@ class PphViewer(QMainWindow):
         if not steps:
             self.log("Execute 计划未选择任何步骤")
             return
+        self.log("Execute 步骤: " + " → ".join(steps))
         out = Path(self.archive_path).with_suffix(".scflow_api.vbs")
         marker = Path(self.archive_path).with_suffix(".scflow_api.done")
         try:
@@ -5132,8 +5137,11 @@ class PphViewer(QMainWindow):
         self._start_api_refresh_poll(marker)
         self._start_api_execute_thread(out)
 
-    def _start_api_refresh_poll(self, marker: Path) -> None:
+    def _start_api_refresh_poll(self, marker: Path,
+                                timeout: float = 600.0) -> None:
         """轮询宿主 VBS 写出的完成标记，出现后自动 Reload。"""
+        start = time.monotonic()
+
         def poll() -> None:
             if marker.is_file():
                 self.log("scFLOWpre API 完成，正在刷新项目…")
@@ -5143,6 +5151,11 @@ class PphViewer(QMainWindow):
                     pass
                 self.reload()
                 self.log("已刷新 Model / Octree / Mesh")
+                return
+            if time.monotonic() - start > timeout:
+                self.log(
+                    f"等待 scFLOWpre API 完成超时（>{timeout:g}s），"
+                    "停止轮询；可手动执行脚本后 Reload", "WARN")
                 return
             QTimer.singleShot(2000, poll)
         QTimer.singleShot(2000, poll)

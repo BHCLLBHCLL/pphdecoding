@@ -253,3 +253,49 @@ def parse_mdl(filepath: str, load_arrays: bool = True) -> MdlModel:
             node_state=node_state, closed_volumes=closed_volumes,
             volume_regions=volume_regions, surface_regions=surface_regions,
         )
+
+
+def detect_tiny_faces(model: MdlModel, width_tol: float) -> list[dict]:
+    """按“面最大边长 < 容差”识别 tiny face（宽度指标取最大边）。
+
+    返回 ``[{face_id, width, n_facets}]``；n_facets 按 MDL 面片粒度记为 1。
+    """
+    if model.n_faces == 0 or model.xyz.size == 0 or width_tol <= 0:
+        return []
+    off = model.face_offsets
+    xyz = model.xyz
+    conn = model.conn
+    out: list[dict] = []
+    for fid in range(model.n_faces):
+        nodes = conn[off[fid]:off[fid + 1]]
+        if nodes.size < 3:
+            continue
+        pts = xyz[nodes]
+        d = np.linalg.norm(np.roll(pts, -1, axis=0) - pts, axis=1)
+        width = float(d.max()) if d.size else 0.0
+        if width < float(width_tol):
+            out.append({"face_id": fid, "width": width, "n_facets": 1})
+    return out
+
+
+def detect_multifold_edges(model: MdlModel) -> dict[tuple[int, int], list[int]]:
+    """识别被 >2 个面共享的边（multi-fold edges）。
+
+    返回 ``{(v0,v1): [face_id, ...]}``，键按顶点序号升序。
+    """
+    from collections import defaultdict
+
+    if model.n_faces == 0 or model.xyz.size == 0:
+        return {}
+    edge_faces: dict[tuple[int, int], list[int]] = defaultdict(list)
+    off = model.face_offsets
+    conn = model.conn
+    for fid in range(model.n_faces):
+        nodes = conn[off[fid]:off[fid + 1]]
+        n = len(nodes)
+        for k in range(n):
+            a = int(nodes[k])
+            b = int(nodes[(k + 1) % n])
+            key = (min(a, b), max(a, b))
+            edge_faces[key].append(fid)
+    return {k: v for k, v in edge_faces.items() if len(v) > 2}

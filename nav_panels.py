@@ -11770,7 +11770,10 @@ class AnalysisModelWizardBody(_Body):
         it.setText(1, f"Default ({self.sp_tiny_pct.value():g})")
 
     def _rerec_tiny(self) -> None:
-        self._stub_action("Re-recognize tiny faces")
+        self._refresh_local_mdl_results(self._ctx)
+        QMessageBox.information(
+            self, "Re-recognize tiny faces",
+            "已按当前容差重新识别本地 MDL 微小面。")
 
     def _reverse_match_dir(self) -> None:
         for r in range(self.tbl_match.rowCount()):
@@ -11790,14 +11793,10 @@ class AnalysisModelWizardBody(_Body):
             self.sp_match_tol.setValue(val)
 
     def _refresh_rm_tiny(self) -> None:
-        self.tbl_rm_tiny.setRowCount(0)
-        QMessageBox.information(
-            self, "Refresh list",
-            "Tiny-face detection needs faceted geometry from scFLOWpre.")
+        self._refresh_local_mdl_results(self._ctx)
 
     def _refresh_report(self) -> None:
         groups = self._ctx.get("groups_info") or {}
-        n_err = 0
         lines = []
         for g, info in sorted(groups.items()):
             paths = info.get("paths") or {}
@@ -11812,8 +11811,80 @@ class AnalysisModelWizardBody(_Body):
         else:
             text = "\n".join(lines)
         self.txt_cause.setPlainText(text)
-        self.lab_err_count.setText(str(n_err))
-        self.lab_prob_level.setText("0")
+        self._refresh_local_mdl_results(self._ctx)
+
+    def _refresh_local_mdl_results(self, ctx: dict) -> None:
+        """从本地 MDL 回填 tiny / multi-fold / report 表（无宿主也可用）。"""
+        import mdl
+        from collections import defaultdict
+
+        groups = ctx.get("groups_info") or {}
+        tiny_rows: list[list] = []
+        multifold: list[tuple[str, int, int, int]] = []
+        mf_face_ids: list[int] = []
+        for g, info in sorted(groups.items()):
+            path = (info.get("paths") or {}).get("part")
+            if not path:
+                continue
+            try:
+                model = mdl.parse_mdl(path, load_arrays=True)
+            except Exception:  # noqa: BLE001
+                continue
+            tol = self.sp_rm_tol.value()
+            for t in mdl.detect_tiny_faces(model, tol):
+                tiny_rows.append(
+                    [g, t["face_id"], f"{t['width']:.6g}", t["n_facets"]])
+            for (a, b), faces in mdl.detect_multifold_edges(model).items():
+                multifold.append((g, a, b, len(faces)))
+                mf_face_ids.extend(faces)
+
+        self.tbl_rm_tiny.setRowCount(len(tiny_rows))
+        for r, row in enumerate(tiny_rows):
+            for c, val in enumerate(row):
+                self.tbl_rm_tiny.setItem(r, c, QTableWidgetItem(str(val)))
+
+        self.tree_mf_edges.clear()
+        by_group: dict[str, list] = defaultdict(list)
+        for g, a, b, n in multifold:
+            by_group[g].append((a, b, n))
+        for g, edges in sorted(by_group.items()):
+            root = QTreeWidgetItem([f"{g} ({len(edges)} pairs…)"])
+            self.tree_mf_edges.addTopLevelItem(root)
+            for a, b, n in edges:
+                root.addChild(QTreeWidgetItem(
+                    [f"edge {a}-{b} ({n} faces)"]))
+
+        self.tree_mf_faces.clear()
+        mf_faces = sorted(set(mf_face_ids))
+        if mf_faces:
+            root = QTreeWidgetItem(
+                [f"Multi-fold faces ({len(mf_faces)})"])
+            self.tree_mf_faces.addTopLevelItem(root)
+
+        self.tree_tiny_faces.clear()
+        tiny_by_part: dict[str, int] = defaultdict(int)
+        for row in tiny_rows:
+            tiny_by_part[row[0]] += 1
+        for g, n in sorted(tiny_by_part.items()):
+            self.tree_tiny_faces.addTopLevelItem(
+                QTreeWidgetItem([g, str(n), "", ""]))
+
+        self.lab_err_count.setText(str(len(tiny_rows)))
+        self.lab_prob_level.setText(str(len(multifold)))
+        self.tbl_report.setRowCount(0)
+        if tiny_rows:
+            self.tbl_report.insertRow(0)
+            for c, val in enumerate(
+                    ["1", str(len(tiny_rows)), "Tiny face",
+                     "Face max edge < tolerance"]):
+                self.tbl_report.setItem(0, c, QTableWidgetItem(val))
+        if multifold:
+            r = self.tbl_report.rowCount()
+            self.tbl_report.insertRow(r)
+            for c, val in enumerate(
+                    ["2", str(len(multifold)), "Multi-fold edge",
+                     "Edge shared by >2 faces"]):
+                self.tbl_report.setItem(r, c, QTableWidgetItem(val))
 
     def _create_facet(self) -> None:
         if not self.apply(self._ctx):
