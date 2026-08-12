@@ -68,6 +68,58 @@ def plane_view_camera(plane: str, *, negative: bool = False
     return (sign, 0.0, 0.0), (0.0, 0.0, 1.0)
 
 
+def _voxel_params_dialog(parent) -> Optional["object"]:
+    """自研 Voxel mesher 参数对话框（对齐 scFLOW Voxel 控制面）。"""
+    from PyQt5.QtWidgets import (
+        QCheckBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
+        QSpinBox,
+    )
+
+    dlg = QDialog(parent)
+    dlg.setWindowTitle("Voxel Fitting Mesh (Self Build)")
+    form = QFormLayout(dlg)
+    sp_init = QSpinBox()
+    sp_init.setRange(1, 6)
+    sp_init.setValue(2)
+    sp_max = QSpinBox()
+    sp_max.setRange(1, 7)
+    sp_max.setValue(4)
+    sp_cells = QSpinBox()
+    sp_cells.setRange(10_000, 5_000_000)
+    sp_cells.setSingleStep(50_000)
+    sp_cells.setValue(500_000)
+    chk_rough = QCheckBox("Use rough poly when voxel meshing")
+    chk_rough.setChecked(True)
+    chk_fit = QCheckBox("Fit block mesh to parts surface")
+    chk_fit.setChecked(False)
+    sp_ratio = QDoubleSpinBox()
+    sp_ratio.setRange(0.05, 2.0)
+    sp_ratio.setSingleStep(0.05)
+    sp_ratio.setValue(0.5)
+    sp_ratio.setDecimals(2)
+    form.addRow("Initial octree depth (/axis):", sp_init)
+    form.addRow("Max adaptive depth:", sp_max)
+    form.addRow("Max cells:", sp_cells)
+    form.addRow("", chk_rough)
+    form.addRow("", chk_fit)
+    form.addRow("Max fitting distance ratio:", sp_ratio)
+    buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+    buttons.accepted.connect(dlg.accept)
+    buttons.rejected.connect(dlg.reject)
+    form.addRow(buttons)
+    if dlg.exec_() != QDialog.Accepted:
+        return None
+    import voxmesh
+    return voxmesh.VoxelMeshParams(
+        initial_depth=sp_init.value(),
+        max_depth=sp_max.value(),
+        max_cells=sp_cells.value(),
+        rough_poly=chk_rough.isChecked(),
+        fit_to_surface=chk_fit.isChecked(),
+        max_fit_distance_ratio=sp_ratio.value(),
+    )
+
+
 def view_key_action(keysym: str, *, shift: bool = False
                     ) -> Optional[tuple]:
     """Draw Window 按键 → ``('plane', name, negative)`` 或 ``('fit',)``。"""
@@ -4131,6 +4183,10 @@ class PphViewer(QMainWindow):
                 key="exec_octree")
         add_act(m, "Generate Mesh", nav("mesh_param"),
                 key="exec_mesh")
+        add_act(m, "Voxel Fitting Mesh (Self Build)…",
+                self._build_voxel_mesh, key="exec_voxel_self",
+                tip="自研 hex-dominant mesher（cfMesh/snappy 风格，"
+                    "产物兼容 OCT/GPH，算法不等价 scFLOW）")
         add_act(m, "Execute Solver", nav("execute"),
                 key="exec_solver")
 
@@ -4987,6 +5043,65 @@ class PphViewer(QMainWindow):
             return
         self.log(f"Octants — 本地 {op} OCT 完成: {out}")
         self.open_archive(str(out))
+
+    def _build_voxel_mesh(self) -> None:
+        """自研 Voxel/Hex-dominant：MDL → octree → hex/poly → 写回新 PPH。"""
+        if not self.arch or not self.archive_path:
+            QMessageBox.information(self, "Voxel Mesh", "请先打开 PPH 项目")
+            return
+        import pph_parser
+        import pphwriter
+
+        oct_members = self.arch.by_role(pph_parser.ROLE_OCT)
+        gph_members = self.arch.by_role(pph_parser.ROLE_GPH)
+        if not oct_members or not gph_members:
+            QMessageBox.information(
+                self, "Voxel Mesh",
+                "当前 PPH 没有 OCT/GPH 成员（自研写回需要先有样例成员占位）。")
+            return
+        part_path = None
+        for _g, info in (self._groups_info or {}).items():
+            part_path = ((info.get("paths") or {}).get("part")
+                         or info.get("part"))
+            if part_path:
+                break
+        if not part_path:
+            QMessageBox.information(
+                self, "Voxel Mesh", "未找到 MDL part 面片（先 Prepare Parts）。")
+            return
+        params = _voxel_params_dialog(self)
+        if params is None:
+            return
+        import voxmesh
+        out = Path(self.tmp_dir) / "voxmesh_self"
+        try:
+            result, oct_p, gph_p = voxmesh.build_from_mdl(
+                part_path, out, params)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "Voxel Mesh",
+                                 f"自研 mesher 失败：{exc}")
+            return
+        st = result.stats()
+        overrides = {
+            oct_members[0].name: oct_p.read_bytes(),
+            gph_members[0].name: gph_p.read_bytes(),
+        }
+        dst = Path(self.archive_path).with_suffix(".voxmesh.pph")
+        try:
+            pphwriter.clone_pph(self.archive_path, dst, overrides)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "Voxel Mesh",
+                                 f"写回 PPH 失败：{exc}")
+            return
+        self.log("Voxel mesh (self): "
+                 + ", ".join(f"{k}={v}" for k, v in st.items()))
+        self.open_archive(str(dst))
+        rows = "\n".join(
+            f"{k}: {v:,}" if isinstance(v, int) else f"{k}: {v}"
+            for k, v in st.items())
+        QMessageBox.information(
+            self, "Voxel Mesh (Self)",
+            f"已生成 hex-dominant 网格并写回：\n{dst}\n\n{rows}")
 
     def _edit_undo(self) -> None:
         stack = self._nav_dialogs.session.setdefault("_undo", [])

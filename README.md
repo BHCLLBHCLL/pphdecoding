@@ -83,6 +83,7 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
 | `blowfish_le.py` | PKBody3 Blowfish 小端变体 ECB（`blowfish_tables.py`） |
 | `pphxml.py` | `main.xml`（索引标签方言）/ `main.prp` / `main.xenv` / `main.js` |
 | `gphstats.py` | 仓库内轻量 GPH 统计（gphdecoding 仓不可用时的降级） |
+| `voxmesh.py` | 自研 Voxel/hex-dominant mesher（MDL/STL → octree → hex/poly → `.oct`+`.gph`） |
 | `parasolid.py` | Parasolid 传输流部分提取（schema/字段名/实体类型） |
 | `pphwriter.py` | 写端：LZMS 压缩 + Blowfish 加密 + ZIP 容器 round-trip |
 | `pph_vtk.py` | VTK 几何构建器（MDL/OCT/GPH → vtkPolyData，离屏可测） |
@@ -103,6 +104,9 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
   `unit_type` 解析；`convert()` 支持 SI 因子换算与温度偏移换算。
 - `scflowpre_probe.py`：探测本机 Cradle 安装、关键 DLL 导出数量与
   `SCTpreCLIHelper`/`scConverter` 等批处理工具，为自动化桥提供可行性证据。
+- `voxmesh.py`：自研拟体素化 mesher（cfMesh/snappy 风格，参考
+  `docs/VOXMESH_NOTES.md`）：`python -m voxmesh box.pph -o out --rough`；
+  GUI `Execute → Voxel Fitting Mesh (Self Build)…`。
 - `tools/build_corpus.py`：生成语料清单（含成员 SHA-256），作为字节级回归基线。
 
 新增测试：`tests/test_schema_extract.py`、`tests/test_condition_registry.py`、

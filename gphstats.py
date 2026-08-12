@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from collections import Counter
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -466,12 +467,29 @@ def write_gph(filepath,
               faces,
               app: str = "SCTpre",
               date: int = 20260812) -> "Path":
-    """写最小 CRDL-FLD GPH（无宿主兜底，可被 :func:`parse_mesh` 读回）。
+    """写最小 CRDL-FLD GPH（单 owner=0 的边界面集合，可被读回）。"""
+    import numpy as _np
 
-    ``vertices``：(n,3) 浮点坐标；``faces``：多边形顶点索引列表（0-based）。
+    n_faces = len(faces)
+    owner = _np.zeros(n_faces, dtype=">i4")
+    neigh = _np.full(n_faces, 0xFFFFFFFF, dtype=">u4")
+    return write_gph_volume(filepath, vertices, faces, owner, neigh,
+                            app=app, date=date)
+
+
+def write_gph_volume(filepath,
+                     vertices,
+                     faces,
+                     owner,
+                     neigh,
+                     app: str = "SCTpre",
+                     date: int = 20260812) -> "Path":
+    """写完整 CRDL-FLD GPH 体网格（``LS_Links`` 含 owner/neigh）。
+
+    ``vertices``：(n,3) 浮点坐标；``faces``：多边形顶点索引列表（0-based），
+    ``owner``/``neigh``：与 ``faces`` 等长的单元索引；``neigh == -1`` 表示
+    边界面（写盘时转存为 0xFFFFFFFF）。
     """
-    from pathlib import Path
-
     import numpy as _np
 
     verts = _np.asarray(vertices, dtype=float).reshape(-1, 3)
@@ -479,6 +497,11 @@ def write_gph(filepath,
     n_faces = len(faces)
     conn_flat = [int(v) for face in faces for v in face]
     conn_total = len(conn_flat)
+    owner = _np.asarray(owner, dtype=">i4").reshape(-1)
+    neigh_u4 = _np.asarray(neigh, dtype=">i4").reshape(-1)
+    if owner.size != n_faces or neigh_u4.size != n_faces:
+        raise ValueError("owner/neigh length must equal faces length")
+    neigh_u4 = _np.where(neigh_u4 < 0, 0xFFFFFFFF, neigh_u4).astype(">u4")
 
     out = bytearray()
     out += _i32(8) + crdlfld.MAGIC + _i32(8) + _i32(4) + _i32(4)
@@ -493,15 +516,13 @@ def write_gph(filepath,
     out += _section("HeaderDataEnd", b"")
     out += _section("OverlapStart_0", b"")
 
-    owner = _np.zeros(n_faces, dtype=">i4")
-    neigh = _np.full(n_faces, 0xFFFFFFFF, dtype=">u4")
     npe = _np.array([len(f) for f in faces], dtype=">u4")
     conn = _np.asarray(conn_flat, dtype=">u4")
     links = (
         _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
         _descriptor(4, 1, 1) + _descriptor(4, n_faces, 4) +
         _descriptor(4, n_faces, 1) +
-        _block(owner.tobytes()) + _block(neigh.tobytes()) +
+        _block(owner.tobytes()) + _block(neigh_u4.tobytes()) +
         _block(npe.tobytes()) +
         _descriptor(4, 1, 1) + _descriptor(4, conn_total, 4) +
         _descriptor(4, conn_total, 1) + _block(conn.tobytes()))
