@@ -174,6 +174,37 @@ class TestPipelinePlan(unittest.TestCase):
             self.assertIn('Doc_.OpenCadFile "D:\\case\\box.x_t"', text)
             self.assertNotIn("Doc_.SaveProject", text)
 
+    def test_build_execute_vbs_bam_octree_params(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            out = td / "bam.vbs"
+            build_execute_vbs(
+                r"D:\case\box.pph", {"bam": True}, out,
+                octree_sess={"mode": "octant", "min_size": 0.001,
+                             "detail": {"min_oct_size": 0.001}})
+            text = decode_vbs(out.read_bytes())
+            self.assertIn("OctParam_.SetOctType 3", text)
+            self.assertLess(
+                text.index("OctParam_.SetOctType 3"),
+                text.index("MeshingGroup_.BuildAnalysisModel"))
+
+    def test_build_execute_vbs_step_marker(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            out = td / "run.vbs"
+            step = td / "run.step"
+            build_execute_vbs(
+                r"D:\case\box.pph",
+                {"bam": True, "oct": True, "mesh": True},
+                out, step_marker=step)
+            text = decode_vbs(out.read_bytes())
+            self.assertIn(f'OpenTextFile("{step}", 8, True)', text)
+            self.assertIn('tf_.WriteLine "bam"', text)
+            self.assertIn('tf_.WriteLine "octree"', text)
+            self.assertIn('tf_.WriteLine "mesh"', text)
+
     def test_octree_settings_actions(self):
         actions = octree_settings_actions({
             "OCT_MESH": {"FACET_LENGTH_FACTOR": "1",

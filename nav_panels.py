@@ -11033,6 +11033,7 @@ class AnalysisModelWizardBody(_Body):
         self._page_keys = [k for k, _ in _BAM_WIZARD_PAGES]
         self._part_acc: dict[str, str] = {}
         self._region_acc: dict[str, str] = {}
+        self._buildable = True
 
         root = QVBoxLayout(self)
         root.setContentsMargins(6, 6, 6, 4)
@@ -11614,6 +11615,7 @@ class AnalysisModelWizardBody(_Body):
         self.btn_create.setEnabled(not on_repair)
         self.btn_close.setVisible(not on_repair)
         self.btn_build.setVisible(on_repair)
+        self.btn_build.setEnabled(self._buildable)
 
     def _go_back(self) -> None:
         keys = self._visible_keys()
@@ -11822,10 +11824,13 @@ class AnalysisModelWizardBody(_Body):
         tiny_rows: list[list] = []
         multifold: list[tuple[str, int, int, int]] = []
         mf_face_ids: list[int] = []
+        match_rows: list[list] = []
+        has_mdl = False
         for g, info in sorted(groups.items()):
             path = (info.get("paths") or {}).get("part")
             if not path:
                 continue
+            has_mdl = True
             try:
                 model = mdl.parse_mdl(path, load_arrays=True)
             except Exception:  # noqa: BLE001
@@ -11837,6 +11842,19 @@ class AnalysisModelWizardBody(_Body):
             for (a, b), faces in mdl.detect_multifold_edges(model).items():
                 multifold.append((g, a, b, len(faces)))
                 mf_face_ids.extend(faces)
+            for mp in mdl.detect_matching_faces(model):
+                match_rows.append(
+                    [mp["group1"], mp["group2"], 0.0, 0.0,
+                     mp["direction"]])
+
+        self.tbl_match.setRowCount(len(match_rows))
+        for r, row in enumerate(match_rows):
+            chk = QTableWidgetItem()
+            chk.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            chk.setCheckState(Qt.Unchecked)
+            self.tbl_match.setItem(r, 0, chk)
+            for c, val in enumerate(row, start=1):
+                self.tbl_match.setItem(r, c, QTableWidgetItem(str(val)))
 
         self.tbl_rm_tiny.setRowCount(len(tiny_rows))
         for r, row in enumerate(tiny_rows):
@@ -11871,6 +11889,8 @@ class AnalysisModelWizardBody(_Body):
 
         self.lab_err_count.setText(str(len(tiny_rows)))
         self.lab_prob_level.setText(str(len(multifold)))
+        self._buildable = has_mdl
+        self.btn_build.setEnabled(has_mdl)
         self.tbl_report.setRowCount(0)
         if tiny_rows:
             self.tbl_report.insertRow(0)

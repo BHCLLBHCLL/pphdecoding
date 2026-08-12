@@ -547,6 +547,7 @@ def write_nav_vbs(op: str, project_path: str | Path,
 def build_execute_vbs(project_path: str | Path, plan: dict,
                       output: str | Path,
                       marker: Optional[str | Path] = None,
+                      step_marker: Optional[str | Path] = None,
                       include_save: bool = True,
                       xenv=None,
                       octree_sess: Optional[dict] = None,
@@ -555,6 +556,8 @@ def build_execute_vbs(project_path: str | Path, plan: dict,
 
     PPH 项目默认在末尾追加 ``Doc_.SaveProject``；传入 ``marker`` 时在脚本
     末尾写一个完成标记文件，供 GUI 轮询后自动 Reload。
+    ``step_marker``：可选进度标记文件，脚本在 BAM/Octree/Mesh 完成后各写
+    一行，供 GUI 显示“当前步骤”。
 
     ``octree_sess``：GUI ``session['octree_param']``，含 Detail 的
     ``region_size`` / ``min_oct_size`` 等；会生成 ``SetOctType`` /
@@ -577,6 +580,12 @@ def build_execute_vbs(project_path: str | Path, plan: dict,
                 insert_at = i + 1
                 break
         actions[insert_at:insert_at] = parts_control_actions(parts_control_sess)
+    if octree_sess and "build_analysis_model" in steps:
+        idx = actions.index("MeshingGroup_.BuildAnalysisModel")
+        insert_at = idx
+        if idx > 0 and actions[idx - 1].startswith("Set MeshingGroup_ ="):
+            insert_at = idx - 1
+        actions[insert_at:idx] = oct_param_actions(octree_sess)
     if "generate_octree" in steps:
         idx = actions.index("MeshingGroup_.CreateOctree")
         insert_at = idx
@@ -589,6 +598,15 @@ def build_execute_vbs(project_path: str | Path, plan: dict,
         # OctParam 必须在 CreateOctree 之前（录制顺序）
         chunk.extend(oct_param_actions(octree_sess))
         actions[insert_at:idx] = chunk
+    if step_marker is not None:
+        for anchor, step in (
+            ("MeshingGroup_.BuildAnalysisModel", "bam"),
+            ("MeshingGroup_.CreateOctree", "octree"),
+            ("Doc_.WaitForWorker", "mesh"),
+        ):
+            if anchor in actions:
+                at = actions.index(anchor) + 1
+                actions[at:at] = _step_progress_actions(step_marker, step)
     if marker is not None:
         actions.append('Set fso_ = CreateObject("Scripting.FileSystemObject")')
         actions.append(f'Set tf_ = fso_.CreateTextFile("{marker}", True)')
@@ -596,6 +614,16 @@ def build_execute_vbs(project_path: str | Path, plan: dict,
     from automation.vbs_bridge import write_vbs_file
     return write_vbs_file(actions, output,
                           title="pph_gui scFLOWpre API execute")
+
+
+def _step_progress_actions(step_marker: str | Path, step: str) -> list[str]:
+    """追加一行步骤进度到 sidecar 文件（VBS FileSystemObject 追加模式）。"""
+    return [
+        'Set fso_ = CreateObject("Scripting.FileSystemObject")',
+        f'Set tf_ = fso_.OpenTextFile("{step_marker}", 8, True)',
+        f'tf_.WriteLine "{step}"',
+        "tf_.Close",
+    ]
 
 
 ROLE_MAP: dict[str, tuple[str, ...]] = {

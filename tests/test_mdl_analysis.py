@@ -40,6 +40,13 @@ class TestMdlAnalysis(unittest.TestCase):
         for faces in edges.values():
             self.assertGreater(len(faces), 2)
 
+    def test_matching_faces_shape(self):
+        pairs = mdl.detect_matching_faces(self.model)
+        self.assertIsInstance(pairs, list)
+        for p in pairs:
+            self.assertIn("group1", p)
+            self.assertIn("group2", p)
+
 
 if __name__ == "__main__":
     unittest.main()

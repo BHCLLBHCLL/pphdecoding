@@ -3168,6 +3168,7 @@ class PphViewer(QMainWindow):
         self._mouse_op_type = "CRADLE 3-Button Mode"
         self._viewer_mode = False
         self._ui_language = "en"
+        self._last_api_step = ""
         # True=Prepare Parts 模式；False=已 Build Analysis Model（锁定实体编辑）
         self._prepare_parts_mode = True
         self._menu_acts: dict[str, QAction] = {}
@@ -5077,8 +5078,10 @@ class PphViewer(QMainWindow):
         self.log("Execute 步骤: " + " → ".join(steps))
         out = Path(self.archive_path).with_suffix(".scflow_api.vbs")
         marker = Path(self.archive_path).with_suffix(".scflow_api.done")
+        step_marker = Path(self.archive_path).with_suffix(".scflow_api.step")
         try:
             marker.unlink(missing_ok=True)
+            step_marker.unlink(missing_ok=True)
         except OSError:
             pass
         sess = ctx.get("session") or {}
@@ -5093,6 +5096,7 @@ class PphViewer(QMainWindow):
         elif sects:
             self.log("OctParam：" + "; ".join(sects))
         build_execute_vbs(self.archive_path, plan, out, marker=marker,
+                          step_marker=step_marker,
                           xenv=ctx.get("xenv"), octree_sess=octree_sess,
                           parts_control_sess=pc_sess)
         self.log(f"scFLOWpre API 脚本已生成：{out}")
@@ -5101,7 +5105,7 @@ class PphViewer(QMainWindow):
         self.log(
             "正在通过 scFLOWpre API 后台执行；"
             "完成后将自动刷新 Model / Octree / Mesh。")
-        self._start_api_refresh_poll(marker)
+        self._start_api_refresh_poll(marker, step_marker=step_marker)
         self._start_api_execute_thread(out)
 
     def _run_bam_pipeline(self, ctx: dict) -> None:
@@ -5112,12 +5116,15 @@ class PphViewer(QMainWindow):
         from automation.pipeline_plan import build_execute_vbs
         out = Path(self.archive_path).with_suffix(".bam.vbs")
         marker = Path(self.archive_path).with_suffix(".bam.done")
+        step_marker = Path(self.archive_path).with_suffix(".bam.step")
         try:
             marker.unlink(missing_ok=True)
+            step_marker.unlink(missing_ok=True)
         except OSError:
             pass
         build_execute_vbs(
             self.archive_path, {"bam": True}, out, marker=marker,
+            step_marker=step_marker,
             xenv=ctx.get("xenv"),
             octree_sess=(ctx.get("session") or {}).get("build_am_octree"),
             parts_control_sess=(ctx.get("session") or {}).get(
@@ -5134,15 +5141,25 @@ class PphViewer(QMainWindow):
         self.log(
             "正在通过 scFLOWpre API 后台执行；"
             "完成后将自动刷新分析模型。")
-        self._start_api_refresh_poll(marker)
+        self._start_api_refresh_poll(marker, step_marker=step_marker)
         self._start_api_execute_thread(out)
 
     def _start_api_refresh_poll(self, marker: Path,
+                                step_marker: Optional[Path] = None,
                                 timeout: float = 600.0) -> None:
         """轮询宿主 VBS 写出的完成标记，出现后自动 Reload。"""
         start = time.monotonic()
 
         def poll() -> None:
+            if step_marker is not None and step_marker.is_file():
+                try:
+                    steps = step_marker.read_text(
+                        encoding="utf-8", errors="replace").split()
+                    if steps and steps[-1] != self._last_api_step:
+                        self._last_api_step = steps[-1]
+                        self.log(f"scFLOWpre API 当前步骤: {steps[-1]}")
+                except OSError:
+                    pass
             if marker.is_file():
                 self.log("scFLOWpre API 完成，正在刷新项目…")
                 try:

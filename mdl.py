@@ -299,3 +299,46 @@ def detect_multifold_edges(model: MdlModel) -> dict[tuple[int, int], list[int]]:
             key = (min(a, b), max(a, b))
             edge_faces[key].append(fid)
     return {k: v for k, v in edge_faces.items() if len(v) > 2}
+
+
+def detect_matching_faces(model: MdlModel) -> list[dict]:
+    """启发式识别重合匹配面：质心/面积相近且法向相反的面对面。
+
+    返回 ``[{group1, group2, direction}]``；direction 取 "Forward"/"Reverse"，
+    这里把法向相反的一对标记为 "Reverse"。
+    """
+    if model.n_faces == 0 or model.xyz.size == 0:
+        return []
+    off = model.face_offsets
+    xyz = model.xyz
+    conn = model.conn
+    groups: dict[tuple, list] = {}
+    for fid in range(model.n_faces):
+        nodes = conn[off[fid]:off[fid + 1]]
+        if nodes.size < 3:
+            continue
+        pts = xyz[nodes]
+        centroid = pts.mean(axis=0)
+        v1 = pts[1] - pts[0]
+        v2 = pts[2] - pts[0]
+        n = np.cross(v1, v2)
+        norm = float(np.linalg.norm(n))
+        if norm < 1e-12:
+            continue
+        n = n / norm
+        area = norm / 2.0
+        key = (tuple(np.round(centroid, 5)),
+               round(area, 6),
+               tuple(np.round(np.abs(n), 4)))
+        groups.setdefault(key, []).append((fid, n))
+    out: list[dict] = []
+    for faces in groups.values():
+        if len(faces) < 2:
+            continue
+        for i in range(len(faces)):
+            fi, ni = faces[i]
+            for fj, nj in faces[i + 1:]:
+                if float(np.dot(ni, nj)) < -0.999:
+                    out.append({"group1": fi, "group2": fj,
+                                "direction": "Reverse"})
+    return out
