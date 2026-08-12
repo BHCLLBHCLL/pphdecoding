@@ -255,3 +255,65 @@ def write_oct(filepath: str | Path,
     path = Path(filepath)
     path.write_bytes(bytes(out))
     return path
+
+
+def _build_tree(refinement) -> list:
+    """把前序位图转成嵌套树 ``[bit, [children...]]``。"""
+    ref = list(refinement)
+    idx = 0
+
+    def build() -> list:
+        nonlocal idx
+        r = int(ref[idx])
+        idx += 1
+        children = [build() for _ in range(8)] if r else []
+        return [r, children]
+
+    return build()
+
+
+def _tree_to_ref(node, out: list[int]) -> None:
+    out.append(node[0])
+    for child in node[1]:
+        _tree_to_ref(child, out)
+
+
+def _model_from_tree(node, model: OctModel) -> OctModel:
+    out: list[int] = []
+    _tree_to_ref(node, out)
+    ref = np.asarray(out, dtype=np.uint8)
+    n = len(ref)
+    bid = np.full(n, -1, dtype=np.int32)
+    if model.block_id.size == n:
+        bid = model.block_id.astype(np.int32)
+    return OctModel(
+        root_min=model.root_min, root_max=model.root_max,
+        n_octants=n, n_internal=int(np.count_nonzero(ref)),
+        n_leaves=n - int(np.count_nonzero(ref)),
+        refinement=ref, block_id=bid,
+        unit=model.unit, last_gen_year=model.last_gen_year)
+
+
+def refine_all_leaves(model: OctModel) -> OctModel:
+    """把所有叶子细分成一层（每个叶子变为内部节点 + 8 个叶子）。"""
+
+    def transform(node: list) -> list:
+        if node[0] == 0:
+            return [1, [[0, []] for _ in range(8)]]
+        return [1, [transform(c) for c in node[1]]]
+
+    return _model_from_tree(transform(_build_tree(model.refinement)), model)
+
+
+def coarsen_all_leaves(model: OctModel) -> OctModel:
+    """把所有“8 个孩子全是叶子”的节点合并为叶子（单层粗化）。"""
+
+    def transform(node: list) -> list:
+        if node[0] == 0:
+            return [0, []]
+        children = [transform(c) for c in node[1]]
+        if all(c[0] == 0 for c in children):
+            return [0, []]
+        return [1, children]
+
+    return _model_from_tree(transform(_build_tree(model.refinement)), model)

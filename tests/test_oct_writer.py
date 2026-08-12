@@ -40,6 +40,27 @@ class TestOctWriter(unittest.TestCase):
         self.assertEqual(model.n_leaves, 8)
         self.assertEqual(len(list(model.iter_leaves())), 8)
 
+    def test_refine_all_leaves(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = oct.write_oct(
+                Path(td) / "leaf.oct",
+                [0, 0, 0], [1, 1, 1])
+            model = oct.parse_oct(str(p))
+        refined = oct.refine_all_leaves(model)
+        self.assertEqual(refined.n_octants, 9)
+        self.assertEqual(refined.n_leaves, 8)
+
+    def test_coarsen_all_leaves(self):
+        ref = np.array([1, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.uint8)
+        with tempfile.TemporaryDirectory() as td:
+            p = oct.write_oct(
+                Path(td) / "sub.oct",
+                [0, 0, 0], [2, 2, 2], refinement=ref)
+            model = oct.parse_oct(str(p))
+        coarse = oct.coarsen_all_leaves(model)
+        self.assertEqual(coarse.n_octants, 1)
+        self.assertEqual(coarse.n_leaves, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

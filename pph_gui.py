@@ -4405,6 +4405,9 @@ class PphViewer(QMainWindow):
         if not self.archive_path:
             QMessageBox.information(self, "Octants", "请先打开 PPH 项目")
             return
+        if op in ("refine", "merge"):
+            self._local_octant_op(op)
+            return
         pick = getattr(self.view3d, "last_pick", None) or {}
         face = pick.get("face")
         out = Path(self.archive_path).with_suffix(f".octant_{op}.vbs")
@@ -4443,6 +4446,52 @@ class PphViewer(QMainWindow):
             self, "Octants",
             f"{label}\n已写出：\n{out}\n"
             "宿主 API 待录制锁定后可取消注释执行。")
+
+    def _local_octant_op(self, op: str) -> None:
+        """本地 Refine/Merge：解析 OCT → 变换 → 写回新 PPH 并打开（无宿主）。"""
+        import oct as octmod
+        import pphwriter
+
+        member = next((m for m in self.arch.members if m.role == "octree"),
+                      None)
+        if member is None:
+            QMessageBox.information(
+                self, "Octants",
+                "当前 PPH 没有 OCT 成员，无法本地 Refine/Merge。")
+            return
+        src = self.bin_paths.get(member.name)
+        if not src or not os.path.exists(src):
+            QMessageBox.information(self, "Octants", "OCT 文件未落盘。")
+            return
+        try:
+            model = octmod.parse_oct(src)
+            if op == "refine":
+                new = octmod.refine_all_leaves(model)
+            else:
+                new = octmod.coarsen_all_leaves(model)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "Octants", f"本地操作失败：{exc}")
+            return
+        tmp = os.path.join(self.tmp_dir, member.name + ".local.oct")
+        try:
+            octmod.write_oct(
+                tmp, new.root_min, new.root_max, new.refinement,
+                new.block_id, unit=new.unit,
+                date=new.last_gen_year or 20260812)
+            with open(tmp, "rb") as f:
+                data = f.read()
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "Octants", f"写出 OCT 失败：{exc}")
+            return
+        out = Path(self.archive_path).with_suffix(".local.pph")
+        try:
+            pphwriter.clone_pph(self.archive_path, out,
+                                {member.name: data})
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "Octants", f"写回 PPH 失败：{exc}")
+            return
+        self.log(f"Octants — 本地 {op} OCT 完成: {out}")
+        self.open_archive(str(out))
 
     def _edit_undo(self) -> None:
         stack = self._nav_dialogs.session.setdefault("_undo", [])
