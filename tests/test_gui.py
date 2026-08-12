@@ -351,6 +351,29 @@ def test_make_actor_mdl_returns_region_annotations():
     tab.close()
 
 
+def test_mdl_mask_rubber_list_filters():
+    import numpy as np
+    from PyQt5.QtWidgets import QApplication
+    import pph_gui
+
+    app = QApplication.instance() or QApplication([])
+    tab = pph_gui.View3DTab()
+
+    class FakeModel:
+        n_faces = 4
+        csid = (np.array([1, 1, 2, 2]), np.array([0, 0, 0, 0]))
+        frid = np.array([10, 11, 10, 12])
+
+    tab._mdl_filter = {"kind": "faces", "values": [1, 3]}
+    mask = tab._mdl_mask(FakeModel())
+    assert mask.tolist() == [False, True, False, True]
+
+    tab._mdl_filter = {"kind": "bodies", "values": [2]}
+    mask = tab._mdl_mask(FakeModel())
+    assert mask.tolist() == [False, False, True, True]
+    tab.close()
+
+
 def test_render_pipeline_adds_layers_edges_and_legend(monkeypatch):
     """render() 全流程：图层 + 网格线进 renderer，Qt 图例面板填充。"""
     from PyQt5.QtWidgets import QApplication
@@ -521,7 +544,7 @@ def test_view3d_clip_plane(monkeypatch):
     assert tab.renderer.GetViewProps().GetNumberOfItems() == n_before
 
 
-def test_view3d_rubber_zoom_toggle(monkeypatch):
+def test_view3d_rubber_select_toggle(monkeypatch):
     from PyQt5.QtWidgets import QApplication
     import pph_gui
 
@@ -529,27 +552,22 @@ def test_view3d_rubber_zoom_toggle(monkeypatch):
     tab = pph_gui.View3DTab()
     iren = tab.vtk_widget.GetRenderWindow().GetInteractor()
     monkeypatch.setattr(iren, "Initialize", lambda: None)
-    # 离屏环境创建 vtkInteractorStyleRubberBandZoom 会原生崩溃，
-    # 故桩化风格类，仅验证切换逻辑。
+    # 离屏环境桩化风格类，仅验证切换逻辑。
     recorded = []
     monkeypatch.setattr(
         iren, "SetInteractorStyle",
         lambda style: recorded.append(type(style).__name__))
 
-    class FakeRubber:
-        def SetRenderOnMouseMove(self, _v):
-            return None
-
     class FakeTrackball:
         pass
 
     monkeypatch.setattr("vtkmodules.vtkInteractionStyle."
-                        "vtkInteractorStyleRubberBandZoom", FakeRubber)
-    monkeypatch.setattr("vtkmodules.vtkInteractionStyle."
                         "vtkInteractorStyleTrackballCamera", FakeTrackball)
     tab.btn_rubber.setChecked(True)
     tab.btn_rubber.setChecked(False)
-    assert recorded == ["FakeRubber", "FakeTrackball"]
+    assert len(recorded) == 2
+    assert recorded[0] == "_RubberStyle"
+    assert recorded[1] == "FakeTrackball"
     tab.close()
 
 

@@ -30,7 +30,9 @@
 3. **条件体系**有 `schemas/conditions.yaml` + `conditions_schema` 合并过滤器；~180 Cond* 表单仍不全。
 4. **几何编辑** Create/Modify 写出 `BeginSolidEdit` VBS 草稿；实体 API 待录制。
 5. **Solver / CMB / FPH** 未做。
-6. **Select**：Face pick / Rubber（缩放）/ All / Deselect / Fit / Hide / Only 已接线；Part/Edge/Vertex 拾取与真正框选仍待。
+6. **Select**：Pick Part/Face/Edge/Vertex 已接线；Rubber Box/Circle/Polygon 已改为
+   真实框选（VTK HardwareSelector + 圆/多边形过滤）；宿主侧另有
+   `Doc_.RubberBox/RubberCircle/RubberPolygon` 可锁定用于宿主内选择。
 
 ---
 
@@ -57,14 +59,21 @@
 - ✅ Execute 默认 `use_api=True`；Solver 仍明确不可用
 
 ### 阶段 2 — Select / View
-- ✅ Pick Part/Face/Edge/Vertex；Rubber（缩放复用）
+- ✅ Pick Part/Face/Edge/Vertex；Rubber Box/Circle/Polygon 真实框选
+  （HardwareSelector；宿主 RubberBox API 已定位）
 - ✅ Select All / Hide / Only Selected / Fit to Selected
 - ✅ Refinement Level / 八叉树显示开关；Parts List / Region Check
 
 ### 阶段 3 — 几何 Edit
 - ✅ Create/Modify → `BeginSolidEdit` VBS 草稿
 - ✅ Register Region：拾取面 → `sface_num` 写 `main.xml`
-- ✅ Ridge / Refine·Merge Octants VBS；Measurement；Undo 栈
+- ✅ Ridge VBS 手册锁定：`VMDL_.RecalcRidge` /
+  `RecalcRidgeFromProjectSetting` / `SetSelectedEdgeToRidge` /
+  `SetSelectedEdgeToNonRidge`（+ `GetEdge`/`SetSelect`）
+- ✅ Octant VBS 手册锁定：`Octree_.Refine` / `Merge` /
+  `RefineByLevel` / `RefineByNumber` / `RefineFromCurvature` /
+  `ShowOctBySelectedFace` / `ShowOctBySelectedEdge`；本地 refine/merge 并行
+- ✅ Measurement；Undo 栈
 
 ### 阶段 4 — 条件与 File 自动化
 - ✅ `schemas/conditions.yaml` + `conditions_schema` 合并过滤器

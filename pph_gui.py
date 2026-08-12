@@ -36,9 +36,10 @@ from PyQt5.QtGui import (
 from PyQt5.QtWidgets import (
     QAction, QActionGroup, QApplication, QCheckBox, QComboBox, QDialog,
     QDialogButtonBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout,
-    QGroupBox, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPlainTextEdit,
-    QPushButton, QSizePolicy, QSlider, QSplitter, QStackedWidget, QTabWidget,
-    QToolBar, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QGroupBox, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMessageBox,
+    QPlainTextEdit, QPushButton, QRubberBand, QSizePolicy, QSlider,
+    QSplitter, QStackedWidget, QTabWidget, QToolBar, QTreeWidget,
+    QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 import nav_panels
@@ -1889,6 +1890,34 @@ class SnapshotTab(QWidget):
             self._add_record(item, c, depth + 1)
 
 
+class _RubberPolygonOverlay(QWidget):
+    """框选多边形叠加层（VTK 坐标 y 向上，绘制时翻转为 Qt 坐标）。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._points: list[tuple[int, int]] = []
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setStyleSheet("background: transparent;")
+
+    def set_points(self, points: list[tuple[int, int]]) -> None:
+        self._points = list(points)
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        if len(self._points) < 2:
+            return
+        painter = QPainter(self)
+        pen = QPen(QColor(0, 200, 0), 2, Qt.DashLine)
+        painter.setPen(pen)
+        h = self.height()
+        poly = QPolygon(
+            [QPoint(int(x), h - int(y)) for x, y in self._points])
+        painter.drawPolyline(poly)
+        if len(self._points) >= 3:
+            painter.setBrush(QColor(0, 200, 0, 30))
+            painter.drawPolygon(poly)
+
+
 class View3DTab(QWidget):
     """Draw Window：VTK 3D + 几何/网格视图 + 体网格剖切（Cross Section）。"""
 
@@ -1985,7 +2014,7 @@ class View3DTab(QWidget):
         self.btn_render.clicked.connect(self.render)
         self.btn_fit.clicked.connect(self.fit)
         self.btn_reset.clicked.connect(self.reset_viewpoint)
-        self.btn_rubber.toggled.connect(self._toggle_rubber_zoom)
+        self.btn_rubber.toggled.connect(self._toggle_rubber_select)
         self.btn_pick.toggled.connect(self._toggle_pick)
         self.btn_show_all.clicked.connect(self.clear_visibility)
         self.status = QLabel("未加载", self)
@@ -2113,6 +2142,12 @@ class View3DTab(QWidget):
         self._pickable_actors: list = []
         self._pickable_meta: dict = {}  # actor -> {group, kind, path}
         self._pick_mode: str = "face"  # face|part|edge|vertex
+        self._rubber_kind: str = "box"  # box|circle|polygon
+        self._rubber_active: bool = False
+        self._rubber_origin: Optional[QPoint] = None
+        self._rubber_band: Optional[QRubberBand] = None
+        self._rubber_style: Optional[object] = None
+        self._rubber_center_cache: dict = {}
         self.last_pick: Optional[dict] = None
         self._picked_status = ""
         self._cache: dict[tuple, object] = {}
@@ -2795,10 +2830,25 @@ class View3DTab(QWidget):
                 if isinstance(value, int) and 0 <= value < model.n_faces:
                     mask[value] = True
                 return mask
+            if kind == "faces":
+                values = [v for v in (self._mdl_filter.get("values") or [])
+                          if isinstance(v, int) and 0 <= v < model.n_faces]
+                if not values:
+                    return np.zeros(model.n_faces, dtype=bool)
+                mask = np.zeros(model.n_faces, dtype=bool)
+                mask[values] = True
+                return mask
             if kind == "body":
                 b1, b2 = model.csid
                 if b2.size:
                     return (b1 == value) | (b2 == value)
+                return None
+            if kind == "bodies":
+                values = [v for v in (self._mdl_filter.get("values") or [])
+                          if isinstance(v, int)]
+                b1, b2 = model.csid
+                if b2.size and values:
+                    return (np.isin(b1, values) | np.isin(b2, values))
                 return None
             if kind == "region":
                 return model.frid == value
@@ -2952,14 +3002,23 @@ class View3DTab(QWidget):
             value = filter_.get("value")
             if kind == "face":
                 self._picked_status = f" | 仅显示面 #{value}"
+            elif kind == "faces":
+                self._picked_status = (
+                    f" | 框选 {len(filter_.get('values') or [])} 面")
             elif kind == "body":
                 self._picked_status = f" | 仅显示 body {value}"
+            elif kind == "bodies":
+                self._picked_status = (
+                    f" | 框选 {len(filter_.get('values') or [])} body")
             elif kind == "region":
                 self._picked_status = f" | 仅显示区域 frid={value}"
             elif kind == "edge":
                 self._picked_status = f" | 拾取边（面 #{value}）"
             elif kind == "vertex":
                 self._picked_status = f" | 拾取点 #{value}"
+            elif kind == "vertices":
+                self._picked_status = (
+                    f" | 框选 {len(filter_.get('values') or [])} 顶点")
         self.render()
 
     def set_pick_mode(self, mode: str) -> None:
@@ -3112,18 +3171,369 @@ class View3DTab(QWidget):
             f"已拾取面 #{cell}"
             + (f" frid={frid}" if frid is not None else ""))
 
-    def _toggle_rubber_zoom(self, checked: bool) -> None:
+    def _toggle_rubber_select(self, checked: bool) -> None:
+        """橡皮框/圆/多边形选择：启用时拦截左键拖动，禁用时恢复相机。"""
         from vtkmodules.vtkInteractionStyle import (
-            vtkInteractorStyleRubberBandZoom, vtkInteractorStyleTrackballCamera)
+            vtkInteractorStyleTrackballCamera)
 
         iren = self.vtk_widget.GetRenderWindow().GetInteractor()
+        owner = self
         if checked:
-            style = vtkInteractorStyleRubberBandZoom()
-            style.SetRenderOnMouseMove(1)
+            class _RubberStyle(vtkInteractorStyleTrackballCamera):
+                def OnLeftButtonDown(self):
+                    owner._rubber_press(
+                        self.GetInteractor().GetEventPosition())
+
+                def OnMouseMove(self):
+                    if owner._rubber_active:
+                        owner._rubber_move(
+                            self.GetInteractor().GetEventPosition())
+                    else:
+                        super().OnMouseMove()
+
+                def OnLeftButtonUp(self):
+                    if owner._rubber_active:
+                        owner._rubber_release(
+                            self.GetInteractor().GetEventPosition())
+                    else:
+                        super().OnLeftButtonUp()
+
+                def OnRightButtonDown(self):
+                    if owner._rubber_active and owner._rubber_kind == "polygon":
+                        owner._rubber_polygon_done()
+                    else:
+                        super().OnRightButtonDown()
+
+                def OnKeyPress(self):
+                    iren2 = self.GetInteractor()
+                    if iren2.GetKeySym() == "Escape" and owner._rubber_active:
+                        owner._rubber_cancel()
+                    else:
+                        super().OnKeyPress()
+
+            style = _RubberStyle()
             self._rubber_style = style
+            # 拾取观察者会与框选左键冲突，先关闭鼠标拾取
+            if self.btn_pick.isChecked():
+                self.btn_pick.setChecked(False)
+            self.status.setText(
+                f"Rubber {self._rubber_kind}: drag to select "
+                f"(pick mode={self._pick_mode}; Esc cancels)")
         else:
+            self._rubber_active = False
+            if self._rubber_band is not None:
+                self._rubber_band.hide()
+            if getattr(self, "_rubber_overlay", None) is not None:
+                self._rubber_overlay.hide()
             self._rubber_style = vtkInteractorStyleTrackballCamera()
         iren.SetInteractorStyle(self._rubber_style)
+
+    def _rubber_press(self, pos) -> None:
+        x, y = int(pos[0]), int(pos[1])
+        if self._rubber_kind == "polygon":
+            pts = list(getattr(self, "_rubber_poly_pts", []) or [])
+            pts.append((x, y))
+            self._rubber_poly_pts = pts
+            if self._rubber_overlay is None:
+                self._rubber_overlay = _RubberPolygonOverlay(self.vtk_widget)
+            self._rubber_overlay.resize(self.vtk_widget.size())
+            self._rubber_overlay.set_points(pts)
+            self._rubber_overlay.show()
+            self._rubber_active = True
+            self.status.setText(
+                f"Rubber polygon: {len(pts)} vertex(es); "
+                "click to add, right-click to finish")
+            return
+        self._rubber_active = True
+        self._rubber_origin = QPoint(x, y)
+        if self._rubber_band is None:
+            self._rubber_band = QRubberBand(
+                QRubberBand.Rectangle, self.vtk_widget)
+        qy = self.vtk_widget.height() - y
+        self._rubber_band.setGeometry(x, qy, 0, 0)
+        self._rubber_band.show()
+
+    def _rubber_move(self, pos) -> None:
+        if not self._rubber_active or self._rubber_origin is None:
+            return
+        x, y = int(pos[0]), int(pos[1])
+        origin = self._rubber_origin
+        qx = min(origin.x(), x)
+        qy = self.vtk_widget.height() - max(origin.y(), y)
+        qw = abs(x - origin.x())
+        qh = abs(y - origin.y())
+        self._rubber_band.setGeometry(qx, qy, qw, qh)
+
+    def _rubber_release(self, pos) -> None:
+        if not self._rubber_active:
+            return
+        self._rubber_complete(self._rubber_origin,
+                              QPoint(int(pos[0]), int(pos[1])))
+
+    def _rubber_cancel(self) -> None:
+        self._rubber_active = False
+        self._rubber_origin = None
+        if self._rubber_band is not None:
+            self._rubber_band.hide()
+        if getattr(self, "_rubber_overlay", None) is not None:
+            self._rubber_overlay.hide()
+        self.status.setText("Rubber select cancelled")
+
+    def _rubber_polygon_done(self) -> None:
+        pts = list(getattr(self, "_rubber_poly_pts", []) or [])
+        if len(pts) < 3:
+            self._rubber_cancel()
+            self.status.setText("Rubber polygon needs >= 3 vertices")
+            return
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        self._rubber_active = False
+        if self._rubber_overlay is not None:
+            self._rubber_overlay.hide()
+        self._rubber_apply_region(min(xs), min(ys), max(xs), max(ys),
+                                  polygon=pts)
+
+    def _rubber_complete(self, start: Optional[QPoint],
+                         end: Optional[QPoint]) -> None:
+        self._rubber_active = False
+        self._rubber_origin = None
+        if self._rubber_band is not None:
+            self._rubber_band.hide()
+        if start is None or end is None:
+            return
+        xmin, xmax = sorted((start.x(), end.x()))
+        ymin, ymax = sorted((start.y(), end.y()))
+        if xmax - xmin < 2 or ymax - ymin < 2:
+            self.status.setText("Rubber select: 区域过小，未选择")
+            return
+        circle = None
+        if self._rubber_kind == "circle":
+            cx = (start.x() + end.x()) / 2.0
+            cy = (start.y() + end.y()) / 2.0
+            r = max(1.0, min(abs(end.x() - start.x()),
+                             abs(end.y() - start.y())) / 2.0)
+            circle = (cx, cy, r)
+        self._rubber_apply_region(xmin, ymin, xmax, ymax, circle=circle)
+
+    def _mdl_face_meta(self, cell: int, meta: dict) -> tuple:
+        """从 MDL 数据解析 face 对应的 body/frid（与鼠标拾取一致）。"""
+        path = meta.get("path")
+        if not path:
+            return None, None
+        try:
+            import mdl
+            model = self._cached(
+                (meta.get("kind") or "mdl", path),
+                lambda: mdl.parse_mdl(path))
+            if 0 <= cell < model.n_faces:
+                frid = int(model.frid[cell]) if getattr(
+                    model, "frid", None) is not None else None
+                b1, b2 = model.csid
+                body_id = int(b1[cell]) if (
+                    b1 is not None and cell < len(b1)) else None
+                return body_id, frid
+        except Exception:  # noqa: BLE001
+            pass
+        return None, None
+
+    def _rubber_project_center(self, actor, cell_id: int,
+                               mode: str) -> Optional[tuple]:
+        """把 cell/vertex 投影到显示坐标（供圆/多边形过滤）。"""
+        key = (id(actor), cell_id, mode)
+        if key in self._rubber_center_cache:
+            return self._rubber_center_cache[key]
+        result = None
+        p = None
+        try:
+            ds = actor.GetMapper().GetInput()
+            if mode == "vertex":
+                if 0 <= cell_id < ds.GetNumberOfPoints():
+                    p = ds.GetPoint(cell_id)
+            else:
+                if 0 <= cell_id < ds.GetNumberOfCells():
+                    c = ds.GetCell(cell_id)
+                    ids = c.GetPointIds()
+                    n = ids.GetNumberOfIds()
+                    if n:
+                        p = [0.0, 0.0, 0.0]
+                        for k in range(n):
+                            q = ds.GetPoint(int(ids.GetId(k)))
+                            p[0] += q[0] / n
+                            p[1] += q[1] / n
+                            p[2] += q[2] / n
+            if p is not None:
+                self.renderer.SetWorldPoint(p[0], p[1], p[2], 1.0)
+                self.renderer.WorldToDisplay()
+                dp = self.renderer.GetDisplayPoint()
+                result = (float(dp[0]), float(dp[1]))
+        except Exception:  # noqa: BLE001
+            result = None
+        self._rubber_center_cache[key] = result
+        return result
+
+    def _rubber_select_cells(self, xmin: int, ymin: int, xmax: int,
+                             ymax: int) -> dict:
+        """HardwareSelector 框选：返回 faces/bodies/frids/edges/vertices。"""
+        import vtk
+
+        mode = self._pick_mode
+        sel = vtk.vtkHardwareSelector()
+        sel.SetRenderer(self.renderer)
+        sel.SetArea(xmin, ymin, xmax, ymax)
+        sel.SetFieldAssociation(
+            vtk.vtkDataObject.FIELD_ASSOCIATION_POINTS
+            if mode == "vertex"
+            else vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS)
+        result = sel.Select()
+        faces: list[int] = []
+        cells: list[tuple] = []      # (actor, cell_id)
+        points: list[tuple] = []     # (actor, point_id)
+        bodies: set[int] = set()
+        frids: set[int] = set()
+        edges: list[tuple] = []
+        vertices: list[int] = []
+        if result is None:
+            return {"faces": faces, "bodies": bodies, "frids": frids,
+                    "edges": edges, "vertices": vertices,
+                    "cells": cells, "points": points}
+        for i in range(result.GetNumberOfNodes()):
+            node = result.GetNode(i)
+            props = node.GetProperties()
+            if not props.Has(vtk.vtkSelectionNode.PROP()):
+                continue
+            actor = props.Get(vtk.vtkSelectionNode.PROP())
+            if actor is None or actor not in self._pickable_actors:
+                continue
+            ids = node.GetSelectionList()
+            if ids is None:
+                continue
+            meta = self._pickable_meta.get(actor, {})
+            if mode == "vertex":
+                for j in range(ids.GetNumberOfTuples()):
+                    vid = int(ids.GetValue(j))
+                    vertices.append(vid)
+                    points.append((actor, vid))
+                continue
+            ds = actor.GetMapper().GetInput()
+            for j in range(ids.GetNumberOfTuples()):
+                cell = int(ids.GetValue(j))
+                faces.append(cell)
+                cells.append((actor, cell))
+                body_id, frid = self._mdl_face_meta(cell, meta)
+                if body_id is not None:
+                    bodies.add(body_id)
+                if frid is not None:
+                    frids.add(frid)
+                if mode == "edge" and ds is not None \
+                        and 0 <= cell < ds.GetNumberOfCells():
+                    c = ds.GetCell(cell)
+                    pids = c.GetPointIds()
+                    n = pids.GetNumberOfIds()
+                    for k in range(n):
+                        a = int(pids.GetId(k))
+                        b = int(pids.GetId((k + 1) % n))
+                        pa = ds.GetPoint(a)
+                        pb = ds.GetPoint(b)
+                        edges.append((
+                            cell, a, b,
+                            ((pa[0] + pb[0]) / 2.0,
+                             (pa[1] + pb[1]) / 2.0,
+                             (pa[2] + pb[2]) / 2.0)))
+        return {"faces": faces, "bodies": bodies, "frids": frids,
+                "edges": edges, "vertices": vertices,
+                "cells": cells, "points": points}
+
+    def _rubber_apply_region(self, xmin: int, ymin: int, xmax: int,
+                             ymax: int, *,
+                             circle: Optional[tuple] = None,
+                             polygon: Optional[list] = None) -> None:
+        mode = self._pick_mode
+        picked = self._rubber_select_cells(xmin, ymin, xmax, ymax)
+        cells = picked["cells"]          # (actor, cell_id)
+        points = picked["points"]        # (actor, point_id)
+        faces = sorted(set(picked["faces"]))
+        bodies = sorted(picked["bodies"])
+        frids = sorted(picked["frids"])
+        edges = picked["edges"]
+        vertices = sorted(set(picked["vertices"]))
+
+        def _inside(x: float, y: float) -> bool:
+            if circle is not None:
+                cx, cy, r = circle
+                return (x - cx) ** 2 + (y - cy) ** 2 <= r * r
+            if polygon is not None:
+                inside = False
+                j = len(polygon) - 1
+                for i in range(len(polygon)):
+                    xi, yi = polygon[i]
+                    xj, yj = polygon[j]
+                    if ((yi > y) != (yj > y)) and \
+                            (x < (xj - xi) * (y - yi) / (yj - yi + 1e-12)
+                             + xi):
+                        inside = not inside
+                    j = i
+                return inside
+            return True
+
+        if circle is not None or polygon is not None:
+            if mode == "vertex":
+                keep = []
+                for actor, vid in points:
+                    pt = self._rubber_project_center(actor, vid, "vertex")
+                    if pt is not None and _inside(pt[0], pt[1]):
+                        keep.append(vid)
+                vertices = sorted(set(keep))
+            else:
+                keep_faces: list[int] = []
+                keep_edges: list[tuple] = []
+                for actor, cell in cells:
+                    pt = self._rubber_project_center(actor, cell, "face")
+                    if pt is not None and _inside(pt[0], pt[1]):
+                        keep_faces.append(cell)
+                faces = sorted(set(keep_faces))
+                if mode == "edge":
+                    keep_ids = set(keep_faces)
+                    for edge in edges:
+                        if edge[0] in keep_ids:
+                            keep_edges.append(edge)
+                    edges = keep_edges
+
+        kind_label = {"box": "Box", "circle": "Circle",
+                      "polygon": "Polygon"}.get(self._rubber_kind, "Box")
+        if mode == "vertex":
+            self.last_pick = {
+                "mode": f"rubber_{self._rubber_kind}",
+                "vertices": vertices,
+            }
+            self.set_model_filter({"kind": "vertices", "values": vertices})
+            self.status.setText(
+                f"Rubber {kind_label}: 已选 {len(vertices)} 顶点")
+        elif mode == "edge":
+            self.last_pick = {
+                "mode": f"rubber_{self._rubber_kind}",
+                "faces": faces, "bodies": bodies, "frids": frids,
+                "edges": edges,
+            }
+            self.set_model_filter({"kind": "faces", "values": faces})
+            self.status.setText(
+                f"Rubber {kind_label}: 已选 {len(edges)} 边 "
+                f"({len(faces)} 面)")
+        elif mode == "part":
+            self.last_pick = {
+                "mode": f"rubber_{self._rubber_kind}",
+                "faces": faces, "bodies": bodies, "frids": frids,
+            }
+            self.set_model_filter({"kind": "bodies", "values": bodies})
+            self.status.setText(
+                f"Rubber {kind_label}: 已选 {len(bodies)} body")
+        else:
+            self.last_pick = {
+                "mode": f"rubber_{self._rubber_kind}",
+                "faces": faces, "bodies": bodies, "frids": frids,
+            }
+            self.set_model_filter({"kind": "faces", "values": faces})
+            self.status.setText(
+                f"Rubber {kind_label}: 已选 {len(faces)} 面")
 
     def _ensure_parallel_camera(self) -> None:
         """Draw Window 固定使用平行投影（正交），对齐 scFLOWpre。"""
@@ -3483,6 +3893,9 @@ class PphViewer(QMainWindow):
         add_act(m, "Refine Octants (Recursive)…",
                 lambda: self._octant_op("refine_rec"),
                 key="edit_refine_oct_rec")
+        add_act(m, "Refine Octants by Number…",
+                lambda: self._octant_op("refine_num"),
+                key="edit_refine_oct_num")
         add_act(m, "Refine Octants from Curvature…",
                 lambda: self._octant_op("refine_curv"),
                 key="edit_refine_oct_curv")
@@ -3528,12 +3941,15 @@ class PphViewer(QMainWindow):
             self._select_pick_group.addAction(act)
         self._menu_acts["sel_pick_face"].setChecked(False)
         m.addSeparator()
-        add_act(m, "Rubber Box (Select)", self._rubber_select,
-                key="sel_rbox", tip="Rubber-box zoom (select mode TBD)")
-        add_act(m, "Rubber Circle (Select)", self._rubber_select,
-                key="sel_rcircle")
-        add_act(m, "Rubber Polygon (Select)", self._rubber_select,
-                key="sel_rpoly")
+        add_act(m, "Rubber Box (Select)",
+                lambda: self._rubber_select("box"), key="sel_rbox",
+                tip="Rubber-box: drag over MDL to select faces/parts")
+        add_act(m, "Rubber Circle (Select)",
+                lambda: self._rubber_select("circle"), key="sel_rcircle",
+                tip="Rubber-circle: drag from center to radius")
+        add_act(m, "Rubber Polygon (Select)",
+                lambda: self._rubber_select("polygon"), key="sel_rpoly",
+                tip="Rubber-polygon: click vertices, right-click to finish")
         m.addSeparator()
         add_act(m, "Spread Selected Face to Selected Edge",
                 key="sel_spread")
@@ -4137,10 +4553,20 @@ class PphViewer(QMainWindow):
         checked = not self.view3d.btn_rubber.isChecked()
         self.view3d.btn_rubber.setChecked(checked)
 
-    def _rubber_select(self) -> None:
-        """Rubber Box Select：暂复用橡皮框缩放（完整框选待阶段2）。"""
-        self._toggle_rubber()
-        self.log("Select — Rubber Box (uses zoom rubber; face-select TBD)")
+    def _rubber_select(self, kind: str = "box") -> None:
+        """Rubber Box/Circle/Polygon Select：VTK HardwareSelector 真实框选。"""
+        self.show_page("draw")
+        self.view3d._rubber_kind = kind
+        self.view3d._rubber_center_cache = {}
+        self.view3d._rubber_poly_pts = []
+        if not self.view3d.btn_rubber.isChecked():
+            self.view3d.btn_rubber.setChecked(True)
+        else:
+            self.view3d._toggle_rubber_select(True)
+        labels = {"box": "Box", "circle": "Circle",
+                  "polygon": "Polygon"}
+        self.log(f"Select — Rubber {labels.get(kind, kind)} "
+                 f"(pick mode={self.view3d._pick_mode})")
 
     def _deselect_all(self) -> None:
         self.view3d.set_model_filter(None)
@@ -4371,81 +4797,150 @@ class PphViewer(QMainWindow):
             self.log(f"Measurement failed: {exc}", "WARN")
 
     def _ridge_op(self, op: str) -> None:
-        """Ridge 操作：记录请求并生成宿主 VBS 草稿。"""
+        """Ridge 操作：VMDL API 生成可执行宿主 VBS（RecalcRidge 等已锁定）。"""
         if not self.archive_path:
             QMessageBox.information(self, "Ridge", "请先打开 PPH 项目")
             return
-        out = Path(self.archive_path).with_suffix(f".ridge_{op}.vbs")
-        actions = [
-            "Set App_ = GetApplication()",
-            'If App_ Is Nothing Then Set App_ = '
-            'CreateObject("scFLOWpre_Bx64net.Application.2025")',
-            "Set Doc_ = App_.GetDocument",
-            f'Doc_.OpenProject "{Path(self.archive_path).as_posix()}", False',
-            "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
-        ]
+        from automation import edit_ops
+
+        angle = None
         if op == "recalc":
-            actions.append("' TODO: MeshingGroup_.RecalcRidge (录制补全)")
-        elif op == "set":
-            actions.append("' TODO: set selected edges to ridge")
-        else:
-            actions.append("' TODO: set selected edges to non-ridge")
-        actions.append(
-            f'Doc_.SaveProject "{Path(self.archive_path).as_posix()}"')
-        from automation.vbs_bridge import write_vbs_file
-        write_vbs_file(actions, out, title=f"pph_gui ridge {op}")
-        self.log(f"Ridge {op} — VBS draft written: {out}")
+            angle, ok = QInputDialog.getDouble(
+                self, "Recalc Ridge", "Angle (degree):",
+                30.0, 0.0, 180.0, 3)
+            if not ok:
+                angle = None
+        out = Path(self.archive_path).with_suffix(f".ridge_{op}.vbs")
+        marker = Path(self.archive_path).with_suffix(f".ridge_{op}.done")
+        try:
+            marker.unlink(missing_ok=True)
+        except OSError:
+            pass
+        pick = getattr(self.view3d, "last_pick", None) or {}
+        edge = pick.get("edge")
+        edit_ops.write_ridge_vbs(
+            self.archive_path, op, out, angle=angle,
+            select_all_edges=op in ("set", "unset"), marker=marker)
+        note = ""
+        if edge is not None and op in ("set", "unset"):
+            note = (f"\n本地拾取边 (v0,v1)={edge}；宿主 VBS 无按坐标选边 API"
+                    "（IVEdge 无几何端点），脚本默认选择全部边。")
+        api_label = ("VMDL_.RecalcRidge / RecalcRidgeFromProjectSetting"
+                     if op == "recalc"
+                     else "VMDL_.SetSelectedEdgeToRidge / "
+                          "SetSelectedEdgeToNonRidge")
+        self.log(f"Ridge {op} — VBS written: {out} ({api_label})")
+        if self._host_api_enabled():
+            self._start_api_refresh_poll(marker)
+            self._start_api_execute_thread(out)
+            self.log(f"Ridge {op} — 已提交宿主后台执行")
+            return
         QMessageBox.information(
             self, "Ridge",
-            f"已写出宿主脚本草稿：\n{out}\n"
-            f"请在 scFLOWpre 中补全/执行（RecalcRidge API 待录制锁定）。")
+            f"已写出可执行宿主脚本（{api_label}）：\n{out}\n"
+            f"{note}\n"
+            "请在 scFLOWpre 中 File → Execute VBScript 执行；"
+            "勾选“使用 scFLOWpre API”后将自动后台执行并刷新。")
 
     def _octant_op(self, op: str) -> None:
-        """Refine/Merge/Show Octants → 宿主 VBS 草稿。"""
+        """Refine/Merge/Show Octants → Octree API 宿主 VBS（或本地算法）。"""
         if not self.archive_path:
             QMessageBox.information(self, "Octants", "请先打开 PPH 项目")
             return
-        if op in ("refine", "merge"):
+        if op in ("refine", "merge") and not self._host_api_enabled():
             self._local_octant_op(op)
             return
-        pick = getattr(self.view3d, "last_pick", None) or {}
-        face = pick.get("face")
+        from automation import edit_ops
+
+        if op == "refine_sep":
+            QMessageBox.information(
+                self, "Octants",
+                "scFLOWpre VBS API（Octree 类手册）未提供 "
+                "“Refine from Separation”方法；\n"
+                "可改用 Refine Octants (Recursive) / Refine by Number，"
+                "或 Merge Octants。")
+            return
+        params: dict = {}
+        if op == "refine_rec":
+            level, ok = QInputDialog.getInt(
+                self, "Refine Octants (Recursive)", "Level:", 1, 1, 20)
+            if not ok:
+                return
+            rng, ok = QInputDialog.getInt(
+                self, "Refine Octants (Recursive)", "Range:", 1, 0, 20)
+            if not ok:
+                return
+            params = {"level": level, "range_": rng}
+        elif op == "refine_num":
+            level, ok = QInputDialog.getInt(
+                self, "Refine by Number", "Level:", 1, 1, 20)
+            if not ok:
+                return
+            num, ok = QInputDialog.getInt(
+                self, "Refine by Number", "Number of times:", 1, 1, 100)
+            if not ok:
+                return
+            params = {"level": level, "num": num}
+        elif op == "refine_curv":
+            lower, ok = QInputDialog.getDouble(
+                self, "Refine from Curvature", "Lower limit:",
+                30.0, 0.0, 180.0, 3)
+            if not ok:
+                return
+            rmin_txt, ok = QInputDialog.getText(
+                self, "Refine from Curvature",
+                "rangeminarray (comma separated, e.g. 0,0.1,0.2):",
+                text="0,0.1,0.2")
+            if not ok:
+                return
+            rmax_txt, ok = QInputDialog.getText(
+                self, "Refine from Curvature",
+                "rangemaxarray (comma separated, e.g. 0.1,0.2,0.3):",
+                text="0.1,0.2,0.3")
+            if not ok:
+                return
+            try:
+                rmin = [float(v) for v in rmin_txt.replace(";", ",")
+                        .split(",") if v.strip()]
+                rmax = [float(v) for v in rmax_txt.replace(";", ",")
+                        .split(",") if v.strip()]
+                if not rmin or len(rmin) != len(rmax):
+                    raise ValueError("length mismatch")
+            except ValueError as exc:
+                QMessageBox.warning(
+                    self, "Refine from Curvature",
+                    f"无法解析数组：{exc}")
+                return
+            params = {"rmin": rmin, "rmax": rmax, "lowerlimit": lower}
         out = Path(self.archive_path).with_suffix(f".octant_{op}.vbs")
-        comments = {
-            "refine": "RefineOctants (selected)",
-            "refine_rec": "RefineOctantsRecursive",
-            "refine_curv": "RefineOctantsFromCurvature",
-            "refine_sep": "RefineOctantsFromSeparation",
-            "merge": "MergeOctants",
-            "show_by_face": "ShowOctantsByMarkedFace",
-            "show_by_edge": "ShowOctantsByMarkedEdge",
-        }
-        label = comments.get(op, op)
-        path = Path(self.archive_path).as_posix()
-        actions = [
-            "Set App_ = GetApplication()",
-            'If App_ Is Nothing Then Set App_ = '
-            'CreateObject("scFLOWpre_Bx64net.Application.2025")',
-            "Set Doc_ = App_.GetDocument",
-            f'Doc_.OpenProject "{path}", False',
-            "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
-            f"' TODO: {label}",
-        ]
-        if face is not None:
-            actions.append(f"' last_pick face={face}")
+        marker = Path(self.archive_path).with_suffix(f".octant_{op}.done")
+        try:
+            marker.unlink(missing_ok=True)
+        except OSError:
+            pass
+        edit_ops.write_octant_vbs(
+            self.archive_path, op, out, marker=marker, **params)
+        label = edit_ops.octant_op_label(op) or op
         if op.startswith("show"):
-            actions.append("Doc_.SetModeOctree")
             self.show_page("draw")
             self.view3d.chk_oct.setChecked(True)
             self.view3d.render()
-        actions.append(f'Doc_.SaveProject "{path}"')
-        from automation.vbs_bridge import write_vbs_file
-        write_vbs_file(actions, out, title=f"pph_gui octant {op}")
-        self.log(f"Octants {op} — VBS draft: {out}")
+        self.log(f"Octants {op} — VBS written: {out} (Octree_.{label})")
+        if self._host_api_enabled():
+            self._start_api_refresh_poll(marker)
+            self._start_api_execute_thread(out)
+            self.log(f"Octants {op} — 已提交宿主后台执行")
+            return
         QMessageBox.information(
             self, "Octants",
-            f"{label}\n已写出：\n{out}\n"
-            "宿主 API 待录制锁定后可取消注释执行。")
+            f"{label}（Octree_.{label}）\n已写出可执行宿主脚本：\n{out}\n"
+            "请在 scFLOWpre 中 File → Execute VBScript 执行；"
+            "勾选“使用 scFLOWpre API”后将自动后台执行并刷新。")
+
+    def _host_api_enabled(self) -> bool:
+        """Execute 计划开关：勾选后编辑操作走宿主 COM API 后台执行。"""
+        sess = getattr(self._nav_dialogs, "session", None) or {}
+        return bool((sess.get("execute") or {}).get("use_api"))
 
     def _local_octant_op(self, op: str) -> None:
         """本地 Refine/Merge：解析 OCT → 变换 → 写回新 PPH 并打开（无宿主）。"""
