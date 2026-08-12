@@ -442,3 +442,81 @@ def parse_mesh(data) -> dict:
         "face_offsets": offsets,
         "boundary_mask": neigh == 0xFFFFFFFF,
     }
+
+
+def _i32(value: int) -> bytes:
+    import struct
+    return struct.pack(">i", int(value))
+
+
+def _descriptor(type_code: int, dim0: int, dim1: int) -> bytes:
+    return _i32(12) + _i32(type_code) + _i32(dim0) + _i32(dim1)
+
+
+def _block(payload: bytes) -> bytes:
+    return _i32(12) + _i32(len(payload)) + payload + _i32(len(payload))
+
+
+def _section(name: str, body: bytes) -> bytes:
+    return _i32(32) + name.ljust(32).encode("ascii") + body
+
+
+def write_gph(filepath,
+              vertices,
+              faces,
+              app: str = "SCTpre",
+              date: int = 20260812) -> "Path":
+    """写最小 CRDL-FLD GPH（无宿主兜底，可被 :func:`parse_mesh` 读回）。
+
+    ``vertices``：(n,3) 浮点坐标；``faces``：多边形顶点索引列表（0-based）。
+    """
+    from pathlib import Path
+
+    import numpy as _np
+
+    verts = _np.asarray(vertices, dtype=float).reshape(-1, 3)
+    n_vertices = len(verts)
+    n_faces = len(faces)
+    conn_flat = [int(v) for face in faces for v in face]
+    conn_total = len(conn_flat)
+
+    out = bytearray()
+    out += _i32(8) + crdlfld.MAGIC + _i32(8) + _i32(4) + _i32(4)
+    out += _section("FileRevision",
+                    _descriptor(4, 1, 1) + _descriptor(4, 2025, 4))
+    out += _section("Application",
+                    _block(app.encode("ascii")[:8].ljust(8)))
+    out += _section("Dimension",
+                    _descriptor(4, 1, 1) + _descriptor(4, 3, 4))
+    out += _section("Date",
+                    _descriptor(4, 1, 1) + _descriptor(4, date, 4))
+    out += _section("HeaderDataEnd", b"")
+    out += _section("OverlapStart_0", b"")
+
+    owner = _np.zeros(n_faces, dtype=">i4")
+    neigh = _np.full(n_faces, 0xFFFFFFFF, dtype=">u4")
+    npe = _np.array([len(f) for f in faces], dtype=">u4")
+    conn = _np.asarray(conn_flat, dtype=">u4")
+    links = (
+        _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+        _descriptor(4, 1, 1) + _descriptor(4, n_faces, 4) +
+        _descriptor(4, n_faces, 1) +
+        _block(owner.tobytes()) + _block(neigh.tobytes()) +
+        _block(npe.tobytes()) +
+        _descriptor(4, 1, 1) + _descriptor(4, conn_total, 4) +
+        _descriptor(4, conn_total, 1) + _block(conn.tobytes()))
+    out += _section("LS_Links", links)
+
+    nodes = (
+        _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+        _descriptor(4, 1, 1) + _descriptor(4, n_vertices, 4) +
+        _descriptor(8, n_vertices, 1) +
+        _block(verts[:, 0].astype(">f8").tobytes()) +
+        _block(verts[:, 1].astype(">f8").tobytes()) +
+        _block(verts[:, 2].astype(">f8").tobytes()))
+    out += _section("LS_Nodes", nodes)
+    out += _section("OverlapEnd", b"")
+
+    path = Path(filepath)
+    path.write_bytes(bytes(out))
+    return path
