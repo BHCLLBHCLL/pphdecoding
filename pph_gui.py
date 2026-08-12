@@ -3066,18 +3066,41 @@ class View3DTab(QWidget):
                 return
 
         if mode == "edge":
-            # 边：记录命中面，显示模式切线框以强调边
+            # 边：从命中单元解析最近边，记录 (v0, v1)
+            edge = None
+            edge_mid = None
+            ds = picker.GetDataSet()
+            if ds is not None and 0 <= cell < ds.GetNumberOfCells():
+                c = ds.GetCell(cell)
+                ids = c.GetPointIds()
+                n = ids.GetNumberOfIds()
+                px, py, pz = picker.GetPickPosition()
+                best = None
+                best_d = float("inf")
+                for k in range(n):
+                    a = int(ids.GetId(k))
+                    b = int(ids.GetId((k + 1) % n))
+                    pa = ds.GetPoint(a)
+                    pb = ds.GetPoint(b)
+                    mx = (pa[0] + pb[0]) / 2.0
+                    my = (pa[1] + pb[1]) / 2.0
+                    mz = (pa[2] + pb[2]) / 2.0
+                    d = ((mx - px) ** 2 + (my - py) ** 2 +
+                         (mz - pz) ** 2)
+                    if d < best_d:
+                        best_d = d
+                        best = (a, b, (mx, my, mz))
+                if best is not None:
+                    edge = (best[0], best[1])
+                    edge_mid = best[2]
             self.last_pick = {
                 "mode": "edge", "face": cell, "body": body_id,
-                "frid": frid, **meta}
+                "frid": frid, "edge": edge, "edge_mid": edge_mid, **meta}
             if self.display_mode.currentText() != "线框":
                 self.display_mode.setCurrentText("线框")
             self.set_model_filter({"kind": "edge", "value": cell})
-            # edge 过滤暂按单面显示（相邻边完整高亮待扩展）
-            self._mdl_filter = {"kind": "face", "value": cell}
-            self._picked_status = f" | 拾取边（面 #{cell}）"
-            self.render()
-            self.status.setText(f"已拾取边（所属面 #{cell}）")
+            self.status.setText(
+                f"已拾取边 {edge if edge else '（面 #' + str(cell) + '）'}")
             return
 
         # face（默认）

@@ -26,12 +26,14 @@ Morton/Z 序约定（bit0=x, bit1=y, bit2=z；低位为 min 半区）。
 
 from __future__ import annotations
 
+import struct
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterator, Optional
 
 import numpy as np
 
-from crdlfld import CrdlFldFile, iter_data_blocks, iter_descriptors
+from crdlfld import CrdlFldFile, MAGIC, iter_data_blocks, iter_descriptors
 
 
 @dataclass
@@ -171,3 +173,85 @@ def parse_oct(filepath: str) -> OctModel:
             refinement=refinement, block_id=block_id,
             unit=unit, last_gen_year=last_gen_year,
         )
+
+
+def _i32(value: int) -> bytes:
+    return struct.pack(">i", int(value))
+
+
+def _descriptor(type_code: int, dim0: int, dim1: int) -> bytes:
+    return _i32(12) + _i32(type_code) + _i32(dim0) + _i32(dim1)
+
+
+def _block(payload: bytes) -> bytes:
+    return _i32(12) + _i32(len(payload)) + payload + _i32(len(payload))
+
+
+def _section(name: str, body: bytes) -> bytes:
+    return _i32(32) + name.ljust(32).encode("ascii") + body
+
+
+def write_oct(filepath: str | Path,
+              root_min,
+              root_max,
+              refinement=None,
+              block_id=None,
+              app: str = "SCTpre",
+              date: int = 20260812,
+              unit: str = "m") -> Path:
+    """写最小 CRDL-FLD OCT 文件（无宿主兜底，可被 :func:`parse_oct` 读回）。
+
+    ``refinement`` 为前序位图：0=叶子，1=内部（后随 8 个子节点记录）。
+    默认单根叶子八叉树。
+    """
+    root_min = np.asarray(root_min, dtype=float).reshape(3)
+    root_max = np.asarray(root_max, dtype=float).reshape(3)
+    if refinement is None:
+        refinement = np.zeros(1, dtype=np.uint8)
+    ref = np.asarray(refinement, dtype=np.uint8).reshape(-1)
+    n = len(ref)
+    if block_id is None:
+        block_id = np.full(n, -1, dtype=np.int32)
+    bid = np.asarray(block_id, dtype=np.int32).reshape(-1)
+    if len(bid) != n:
+        raise ValueError("block_id length must equal refinement length")
+
+    app_block = app.encode("ascii")[:8].ljust(8)
+    unit8 = unit.encode("ascii")[:8].ljust(8)
+    unit32 = unit.encode("ascii")[:32].ljust(32)
+
+    out = bytearray()
+    out += _i32(8) + MAGIC + _i32(8) + _i32(4) + _i32(4)
+    out += _section("Application", _block(app_block))
+    out += _section("Dimension",
+                    _descriptor(4, 1, 1) + _descriptor(4, 3, 4))
+    out += _section("Date",
+                    _descriptor(4, 1, 1) + _descriptor(4, date, 4))
+    out += _section(
+        "UnitOfCoordinates",
+        _descriptor(8, 1, 1) + _block(unit8) + _block(unit32) + _block(unit32))
+    out += _section("HeaderDataEnd", b"")
+    out += _section("OverlapStart_0", b"")
+    coord = (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+             _descriptor(4, 1, 1) + _descriptor(4, 0, 4))
+    out += _section("LS_CoordinateSystem", coord)
+    out += _section("LS_OctLastGenYear", coord)
+    root_box = np.concatenate([root_min, root_max]).astype(">f8").tobytes()
+    out += _section(
+        "LS_OctRootOctantMinMax",
+        _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+        _descriptor(8, 6, 1) + _block(root_box))
+    out += _section(
+        "LS_OctOctantRefinement",
+        _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+        _descriptor(4, 1, 1) + _descriptor(4, n, 4) + _block(ref.tobytes()))
+    out += _section(
+        "LS_OctOctantBlockID",
+        _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+        _descriptor(4, 1, 1) + _descriptor(4, n, 4) +
+        _descriptor(4, n, 1) + _block(bid.astype(">i4").tobytes()))
+    out += _section("OverlapEnd", b"")
+
+    path = Path(filepath)
+    path.write_bytes(bytes(out))
+    return path
