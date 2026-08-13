@@ -62,6 +62,10 @@
 - ✅ Execute 未勾选「使用 scFLOWpre API」→ 原生生成：BAM 用现有 MDL，
   Octree 走 `voxmesh.build_octree`，Mesh 按 `MESH/MESHER` 选
   voxmesh（Voxel）或 polymesh（Polyhedral），写回 `*.native.pph`
+- ✅ 原生流程可从 x_t 剖分写出 `meshinggroup1_part.mdl`：
+  `mdl.write_mdl` 最小写端（LS_Nodes/Faces/CsidOfFaces/FridOfFaces/
+  EdgeStateOfFaces/StateOfNodes/SurfaceRegions），空工程一并追加
+  MDL+OCT+GPH 成员
 
 ### 阶段 2 — Select / View
 - ✅ Pick Part/Face/Edge/Vertex；Rubber Box/Circle/Polygon 真实框选

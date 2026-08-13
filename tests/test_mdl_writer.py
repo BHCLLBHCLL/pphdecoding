@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""最小 MDL 写端（write_mdl）回归：LS_Faces/Csid/Frid/EdgeState 往返。"""
+
+from __future__ import annotations
+
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+import numpy as np  # noqa: E402
+
+import mdl  # noqa: E402
+import pph_vtk  # noqa: E402
+
+
+def _unit_box_quads():
+    pts = np.array(
+        [[x, y, z]
+         for x in (-0.5, 0.5) for y in (-0.5, 0.5) for z in (-0.5, 0.5)],
+        dtype=float)
+    faces = [
+        [0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1],
+        [2, 3, 7, 6], [1, 5, 6, 2], [0, 2, 6, 4],
+    ]
+    return pts, faces
+
+
+class TestWriteMdl(unittest.TestCase):
+    def test_quad_roundtrip(self):
+        pts, faces = _unit_box_quads()
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "part.mdl"
+            mdl.write_mdl(p, pts, faces)
+            m = mdl.parse_mdl(str(p))
+        self.assertEqual(m.n_vertices, 8)
+        self.assertEqual(m.n_faces, 6)
+        self.assertTrue(np.all(m.npe == 4))
+        self.assertEqual(len(m.conn), 24)
+        self.assertTrue(np.all(m.csid[0] == 0))
+        self.assertTrue(np.all(m.csid[1] == 1))
+        self.assertTrue(np.all(m.frid == 0))
+        self.assertEqual(len(m.edge_state), 24)
+        self.assertEqual(int(m.edge_state.sum()), 0)
+        self.assertEqual(m.n_closed_volumes, 1)
+
+    def test_triangle_roundtrip_and_render(self):
+        pts, quads = _unit_box_quads()
+        tris = []
+        for q in quads:
+            tris.append([q[0], q[1], q[2]])
+            tris.append([q[0], q[2], q[3]])
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "tri.mdl"
+            mdl.write_mdl(p, pts, tris)
+            m = mdl.parse_mdl(str(p))
+            self.assertEqual(m.n_faces, 12)
+            self.assertTrue(np.all(m.npe == 3))
+            pd = pph_vtk.mdl_mesh(m, "frid")
+        self.assertEqual(pd.GetNumberOfCells(), 12)
+        self.assertEqual(pd.GetNumberOfPoints(), 8)
+
+    def test_deterministic_bytes(self):
+        pts, faces = _unit_box_quads()
+        with tempfile.TemporaryDirectory() as td:
+            p1 = Path(td) / "a.mdl"
+            p2 = Path(td) / "b.mdl"
+            mdl.write_mdl(p1, pts, faces)
+            mdl.write_mdl(p2, pts, faces)
+            self.assertEqual(p1.read_bytes(), p2.read_bytes())
+
+    def test_custom_csid_frid_regions(self):
+        pts, faces = _unit_box_quads()
+        n = len(faces)
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "part.mdl"
+            mdl.write_mdl(
+                p, pts, faces,
+                csid=(np.full(n, 2, dtype=np.int64),
+                      np.full(n, 3, dtype=np.int64)),
+                frid=np.arange(n, dtype=np.int64),
+                surface_regions=[("inlet", 0), ("outlet", 1)])
+            m = mdl.parse_mdl(str(p))
+        self.assertEqual(m.n_closed_volumes, 3)
+        self.assertTrue(np.all(m.csid[0] == 2))
+        self.assertTrue(np.all(m.csid[1] == 3))
+        self.assertEqual(m.frid.tolist(), list(range(n)))
+        self.assertEqual([(r.name, r.index) for r in m.surface_regions],
+                         [("inlet", 0), ("outlet", 1)])
+
+    def test_native_flow_writes_mdl_from_cad(self):
+        src = (ROOT / "pph_gui.py").read_text(encoding="utf-8")
+        self.assertIn("mdlmod.write_mdl", src)
+        self.assertIn('part_name = "meshinggroup1_part.mdl"', src)
+        self.assertIn("MDL(CAD生成)", src)
+
+
+if __name__ == "__main__":
+    unittest.main()

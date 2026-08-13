@@ -5928,19 +5928,23 @@ class PphViewer(QMainWindow):
             return cad, "CAD"
         return None, None
 
-    def _native_member_names(self) -> tuple[str, str]:
-        """OCT/GPH 成员名：已有则复用，空工程则追加 meshinggroup1.*。"""
+    def _native_member_names(self) -> tuple[str, str, str]:
+        """MDL/OCT/GPH 成员名：已有则复用，空工程则追加 meshinggroup1.*。"""
         import pph_parser
+        part_name = "meshinggroup1_part.mdl"
         oct_name = "meshinggroup1.oct"
         gph_name = "meshinggroup1.gph"
         if self.arch:
+            pm = self.arch.by_role(pph_parser.ROLE_MDL_PART)
             om = self.arch.by_role(pph_parser.ROLE_OCT)
             gm = self.arch.by_role(pph_parser.ROLE_GPH)
+            if pm:
+                part_name = pm[0].name
             if om:
                 oct_name = om[0].name
             if gm:
                 gph_name = gm[0].name
-        return oct_name, gph_name
+        return part_name, oct_name, gph_name
 
     def _run_native_pipeline(self, ctx: dict, plan: dict,
                              steps: list[str]) -> None:
@@ -5949,6 +5953,7 @@ class PphViewer(QMainWindow):
         表面来源：工程内 MDL part，或 Import 的 CAD 剖分（Untitled + XT 预览）。
         空工程无 OCT/GPH 占位时，向 PPH 追加 ``meshinggroup1.oct/.gph``。
         """
+        import pph_parser
         import pphwriter
 
         part_path = None
@@ -5972,13 +5977,26 @@ class PphViewer(QMainWindow):
         if not self.tmp_dir:
             self.tmp_dir = tempfile.mkdtemp(prefix="pph_gui_")
         points, tris = surface
-        oct_name, gph_name = self._native_member_names()
+        part_name, oct_name, gph_name = self._native_member_names()
         overrides: dict[str, bytes] = {}
         msgs: list[str] = []
         need_oct = any(s == "generate_octree" for s in steps)
         need_mesh = any(s == "generate_mesh" for s in steps)
         if any(s == "build_analysis_model" for s in steps):
             msgs.append(f"BAM({src_kind}表面)")
+        if src_kind == "CAD" and not self.arch.by_role(
+                pph_parser.ROLE_MDL_PART):
+            # 从 x_t 剖分生成最小 *_part.mdl 面片成员（LS_Faces/Csid/Frid/
+            # EdgeState），让 Part Tree / 几何显示不依赖内存 CAD 预览。
+            try:
+                import mdl as mdlmod
+                tmp = Path(self.tmp_dir) / "native_part.mdl"
+                mdlmod.write_mdl(
+                    tmp, points, tris, app="pphdecoding", date=20260814)
+                overrides[part_name] = tmp.read_bytes()
+                msgs.append("MDL(CAD生成)")
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"Execute（原生模式）MDL 写出失败: {exc}", "WARN")
         for step in steps:
             if step == "generate_octree":
                 try:

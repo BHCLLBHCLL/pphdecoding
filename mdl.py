@@ -22,11 +22,13 @@
 
 from __future__ import annotations
 
+import struct
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
-from crdlfld import (CrdlFldFile, DataBlock, Descriptor, iter_data_blocks,
+from crdlfld import (CrdlFldFile, DataBlock, Descriptor, MAGIC, iter_data_blocks,
                      iter_descriptors, iter_records)
 
 
@@ -253,6 +255,169 @@ def parse_mdl(filepath: str, load_arrays: bool = True) -> MdlModel:
             node_state=node_state, closed_volumes=closed_volumes,
             volume_regions=volume_regions, surface_regions=surface_regions,
         )
+
+
+def _i32(value: int) -> bytes:
+    return struct.pack(">i", int(value))
+
+
+def _descriptor(type_code: int, dim0: int, dim1: int) -> bytes:
+    return _i32(12) + _i32(type_code) + _i32(dim0) + _i32(dim1)
+
+
+def _block(payload: bytes) -> bytes:
+    return _i32(12) + _i32(len(payload)) + payload + _i32(len(payload))
+
+
+def _section(name: str, body: bytes) -> bytes:
+    return _i32(32) + name.ljust(32).encode("ascii") + body
+
+
+def _name255(text: str) -> bytes:
+    raw = text.encode("ascii", errors="replace")[:255]
+    return raw.ljust(255, b" ")
+
+
+def write_mdl(filepath,
+              points,
+              faces,
+              *,
+              app: str = "SCTpre",
+              date: int = 20260814,
+              unit: str = "m",
+              csid=None,
+              frid=None,
+              edge_state=None,
+              node_state=None,
+              surface_regions=None) -> "Path":
+    """写最小 CRDL-FLD MDL 面片（``*_part.mdl``，可被 :func:`parse_mdl` 读回）。
+
+    ``points``：(n,3) 坐标；``faces``：多边形顶点索引（3 或 4 顶点，
+    ``face_type = 130 + npe``，133=三角 / 134=四边）。
+
+    ``csid``：面两侧闭体 id 元组，默认 ``(zeros, ones)`` —— 全部面为
+    body 1 的边界面；``frid`` 默认全 0；``edge_state`` 默认全 0；
+    ``surface_regions`` 默认 ``[("@PartSurface_Part", 0)]``，便于 Part Tree
+    识别零件名。
+    """
+    verts = np.asarray(points, dtype=float).reshape(-1, 3)
+    n_vertices = len(verts)
+    face_list = [np.asarray(f, dtype=np.int64).reshape(-1) for f in faces]
+    npe = np.asarray([len(f) for f in face_list], dtype=np.int64)
+    if npe.size == 0 or np.any((npe != 3) & (npe != 4)):
+        raise ValueError("write_mdl supports triangle/quad faces only")
+    n_faces = len(face_list)
+    face_type = (130 + npe).astype(">i4")
+    conn_flat = np.concatenate(face_list) if n_faces else \
+        np.empty(0, dtype=np.int64)
+    conn_total = int(conn_flat.size)
+
+    b1, b2 = (csid if csid is not None
+              else (np.zeros(n_faces, dtype=np.int64),
+                    np.ones(n_faces, dtype=np.int64)))
+    b1 = np.asarray(b1, dtype=">i4").reshape(-1)
+    b2 = np.asarray(b2, dtype=">i4").reshape(-1)
+    if b1.size != n_faces or b2.size != n_faces:
+        raise ValueError("csid length must equal faces length")
+    fr = np.asarray(frid if frid is not None
+                    else np.zeros(n_faces, dtype=np.int64),
+                    dtype=">i4").reshape(-1)
+    if fr.size != n_faces:
+        raise ValueError("frid length must equal faces length")
+    es = np.asarray(edge_state if edge_state is not None
+                    else np.zeros(conn_total, dtype=np.uint8),
+                    dtype=np.uint8).reshape(-1)
+    if es.size != conn_total:
+        raise ValueError("edge_state length must equal sum(npe)")
+    ns = np.asarray(node_state if node_state is not None
+                    else np.zeros(n_vertices, dtype=np.int64),
+                    dtype=">i4").reshape(-1)
+    if ns.size != n_vertices:
+        raise ValueError("node_state length must equal n_vertices")
+
+    regions = list(surface_regions if surface_regions is not None
+                   else [("@PartSurface_Part", 0)])
+    unit8 = unit.encode("ascii")[:8].ljust(8)
+    unit32 = unit.encode("ascii")[:32].ljust(32)
+    out = bytearray()
+    out += _i32(8) + MAGIC + _i32(8) + _i32(4) + _i32(4)
+    out += _section("FileRevision",
+                    _descriptor(4, 1, 1) + _descriptor(4, 2025, 4))
+    out += _section("Application", _block(app.encode("ascii")[:8].ljust(8)))
+    out += _section("GridType", _descriptor(4, 1, 1) + _descriptor(4, 1, 4))
+    out += _section("Dimension",
+                    _descriptor(4, 1, 1) + _descriptor(4, 3, 4))
+    out += _section("Bias", _descriptor(4, 1, 1) + _descriptor(4, 0, 4))
+    out += _section("Date", _descriptor(4, 1, 1) + _descriptor(4, date, 4))
+    out += _section("ApplicationVersion",
+                    _descriptor(4, 1, 1) + _descriptor(4, 2025, 4))
+    out += _section("ReleaseDate",
+                    _descriptor(4, 1, 1) + _descriptor(4, 20251217, 4))
+    out += _section("Encoding", _block(b" " * 32))
+    out += _section(
+        "UnitOfCoordinates",
+        _descriptor(8, 1, 1) + _block(unit8) + _block(unit32) + _block(unit32))
+    out += _section("HeaderDataEnd", b"")
+    out += _section("OverlapStart_0", b"")
+    out += _section("LS_CoordinateSystem",
+                    _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+                    _descriptor(4, 1, 1) + _descriptor(4, 0, 4))
+
+    nodes = (
+        _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+        _descriptor(4, 1, 1) + _descriptor(4, n_vertices, 4) +
+        _descriptor(8, n_vertices, 1) +
+        _descriptor(8, n_vertices, 1) + _descriptor(8, n_vertices, 1) +
+        _block(verts[:, 0].astype(">f8").tobytes()) +
+        _block(verts[:, 1].astype(">f8").tobytes()) +
+        _block(verts[:, 2].astype(">f8").tobytes()))
+    out += _section("LS_Nodes", nodes)
+
+    faces_sec = (
+        _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+        _descriptor(4, 1, 1) + _descriptor(4, n_faces, 4) +
+        _descriptor(4, n_faces, 1) +
+        _descriptor(4, 1, 1) + _descriptor(4, conn_total, 4) +
+        _descriptor(4, conn_total, 1) +
+        _block(face_type.tobytes()) +
+        _block(conn_flat.astype(">i4").tobytes()))
+    out += _section("LS_Faces", faces_sec)
+
+    pair_sec = (
+        _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+        _descriptor(4, 1, 1) + _descriptor(4, n_faces, 4) +
+        _descriptor(4, n_faces, 1) + _descriptor(4, n_faces, 1))
+    out += _section("LS_CsidOfFaces",
+                    pair_sec + _block(b1.tobytes()) + _block(b2.tobytes()))
+    out += _section("LS_FridOfFaces",
+                    pair_sec + _block(fr.tobytes()) + _block(fr.tobytes()))
+    out += _section(
+        "LS_EdgeStateOfFaces",
+        _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+        _descriptor(4, 1, 1) + _descriptor(4, conn_total, 4) +
+        _block(es.tobytes()))
+    out += _section(
+        "LS_StateOfNodes",
+        _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+        _descriptor(4, 1, 1) + _descriptor(4, n_vertices, 4) +
+        _descriptor(4, n_vertices, 1) + _block(ns.tobytes()))
+
+    if regions:
+        body = bytearray()
+        body += _descriptor(4, 1, 1) + _descriptor(4, 1, 4)
+        body += _descriptor(4, 1, 1) + _descriptor(4, len(regions), 4)
+        for i, (name, idx) in enumerate(regions):
+            if i == 0:
+                body += _descriptor(4, 1, 1) + _descriptor(4, 255, 4)
+            body += _block(_name255(name))
+            body += (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+                     _descriptor(4, 1, 1) + _descriptor(4, int(idx), 4))
+        out += _section("LS_MdlSurfaceRegions", bytes(body))
+    out += _section("OverlapEnd", b"")
+
+    path = Path(filepath)
+    path.write_bytes(bytes(out))
+    return path
 
 
 def detect_tiny_faces(model: MdlModel, width_tol: float) -> list[dict]:

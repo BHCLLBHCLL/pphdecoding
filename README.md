@@ -77,7 +77,7 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
 |------|------|
 | `pph_parser.py` | CLI + ZIP 容器 + 成员分类 + 摘要报告 |
 | `crdlfld.py` | CRDL-FLD 公共二进制层（gph/oct/mdl 共享） |
-| `mdl.py` | `*_part.mdl` / `*_ridge.mdl` 面片几何 |
+| `mdl.py` | `*_part.mdl` / `*_ridge.mdl` 面片几何（解析 + 最小 `write_mdl` 写端） |
 | `oct.py` | `*.oct` 八叉树（前序位图 → 叶子包围盒重建） |
 | `sctsnapshot.py` | 快照记录流 + LZMS / PKBody3 / ZIPOCTREE DIVISION·REGION |
 | `blowfish_le.py` | PKBody3 Blowfish 小端变体 ECB（`blowfish_tables.py`） |
