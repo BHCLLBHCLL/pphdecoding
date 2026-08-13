@@ -465,6 +465,21 @@ def _build_octree(points: np.ndarray, tris: np.ndarray,
     return root_min, root_max, index, root
 
 
+def build_octree(points: np.ndarray, tris: np.ndarray,
+                 params: Optional[VoxelMeshParams] = None
+                 ) -> tuple[np.ndarray, np.ndarray, np.ndarray,
+                            list[tuple[np.ndarray, np.ndarray, int]]]:
+    """仅构建八叉树（不生成体单元），返回 (root_min, root_max, refinement,
+    叶子列表 [(min, max, depth)]），可直接交给 ``oct.write_oct``。"""
+    params = params or VoxelMeshParams()
+    root_min, root_max, _index, root = _build_octree(points, tris, params)
+    refinement: list[int] = []
+    leaves: list[tuple[np.ndarray, np.ndarray, int]] = []
+    _walk(root, refinement, leaves)
+    return (root_min, root_max,
+            np.asarray(refinement, dtype=np.uint8), leaves)
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # 单元构建（hex + 切割 polyhedra）
 # ────────────────────────────────────────────────────────────────────────────

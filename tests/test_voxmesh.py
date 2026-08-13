@@ -90,6 +90,16 @@ class TestVoxMeshSynthetic(unittest.TestCase):
         self.assertEqual(r1.stats()["n_vertices"],
                          r2.stats()["n_vertices"])
 
+    def test_build_octree_only_matches_build_mesh(self):
+        points, tris = _unit_box_surface()
+        params = voxmesh.VoxelMeshParams(initial_depth=2, max_depth=3)
+        rmin, rmax, ref, leaves = voxmesh.build_octree(points, tris, params)
+        res = voxmesh.build_mesh(points, tris, params)
+        self.assertEqual(len(leaves), len(res.leaf_boxes))
+        self.assertTrue(np.array_equal(ref, res.refinement))
+        self.assertTrue(np.allclose(rmin, res.root_min))
+        self.assertTrue(np.allclose(rmax, res.root_max))
+
 
 class TestVoxMeshReal(unittest.TestCase):
     @unittest.skipUnless(BOX_PPH.is_file(), "box.pph not present")

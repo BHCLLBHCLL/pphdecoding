@@ -57,6 +57,9 @@
 - ✅ Octree 区域 Size 预填（xml/session/宿主参数）
 - ✅ BAM/Wrapping 生成可执行 VBS 草稿
 - ✅ Execute 默认 `use_api=True`；Solver 仍明确不可用
+- ✅ Execute 未勾选「使用 scFLOWpre API」→ 原生生成：BAM 用现有 MDL，
+  Octree 走 `voxmesh.build_octree`，Mesh 按 `MESH/MESHER` 选
+  voxmesh（Voxel）或 polymesh（Polyhedral），写回 `*.native.pph`
 
 ### 阶段 2 — Select / View
 - ✅ Pick Part/Face/Edge/Vertex；Rubber Box/Circle/Polygon 真实框选

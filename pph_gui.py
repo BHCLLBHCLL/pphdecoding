@@ -5843,19 +5843,19 @@ class PphViewer(QMainWindow):
     def _run_scflow_pipeline(self, ctx: dict) -> None:
         """Execute 开关打开时：用 scFLOWpre API 构建 Model/Octree/Mesh。"""
         plan = (ctx.get("session") or {}).get("execute") or {}
-        if not plan.get("use_api"):
-            self.log(
-                "Execute 计划已保存（未启用 scFLOWpre API，使用原生查看模式）")
-            return
         if not self.archive_path:
             QMessageBox.information(self, "提示", "请先打开 PPH 项目")
             return
-        from automation.pipeline_plan import (
-            build_execute_vbs, oct_param_sect_summary, steps_from_execute_plan)
+        from automation.pipeline_plan import steps_from_execute_plan
         steps = steps_from_execute_plan(plan)
         if not steps:
             self.log("Execute 计划未选择任何步骤")
             return
+        if not plan.get("use_api"):
+            self._run_native_pipeline(ctx, plan, steps)
+            return
+        from automation.pipeline_plan import (
+            build_execute_vbs, oct_param_sect_summary)
         self.log("Execute 步骤: " + " → ".join(steps))
         out = Path(self.archive_path).with_suffix(".scflow_api.vbs")
         marker = Path(self.archive_path).with_suffix(".scflow_api.done")
@@ -5888,6 +5888,113 @@ class PphViewer(QMainWindow):
             "完成后将自动刷新 Model / Octree / Mesh。")
         self._start_api_refresh_poll(marker, step_marker=step_marker)
         self._start_api_execute_thread(out)
+
+    def _run_native_pipeline(self, ctx: dict, plan: dict,
+                             steps: list[str]) -> None:
+        """未启用 scFLOWpre API 时：用自研算法原生生成 Octree/Mesh。"""
+        import pph_parser
+        import pphwriter
+
+        part_path = None
+        for _g, info in (self._groups_info or {}).items():
+            part_path = ((info.get("paths") or {}).get("part")
+                         or info.get("part"))
+            if part_path:
+                break
+        if not part_path:
+            QMessageBox.information(
+                self, "Execute（原生模式）",
+                "未找到 MDL part 面片；请先 Prepare Parts 或打开含 MDL 的工程。")
+            return
+        overrides: dict[str, bytes] = {}
+        msgs: list[str] = []
+        for step in steps:
+            if step == "build_analysis_model":
+                msgs.append("BAM(现有MDL)")
+            elif step == "generate_octree":
+                try:
+                    import oct as octmod
+                    import voxmesh
+                    points, tris = voxmesh.surface_from_mdl(part_path)
+                    root_min, root_max, refinement, leaves = \
+                        voxmesh.build_octree(
+                            points, tris,
+                            voxmesh.VoxelMeshParams(
+                                initial_depth=2, max_depth=4,
+                                max_cells=500_000))
+                    tmp = Path(self.tmp_dir) / "native_oct.oct"
+                    octmod.write_oct(tmp, root_min, root_max,
+                                     refinement, date=20260814)
+                    member = self.arch.by_role(pph_parser.ROLE_OCT)
+                    if member:
+                        overrides[member[0].name] = tmp.read_bytes()
+                        msgs.append(f"Octree({len(leaves):,}叶)")
+                    else:
+                        self.log(
+                            "Execute（原生模式）：PPH 无 OCT 成员，跳过写回",
+                            "WARN")
+                except Exception as exc:  # noqa: BLE001
+                    self.log(f"Execute（原生模式）Octree 生成失败: {exc}",
+                             "WARN")
+            elif step == "generate_mesh":
+                if plan.get("mesh_mode") == "Use existing":
+                    msgs.append("Mesh(Use existing)")
+                    continue
+                mesher = "0"
+                if self._xenv is not None:
+                    mesher = (self._xenv.get("MESH", "MESHER", "0")
+                              or "0")
+                try:
+                    tmp = Path(self.tmp_dir) / "native_mesh"
+                    if mesher == "1":
+                        import voxmesh
+                        result, _oct_p, gph_p = voxmesh.build_from_mdl(
+                            part_path, tmp,
+                            voxmesh.VoxelMeshParams(
+                                initial_depth=2, max_depth=4,
+                                max_cells=500_000, rough_poly=True))
+                        kind = "voxel"
+                    else:
+                        import polymesh
+                        result, gph_p = polymesh.build_from_mdl(
+                            part_path, tmp,
+                            polymesh.PolyMeshParams(
+                                divisions=10, surface_stride=12,
+                                max_cells=200_000))
+                        kind = "poly"
+                    member = self.arch.by_role(pph_parser.ROLE_GPH)
+                    if member:
+                        overrides[member[0].name] = gph_p.read_bytes()
+                        st = result.stats()
+                        msgs.append(
+                            f"Mesh({kind},{st['n_cells']:,}单元)")
+                    else:
+                        self.log(
+                            "Execute（原生模式）：PPH 无 GPH 成员，跳过写回",
+                            "WARN")
+                except Exception as exc:  # noqa: BLE001
+                    self.log(f"Execute（原生模式）Mesh 生成失败: {exc}",
+                             "WARN")
+            elif step in ("set_mode_octree", "set_mode_mesh",
+                          "save_project"):
+                continue  # 原生写回新 PPH 隐含保存
+        if not overrides:
+            self.log("Execute（原生模式）：无可写回成员，计划已保存")
+            return
+        dst = Path(self.archive_path).with_suffix(".native.pph")
+        try:
+            pphwriter.clone_pph(self.archive_path, dst, overrides)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "Execute（原生模式）",
+                                 f"写回 PPH 失败：{exc}")
+            return
+        self.log("Execute（原生模式）: " + " → ".join(msgs))
+        self.log(f"Execute（原生模式）已写回: {dst}")
+        self.open_archive(str(dst))
+        QMessageBox.information(
+            self, "Execute（原生模式）",
+            f"已用自研算法生成并写回：\n{dst}\n\n"
+            + "\n".join(msgs))
 
     def _run_bam_pipeline(self, ctx: dict) -> None:
         """Analysis Model Wizard 的 Create Facet / Build → 宿主 VBS 并自动刷新。"""

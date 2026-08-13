@@ -113,6 +113,13 @@ class TestGuiWiring(unittest.TestCase):
         self.assertIn("def _poly_params_dialog", src)
         self.assertIn("polymesh.build_from_mdl", src)
 
+    def test_native_execute_pipeline_wired(self):
+        src = (ROOT / "pph_gui.py").read_text(encoding="utf-8")
+        self.assertIn("def _run_native_pipeline", src)
+        self.assertIn("voxmesh.build_octree", src)
+        self.assertIn("polymesh.build_from_mdl", src)
+        self.assertIn("未启用 scFLOWpre API", src)
+
     def test_module_cli_args(self):
         src = (ROOT / "polymesh.py").read_text(encoding="utf-8")
         self.assertIn("--divisions", src)
