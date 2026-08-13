@@ -85,6 +85,9 @@
 - ✅ Voxel/hex-dominant MVP：`voxmesh.py`（MDL/STL → 八叉树 → inside hex +
   切割带 polyhedra/rough hex → 写 `.oct`+`.gph`），GUI `Execute → Voxel
   Fitting Mesh (Self Build)…`；详见 `docs/VOXMESH_NOTES.md`
+- ✅ 原生多面体 MVP：`polymesh.py`（Delaunay/Voronoi 对偶 + 表面平面裁剪，
+  cfMesh pMesh / VoroCrust / LAVA 路线），GUI `Execute → Polyhedral Mesh
+  (Self Build)…`；详见 `docs/POLYMESH_NOTES.md`
 - ⏳ 2:1 平衡/pairing、边界层、面区域映射、质量平滑、性能优化
 
 ---
