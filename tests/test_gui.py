@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -372,6 +373,19 @@ def test_mdl_mask_rubber_list_filters():
     mask = tab._mdl_mask(FakeModel())
     assert mask.tolist() == [False, False, True, True]
     tab.close()
+
+
+def test_native_execute_helpers_present():
+    """原生 Execute 流程辅助方法（CAD 回退 / 空工程成员追加）已接线。"""
+    src = Path("pph_gui.py").read_text(encoding="utf-8")
+    for needle in (
+        "def _native_surface",
+        "def _native_member_names",
+        "def _cad_surface_points_tris",
+        "meshinggroup1.oct",
+        "meshinggroup1.gph",
+    ):
+        assert needle in src, needle
 
 
 def test_render_pipeline_adds_layers_edges_and_legend(monkeypatch):

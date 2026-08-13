@@ -55,7 +55,9 @@
 
 ### 阶段 1 — 预处理主链路
 - ✅ Octree 区域 Size 预填（xml/session/宿主参数）
-- ✅ BAM/Wrapping 生成可执行 VBS 草稿
+- ✅ BAM 录制锁定（`box_scflow_mdl.vbs`）：`BeginMDLWizard → CreateBoundary →
+  CreateMultiEntityInfo → CreateMDL → FindAFFaceMatching → SetTinyFacesRemoved
+  → RepairMDL → EndMDLWizard`；Wrapping 生成可执行 VBS 草稿
 - ✅ Execute 默认 `use_api=True`；Solver 仍明确不可用
 - ✅ Execute 未勾选「使用 scFLOWpre API」→ 原生生成：BAM 用现有 MDL，
   Octree 走 `voxmesh.build_octree`，Mesh 按 `MESH/MESHER` 选

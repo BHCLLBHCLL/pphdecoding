@@ -5889,10 +5889,66 @@ class PphViewer(QMainWindow):
         self._start_api_refresh_poll(marker, step_marker=step_marker)
         self._start_api_execute_thread(out)
 
+    def _cad_surface_points_tris(self):
+        """Import 剖分预览 → (points, tris)；无 CAD 则 None。"""
+        import numpy as np
+        meshes = getattr(self.view3d, "_cad_meshes", None) or []
+        if not meshes:
+            return None
+        pts_list: list = []
+        tris_list: list = []
+        base = 0
+        for tess in meshes:
+            pts = getattr(tess, "points", None)
+            tris = getattr(tess, "triangles", None)
+            if pts is None or tris is None:
+                continue
+            pts = np.asarray(pts, dtype=float).reshape(-1, 3)
+            tris = np.asarray(tris, dtype=np.int64).reshape(-1, 3)
+            if pts.size == 0 or tris.size == 0:
+                continue
+            pts_list.append(pts)
+            tris_list.append(tris + base)
+            base += len(pts)
+        if not pts_list:
+            return None
+        return np.vstack(pts_list), np.vstack(tris_list)
+
+    def _native_surface(self, part_path: Optional[str] = None):
+        """原生 Execute 表面：优先 MDL，其次 Import CAD 剖分。"""
+        import voxmesh
+        if part_path:
+            try:
+                return voxmesh.surface_from_mdl(part_path), "MDL"
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"Execute（原生模式）MDL 读取失败，尝试 CAD：{exc}",
+                         "WARN")
+        cad = self._cad_surface_points_tris()
+        if cad is not None:
+            return cad, "CAD"
+        return None, None
+
+    def _native_member_names(self) -> tuple[str, str]:
+        """OCT/GPH 成员名：已有则复用，空工程则追加 meshinggroup1.*。"""
+        import pph_parser
+        oct_name = "meshinggroup1.oct"
+        gph_name = "meshinggroup1.gph"
+        if self.arch:
+            om = self.arch.by_role(pph_parser.ROLE_OCT)
+            gm = self.arch.by_role(pph_parser.ROLE_GPH)
+            if om:
+                oct_name = om[0].name
+            if gm:
+                gph_name = gm[0].name
+        return oct_name, gph_name
+
     def _run_native_pipeline(self, ctx: dict, plan: dict,
                              steps: list[str]) -> None:
-        """未启用 scFLOWpre API 时：用自研算法原生生成 Octree/Mesh。"""
-        import pph_parser
+        """未启用 scFLOWpre API 时：用自研算法原生生成 Octree/Mesh。
+
+        表面来源：工程内 MDL part，或 Import 的 CAD 剖分（Untitled + XT 预览）。
+        空工程无 OCT/GPH 占位时，向 PPH 追加 ``meshinggroup1.oct/.gph``。
+        """
         import pphwriter
 
         part_path = None
@@ -5901,21 +5957,33 @@ class PphViewer(QMainWindow):
                          or info.get("part"))
             if part_path:
                 break
-        if not part_path:
+        try:
+            surface, src_kind = self._native_surface(part_path)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(
+                self, "Execute（原生模式）", f"读取表面失败：{exc}")
+            return
+        if surface is None:
             QMessageBox.information(
                 self, "Execute（原生模式）",
-                "未找到 MDL part 面片；请先 Prepare Parts 或打开含 MDL 的工程。")
+                "未找到 MDL part 或 Import CAD 剖分。\n"
+                "请先 File → Import 导入 XT，或打开含 MDL 的工程。")
             return
+        if not self.tmp_dir:
+            self.tmp_dir = tempfile.mkdtemp(prefix="pph_gui_")
+        points, tris = surface
+        oct_name, gph_name = self._native_member_names()
         overrides: dict[str, bytes] = {}
         msgs: list[str] = []
+        need_oct = any(s == "generate_octree" for s in steps)
+        need_mesh = any(s == "generate_mesh" for s in steps)
+        if any(s == "build_analysis_model" for s in steps):
+            msgs.append(f"BAM({src_kind}表面)")
         for step in steps:
-            if step == "build_analysis_model":
-                msgs.append("BAM(现有MDL)")
-            elif step == "generate_octree":
+            if step == "generate_octree":
                 try:
                     import oct as octmod
                     import voxmesh
-                    points, tris = voxmesh.surface_from_mdl(part_path)
                     root_min, root_max, refinement, leaves = \
                         voxmesh.build_octree(
                             points, tris,
@@ -5925,14 +5993,8 @@ class PphViewer(QMainWindow):
                     tmp = Path(self.tmp_dir) / "native_oct.oct"
                     octmod.write_oct(tmp, root_min, root_max,
                                      refinement, date=20260814)
-                    member = self.arch.by_role(pph_parser.ROLE_OCT)
-                    if member:
-                        overrides[member[0].name] = tmp.read_bytes()
-                        msgs.append(f"Octree({len(leaves):,}叶)")
-                    else:
-                        self.log(
-                            "Execute（原生模式）：PPH 无 OCT 成员，跳过写回",
-                            "WARN")
+                    overrides[oct_name] = tmp.read_bytes()
+                    msgs.append(f"Octree({len(leaves):,}叶)")
                 except Exception as exc:  # noqa: BLE001
                     self.log(f"Execute（原生模式）Octree 生成失败: {exc}",
                              "WARN")
@@ -5948,38 +6010,42 @@ class PphViewer(QMainWindow):
                     tmp = Path(self.tmp_dir) / "native_mesh"
                     if mesher == "1":
                         import voxmesh
-                        result, _oct_p, gph_p = voxmesh.build_from_mdl(
-                            part_path, tmp,
+                        result, oct_p, gph_p = voxmesh.build_from_surface(
+                            points, tris, tmp,
                             voxmesh.VoxelMeshParams(
                                 initial_depth=2, max_depth=4,
                                 max_cells=500_000, rough_poly=True))
                         kind = "voxel"
+                        if need_oct and oct_name not in overrides:
+                            overrides[oct_name] = oct_p.read_bytes()
                     else:
                         import polymesh
-                        result, gph_p = polymesh.build_from_mdl(
-                            part_path, tmp,
+                        result, gph_p = polymesh.build_from_surface(
+                            points, tris, tmp,
                             polymesh.PolyMeshParams(
                                 divisions=10, surface_stride=12,
                                 max_cells=200_000))
                         kind = "poly"
-                    member = self.arch.by_role(pph_parser.ROLE_GPH)
-                    if member:
-                        overrides[member[0].name] = gph_p.read_bytes()
-                        st = result.stats()
-                        msgs.append(
-                            f"Mesh({kind},{st['n_cells']:,}单元)")
-                    else:
-                        self.log(
-                            "Execute（原生模式）：PPH 无 GPH 成员，跳过写回",
-                            "WARN")
+                    overrides[gph_name] = gph_p.read_bytes()
+                    st = result.stats()
+                    msgs.append(
+                        f"Mesh({kind},{st['n_cells']:,}单元)")
                 except Exception as exc:  # noqa: BLE001
                     self.log(f"Execute（原生模式）Mesh 生成失败: {exc}",
                              "WARN")
-            elif step in ("set_mode_octree", "set_mode_mesh",
-                          "save_project"):
-                continue  # 原生写回新 PPH 隐含保存
+            elif step in ("build_analysis_model", "set_mode_octree",
+                          "set_mode_mesh", "save_project"):
+                continue
         if not overrides:
-            self.log("Execute（原生模式）：无可写回成员，计划已保存")
+            hint = ""
+            if need_oct or need_mesh:
+                hint = "（Octree/Mesh 生成未写出，见 Message 日志）"
+            self.log("Execute（原生模式）：无可写回成员，计划已保存" + hint)
+            QMessageBox.information(
+                self, "Execute（原生模式）",
+                "已保存 Execute 计划，但没有可写回的 OCT/GPH。\n"
+                "请确认已勾选 Generate Octree / Generate Mesh，"
+                "并查看 Message 窗口是否有生成失败日志。")
             return
         dst = Path(self.archive_path).with_suffix(".native.pph")
         try:

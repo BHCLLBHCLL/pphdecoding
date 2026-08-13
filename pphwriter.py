@@ -135,11 +135,13 @@ def clone_pph(src: str, dst: str,
     """把 src 的所有成员写入新 pph（ZIP/deflate 容器）。
 
     ``member_overrides`` 可替换指定成员字节（如重写后的 main.xml），
-    支撑"读 → 改 → 写回"互操作。
+    支撑"读 → 改 → 写回"互操作。源 ZIP 中不存在的 override 键会作为
+    **新成员追加**（空工程原生 Execute 写 OCT/GPH 需要这条路径）。
     """
     overrides = member_overrides or {}
     dst_path = Path(dst)
     dst_path.parent.mkdir(parents=True, exist_ok=True)
+    written: set[str] = set()
     with zipfile.ZipFile(src) as zin, \
             zipfile.ZipFile(dst_path, "w", zipfile.ZIP_DEFLATED) as zout:
         for info in zin.infolist():
@@ -147,6 +149,10 @@ def clone_pph(src: str, dst: str,
             if data is None:
                 data = zin.read(info.filename)
             zout.writestr(info.filename, data)
+            written.add(info.filename)
+        for name, data in overrides.items():
+            if name not in written:
+                zout.writestr(name, data)
 
 
 def rewrite_pph(src: str, dst: str,

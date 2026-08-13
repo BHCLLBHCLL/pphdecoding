@@ -24,6 +24,7 @@ BOX_PPH = ROOT / "box.pph"
 BOX_VBS = ROOT / "tests" / "box_vbs.vbs"
 BOX_VBS_V3 = ROOT / "tests" / "box_vbs_v3.vbs"
 BOX_VBS_V4 = ROOT / "tests" / "box_vbs_v4.vbs"
+BOX_VBS_MDL = ROOT / "box_scflow_mdl.vbs"
 
 
 class TestLockedCommands(unittest.TestCase):
@@ -59,6 +60,32 @@ class TestLockedCommands(unittest.TestCase):
             self.assertIn(command, cmds,
                           f"locked command {key} missing in box_vbs*.vbs")
         self.assertIn("Doc_.WaitForWorker", self.commands)
+
+    def test_bam_wizard_sequence_locked_from_new_recording(self):
+        if not BOX_VBS_MDL.is_file():
+            self.skipTest("box_scflow_mdl.vbs not present")
+        actions = parse_history_file(str(BOX_VBS_MDL))
+        cmds = {a["command"] for a in actions}
+        for cmd in (
+            "MeshingGroup_.BeginMDLWizard",
+            "MDLWizard_.CreateBoundary",
+            "MDLWizard_.CreateMultiEntityInfo",
+            "MDLWizard_.CreateMDL",
+            "MDLWizard_.FindAFFaceMatching",
+            "MDLWizard_.SetFaceMatched",
+            "MDLWizard_.SetTinyFacesRemoved",
+            "MDLWizard_.RepairMDL",
+            "MDLWizard_.CheckMDLErrors",
+            "MeshingGroup_.EndMDLWizard",
+        ):
+            self.assertIn(cmd, cmds, cmd)
+        template = LOCKED_COMMANDS["build_analysis_model"]
+        for cmd in (
+            "MeshingGroup_.BeginMDLWizard",
+            "MDLWizard_.CreateMDL",
+            "MeshingGroup_.EndMDLWizard",
+        ):
+            self.assertIn(cmd, template)
 
     def test_locked_command_line_numbers(self):
         # 行号证据锁定：与 automation/pipeline_plan.py 中的注释一一对应，
@@ -148,7 +175,9 @@ class TestPipelinePlan(unittest.TestCase):
                     "SOLID_BASE_LENGTH_FACTOR_FOR_OCTREE": "0.5"}})
             text = decode_vbs(out.read_bytes())
             self.assertIn('Doc_.OpenProject "D:\\case\\box.pph", False', text)
-            self.assertIn("MeshingGroup_.BuildAnalysisModel", text)
+            self.assertIn("MeshingGroup_.BeginMDLWizard", text)
+            self.assertIn("MDLWizard_.CreateMDL", text)
+            self.assertIn("MeshingGroup_.EndMDLWizard", text)
             self.assertIn(
                 "MeshingGroupSetting_.SetAFFaceterLengthFactorForOctree 0.5",
                 text)
@@ -186,8 +215,8 @@ class TestPipelinePlan(unittest.TestCase):
             text = decode_vbs(out.read_bytes())
             self.assertIn("OctParam_.SetOctType 3", text)
             self.assertLess(
-                text.index("OctParam_.SetOctType 3"),
-                text.index("MeshingGroup_.BuildAnalysisModel"))
+                text.index("MeshingGroup_.EndMDLWizard"),
+                text.index("OctParam_.SetOctType 3"))
 
     def test_build_execute_vbs_step_marker(self):
         import tempfile
@@ -242,7 +271,9 @@ class TestPipelinePlan(unittest.TestCase):
         self.assertIn("MeshingGroup_.BeginSolidEdit", actions)
         self.assertTrue(any(a.startswith("Conditions_.SetPartsControl")
                             for a in actions))
-        self.assertIn("MeshingGroup_.BuildAnalysisModel", actions)
+        self.assertIn("MeshingGroup_.BeginMDLWizard", actions)
+        self.assertIn("MDLWizard_.CreateMDL", actions)
+        self.assertIn("MeshingGroup_.EndMDLWizard", actions)
         self.assertIn("MeshingGroup_.CreateOctree", actions)
         self.assertIn("Doc_.SetModeOctree", actions)
         self.assertIn("Doc_.SetModeMesh", actions)

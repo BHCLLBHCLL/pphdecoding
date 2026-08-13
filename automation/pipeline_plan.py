@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """M2 预处理管线计划与 VBS 验收脚本生成。
 
-命令名以 scFLOWpre 真实录制的 ``tests/box_vbs*.vbs``（v1/v3/v4）为准：
+命令名以 scFLOWpre 真实录制的 ``tests/box_vbs*.vbs``（v1/v3/v4）与
+``box_scflow_mdl.vbs``（2026-08-14，含完整 BAM 向导流程）为准：
 
 - ``LOCKED_COMMANDS``：已在录制中出现并锁定的命令（含行号证据）；
 - ``UNLOCKED_COMMANDS``：录制中未出现、仍待验证的占位命令；
@@ -12,12 +13,116 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 from pph_parser import PphArchive
+
+# ── BAM（Analysis Model Wizard）录制锁定流程 ─────────────────────────────
+# 来源：box_scflow_mdl.vbs（2026/08/14）：BeginMDLWizard → GetMDLWizard →
+# CreateBoundary → CreateMultiEntityInfo ×6 → CreateMDL → FindAFFaceMatching
+# → SetFaceMatched → FindTinyFace ×2 → SetTinyFacesRemoved → RepairMDL →
+# CheckMDLErrors → EndMDLWizard；参数取值与录制一致（框体 6 个多实体域）。
+BAM_WIZARD_ACTIONS: list[str] = [
+    "MeshingGroup_.BeginMDLWizard",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.RemoveMDLFacetPreview",
+    "Doc_.SetModePart",
+    "Param1_ = True",
+    "Set Proj_ = Doc_.GetProjectSetting",
+    "Proj_.SetRidgeProjectSolids Param1_",
+    "Param1_ = True",
+    "Set Proj_ = Doc_.GetProjectSetting",
+    "Proj_.SetRidgeProjectSheets Param1_",
+    "Param1_ = True",
+    "Set Proj_ = Doc_.GetProjectSetting",
+    "Proj_.SetUseAFFacetter Param1_",
+    "Param1_ = 0",
+    "Set Proj_ = Doc_.GetProjectSetting",
+    "Proj_.SetFacetAccuracySpecificationType Param1_",
+    "Param1_ = True",
+    "Set MeshingGroupSetting_ = MeshingGroup_.GetMeshingGroupSetting",
+    "MeshingGroupSetting_.SetUseOctLengthParam Param1_",
+    "Param1_ = 5",
+    "Set MeshingGroupSetting_ = MeshingGroup_.GetMeshingGroupSetting",
+    "MeshingGroupSetting_.SetOctLengthParamType Param1_",
+    "Param1_ = 5",
+    "Set MeshingGroupSetting_ = MeshingGroup_.GetMeshingGroupSetting",
+    "MeshingGroupSetting_.SetOctLengthParamItr Param1_",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.CreateBoundary",
+    "Param1_ = True",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.CreateMultiEntityInfo Param1_",
+    "Param1_ = False",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.CreateMultiEntityInfo Param1_",
+    "Param1_ = True",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.CreateMultiEntityInfo Param1_",
+    "Param1_ = False",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.CreateMultiEntityInfo Param1_",
+    "Param1_ = True",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.CreateMultiEntityInfo Param1_",
+    "Param1_ = False",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.CreateMultiEntityInfo Param1_",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.SetBoundaryConfigured",
+    "Param1_ = False",
+    "Set MeshingGroupSetting_ = MeshingGroup_.GetMeshingGroupSetting",
+    "MeshingGroupSetting_.SetFacetUseAbsoluteValue Param1_",
+    "Param1_ = 0.05",
+    "Set MeshingGroupSetting_ = MeshingGroup_.GetMeshingGroupSetting",
+    "MeshingGroupSetting_.SetAFFaceterLengthFactor Param1_",
+    "Param1_ = 10",
+    "Set MeshingGroupSetting_ = MeshingGroup_.GetMeshingGroupSetting",
+    "MeshingGroupSetting_.SetAFFaceterMinimumAngle Param1_",
+    "Param1_ = 5",
+    "Set MeshingGroupSetting_ = MeshingGroup_.GetMeshingGroupSetting",
+    "MeshingGroupSetting_.SetFacetSimpleMaxWidth Param1_",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.RemoveMDLFacetPreview",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.SetSpatialSeparationSettingsConfigured",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.RemoveMDLFacetPreview",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.ReconfigureSpatialSeparationSettings",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.SetAutoRemoveTinyFaceConfigured",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.CreateMDL",
+    "Param1_ = 0.05",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.FindAFFaceMatching Param1_",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.SetFaceMatched",
+    "Param1_ = 1e-05",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.FindTinyFace Param1_",
+    "Doc_.ClearPreview",
+    "Param1_ = 1e-05",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.FindTinyFace Param1_",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.SetTinyFacesRemoved",
+    'Param1_ = "TINYFACEARROW"',
+    "Doc_.DeleteTemporaryDrawingObject Param1_",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.RepairMDL",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.CheckMDLErrors",
+    "Doc_.ClearPreview",
+    "Set MDLWizard_ = MeshingGroup_.GetMDLWizard",
+    "MDLWizard_.RemoveMDLFacetPreview",
+    'Param1_ = "TINYFACEARROW"',
+    "Doc_.DeleteTemporaryDrawingObject Param1_",
+    "MeshingGroup_.EndMDLWizard",
+]
 
 # 实测锁定命令（来源 tests/box_vbs*.vbs，括号内为行号）
 LOCKED_COMMANDS: dict[str, str] = {
@@ -28,7 +133,8 @@ LOCKED_COMMANDS: dict[str, str] = {
         'Conditions_.SetPartsControl "Discontinuous", False\n'
         'Conditions_.SetPartsControl "Overset", False\n'
         'Conditions_.SetPartsControl "Wrapping", False'),
-    "build_analysis_model": "MeshingGroup_.BuildAnalysisModel",      # :210 (v3)
+    # BAM 走 Analysis Model Wizard（box_scflow_mdl.vbs :350-527）
+    "build_analysis_model": "\n".join(BAM_WIZARD_ACTIONS),
     "generate_octree": "MeshingGroup_.CreateOctree",                 # :3110 (v1)
     "set_mode_octree": "Doc_.SetModeOctree",                         # :3112 (v1)
     "generate_mesh": (                                               # :5276,5283 (v1)
@@ -580,12 +686,6 @@ def build_execute_vbs(project_path: str | Path, plan: dict,
                 insert_at = i + 1
                 break
         actions[insert_at:insert_at] = parts_control_actions(parts_control_sess)
-    if octree_sess and "build_analysis_model" in steps:
-        idx = actions.index("MeshingGroup_.BuildAnalysisModel")
-        insert_at = idx
-        if idx > 0 and actions[idx - 1].startswith("Set MeshingGroup_ ="):
-            insert_at = idx - 1
-        actions[insert_at:idx] = oct_param_actions(octree_sess)
     if "generate_octree" in steps:
         idx = actions.index("MeshingGroup_.CreateOctree")
         insert_at = idx
@@ -598,9 +698,13 @@ def build_execute_vbs(project_path: str | Path, plan: dict,
         # OctParam 必须在 CreateOctree 之前（录制顺序）
         chunk.extend(oct_param_actions(octree_sess))
         actions[insert_at:idx] = chunk
+    elif octree_sess and "build_analysis_model" in steps:
+        # 仅 BAM：OctParam 参数在 EndMDLWizard 之后设置（录制顺序）
+        idx = actions.index("MeshingGroup_.EndMDLWizard") + 1
+        actions[idx:idx] = oct_param_actions(octree_sess)
     if step_marker is not None:
         for anchor, step in (
-            ("MeshingGroup_.BuildAnalysisModel", "bam"),
+            ("MeshingGroup_.EndMDLWizard", "bam"),
             ("MeshingGroup_.CreateOctree", "octree"),
             ("Doc_.WaitForWorker", "mesh"),
         ):
