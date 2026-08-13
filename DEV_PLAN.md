@@ -1,11 +1,14 @@
 # DEV_PLAN — Analysis Model Wizard 完整功能规划
 
-> 日期：2026-08-09 ｜ 仓库：`pphdecoding` ｜ 对照：Cradle CFD 2025.2 scFLOWpre  
+> 日期：2026-08-13 ｜ 仓库：`pphdecoding` ｜ 对照：Cradle CFD 2025.2 scFLOWpre  
 > 手册：`Manuals/scFLOW/HTML/Pre_eng/Scf_pre_Analysis_Model_*.html`（10 页）+  
 > `[Execute]-[Build Analysis Model]` / `[Option]-[Navigation]` / Mesher·Faceter  
 > 代码入口：`nav_panels.AnalysisModelWizardBody`（`build_am_detailed`）、  
 > `pph_gui._confirm_build_analysis_model`（确认框 + Detailed…）  
-> 总览对照见 [SCFLOWPRE_FEATURE_PLAN.md](SCFLOWPRE_FEATURE_PLAN.md)
+> 总览对照见 [SCFLOWPRE_FEATURE_PLAN.md](SCFLOWPRE_FEATURE_PLAN.md)  
+> §0.4：网格生成策略逆向可行性（基于当前代码实现的结论）  
+> §0.5：自研多面体 mesher 候选技术栈（学术 / 开源参考）  
+> §0.6：自研拟体素化（Voxel fitting）mesher 候选技术栈
 
 ---
 
@@ -36,6 +39,234 @@
 | **L4 结果** | 列表/报告/预览来自真实几何或宿主回调 | 与 scFLOWpre 同工程对照 |
 
 当前实现约 **L1 部分 + L2 全局 FACET 键**；L3/L4 与多数页的运行时列表仍为占位。
+
+### 0.4 网格生成策略逆向可行性（实现结论）
+
+> 基于仓库已落地的格式解析、参数面与 COM/VBS 桥接能力的评估（2026-08-13）。
+
+**结论：能把「产物与控制面」摸得很透，但「完整逆向网格生成策略/算法」基本不现实。**  
+当前仓库强项是格式与管线编排，不是在本进程复刻 mesher 内核。与 §0.2 非目标及 [SCFLOWPRE_FEATURE_PLAN.md](SCFLOWPRE_FEATURE_PLAN.md) 阶段 5（可选自研 mesher）一致。
+
+#### 0.4.1 已经摸清的（高置信）
+
+| 层 | 含义 | 代表模块 |
+|----|------|----------|
+| 产物格式 | 网格**结果**可读可重建显示 | `oct.py`、`mdl.py`、`gphstats.py`、`crdlfld.py` |
+| 快照/加密外壳 | 中间态可解压、部分字段对齐 DLL | `sctsnapshot.py`、`blowfish_le.py` |
+| 参数面 | Faceter/Octree 键 ↔ 宿主 setter | `main.xenv`、`automation/pipeline_plan.py` |
+| 控制面 | BAM → DeleteOctree → SetOctType/MinSize → CreateOctree → CreateMesh | VBS/COM 录制锁定（`host_pipeline.py`、`tests/box_vbs*.vbs`） |
+| 显示级 CAD 剖分 | **调用** Cradle Parasolid，非复刻采样器 | `ps_facet2_nodes.py`、`ps_tessellate.py`、`cad_import.py` |
+| NativeBridge 符号 | SCTprime 入口可解析；需活宿主上下文 | `native_bridge.py`、`native/scflow_bridge.cpp` |
+
+即：**输入参数、调用顺序、输出 OCT/MDL/GPH 几何状态**可以对照；**为何这一刀、如何生成多面体单元**仍在闭源内核里。
+
+#### 0.4.2 仍不透明的部分
+
+| 瓶颈域 | 已知 | 缺失 |
+|--------|------|------|
+| BAM / Build Analysis Model | UI + xenv；`MeshingGroup_.BuildAnalysisModel` | 干涉/微小面/匹配/闭体识别的运行时逻辑 |
+| Faceting（Solid / AF / Parasolid） | 公差参数；PK 选项块布局；CAD 预览 | `PK_TOPOL_facet_2` 内部采样策略 |
+| `CreateOctree` | OctParam / 区域 Size / create type；`.oct` 可读 | 细化判定过程（曲率、邻近、区域规则、平衡） |
+| `CreateMesh` → GPH | VBS monitor + WaitForWorker；GPH 统计 | 单元生成、棱柱层、质量、写端 |
+| Wrapping / Disc / Overset | Native 符号 + VBS 草稿 | 录制未锁定；依赖 SCTprime 运行时 |
+
+#### 0.4.3 核心瓶颈（按严重度）
+
+1. **致命 — 算法在闭源内核，不在文件里**  
+   `CreateOctree` / `CreateMesh` / BAM 在 SCTprime/scFLOWpre 内。`.oct`/`.gph` 只存**结果**，不存决策过程。样例深度直方图等最多得到经验启发，得不到可证明等价的策略。
+
+2. **致命 — Parasolid faceter / B-rep**  
+   面片化依赖商业内核。无合法内核路径则 BAM 前置几何做不全；完整 RE 内核在工程与合规上均不成立。
+
+3. **高 — 宿主进程 / 许可证上下文**  
+   能**驱动**已安装的 scFLOWpre；难以把 mesher 当独立库完整拉出（裸调常缺 document 态）。
+
+4. **高 — Wrapping 等高层命令**  
+   VBS 层未锁定；NativeBridge 仍绑活宿主。
+
+5. **中–高 — GPH 写端与体网格算法**  
+   读/统计/显示已有；自研 polyhedral 等于另写 mesher，目标应是**兼容格式**，非 bit-identical Cradle。
+
+#### 0.4.4 现实策略
+
+| 路径 | 角色 |
+|------|------|
+| **主路径：AutomationBridge** | COM/VBS（及必要的 NativeBridge）继续当真正网格器——复现官方策略的唯一可靠方式 |
+| **旁路：格式与查看器** | 继续 OCT/MDL/GPH 消费、参数 UI、行为表征 |
+| **可选自研** | 新写 octree + 开源体网格器并写出 CRDL-FLD；接受与官方**算法不等价**（见功能计划阶段 5） |
+| **明确不做** | 以「完整逆向 CreateOctree/CreateMesh/BAM/Wrapping/Parasolid」为完成标准 |
+
+**一句话：「完全逆向策略」≈ 不；「完整理解产物 + 可靠驱动官方算法」≈ 已经在走且可行。**
+
+### 0.5 自研多面体 mesher 候选技术栈
+
+> 可选长期路径（[SCFLOWPRE_FEATURE_PLAN.md](SCFLOWPRE_FEATURE_PLAN.md) 阶段 5）：写出兼容 CRDL-FLD / 自有格式的 polyhedral，**不追求**与 Cradle bit-identical。  
+> 注意：CGAL「Polyhedral domain」多指「由多面体表面围成的区域」上的 **四面体** 生成，勿与 CFD 任意多面体体网格混淆。
+
+#### 0.5.1 与 Cradle / scFLOW 路线最接近的开源参考
+
+| 来源 | 思路 | 为何相关 |
+|------|------|----------|
+| **cfMesh `pMesh`**（OpenFOAM 社区，GPL） | 背景 **octree**（曲率/邻近/尺寸场）→ 四面体模板 → **对偶成任意 polyhedra** → 投影贴体 | 与本仓库已解析的 OCT + 多面体流程最像；inside-out，对脏 STL 较容忍 |
+| **OpenFOAM `polyDualMesh`** | 先 tet，再取对偶 | 实现简单；质量依赖前序 tet |
+| **snappyHexMesh / hex-dominant** | 笛卡尔/六面体为主 + 贴体 | 非纯 polyhedral，但「背景网格 + 贴体」可借鉴 |
+
+**首选拆读蓝本：** cfMesh `pMesh`（Creative Fields 文档：octree 细化与平衡 → tet 模板 → dual → 边界投影）。
+
+#### 0.5.2 学术上更「正统」的 polyhedral：Voronoi 系
+
+| 论文 / 系统 | 要点 | 参考 |
+|-------------|------|------|
+| **VoroCrust**（ACM TOG） | 无 clipping 的 conforming Voronoi；保尖角；primal–dual | [PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC7439975/) |
+| **Clipped Voronoi + 粘性层** | 分层放 seed + 边界裁剪；工程 CFD 常用 | doi:10.1002/nme.5963 |
+| **NASA LAVA Voronoi mesher**（2024） | 工业级：seed、Lloyd 平滑、裁剪、合缝 | [NTRS PDF](https://ntrs.nasa.gov/api/citations/20240008543/downloads/LAVA_Voronoi_Aviation24_compressed.pdf) |
+| Cadence 等工业材料 | clipped Voronoi + 近壁 strand | 思路参考，非开源 |
+
+Star-CCM+ / 部分现代 CFD mesher 的「多面体」本质亦接近 **clipped/restricted Voronoi**。
+
+#### 0.5.3 CGAL：能当积木、不当整机
+
+**适合：**
+
+- `Mesh_3`：高质量 **tet**（隐式曲面 / 多面体域 / 特征保护）
+- 3D Triangulation / Voronoi / Restricted Voronoi、Lloyd / ODT
+- 布尔、AABB、特征探测
+
+**不适合：** 开箱即用的 scFLOW 式任意 polyhedral 体网格。  
+要 polyhedral 需自做 **tet→dual**，或 **CGAL Voronoi + 自写 clipping/合缝**。
+
+许可：多为 **GPLv3+ / GeometryFactory 商业双许可**，嵌入闭源产品须提前核算。
+
+#### 0.5.4 可拼装的开源积木（偏效率）
+
+| 库 | 角色 |
+|----|------|
+| **Voro++** | 快速计算 Voronoi 胞元 |
+| **TetGen / fTetWild / TetWild** | 稳健 tet |
+| **MMG3D** | 自适应与重网格 |
+| **Gmsh** | 前端 + tet；再 dual |
+| **Geogram** | 受限 Voronoi / 重网格 |
+| **libigl** | 原型与质量度量 |
+
+#### 0.5.5 建议流水线（对齐本仓库 OCT 能力）
+
+```text
+面网格(MDL/STL)
+  → 尺寸场 + 八叉树细化（可对齐现有 oct 语义 / oct.py）
+  → (A) tet 模板 → dual polyhedra     ← cfMesh 路线，工程落地最快
+  → (B) seed + clipped / VoroCrust Voronoi  ← 更接近文献中的「真·多面体 CFD」
+  → 近壁棱柱/层（最难：多数开源最弱）
+  → 写出 CRDL-FLD .oct/.gph 或自有格式（算法不等价 Cradle 可接受）
+```
+
+**效率关键：** 并行种子生成、空间索引、边界裁剪/投影、避免反复堆分配（cfMesh 强调）、Lloyd 仅局部迭代。
+
+**最大工程坑：** 脏 CAD、尖角、薄特征、边界层、并行合缝——LAVA / VoroCrust / cfMesh 文献篇幅多在此，而非「算一次 Voronoi」。
+
+#### 0.5.6 选型小结
+
+| 问题 | 建议 |
+|------|------|
+| 与现有 OCT 栈最合拍？ | **cfMesh `pMesh` +（可选）Voro++/CGAL 子步骤** |
+| 学术主线？ | **Voronoi（clipped / VoroCrust）** 与 **octree→tet→dual** 两派并读 |
+| CGAL 定位？ | tet / Voronoi / 几何内核，**不要**指望 `make_mesh_3` 直接出 scFLOW 式 polyhedral |
+| 与 §0.4 关系？ | 自研是**兼容产物**路径；官方策略仍靠 AutomationBridge |
+
+### 0.6 自研拟体素化（Voxel fitting）mesher 候选技术栈
+
+> 对照 scFLOWpre **Voxel fitting mesher**（`MESH/MESHER=1`）：手册/UI 写明生成  
+> **hex-dominant polyhedron**，**直接从零件出发**（无独立 BAM / 独立面网格阶段，见 §0.2）。  
+> 本仓库已暴露参数面：`Mesher/Faceter` 的 Voxel 行、`OCT_MESH/VOXEL_OCT_REFINE_TYPE`、  
+> `MESH_COMMON/USE_ROUGH_POLY_WHEN_VOXEL_MESHING`、`NUMBER_OF_INITIAL_DIVISION_WHEN_VOXEL_MESHING` 等  
+> （`nav_panels.MesherFaceterBody`、`option_settings`、`pipeline_plan.OCTREE_SETTING_MAP`）。
+
+#### 0.6.1 scFLOWpre Voxel fitting：已知控制面与复刻难度
+
+**已知（高置信，来自 UI / xenv / 手册文案）：**
+
+| 项 | 内容 |
+|----|------|
+| 产品定位 | hex-dominant；相对 Polyhedral **跳过 BAM**；面片精度仍可调（Voxel 专用 Facet accuracy） |
+| 八叉树 | 「Inclusion of octree creation process in meshing」；`SetVoxelOctRefineType`（录制映射含 `octree`） |
+| 粗化/初分 | rough poly when voxel；initial division 次数 |
+| 产物形态 | 与 Polyhedral 共用 OCT/GPH 一类成员可读（`oct.py` / `gphstats.py`），但细化策略与单元模板不同 |
+
+**未知（仍在宿主内核）：** 笛卡尔根网格如何铺、cut/snap/层插入、级别过渡处如何把 hanging-node hex 变成 polyhedra、与 Solid/Facet 面片的精确耦合顺序。
+
+**复刻难度总判：**
+
+| 维度 | 相对 §0.5 任意多面体 | 说明 |
+|------|----------------------|------|
+| 概念清晰度 | **更容易** | 工业界 hex-core / Cartesian / snappy 文献与开源极多；与「已解析 OCT」同族 |
+| 做出「能跑的 hex-dominant」MVP | **中等偏低** | 可直接借 cfMesh `cartesianMesh` / snappy 管线 |
+| 对齐 Cradle 行为 / 质量 / 边界层 | **仍然高** | snap、尖角、薄壁、层、rough poly、与 scFLOW 求解器兼容的单元质量 |
+| bit-identical 官方 Voxel | **不现实** | 同 §0.4：算法不在文件里 |
+
+**相对 Polyhedral 自研：** Voxel 路线更适合作为**第一条自研 mesher MVP**（背景网格 + 贴体），再视需求加层与质量优化；不必先啃 VoroCrust。
+
+#### 0.6.2 最接近的开源 / 工业参照
+
+| 来源 | 思路 | 与 Voxel fitting 的关系 |
+|------|------|-------------------------|
+| **cfMesh `cartesianMesh`**（GPL） | 背景笛卡尔/八叉树 → hex-dominant，级别过渡为 polyhedra；可加层；脏几何容忍 | **首选拆读蓝本**；产品语义最接近「hex-dominant + octree」 |
+| **OpenFOAM `snappyHexMesh`** | blockMesh 背景 hex → castellation → snap → addLayers | 经典 Cartesian；步骤清晰，可作教学与对照 |
+| **Ansys Fluent Hexcore / Pointwise hex-core voxel** | 内部轴对齐 hex + 近壁 tet/过渡；octree 细化 | 工业「voxel / hex-core」术语来源；闭源，仅读论文/博客 |
+| **Inria Hexotic**（octree all-hex） | 平衡八叉树 → 对偶全六面体 + buffer + 可插层 | 学术/工程 hex 路线；评估版/商业，非自由嵌入 |
+| **HybridOctree_Hex**（CMU, JoCS 2024） | hybrid octree 模板 → all-hex + Jacobian 优化 | [GitHub](https://github.com/CMU-CBML/HybridOctree_Hex)；偏结构 all-hex，可借鉴平衡/贴体/质量 |
+
+#### 0.6.3 可借鉴的学术论文（近年与经典）
+
+| 文献 | 要点 |
+|------|------|
+| Maréchal et al.，Hexotic / IMR（octree hex） | 平衡与 pairing、对偶消 hanging node、尖角与层；[IMR18 PDF](https://team.inria.fr/gamma/files/2021/03/imr18.pdf) |
+| Tong et al.，**HybridOctree_Hex**，*J. Comput. Sci.* 2024 | 自适应 all-hex + scaled Jacobian>0.5；doi:10.1016/j.jocs.2024.102278 |
+| Steinbrenner / Karman 等，Pointwise hex-core voxel（2020 前后） | 根 voxel + octree 尺寸场；cut/inside/outside 分类；过渡 tet/pyramid |
+| OpenFOAM snappy 用户文档 + 社区论文 | castellation / snap / layer 三阶段工程实践 |
+| （可选）Cut-cell / immersed boundary 文献 | 若走「不 snap、保留切割面」的变体；与 Cradle「fitting」贴体目标略不同 |
+
+#### 0.6.4 CGAL 与其它积木在 Voxel 栈中的角色
+
+**CGAL：**
+
+- **有用：** AABB 树、距离场、布尔、表面特征、（若过渡区需要）`Mesh_3` tet
+- **无：** 现成 hex-core / voxel fitting / snappy 式管线  
+→ Voxel 自研**不要以 CGAL 为主引擎**；几何查询可嵌入。
+
+**其它积木：**
+
+| 库 / 组件 | 角色 |
+|-----------|------|
+| 本仓库 `oct.py` / OCT 写端（待建） | 背景细化与尺寸场；与 scFLOW OCT 语义对齐的**展示/中间格式** |
+| OpenFOAM / cfMesh 源码 | Cartesian 细化、贴体、层、并行容器 |
+| Embree / libigl / Geogram | 快速求交与投影 |
+| MMG | 过渡区或表面重网格（可选） |
+
+#### 0.6.5 建议流水线（自研拟体素化）
+
+```text
+零件面片(MDL/STL) 或 CAD 预览面
+  → 根笛卡尔盒 + 初始划分（对齐 NUMBER_OF_INITIAL_DIVISION_*）
+  → 八叉树 / 2:1 平衡细化（曲率·邻近·区域 Size；可选对齐 VOXEL_OCT_REFINE_TYPE）
+  → 体素分类：outside / cutting / inside
+  → (A) snappy 风格：castellated hex → snap 到表面 → addLayers
+  → (B) hex-core 风格：内部纯 hex，切割带 tet/pyramid 或合并为 polyhedra
+  → (C) cfMesh 风格：级别跃迁处直接生成 polyhedra（hex-dominant）
+  → 可选 rough poly / 质量平滑
+  → 写出 .oct（中间）+ .gph / 自有体网格（算法不等价 Cradle）
+```
+
+**效率关键：** 并行 octree、稀疏存储、求交加速、层插入失败回退。  
+**最大坑：** snap 失败导致非正交/负体积；薄特征过度细化；层在尖角崩溃——与「算 octree」相比，**贴体与层**仍是主成本。
+
+#### 0.6.6 选型小结（Voxel vs Polyhedral）
+
+| 问题 | 建议 |
+|------|------|
+| 自研 MVP 先做哪条？ | **Voxel / hex-dominant（§0.6）**，再考虑 §0.5 任意 polyhedral |
+| 首选开源蓝本？ | **cfMesh `cartesianMesh`**；对照 **snappyHexMesh**；质量/全 hex 参考 **HybridOctree_Hex / Hexotic 论文** |
+| CGAL？ | 几何查询与可选 tet 过渡，**非** voxel 主流程 |
+| 与宿主关系？ | 短期仍用 COM 跑官方 Voxel；自研仅作离线/兼容格式实验 |
+| 与 BAM？ | Voxel 路径**无**独立 BAM（§0.2）；勿把 Analysis Model Wizard 硬套到 Voxel |
 
 ---
 
