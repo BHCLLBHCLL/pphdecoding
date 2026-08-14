@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""自研原生多面体（polyhedral）mesher MVP —— Delaunay/Voronoi 对偶 + 表面裁剪。
+"""自研原生多面体（polyhedral）mesher —— Delaunay/Voronoi 对偶 + 表面裁剪。
 
 参照：
 
@@ -8,12 +8,16 @@
   **点集 Voronoi 胞元 = Delaunay 四面体化的对偶**；
 - cfMesh《An Inside-Out Method For Arbitrary Polyhedra》(2014)：八叉树模板 →
   tet → dual polyhedra；
-- VoroCrust（ACM TOG）：conforming Voronoi、保尖角（本 MVP 未实现无裁剪保证）；
-- NASA LAVA Voronoi mesher（AIAA 2024）：seed → Lloyd 平滑 → cell clipping
-  的工业流程（本 MVP 实现 seed + 裁剪，未做 Lloyd/平滑）。
+- VoroCrust（ACM TOG）：conforming Voronoi、保尖角 —— 本实现以其
+  **镜像 seed 对（in/out ball seeds）** 表达边界贴合，尖边处放置
+  棱心 4-seed 球并按邻域加权（半径随特征距离缩放，等效 VoroCrust 权
+  ``w = r²`` 的几何近似）；
+- NASA LAVA Voronoi mesher（AIAA 2024）：seed → 近壁分层 → **Lloyd 平滑**
+  → cell clipping 的工业流程（本实现全部覆盖）。
 
-流水线：MDL/STL 面片 → 根盒 + 内部格点（射线法过滤 inside）→ 表面点 +
-内部点联合 Delaunay/Voronoi → 内部点的有界 Voronoi 胞元 →
+流水线：MDL/STL 面片 → 根盒 + 内部格点（射线法过滤 inside）→ 表面 seed
+（可选 VoroCrust 式镜像对）+ 近壁层 seed + 内部点联合 Delaunay →
+Lloyd 平滑（自由 seed 迭代移至胞元质心）→ 内部点的有界 Voronoi 胞元 →
 对与表面相交的胞元按三角形平面裁剪（convex clip）→ ConvexHull 面 →
 owner/neigh 装配 → 写 ``.gph``（CRDL-FLD，可被 gphstats/查看器读回）。
 """
@@ -36,6 +40,14 @@ from voxmesh import (
     surface_from_stl,
 )
 
+# seed 类别（统计用）
+_INTERIOR = 0
+_SURFACE = 1
+_GHOST = 2      # VoroCrust out-seed：只塑形不出单元
+_LAYER = 3      # 近壁层
+_EDGE_IN = 4    # 尖边棱心球内 seed
+_EDGE_OUT = 5   # 尖边棱心球外 seed（ghost）
+
 
 @dataclass
 class PolyMeshParams:
@@ -48,6 +60,18 @@ class PolyMeshParams:
     max_cells: int = 200_000       # 单元上限
     min_cell_volume: float = 1e-12 # 最小单元体积
     margin_ratio: float = 0.02     # 根盒外扩比例
+    # ── Lloyd 平滑（LAVA 流程；冻结边界 seed，仅移自由 seed）──
+    lloyd_iterations: int = 0      # Lloyd 迭代次数（0=关）
+    lloyd_damping: float = 0.5     # 每趟向胞元质心移动比例（0-1]
+    interior_jitter: float = 0.0   # 内部格点确定性抖动幅度（×间距，测试用）
+    # ── 近壁层（分层 seed，对齐 LAVA 近壁 strand 思路）──
+    n_wall_layers: int = 0         # 近壁层数（0=关）
+    first_layer_ratio: float = 0.25  # 首层厚 = ratio × 局部 seed 间距
+    layer_growth: float = 1.4      # 层厚增长比
+    # ── 特征保形（VoroCrust 式镜像加权 seed）──
+    feature_preserve: bool = False   # 镜像 seed 对 + 尖边球
+    feature_angle_deg: float = 30.0  # 尖边二面角阈值
+    feature_radius_ratio: float = 0.5  # seed 球半径 = ratio × 局部间距
 
 
 @dataclass
@@ -62,6 +86,10 @@ class PolyMeshResult:
     n_clipped: int = 0
     n_surface_seeds: int = 0
     n_interior_seeds: int = 0
+    n_ghost_seeds: int = 0
+    n_layer_seeds: int = 0
+    n_sharp_edges: int = 0
+    lloyd_iterations: int = 0
 
     def stats(self) -> dict:
         npe = np.asarray([len(f) for fs in self.cell_faces for f in fs],
@@ -73,6 +101,10 @@ class PolyMeshResult:
             "n_vertices": int(len(self.vertices)),
             "n_surface_seeds": self.n_surface_seeds,
             "n_interior_seeds": self.n_interior_seeds,
+            "n_ghost_seeds": self.n_ghost_seeds,
+            "n_layer_seeds": self.n_layer_seeds,
+            "n_sharp_edges": self.n_sharp_edges,
+            "lloyd_iterations": self.lloyd_iterations,
             "n_clipped": self.n_clipped,
             "avg_faces_per_cell": float(npe.size / len(self.cells))
             if self.cells else 0.0,
@@ -82,37 +114,6 @@ class PolyMeshResult:
             "mean_volume": float(vols.mean()) if vols.size else 0.0,
             "max_volume": float(vols.max()) if vols.size else 0.0,
         }
-
-
-def _clip_poly_by_plane(pts: np.ndarray, normal: np.ndarray,
-                        p0: np.ndarray, tol: float = 1e-12) -> np.ndarray:
-    """Sutherland–Hodgman：保留 ``normal·(x-p0) <= tol`` 一侧。"""
-    if len(pts) < 3:
-        return pts
-    out: list[np.ndarray] = []
-    m = len(pts)
-    for i in range(m):
-        a = pts[i]
-        b = pts[(i + 1) % m]
-        da = float(np.dot(normal, a - p0))
-        db = float(np.dot(normal, b - p0))
-        if da <= tol:
-            out.append(a)
-        if (da > tol) != (db > tol):
-            t = da / (da - db)
-            out.append(a + t * (b - a))
-    if not out:
-        return np.empty((0, 3))
-    scale = float(np.max(np.linalg.norm(pts, axis=1))) or 1.0
-    eps = 1e-10 * scale
-    cleaned: list[np.ndarray] = []
-    for p in out:
-        if not cleaned or float(np.linalg.norm(p - cleaned[-1])) > eps:
-            cleaned.append(p)
-    if len(cleaned) > 1 and \
-            float(np.linalg.norm(cleaned[-1] - cleaned[0])) <= eps:
-        cleaned.pop()
-    return np.asarray(cleaned, dtype=float).reshape(-1, 3)
 
 
 class _Poly:
@@ -291,6 +292,209 @@ def _poly_volume(poly: _Poly, params: PolyMeshParams) -> Optional[float]:
     return vol
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# 表面法向 / 尖边（特征保形与近壁层共用）
+# ────────────────────────────────────────────────────────────────────────────
+
+def _tri_unit_normals(points: np.ndarray, tris: np.ndarray) -> np.ndarray:
+    t = points[tris]                                # (n,3,3)
+    n = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+    ln = np.linalg.norm(n, axis=1)
+    ln[ln < 1e-30] = 1.0
+    return n / ln[:, None]
+
+
+def _vertex_normals(points: np.ndarray, tris: np.ndarray,
+                    tri_n: np.ndarray) -> np.ndarray:
+    vn = np.zeros_like(points)
+    np.add.at(vn, tris[:, 0], tri_n)
+    np.add.at(vn, tris[:, 1], tri_n)
+    np.add.at(vn, tris[:, 2], tri_n)
+    ln = np.linalg.norm(vn, axis=1)
+    ln[ln < 1e-30] = 1.0
+    return vn / ln[:, None]
+
+
+def detect_sharp_edges(points: np.ndarray, tris: np.ndarray,
+                       angle_deg: float) -> dict:
+    """尖边检测：共享两三角形的二面角 > ``angle_deg`` 的边。
+
+    返回 ``{(v0,v1): (t0, t1)}``（三角形 id 对；顶点序升序）。
+    """
+    edge_tris: dict = {}
+    for t in range(len(tris)):
+        a, b, c = (int(v) for v in tris[t])
+        for e in ((a, b), (b, c), (c, a)):
+            key = e if e[0] < e[1] else (e[1], e[0])
+            edge_tris.setdefault(key, []).append(t)
+    tri_n = _tri_unit_normals(points, tris)
+    cos_lim = math.cos(math.radians(angle_deg))
+    sharp: dict = {}
+    for key, ts in edge_tris.items():
+        if len(ts) != 2:
+            continue
+        if float(np.dot(tri_n[ts[0]], tri_n[ts[1]])) < cos_lim:
+            sharp[key] = (ts[0], ts[1])
+    return sharp
+
+
+def _outward_normal(points: np.ndarray, tris: np.ndarray, tri_id: int,
+                    tri_n: np.ndarray, index: _TriIndex,
+                    probe: float) -> np.ndarray:
+    """三角形的外向法向（用 inside 射线测试定向）。"""
+    n = tri_n[tri_id]
+    c = points[tris[tri_id]].mean(axis=0)
+    if index.point_inside(c + probe * n):
+        return -n
+    return n
+
+
+def _generate_seeds(points: np.ndarray, tris: np.ndarray,
+                    index: _TriIndex, spacing: float,
+                    params: PolyMeshParams,
+                    centroid_tree) -> tuple:
+    """生成全部 seed：表面（镜像对）/ 尖边球 / 近壁层 / 内部格点。
+
+    返回 ``(P, emit_mask, clip_mask, free_mask, kind, n_sharp_edges)``；
+    ``kind`` 取 ``_INTERIOR/_SURFACE/_GHOST/_LAYER/_EDGE_IN/_EDGE_OUT``。
+    """
+    seeds: list[np.ndarray] = []
+    emit: list[bool] = []
+    clip: list[bool] = []
+    free: list[bool] = []
+    kind: list[int] = []
+
+    def _add(p: np.ndarray, e: bool, c: bool, f: bool, k: int) -> None:
+        seeds.append(np.asarray(p, dtype=float))
+        emit.append(e)
+        clip.append(c)
+        free.append(f)
+        kind.append(k)
+
+    # 1) 表面点抽样
+    surf_ids = np.arange(0, len(points), max(1, int(params.surface_stride)))
+    surf_pts = points[surf_ids]
+
+    tri_n = _tri_unit_normals(points, tris)
+    sharp: dict = {}
+    n_sharp = 0
+    need_normals = params.feature_preserve or params.n_wall_layers > 0
+    inward: Optional[np.ndarray] = None
+    radii: Optional[np.ndarray] = None
+    if need_normals:
+        vn = _vertex_normals(points, tris, tri_n)[surf_ids]
+        inward = np.empty_like(vn)
+        probe = 0.5 * spacing
+        for i, p in enumerate(surf_pts):
+            n = vn[i]
+            inward[i] = n if index.point_inside(p + probe * n) else -n
+        radii = np.full(len(surf_pts),
+                        params.feature_radius_ratio * spacing)
+    if params.feature_preserve:
+        sharp = detect_sharp_edges(points, tris, params.feature_angle_deg)
+        n_sharp = len(sharp)
+        if sharp:
+            # VoroCrust 式加权：距尖边一个间距内的表面 seed 球半径减半
+            from scipy.spatial import cKDTree
+            edge_mid = np.asarray(
+                [(points[a] + points[b]) * 0.5 for a, b in sharp])
+            edge_tree = cKDTree(edge_mid)
+            dist, _ = edge_tree.query(surf_pts, k=1)
+            radii = np.asarray(radii)
+            radii[dist < spacing] *= 0.5
+
+    # 2) 表面 seed（feature_preserve: VoroCrust 镜像对；否则裸表面点）
+    for i, p in enumerate(surf_pts):
+        if params.feature_preserve:
+            d = float(radii[i])
+            n_in = inward[i]
+            _add(p + d * n_in, True, True, False, _SURFACE)   # in-seed
+            _add(p - d * n_in, False, False, False, _GHOST)   # out-seed
+        else:
+            _add(p, True, True, False, _SURFACE)
+
+    # 3) 尖边棱心球（VoroCrust edge ball：±n0、±n1 共 4 seed）
+    if params.feature_preserve and sharp:
+        d = params.feature_radius_ratio * spacing
+        probe = 0.5 * spacing
+        for (a, b), (t0, t1) in sharp.items():
+            c = (points[a] + points[b]) * 0.5
+            n0 = _outward_normal(points, tris, t0, tri_n, index, probe)
+            n1 = _outward_normal(points, tris, t1, tri_n, index, probe)
+            _add(c - d * n0, True, True, False, _EDGE_IN)
+            _add(c + d * n0, False, False, False, _EDGE_OUT)
+            _add(c - d * n1, True, True, False, _EDGE_IN)
+            _add(c + d * n1, False, False, False, _EDGE_OUT)
+
+    # 4) 近壁层 seed（沿内法向分层；碰撞检测剔除对壁干涉）
+    if params.n_wall_layers > 0:
+        t1 = params.first_layer_ratio * spacing
+        g = max(1.01, params.layer_growth)
+        for i in range(len(surf_pts)):
+            p = surf_pts[i]
+            n_in = inward[i]
+            for li in range(1, params.n_wall_layers + 1):
+                d_i = t1 * (g ** li - 1.0) / (g - 1.0)
+                q = p + d_i * n_in
+                if not index.point_inside(q):
+                    break
+                # 对壁/薄特征碰撞：最近表面质心距离不足 → 停止该点加层
+                dc, _ = centroid_tree.query(q, k=1)
+                if float(dc) < 0.9 * d_i:
+                    break
+                _add(q, True, False, True, _LAYER)
+
+    # 5) 内部格点（射线法过滤 inside；可选确定性抖动）
+    n_div = int(params.divisions)
+    root_min = index.bmin
+    root_max = index.bmax
+    axes = np.linspace(root_min, root_max, n_div + 1)
+    gx, gy, gz = np.meshgrid(axes[:, 0], axes[:, 1], axes[:, 2],
+                             indexing="ij")
+    grid = np.column_stack([gx.ravel(), gy.ravel(), gz.ravel()])
+    if params.interior_jitter > 0:
+        rng = np.random.default_rng(12345)
+        grid = grid + rng.uniform(-0.5, 0.5, grid.shape) \
+            * (params.interior_jitter * spacing)
+    inside = np.array([index.point_inside(p) for p in grid], dtype=bool)
+    interior = grid[inside]
+    for p in interior:
+        _add(p, True, False, True, _INTERIOR)
+
+    P = np.asarray(seeds, dtype=float).reshape(-1, 3)
+    return (P, np.asarray(emit, dtype=bool), np.asarray(clip, dtype=bool),
+            np.asarray(free, dtype=bool), np.asarray(kind, dtype=np.int64),
+            n_sharp, interior)
+
+
+def _lloyd_relax(P: np.ndarray, free_mask: np.ndarray, index: _TriIndex,
+                 root_box: np.ndarray, params: PolyMeshParams) -> np.ndarray:
+    """Lloyd 平滑：自由 seed 迭代移至其有界 Voronoi 胞元质心（阻尼）。
+
+    边界相关 seed（表面/镜像对/尖边球）全程冻结，保证贴体与保角；
+    目标位置出域时放弃本次移动。
+    """
+    if params.lloyd_iterations <= 0 or not bool(free_mask.any()):
+        return P
+    from scipy.spatial import Delaunay
+    damping = min(1.0, max(0.05, params.lloyd_damping))
+    P = P.copy()
+    free_ids = np.flatnonzero(free_mask)
+    for _ in range(int(params.lloyd_iterations)):
+        tri = Delaunay(P, qhull_options="Qbb Qc Qz Qx")
+        neigh_ptrs, neigh_indices = tri.vertex_neighbor_vertices
+        for k in free_ids:
+            poly = _cell_from_neighbors(int(k), P, neigh_indices,
+                                        neigh_ptrs, root_box)
+            if poly is None:
+                continue
+            centroid = np.asarray(poly.verts).mean(axis=0)
+            cand = P[k] + damping * (centroid - P[k])
+            if index.point_inside(cand):
+                P[k] = cand
+    return P
+
+
 def build_mesh(points: np.ndarray, tris: np.ndarray,
                params: Optional[PolyMeshParams] = None) -> PolyMeshResult:
     """从三角面片构建原生多面体网格（Voronoi 对偶 + 表面裁剪）。"""
@@ -303,43 +507,37 @@ def build_mesh(points: np.ndarray, tris: np.ndarray,
     root_min = center - half
     root_max = center + half
     index = _TriIndex(points, tris, root_min, root_max)
+    spacing = span / max(1, int(params.divisions))
+    tri_centroids = index.tri_pts.mean(axis=1)
 
-    # 1) 表面点抽样
-    surf_ids = np.arange(0, len(points), max(1, int(params.surface_stride)))
-    surf_pts = points[surf_ids]
-
-    # 2) 内部格点（射线法过滤）
-    n_div = int(params.divisions)
-    axes = np.linspace(root_min, root_max, n_div + 1)
-    gx, gy, gz = np.meshgrid(axes[:, 0], axes[:, 1], axes[:, 2],
-                             indexing="ij")
-    grid = np.column_stack([gx.ravel(), gy.ravel(), gz.ravel()])
-    inside = np.array([index.point_inside(p) for p in grid], dtype=bool)
-    interior = grid[inside]
+    # 1) seed 生成（表面/镜像对/尖边球/近壁层/内部格点）
+    from scipy.spatial import Delaunay, cKDTree
+    centroid_tree = cKDTree(tri_centroids)
+    (P, emit_mask, clip_mask, free_mask, kind,
+     n_sharp, interior) = _generate_seeds(
+         points, tris, index, spacing, params, centroid_tree)
     if len(interior) == 0:
         raise ValueError("no interior lattice points; "
                          "check surface orientation/watertightness")
-    if len(interior) + len(surf_pts) > params.max_cells * 4:
+    if len(P) > params.max_cells * 4:
         raise ValueError("point set too large; increase surface_stride "
-                         "or reduce divisions")
+                         "or reduce divisions/layers")
 
-    # 3) 联合 Delaunay（Voronoi 对偶的邻居图）
-    from scipy.spatial import Delaunay, cKDTree
-    all_pts = np.vstack([surf_pts, interior])
-    n_surf = len(surf_pts)
-    tri = Delaunay(all_pts, qhull_options="Qbb Qc Qz Qx")
-    neigh_ptrs, neigh_indices = tri.vertex_neighbor_vertices
-    interior_tree = cKDTree(interior)
+    # 2) Lloyd 平滑（自由 seed：内部格点 + 近壁层）
     root_box = np.array([
         [x, y, z]
         for x in (root_min[0], root_max[0])
         for y in (root_min[1], root_max[1])
         for z in (root_min[2], root_max[2])
     ], dtype=float)
-    tri_centroids = index.tri_pts.mean(axis=1)
-    centroid_tree = cKDTree(tri_centroids)
+    P = _lloyd_relax(P, free_mask, index, root_box, params)
 
-    # 4) 内部点 → 有界 Voronoi 胞元 → 表面裁剪 → 凸包面
+    # 3) 联合 Delaunay（Voronoi 对偶的邻居图）
+    tri = Delaunay(P, qhull_options="Qbb Qc Qz Qx")
+    neigh_ptrs, neigh_indices = tri.vertex_neighbor_vertices
+    interior_tree = cKDTree(interior)
+
+    # 4) emit seed → 有界 Voronoi 胞元 → 表面裁剪 → 凸包面
     lookup: dict[tuple, int] = {}
     global_verts: list[np.ndarray] = []
     cells: list[np.ndarray] = []
@@ -347,18 +545,19 @@ def build_mesh(points: np.ndarray, tris: np.ndarray,
     cell_centers: list[np.ndarray] = []
     cell_vols: list[float] = []
     n_clipped = 0
-    for k in range(len(all_pts)):
+    for k in range(len(P)):
         if len(cells) >= params.max_cells:
             break
-        poly = _cell_from_neighbors(k, all_pts, neigh_indices, neigh_ptrs,
+        if not emit_mask[k]:
+            continue  # ghost seed：只塑形不出单元
+        poly = _cell_from_neighbors(k, P, neigh_indices, neigh_ptrs,
                                     root_box)
         if poly is None:
             continue
-        seed = all_pts[k]
-        is_surface = k < n_surf
+        seed = P[k]
         clipped = False
-        if params.clip_to_surface and is_surface:
-            # 表面种子的未裁剪胞元大部分在域外；以最近内部种子为内部参考
+        if params.clip_to_surface and clip_mask[k]:
+            # 表面相关胞元大部分在域外；以最近内部格点为内部参考
             _, nb = interior_tree.query(seed, k=1)
             ref = interior[int(nb)]
             poly, any_clip = _clip_cell_by_surface(
@@ -389,13 +588,22 @@ def build_mesh(points: np.ndarray, tris: np.ndarray,
             n_clipped += 1
 
     vertices = np.asarray(global_verts, dtype=float).reshape(-1, 3)
+    n_surface = int(np.count_nonzero(
+        (kind == _SURFACE) | (kind == _EDGE_IN)))
+    n_ghost = int(np.count_nonzero(
+        (kind == _GHOST) | (kind == _EDGE_OUT)))
+    n_layer = int(np.count_nonzero(kind == _LAYER))
     return PolyMeshResult(
         cells=cells, cell_faces=cell_faces, vertices=vertices,
         cell_centers=np.asarray(cell_centers, dtype=float).reshape(-1, 3),
         cell_volumes=np.asarray(cell_vols, dtype=float),
         n_clipped=n_clipped,
-        n_surface_seeds=n_surf,
-        n_interior_seeds=len(interior))
+        n_surface_seeds=n_surface,
+        n_interior_seeds=int(np.count_nonzero(kind == _INTERIOR)),
+        n_ghost_seeds=n_ghost,
+        n_layer_seeds=n_layer,
+        n_sharp_edges=n_sharp,
+        lloyd_iterations=int(params.lloyd_iterations))
 
 
 def assemble_faces(result: PolyMeshResult
@@ -490,10 +698,27 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--max-cells", type=int, default=200_000)
     ap.add_argument("--no-clip", action="store_true",
                     help="不对表面相交胞元做裁剪")
+    ap.add_argument("--lloyd", type=int, default=0, metavar="N",
+                    help="Lloyd 平滑迭代次数（内部/层 seed 移至胞元质心）")
+    ap.add_argument("--lloyd-damping", type=float, default=0.5)
+    ap.add_argument("--layers", type=int, default=0, metavar="N",
+                    help="近壁层数（法向分层 seed）")
+    ap.add_argument("--first-layer", type=float, default=0.25,
+                    help="首层厚度比例（×局部间距）")
+    ap.add_argument("--growth", type=float, default=1.4, help="层厚增长比")
+    ap.add_argument("--preserve-features", action="store_true",
+                    help="VoroCrust 式镜像 seed 对 + 尖边球（特征保形）")
+    ap.add_argument("--feature-angle", type=float, default=30.0,
+                    help="尖边二面角阈值（deg）")
     args = ap.parse_args(argv)
     params = PolyMeshParams(
         divisions=args.divisions, surface_stride=args.surface_stride,
-        max_cells=args.max_cells, clip_to_surface=not args.no_clip)
+        max_cells=args.max_cells, clip_to_surface=not args.no_clip,
+        lloyd_iterations=args.lloyd, lloyd_damping=args.lloyd_damping,
+        n_wall_layers=args.layers, first_layer_ratio=args.first_layer,
+        layer_growth=args.growth,
+        feature_preserve=args.preserve_features,
+        feature_angle_deg=args.feature_angle)
     inp = str(args.input)
     suffix = Path(inp).suffix.lower()
     if suffix == ".mdl":

@@ -121,9 +121,10 @@ def _voxel_params_dialog(parent) -> Optional["object"]:
 
 
 def _poly_params_dialog(parent) -> Optional["object"]:
-    """自研多面体 mesher 参数对话框（seed + 裁剪）。"""
+    """自研多面体 mesher 参数对话框（seed + Lloyd/近壁层/特征保形）。"""
     from PyQt5.QtWidgets import (
-        QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QSpinBox,
+        QCheckBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
+        QGroupBox, QSpinBox,
     )
 
     dlg = QDialog(parent)
@@ -145,6 +146,39 @@ def _poly_params_dialog(parent) -> Optional["object"]:
     form.addRow("Surface seed stride:", sp_stride)
     form.addRow("Max cells:", sp_cells)
     form.addRow("", chk_clip)
+
+    gb_smooth = QGroupBox("Lloyd smoothing / near-wall layers")
+    fs = QFormLayout(gb_smooth)
+    sp_lloyd = QSpinBox()
+    sp_lloyd.setRange(0, 20)
+    sp_lloyd.setValue(2)
+    sp_layers = QSpinBox()
+    sp_layers.setRange(0, 8)
+    sp_layers.setValue(0)
+    sp_first = QDoubleSpinBox()
+    sp_first.setRange(0.05, 1.0)
+    sp_first.setSingleStep(0.05)
+    sp_first.setValue(0.25)
+    sp_growth = QDoubleSpinBox()
+    sp_growth.setRange(1.05, 3.0)
+    sp_growth.setSingleStep(0.1)
+    sp_growth.setValue(1.4)
+    fs.addRow("Lloyd iterations:", sp_lloyd)
+    fs.addRow("Near-wall layers:", sp_layers)
+    fs.addRow("First layer ratio:", sp_first)
+    fs.addRow("Layer growth rate:", sp_growth)
+    form.addRow(gb_smooth)
+
+    chk_feat = QCheckBox("Preserve sharp features (VoroCrust-style seed pairs)")
+    chk_feat.setChecked(True)
+    sp_fang = QDoubleSpinBox()
+    sp_fang.setRange(5.0, 120.0)
+    sp_fang.setSingleStep(5.0)
+    sp_fang.setValue(30.0)
+    sp_fang.setSuffix(" deg")
+    form.addRow("", chk_feat)
+    form.addRow("Feature angle:", sp_fang)
+
     buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
     buttons.accepted.connect(dlg.accept)
     buttons.rejected.connect(dlg.reject)
@@ -157,6 +191,12 @@ def _poly_params_dialog(parent) -> Optional["object"]:
         surface_stride=sp_stride.value(),
         max_cells=sp_cells.value(),
         clip_to_surface=chk_clip.isChecked(),
+        lloyd_iterations=sp_lloyd.value(),
+        n_wall_layers=sp_layers.value(),
+        first_layer_ratio=sp_first.value(),
+        layer_growth=sp_growth.value(),
+        feature_preserve=chk_feat.isChecked(),
+        feature_angle_deg=sp_fang.value(),
     )
 
 
@@ -5928,6 +5968,17 @@ class PphViewer(QMainWindow):
             return cad, "CAD"
         return None, None
 
+    def _is_native_mdl(self, member_name: str) -> bool:
+        """MDL 成员是否为本进程原生生成（Application 块 = pphdecoding）。
+
+        仅原生生成的 MDL 允许被原生 BAM 覆写；宿主 MDL 保留原样。
+        """
+        try:
+            head = bytes(self.arch.read_member(member_name)[:4096])
+        except Exception:  # noqa: BLE001
+            return False
+        return b"pphdecod" in head
+
     def _native_member_names(self) -> tuple[str, str, str]:
         """MDL/OCT/GPH 成员名：已有则复用，空工程则追加 meshinggroup1.*。"""
         import pph_parser
@@ -5990,8 +6041,34 @@ class PphViewer(QMainWindow):
         msgs: list[str] = []
         need_oct = any(s == "generate_octree" for s in steps)
         need_mesh = any(s == "generate_mesh" for s in steps)
+        bam_result = None
         if any(s == "build_analysis_model" for s in steps):
-            msgs.append(f"BAM({src_kind}表面)")
+            # 原生 BAM：对齐 Analysis Model Wizard 步骤（native_bam.py）——
+            # CreateBoundary 闭体识别 → 多重边/面 → 面匹配 → 微小面去除 →
+            # Repair → CheckMDLErrors，产物含 csid/frid/区域/闭体/ridge。
+            import native_bam
+            bam_sess = (ctx.get("session") or {}).get("build_am") or {}
+            try:
+                bam_result = native_bam.build_analysis_model(
+                    points, tris,
+                    native_bam.BamParams.from_session(bam_sess, self._xenv))
+            except Exception as exc:  # noqa: BLE001
+                QMessageBox.warning(
+                    self, "Execute（原生模式）", f"原生 BAM 失败：{exc}")
+                return
+            points, tris = bam_result.tris()
+            rep = bam_result.report
+            bam_sess = (ctx.get("session") or {}).setdefault("build_am", {})
+            bam_sess["native_report"] = {
+                "rows": list(rep.rows),
+                "closed_volumes": rep.n_closed_volumes,
+                "buildable": rep.buildable,
+                "summary": rep.summary_lines(),
+            }
+            msgs.append(
+                f"BAM(闭体{rep.n_closed_volumes},多重边{rep.n_multifold_edges},"
+                f"匹配{rep.n_matched_pairs},微小面-{rep.n_tiny_removed},"
+                f"ridge{rep.n_ridge_edges})")
         if plan.get("wrapping"):
             try:
                 import mdl as mdlmod
@@ -6003,10 +6080,25 @@ class PphViewer(QMainWindow):
             except Exception as exc:  # noqa: BLE001
                 self.log(f"Execute（原生模式）Wrapping 写出失败: {exc}",
                          "WARN")
-        if src_kind == "CAD" and not self.arch.by_role(
-                pph_parser.ROLE_MDL_PART):
-            # 从 x_t 剖分生成最小 *_part.mdl 面片成员（LS_Faces/Csid/Frid/
-            # EdgeState），让 Part Tree / 几何显示不依赖内存 CAD 预览。
+        mdl_members = self.arch.by_role(pph_parser.ROLE_MDL_PART)
+        if bam_result is not None:
+            # 写出完整 *_part.mdl（csid/frid/区域/闭体/ridge 状态）。
+            # 宿主生成的 MDL 不覆盖（避免丢失宿主 ridge/区域信息），仅更新报告。
+            if (not mdl_members or src_kind == "CAD"
+                    or self._is_native_mdl(mdl_members[0].name)):
+                try:
+                    tmp = Path(self.tmp_dir) / "native_part.mdl"
+                    native_bam.write_bam_mdl(bam_result, tmp, date=20260814)
+                    overrides[part_name] = tmp.read_bytes()
+                    msgs.append("MDL(BAM)")
+                except Exception as exc:  # noqa: BLE001
+                    self.log(f"Execute（原生模式）MDL 写出失败: {exc}", "WARN")
+            else:
+                self.log("Execute（原生模式）：保留宿主 MDL，"
+                         "原生 BAM 仅更新检测报告")
+        elif src_kind == "CAD" and not mdl_members:
+            # 未跑 BAM 时保持原行为：从 x_t 剖分生成最小 *_part.mdl 成员，
+            # 让 Part Tree / 几何显示不依赖内存 CAD 预览。
             try:
                 import mdl as mdlmod
                 tmp = Path(self.tmp_dir) / "native_part.mdl"
@@ -6061,7 +6153,9 @@ class PphViewer(QMainWindow):
                             points, tris, tmp,
                             polymesh.PolyMeshParams(
                                 divisions=10, surface_stride=12,
-                                max_cells=200_000))
+                                max_cells=200_000,
+                                lloyd_iterations=2,
+                                feature_preserve=True))
                         kind = "poly"
                     overrides[gph_name] = gph_p.read_bytes()
                     st = result.stats()
@@ -6104,6 +6198,10 @@ class PphViewer(QMainWindow):
         if not self.archive_path:
             QMessageBox.information(self, "提示", "请先打开 PPH 项目")
             return
+        plan = (ctx.get("session") or {}).get("execute") or {}
+        if not plan.get("use_api", True):
+            self._run_native_bam(ctx)
+            return
         from automation.pipeline_plan import build_execute_vbs
         out = Path(self.archive_path).with_suffix(".bam.vbs")
         marker = Path(self.archive_path).with_suffix(".bam.done")
@@ -6134,6 +6232,77 @@ class PphViewer(QMainWindow):
             "完成后将自动刷新分析模型。")
         self._start_api_refresh_poll(marker, step_marker=step_marker)
         self._start_api_execute_thread(out)
+
+    def _run_native_bam(self, ctx: dict) -> None:
+        """向导 Build/Create Facet 且未启用 scFLOWpre API → 原生 BAM。
+
+        与 Execute 原生模式的 BAM 段共用 :mod:`native_bam` 管线；
+        写回 ``*.native.pph`` 并刷新。
+        """
+        import pph_parser
+        import pphwriter
+
+        part_path = None
+        for _g, info in (self._groups_info or {}).items():
+            part_path = ((info.get("paths") or {}).get("part")
+                         or info.get("part"))
+            if part_path:
+                break
+        try:
+            surface, src_kind = self._native_surface(part_path)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "BAM（原生模式）", f"读取表面失败：{exc}")
+            return
+        if surface is None:
+            QMessageBox.information(
+                self, "BAM（原生模式）",
+                "未找到 MDL part 或 Import CAD 剖分。")
+            return
+        if not self.tmp_dir:
+            self.tmp_dir = tempfile.mkdtemp(prefix="pph_gui_")
+        import native_bam
+        points, tris = surface
+        bam_sess = (ctx.get("session") or {}).get("build_am") or {}
+        try:
+            result = native_bam.build_analysis_model(
+                points, tris,
+                native_bam.BamParams.from_session(bam_sess, self._xenv))
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "BAM（原生模式）", f"原生 BAM 失败：{exc}")
+            return
+        rep = result.report
+        sess = (ctx.get("session") or {}).setdefault("build_am", {})
+        sess["native_report"] = {
+            "rows": list(rep.rows),
+            "closed_volumes": rep.n_closed_volumes,
+            "buildable": rep.buildable,
+            "summary": rep.summary_lines(),
+        }
+        part_name, _oct_name, _gph_name = self._native_member_names()
+        mdl_members = self.arch.by_role(pph_parser.ROLE_MDL_PART)
+        if mdl_members and src_kind != "CAD" and not self._is_native_mdl(
+                mdl_members[0].name):
+            self.log("BAM（原生模式）：保留宿主 MDL，仅更新检测报告")
+            QMessageBox.information(
+                self, "BAM（原生模式）",
+                "分析模型检查完成（宿主 MDL 未改动）：\n\n"
+                + "\n".join(rep.summary_lines()))
+            return
+        tmp = Path(self.tmp_dir) / "native_bam_part.mdl"
+        try:
+            native_bam.write_bam_mdl(result, tmp, date=20260814)
+            dst = Path(self.archive_path).with_suffix(".native.pph")
+            pphwriter.clone_pph(
+                self.archive_path, dst, {part_name: tmp.read_bytes()})
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "BAM（原生模式）", f"写回失败：{exc}")
+            return
+        self.log("BAM（原生模式）: " + "；".join(rep.summary_lines()))
+        self.open_archive(str(dst))
+        QMessageBox.information(
+            self, "BAM（原生模式）",
+            f"已生成分析模型并写回：\n{dst}\n\n"
+            + "\n".join(rep.summary_lines()))
 
     def _start_api_refresh_poll(self, marker: Path,
                                 step_marker: Optional[Path] = None,

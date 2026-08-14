@@ -71,6 +71,11 @@
   `mdl.write_mdl` 最小写端（LS_Nodes/Faces/CsidOfFaces/FridOfFaces/
   EdgeStateOfFaces/StateOfNodes/SurfaceRegions），空工程一并追加
   MDL+OCT+GPH 成员
+- ✅ **原生 BAM**（`native_bam.py`，API 关闭时对齐 Analysis Model Wizard
+  步骤：闭体识别/多重边/容差匹配/微小面/Repair/CheckErrors/ridge），
+  写回布局一致的 `*_part.mdl`（`LS_MdlSurfaceRegions` 精确布局 +
+  `LS_MdlClosedVolumes`/`LS_MdlVolumeRegions` 写端）；详见
+  `docs/NATIVE_BAM_NOTES.md`
 
 ### 阶段 2 — Select / View
 - ✅ Pick Part/Face/Edge/Vertex；Rubber Box/Circle/Polygon 真实框选
@@ -102,7 +107,9 @@
 - ✅ 原生多面体 MVP：`polymesh.py`（Delaunay/Voronoi 对偶 + 表面平面裁剪，
   cfMesh pMesh / VoroCrust / LAVA 路线），GUI `Execute → Polyhedral Mesh
   (Self Build)…`；详见 `docs/POLYMESH_NOTES.md`
-- ⏳ 2:1 平衡/pairing、边界层、面区域映射、质量平滑、性能优化
+- ✅ 增强：Lloyd 平滑 + 近壁层（LAVA 式 seed + 拉伸）+ VoroCrust 式特征
+  保形（镜像加权 seed 对）；`--preserve-features --lloyd N --layers N`
+- ⏳ 2:1 平衡/pairing、面区域映射、质量平滑、性能优化
 
 ---
 

@@ -278,6 +278,67 @@ def _name255(text: str) -> bytes:
     return raw.ljust(255, b" ")
 
 
+def _name_record(text: str) -> bytes:
+    """255B 名称记录：``desc(type=1, 255, 1) + block(name255)``（原生布局）。"""
+    return _descriptor(1, 255, 1) + _block(_name255(text))
+
+
+# 区域/闭体三节共用的 20 字节节尾（box/laptop 实测一致）：I4=12 + 16×0
+_SECTION_TRAILER = _i32(12) + b"\x00" * 16
+
+
+def _regions_section(names_idx: list) -> bytes:
+    """LS_MdlSurfaceRegions 原生布局（box/laptop 钉死）。
+
+    头：``desc(4,1,1) desc(4,1,4) desc(4,1,1) desc(4,N,4)`` +
+    名称头 ``desc(4,1,1) desc(4,255,4)``；每区域：名称记录 +
+    ``desc(4,1,1) desc(4,1,4) desc(4,1,1) desc(4,frid,4)``；节尾 20B。
+    """
+    body = bytearray()
+    body += _descriptor(4, 1, 1) + _descriptor(4, 1, 4)
+    body += _descriptor(4, 1, 1) + _descriptor(4, len(names_idx), 4)
+    body += _descriptor(4, 1, 1) + _descriptor(4, 255, 4)
+    for name, idx in names_idx:
+        body += _name_record(name)
+        body += (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+                 _descriptor(4, 1, 1) + _descriptor(4, int(idx), 4))
+    body += _SECTION_TRAILER
+    return _section("LS_MdlSurfaceRegions", bytes(body))
+
+
+def _closed_volumes_section(names: list) -> bytes:
+    """LS_MdlClosedVolumes 原生布局（box/laptop 钉死）。
+
+    记录数 = N+1（记录 0 = 外部，空名）；记录 i 尾随 6 个描述符：
+    ``(1,1) (i%2,4) (1,1) (1,4) (1,1) (i,4)``（laptop 5 记录验证）。
+    """
+    body = bytearray()
+    body += _descriptor(4, 1, 1) + _descriptor(4, 1, 4)
+    body += _descriptor(4, 1, 1) + _descriptor(4, len(names), 4)
+    body += _descriptor(4, 1, 1) + _descriptor(4, 255, 4)
+    for i, name in enumerate(names):
+        body += _name_record(name)
+        body += (_descriptor(4, 1, 1) + _descriptor(4, i % 2, 4) +
+                 _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+                 _descriptor(4, 1, 1) + _descriptor(4, i, 4))
+    body += _SECTION_TRAILER
+    return _section("LS_MdlClosedVolumes", bytes(body))
+
+
+def _volume_regions_section(names: list) -> bytes:
+    """LS_MdlVolumeRegions 原生布局（box 风格：无内部种子点）。"""
+    body = bytearray()
+    body += _descriptor(4, 1, 1) + _descriptor(4, 1, 4)
+    body += _descriptor(4, 1, 1) + _descriptor(4, len(names), 4)
+    body += _descriptor(4, 1, 1) + _descriptor(4, 255, 4)
+    for name in names:
+        body += _name_record(name)
+        body += (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+                 _descriptor(4, 1, 1) + _descriptor(4, 1, 4))
+    body += _SECTION_TRAILER
+    return _section("LS_MdlVolumeRegions", bytes(body))
+
+
 def write_mdl(filepath,
               points,
               faces,
@@ -289,7 +350,9 @@ def write_mdl(filepath,
               frid=None,
               edge_state=None,
               node_state=None,
-              surface_regions=None) -> "Path":
+              surface_regions=None,
+              closed_volumes=None,
+              volume_regions=None) -> "Path":
     """写最小 CRDL-FLD MDL 面片（``*_part.mdl``，可被 :func:`parse_mdl` 读回）。
 
     ``points``：(n,3) 坐标；``faces``：多边形顶点索引（3 或 4 顶点，
@@ -299,6 +362,11 @@ def write_mdl(filepath,
     body 1 的边界面；``frid`` 默认全 0；``edge_state`` 默认全 0；
     ``surface_regions`` 默认 ``[("@PartSurface_Part", 0)]``，便于 Part Tree
     识别零件名。
+
+    ``closed_volumes``：闭体名列表（**含**记录 0 = 外部，通常空名），
+    传入时按原生布局写 ``LS_MdlClosedVolumes``；``volume_regions``：
+    体区域名列表（如 ``["FluidRegion"]``），传入时写
+    ``LS_MdlVolumeRegions``。两者缺省不写（保持最小写端行为）。
     """
     verts = np.asarray(points, dtype=float).reshape(-1, 3)
     n_vertices = len(verts)
@@ -402,17 +470,13 @@ def write_mdl(filepath,
         _descriptor(4, 1, 1) + _descriptor(4, n_vertices, 4) +
         _descriptor(4, n_vertices, 1) + _block(ns.tobytes()))
 
+    # 节序与原生一致：ClosedVolumes → VolumeRegions → SurfaceRegions
+    if closed_volumes is not None:
+        out += _closed_volumes_section(list(closed_volumes))
+    if volume_regions is not None:
+        out += _volume_regions_section(list(volume_regions))
     if regions:
-        body = bytearray()
-        body += _descriptor(4, 1, 1) + _descriptor(4, 1, 4)
-        body += _descriptor(4, 1, 1) + _descriptor(4, len(regions), 4)
-        for i, (name, idx) in enumerate(regions):
-            if i == 0:
-                body += _descriptor(4, 1, 1) + _descriptor(4, 255, 4)
-            body += _block(_name255(name))
-            body += (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
-                     _descriptor(4, 1, 1) + _descriptor(4, int(idx), 4))
-        out += _section("LS_MdlSurfaceRegions", bytes(body))
+        out += _regions_section(regions)
     out += _section("OverlapEnd", b"")
 
     path = Path(filepath)

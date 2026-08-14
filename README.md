@@ -77,14 +77,15 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
 |------|------|
 | `pph_parser.py` | CLI + ZIP 容器 + 成员分类 + 摘要报告 |
 | `crdlfld.py` | CRDL-FLD 公共二进制层（gph/oct/mdl 共享） |
-| `mdl.py` | `*_part.mdl` / `*_ridge.mdl` 面片几何（解析 + 最小 `write_mdl` 写端） |
+| `mdl.py` | `*_part.mdl` / `*_ridge.mdl` 面片几何（解析 + `write_mdl` 写端：区域/闭体/体区域原生布局） |
 | `oct.py` | `*.oct` 八叉树（前序位图 → 叶子包围盒重建） |
 | `sctsnapshot.py` | 快照记录流 + LZMS / PKBody3 / ZIPOCTREE DIVISION·REGION |
 | `blowfish_le.py` | PKBody3 Blowfish 小端变体 ECB（`blowfish_tables.py`） |
 | `pphxml.py` | `main.xml`（索引标签方言）/ `main.prp` / `main.xenv` / `main.js` |
 | `gphstats.py` | 仓库内轻量 GPH 统计（gphdecoding 仓不可用时的降级） |
+| `native_bam.py` | 原生 BAM（对齐 Analysis Model Wizard 步骤：闭体识别/多重边/匹配/微小面/Repair/CheckErrors/ridge） |
 | `voxmesh.py` | 自研 Voxel/hex-dominant mesher（MDL/STL → octree → hex/poly → `.oct`+`.gph`） |
-| `polymesh.py` | 自研原生多面体 mesher（clipped Voronoi / Delaunay 对偶 → `.gph`） |
+| `polymesh.py` | 自研原生多面体 mesher（clipped Voronoi：Lloyd/近壁层/VoroCrust 式特征保形 → `.gph`） |
 | `parasolid.py` | Parasolid 传输流部分提取（schema/字段名/实体类型） |
 | `pphwriter.py` | 写端：LZMS 压缩 + Blowfish 加密 + ZIP 容器 round-trip |
 | `pph_vtk.py` | VTK 几何构建器（MDL/OCT/GPH → vtkPolyData，离屏可测） |
@@ -109,8 +110,12 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
   `docs/VOXMESH_NOTES.md`）：`python -m voxmesh box.pph -o out --rough`；
   GUI `Execute → Voxel Fitting Mesh (Self Build)…`。
 - `polymesh.py`：自研原生多面体 mesher（cfMesh pMesh/VoroCrust/LAVA 参考，
-  见 `docs/POLYMESH_NOTES.md`）：`python -m polymesh box.pph -o out`；
+  见 `docs/POLYMESH_NOTES.md`）：`python -m polymesh box.pph -o out
+  --preserve-features --lloyd 2 --layers 2`；
   GUI `Execute → Polyhedral Mesh (Self Build)…`。
+- `native_bam.py`：原生 BAM（无宿主时对齐 Analysis Model Wizard 步骤，
+  见 `docs/NATIVE_BAM_NOTES.md`）：Execute（API 关闭）勾选 BAM 或
+  向导 Build/Create Facet 触发，写回布局一致的 `*_part.mdl`。
 - `tools/build_corpus.py`：生成语料清单（含成员 SHA-256），作为字节级回归基线。
 
 新增测试：`tests/test_schema_extract.py`、`tests/test_condition_registry.py`、

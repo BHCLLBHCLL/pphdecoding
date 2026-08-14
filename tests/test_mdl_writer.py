@@ -91,6 +91,32 @@ class TestWriteMdl(unittest.TestCase):
         self.assertEqual([(r.name, r.index) for r in m.surface_regions],
                          [("inlet", 0), ("outlet", 1)])
 
+    def test_native_region_layout(self):
+        """区域节对齐宿主布局：desc(type=1,255,1) 名称记录 + 20B 节尾。"""
+        pts, faces = _unit_box_quads()
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "part.mdl"
+            mdl.write_mdl(
+                p, pts, faces,
+                surface_regions=[("open", 0), ("inlet", 1)],
+                closed_volumes=["", "body1"],
+                volume_regions=["FluidRegion"])
+            raw = p.read_bytes()
+            m = mdl.parse_mdl(str(p))
+        name_rec = (b"\x00\x00\x00\x0c\x00\x00\x00\x01"
+                    b"\x00\x00\x00\xff\x00\x00\x00\x01")
+        # 2 面区域 + 2 闭体 + 1 体区域 = 5 条名称记录
+        self.assertEqual(raw.count(name_rec), 5)
+        self.assertIn(b"LS_MdlClosedVolumes", raw)
+        self.assertIn(b"LS_MdlVolumeRegions", raw)
+        self.assertEqual(m.closed_volumes, ["", "body1"])
+        self.assertEqual(m.volume_regions, ["FluidRegion"])
+        self.assertEqual([(r.name, r.index) for r in m.surface_regions],
+                         [("open", 0), ("inlet", 1)])
+        # 闭体 id 仍由 csid 数组推导；默认 csid(0,1) → 1 闭体，
+        # closed_volumes 记录数 = N+1（含外部记录）
+        self.assertEqual(m.n_closed_volumes, 1)
+
     def test_native_flow_writes_mdl_from_cad(self):
         src = (ROOT / "pph_gui.py").read_text(encoding="utf-8")
         self.assertIn("mdlmod.write_mdl", src)

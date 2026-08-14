@@ -11709,7 +11709,11 @@ class AnalysisModelWizardBody(_Body):
     # ── page actions ───────────────────────────────────────────────
 
     def _stub_action(self, name: str) -> None:
-        """BAM Wizard 几何动作：记入 session 并生成 VBS 步骤注释。"""
+        """BAM Wizard 几何动作：记入 session 并生成 VBS 步骤注释。
+
+        同时把动作映射为原生 BAM（``native_bam``）步骤标志：未启用
+        scFLOWpre API 时由 Execute / Build 的原生管线执行对应步骤。
+        """
         sess = self._ctx.setdefault("session", {}).setdefault("build_am", {})
         steps = list(sess.get("vbs_steps") or [])
         steps.append(name)
@@ -11719,11 +11723,21 @@ class AnalysisModelWizardBody(_Body):
             "label": name,
             "steps": list(steps),
         }
+        # 原生 BAM 步骤标志（与 MDLWizard 录制命令对应）
+        flag = {
+            "Match": "apply_face_matching",          # SetFaceMatched
+            "Clean": "repair",                       # RepairMDL
+            "Clean all": "repair",                   # RepairMDL
+            "Remove tiny faces": "remove_tiny",      # SetTinyFacesRemoved
+        }.get(name)
+        if flag:
+            sess[flag] = True
         QMessageBox.information(
             self, name,
             f"{name} recorded as VBS step "
             f"({len(steps)} queued).\n"
-            "OK/Build will include these as comments in the host script.")
+            "OK/Build will include these as comments in the host script;\n"
+            "native mode (scFLOWpre API off) runs them via native_bam.")
 
     def _apply_multifold(self) -> None:
         sess = self._ctx.setdefault("session", {}).setdefault("build_am", {})
@@ -11807,6 +11821,11 @@ class AnalysisModelWizardBody(_Body):
             lines.append(f"[{g}] MDL={'yes' if has_mdl else 'no'}")
             for k, val in st.items():
                 lines.append(f"  {k}: {val}")
+        native_rep = ((self._ctx.get("session") or {})
+                      .get("build_am", {}).get("native_report") or {})
+        if native_rep.get("summary"):
+            lines = ["Native BAM report:"] + list(native_rep["summary"]) \
+                + [""] + lines
         if not lines:
             text = ("No interference or unintentional isolated/multifold "
                     "edge is found.")
@@ -11905,6 +11924,22 @@ class AnalysisModelWizardBody(_Body):
                     ["2", str(len(multifold)), "Multi-fold edge",
                      "Edge shared by >2 faces"]):
                 self.tbl_report.setItem(r, c, QTableWidgetItem(val))
+        # 原生 BAM 报告（native_bam）优先于本地 MDL 启发式探测
+        native_rep = ((ctx.get("session") or {})
+                      .get("build_am", {}).get("native_report") or {})
+        native_rows = list(native_rep.get("rows") or [])
+        if native_rows:
+            self.tbl_report.setRowCount(len(native_rows))
+            for r, row in enumerate(native_rows):
+                for c, key in enumerate(("level", "count", "type", "cause")):
+                    self.tbl_report.setItem(
+                        r, c, QTableWidgetItem(str(row.get(key, ""))))
+            self.lab_err_count.setText(str(sum(
+                int(x.get("count", 0)) for x in native_rows)))
+            self.lab_prob_level.setText(str(max(
+                [int(x.get("level", 0)) for x in native_rows], default=0)))
+            self._buildable = bool(native_rep.get("buildable", True))
+            self.btn_build.setEnabled(self._buildable)
 
     def _create_facet(self) -> None:
         if not self.apply(self._ctx):
@@ -12152,7 +12187,9 @@ class AnalysisModelWizardBody(_Body):
                 influence_targets.append(it0.text())
         sess["influence_targets"] = influence_targets
         prev = ctx.setdefault("session", {}).get("build_am") or {}
-        for k in ("create_facet_requested", "build_requested"):
+        for k in ("create_facet_requested", "build_requested",
+                  "apply_face_matching", "remove_tiny", "repair",
+                  "native_report", "vbs_steps"):
             if k in prev:
                 sess[k] = prev[k]
         ctx.setdefault("session", {})["build_am"] = sess

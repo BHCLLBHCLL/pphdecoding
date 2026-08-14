@@ -163,6 +163,11 @@ Star-CCM+ / 部分现代 CFD mesher 的「多面体」本质亦接近 **clipped/
 
 **最大工程坑：** 脏 CAD、尖角、薄特征、边界层、并行合缝——LAVA / VoroCrust / cfMesh 文献篇幅多在此，而非「算一次 Voronoi」。
 
+> **落地状态（2026-08-14）：** `polymesh.py` 已实现路线 (B)：Voronoi 对偶 +
+> 表面裁剪 + Lloyd 平滑 + 近壁层（LAVA 式拉伸 seed）+ VoroCrust 式镜像加权
+> seed 特征保形（`--preserve-features --lloyd N --layers N`）。详见
+> `docs/POLYMESH_NOTES.md`。
+
 #### 0.5.6 选型小结
 
 | 问题 | 建议 |
@@ -672,19 +677,23 @@ build_am:
 
 ## 10. 现状总表（快照）
 
+> 2026-08-14：Execute（未勾选 API）与向导 Build/Create Facet 已接入
+> 原生 BAM 管线（`native_bam.py`，见 `docs/NATIVE_BAM_NOTES.md`），
+> L3/L4 在原生路径下可达；宿主路径（🔌）仍待 AutomationBridge。
+
 | 模块 | L1 UI | L2 参数 | L3 驱动 | L4 结果 |
 |------|-------|---------|---------|---------|
-| Shell（8/9 页） | ◑ 缺 Influence | ◑ | ❌ Next/Create 真执行 | — |
-| Interference | ◑ | ◑ xenv | ❌ octree 子框 | — |
-| Multi-fold | ◑ 空树 | ◑ tol | 🔌 | 🔌 |
+| Shell（8/9 页） | ◑ 缺 Influence | ◑ | ◑ 原生 BAM（向导 Build/Create Facet） | ◑ |
+| Interference | ◑ | ◑ xenv | ◑ 原生投影参数 | ◑ |
+| Multi-fold | ◑ 空树 | ◑ tol | ◑ 原生 `detect_multifold` | ◑ 报告 |
 | Acc Whole | ◑ | ◑ | 🔌 Preview | 🔌 |
-| Acc Part | ◑ | ◑ session | ❌ 真 Edit 对话框 | 🔌 |
-| Influence | ❌ | ❌ | ❌ | — |
-| Auto Tiny | ◑ | ◑ ratio | 🔌 | 🔌 |
-| Face Match | ◑ | ◑ tol | 🔌 | 🔌 |
-| Remove Tiny | ◑ | ◑ tol | 🔌 | 🔌 |
-| Repair | ◑ | ◑ | 🔌 Clean/Build | 🔌 |
-| 确认框+Detailed | ✅ | — | OK→flag only | — |
+| Acc Part | ◑ | ◑ session | ◑ 原生透传 | 🔌 |
+| Influence | ◑ 已补 | ◑ 记录 targets | ◑ 原生记录 | 🔌 几何效应 |
+| Auto Tiny | ◑ | ◑ ratio | ◑ 原生 `remove_tiny` | ◑ 报告 |
+| Face Match | ◑ | ◑ tol | ◑ 原生 `match_faces` | ◑ frid 合并 |
+| Remove Tiny | ◑ | ◑ tol | ◑ 原生 `remove_tiny_faces` | ◑ 报告 |
+| Repair | ◑ | ◑ | ◑ 原生 `repair_surface`/`check_errors` | ✅ native_report |
+| 确认框+Detailed | ✅ | — | ✅ OK→向导/原生 BAM | — |
 | Polyhedral 门控 | ✅ | ✅ | — | — |
 
 ---
@@ -696,7 +705,11 @@ build_am:
 - [x] **Always show wizard / OK 自动进向导**
 - [x] **BAM-Octree 子对话框挂到 Specify octree**
 - [x] **Create Facet/Build 接入现有 VBS 管线并 Reload**
-- [ ] **结果列表从 MDL/报告回填（先 Repair，再 tiny/multifold）**（Repair 已回填；tiny/multifold 待宿主/几何结果）
+- [x] **原生 BAM 旁路**（API 关闭）：闭体识别/多重边/匹配/微小面/Repair/
+  CheckErrors/ridge → 布局一致 `*_part.mdl`（`native_bam.py` +
+  `docs/NATIVE_BAM_NOTES.md`）
+- [ ] **结果列表从 MDL/报告回填（先 Repair，再 tiny/multifold）**（Repair 已回填
+  native_report；tiny/multifold 原生已出报告，宿主/几何结果待 AutomationBridge）
 
 ---
 
