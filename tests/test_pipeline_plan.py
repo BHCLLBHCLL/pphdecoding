@@ -114,12 +114,13 @@ class TestLockedCommands(unittest.TestCase):
                 self.assertIn(command, lines[path][lineno - 1],
                               f"line {lineno} does not contain {command}")
 
-    def test_wrapping_commands_removed_from_vbs_defaults(self):
-        # Begin/Execute Wrapping 在 v1-v4 录制中均未出现，
-        # 已从 VBS 默认命令中移除，改走 NativeBridge。
-        for key in ("begin_wrapping", "execute_wrapping"):
-            self.assertNotIn(key, LOCKED_COMMANDS)
-            self.assertNotIn(key, UNLOCKED_COMMANDS)
+    def test_wrapping_locked_from_new_recording(self):
+        # Begin Wrapping 已由 box_scflow_wrapping.vbs 录制锁定；
+        # 单独的 execute_wrapping 步骤键仍不使用（ExecuteWrapping 在
+        # begin_wrapping 序列内）。
+        self.assertIn("begin_wrapping", LOCKED_COMMANDS)
+        self.assertNotIn("execute_wrapping", LOCKED_COMMANDS)
+        self.assertNotIn("execute_wrapping", UNLOCKED_COMMANDS)
         self.assertNotIn("quit", LOCKED_COMMANDS)
 
 
@@ -341,7 +342,9 @@ class TestWrappingAndCreateVbs(unittest.TestCase):
         acts = wrapping_actions("exec_wrap", "proj.pph")
         joined = "\n".join(acts)
         self.assertIn('SetPartsControl "Wrapping", True', joined)
-        self.assertIn("TODO", joined)
+        self.assertIn("WrappingGroup_.ExecuteWrapping", joined)
+        self.assertIn("Octree_.UpdateGroups", joined)
+        self.assertNotIn("TODO", joined)
 
     def test_create_parts_begin_solid_edit(self):
         from automation.pipeline_plan import create_parts_actions

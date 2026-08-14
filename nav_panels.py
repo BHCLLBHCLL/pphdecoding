@@ -13582,23 +13582,25 @@ class ExecuteBody(_Body):
         v.addWidget(_note(
             "[Execute] 批处理\n"
             "勾选步骤并 OK/Apply；默认经 scFLOWpre COM API 执行 "
-            "BAM / Octree / Mesh。\n"
+            "Wrapping / BAM / Octree / Mesh。\n"
             "Execute Solver 本查看器不支持（仍为 NYI）。"))
         box = QGroupBox("Process")
         bv = QVBoxLayout(box)
+        self.chk_wrap = QCheckBox("Wrapping (from CAD)")
         self.chk_bam = QCheckBox("Build Analysis Model")
         self.chk_oct = QCheckBox("Generate Octree for Meshing")
         self.chk_mesh = QCheckBox("Generate Mesh")
         self.chk_files = QCheckBox("Create files (mesh / condition)")
         self.chk_save = QCheckBox("Save project")
         self.chk_solver = QCheckBox("Execute Solver (not available)")
+        self.chk_wrap.setChecked(False)
         self.chk_bam.setChecked(True)
         self.chk_oct.setChecked(True)
         self.chk_mesh.setChecked(True)
         self.chk_use_api = QCheckBox(
             "使用 scFLOWpre API 构建 Model / Octree / Mesh")
         self.chk_use_api.setChecked(True)
-        for w in (self.chk_bam, self.chk_oct, self.chk_mesh,
+        for w in (self.chk_wrap, self.chk_bam, self.chk_oct, self.chk_mesh,
                   self.chk_files, self.chk_save, self.chk_solver):
             bv.addWidget(w)
         bv.addWidget(self.chk_use_api)
@@ -13614,6 +13616,7 @@ class ExecuteBody(_Body):
 
     def load(self, ctx: dict) -> None:
         ex = ctx.setdefault("session", {}).setdefault("execute", {})
+        self.chk_wrap.setChecked(ex.get("wrapping", False))
         self.chk_bam.setChecked(ex.get("bam", True))
         self.chk_oct.setChecked(ex.get("oct", True))
         self.chk_mesh.setChecked(ex.get("mesh", True))
@@ -13642,6 +13645,7 @@ class ExecuteBody(_Body):
                 "Execute Solver is not available in PPH viewer.\n"
                 "Use scFLOWsolver / scPOST separately.")
         ctx.setdefault("session", {})["execute"] = {
+            "wrapping": self.chk_wrap.isChecked(),
             "bam": self.chk_bam.isChecked(),
             "oct": self.chk_oct.isChecked(),
             "mesh": self.chk_mesh.isChecked(),

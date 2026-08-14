@@ -5946,6 +5946,14 @@ class PphViewer(QMainWindow):
                 gph_name = gm[0].name
         return part_name, oct_name, gph_name
 
+    def _native_wrap_member_name(self) -> str:
+        """Wrapping 生成的 MDL 成员名：已有 *_wrap.mdl 则复用。"""
+        if self.arch:
+            for m in self.arch.members:
+                if "_wrap.mdl" in m.name.lower():
+                    return m.name
+        return "meshinggroup1_wrap.mdl"
+
     def _run_native_pipeline(self, ctx: dict, plan: dict,
                              steps: list[str]) -> None:
         """未启用 scFLOWpre API 时：用自研算法原生生成 Octree/Mesh。
@@ -5984,6 +5992,17 @@ class PphViewer(QMainWindow):
         need_mesh = any(s == "generate_mesh" for s in steps)
         if any(s == "build_analysis_model" for s in steps):
             msgs.append(f"BAM({src_kind}表面)")
+        if plan.get("wrapping"):
+            try:
+                import mdl as mdlmod
+                tmp = Path(self.tmp_dir) / "native_wrap.mdl"
+                mdlmod.write_mdl(
+                    tmp, points, tris, app="pphdecoding", date=20260814)
+                overrides[self._native_wrap_member_name()] = tmp.read_bytes()
+                msgs.append("Wrapping(CAD→MDL)")
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"Execute（原生模式）Wrapping 写出失败: {exc}",
+                         "WARN")
         if src_kind == "CAD" and not self.arch.by_role(
                 pph_parser.ROLE_MDL_PART):
             # 从 x_t 剖分生成最小 *_part.mdl 面片成员（LS_Faces/Csid/Frid/

@@ -19,6 +19,237 @@ from typing import Optional
 
 from pph_parser import PphArchive
 
+# ── Wrapping（从 x_t 曲面）录制锁定参数 ──────────────────────────────────
+# 来源：box_scflow_wrapping.vbs（2026/08/14）：
+# Doc_.BeginWrapping → Doc_.CreateWrappingGroup → WrappingGroup_.GetOctParam
+# → WrappingParam_.SetMethod/SetOutsideType/SetOutsideRegions/SetInsideGroups
+# → WrappingGroup_.CreateOctree → ExecuteWrapping ×4 → Octree_.UpdateGroups →
+# ExecuteWrapping ×2 → Doc_.EndWrapping。
+WRAP_OCT_PARAM_PAIRS: list[tuple[str, str]] = [
+    ("BALANCING", "3"),
+    ("BASELEV.MAX", "6"),
+    ("BASELEV.MIN", "-1"),
+    ("BASELEV.ROOTFAC", "1.3999999999999999"),
+    ("BASEMODE", "2"),
+    ("BASENAME", ""),
+    ("BASENELEM", "0"),
+    ("BASEPOS", "1"),
+    ("BASEPOS.X", "0"),
+    ("BASEPOS.Y", "0"),
+    ("BASEPOS.Z", "0"),
+    ("BASESIZE.MAX", "0.001"),
+    ("BASESIZE.MIN", "0.00050000000000000001"),
+    ("BASESIZEFORAUTOGEN", "0"),
+    ("BOUNDARYRANGE", "0"),
+    ("CHECKONLYFLUID", "0"),
+    ("CSPCGROUPINGTYPE", "0"),
+    ("IGNOREDRATIO", "0.0001"),
+    ("INITIALIZED", "0"),
+    ("NUMERICALREGION.N", "0"),
+    ("OCTNAME", ""),
+    ("PATCHEFFECTMODE", "0"),
+    ("PROXIMITYITEM.N", "0"),
+    ("REFMODEL.N", "0"),
+    ("REFSECTITEM.N", "0"),
+    ("REGNMODE", "0"),
+    ("REGNNAME", ""),
+    ("SECTAVOIDORDERDEPENDENCY", "1"),
+    ("SECTGRP2", "0"),
+    ("SECTITEM.N", "1"),
+    ("SECTITEM[0].NAME", "Part"),
+    ("SECTITEM[0].NEIGHBOR", "0"),
+    ("SECTITEM[0].SIZE", "0.00050000000000000001"),
+    ("SECTTYPE", "1"),
+    ("TARGETNUMBER", "100000"),
+]
+
+WRAP_PARAM_PAIRS: list[tuple[str, str]] = [
+    ("AVOIDEDGECONTACT", "0"),
+    ("AVOIDMULTINODE", "0"),
+    ("CORRECTGROUPTYPE", "2"),
+    ("EXPANDNARRAWSPACE", "3"),
+    ("EXPANDRT", "0.10000000000000001"),
+    ("EXPANDTHIN", "1"),
+    ("EXTRACTEDGEAFTERTARGET", "2"),
+    ("FILLHOLE", "0"),
+    ("FITTOEDGE", "4"),
+    ("IMPROVERELATION", "3"),
+    ("LOGNAME", ""),
+    ("MARKEDFACE", "0"),
+    ("MARKEDGELIST", "0"),
+    ("MDLMODE", "0"),
+    ("MDLNAME", ""),
+    ("NEARTPATCHTYPE", "2"),
+    ("NEWCOORDTYPE", "2"),
+    ("NOCONNECT.N", "0"),
+    ("NOCONNECTTYPE", "1"),
+    ("NOTEXPANDREGN.N", "0"),
+    ("NUMOFOCTTOIGNORE", "0"),
+    ("OCTMODE", "0"),
+    ("OCTNAME", ""),
+    ("PROJECTANDMOVEINNORMTYPE", "2"),
+    ("PROTECTNDTP", "2"),
+    ("RECOVERYTYPE", "0"),
+    ("REFINEDOCTNAME", ""),
+    ("REGISTFRGN", "0"),
+    ("REMOVEISECT", "1"),
+    ("REMOVENARRAWTHIN", "0"),
+    ("REPORTEDGELIST", "0"),
+    ("SMOOTHTYPE", "2"),
+    ("SMTUNFITBDRY", "3"),
+    ("SMTUNFITEDGE", "30"),
+    ("SWAPEDGE", "3"),
+    ("TARGETGRP.N", "1"),
+    ("TARGETGRP[0]", "2"),
+    ("TARGETOCTDIV", "1"),
+    ("UPDATENEARESTFACETYPE", "3"),
+    ("USERAWEDGELIST", "0"),
+    ("WRAPPEDMDLNAME", ""),
+    ("WTOECANCELRANGE", "3"),
+    ("WTOETYPE", "1"),
+]
+
+
+def _array_assign_actions(pairs: list[tuple[str, str]],
+                          var: str = "ArrayParam1_") -> list[str]:
+    """键值对 → ``Dim/Redim ArrayParam1_(n)`` + 逐项字符串赋值。"""
+    n = len(pairs) * 2 - 1
+    actions = [f"Dim {var}()", f"Redim {var}({n})"]
+    for i, (key, val) in enumerate(pairs):
+        esc = str(val).replace('"', '""')
+        actions.append(f'{var}({i * 2}) = "{key}"')
+        actions.append(f'{var}({i * 2 + 1}) = "{esc}"')
+    return actions
+
+
+def _wrapping_param_actions(marked_face: int = 0) -> list[str]:
+    """WrappingParam：Method/OutsideType/OutsideRegions/InsideGroups/SetParams。"""
+    pairs = [list(p) for p in WRAP_PARAM_PAIRS]
+    for p in pairs:
+        if p[0] == "MARKEDFACE":
+            p[1] = str(int(marked_face))
+    actions = [
+        'Param1_ = "outside"',
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set WrappingParam_ = WrappingGroup_.GetWrappingParam",
+        "WrappingParam_.SetMethod Param1_",
+        'Param1_ = "all"',
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set WrappingParam_ = WrappingGroup_.GetWrappingParam",
+        "WrappingParam_.SetOutsideType Param1_",
+        "Redim ArrayParam1_(-1)",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set WrappingParam_ = WrappingGroup_.GetWrappingParam",
+        "WrappingParam_.SetOutsideRegions ArrayParam1_",
+        "Redim ArrayParam1_(-1)",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set WrappingParam_ = WrappingGroup_.GetWrappingParam",
+        "WrappingParam_.SetInsideGroups ArrayParam1_",
+        *_array_assign_actions(pairs),
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set WrappingParam_ = WrappingGroup_.GetWrappingParam",
+        "WrappingParam_.SetParams ArrayParam1_",
+    ]
+    return actions
+
+
+def _wrapping_oct_param_actions() -> list[str]:
+    """WrappingGroup 八叉树参数（录制顺序：SetOctType→Initialize→SetParams）。"""
+    actions = [
+        "Param1_ = 3",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set OctParam_ = WrappingGroup_.GetOctParam",
+        "OctParam_.SetOctType Param1_",
+        "Param1_ = 1",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set OctParam_ = WrappingGroup_.GetOctParam",
+        "OctParam_.SetOctType Param1_",
+        'Param1_ = "@TemporaryOct"',
+        "Doc_.DeleteTemporaryDrawingObject Param1_",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set OctParam_ = WrappingGroup_.GetOctParam",
+        "OctParam_.Initialize",
+        "Param1_ = 3",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set OctParam_ = WrappingGroup_.GetOctParam",
+        "OctParam_.SetOctType Param1_",
+        "Param1_ = 10000",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set OctParam_ = WrappingGroup_.GetOctParam",
+        "OctParam_.SetMeshNum Param1_",
+        "Param1_ = 0",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set OctParam_ = WrappingGroup_.GetOctParam",
+        "OctParam_.SetMinSize Param1_",
+        *_array_assign_actions(WRAP_OCT_PARAM_PAIRS),
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set OctParam_ = WrappingGroup_.GetOctParam",
+        "OctParam_.SetParams ArrayParam1_",
+        "Param1_ = -1",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set OctParam_ = WrappingGroup_.GetOctParam",
+        "OctParam_.SetGlobalAngularPrecisionMinOctLimitSize Param1_",
+        "Redim ArrayParam1_(-1)",
+        "Redim ArrayParam2_(-1)",
+        "Redim ArrayParam3_(-1)",
+        "Redim ArrayParam4_(-1)",
+        "OctParam_.SetAngularPrecision ArrayParam1_, ArrayParam2_, "
+        "ArrayParam3_, ArrayParam4_",
+        'Param1_ = "default"',
+        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
+        "MeshingGroup_.SetOctCreateTypeWithSolidBaseOct Param1_",
+    ]
+    return actions
+
+
+def _wrapping_body_actions() -> list[str]:
+    """Execute 管线用 wrapping 主体（不含 App/Doc/Open 头，含 EndWrapping）。"""
+    actions = [
+        'Conditions_.SetPartsControl "Wrapping", True',
+        "Doc_.BeginWrapping",
+        "Doc_.CreateWrappingGroup",
+        "Param1_ = False",
+        'Set FaceRegion_ = Doc_.QueryFaceRegionByName("@PartSurface_Part")',
+        "FaceRegion_.SetIsContactAngleSet Param1_",
+        *_wrapping_oct_param_actions(),
+        *_wrapping_param_actions(0),
+        'Param1_ = "Rearrange on the tree window"',
+        "Doc_.BeginTransaction Param1_",
+        'Param1_ = "Part"',
+        'Param2_ = ""',
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set SNode_ = WrappingGroup_.GetRootSNode",
+        "SNode_.MoveToChild Param1_, Param2_",
+        "Doc_.EndTransaction",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "WrappingGroup_.CreateOctree",
+        "Doc_.SetModeOctree",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(0)",
+        "WrappingGroup_.ExecuteWrapping",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "WrappingGroup_.ExecuteWrapping",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(0)",
+        "WrappingGroup_.ExecuteWrapping",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "WrappingGroup_.ExecuteWrapping",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set Octree_ = WrappingGroup_.GetOctree",
+        "Octree_.UpdateGroups",
+        *_wrapping_param_actions(1),
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "Set Octree_ = WrappingGroup_.GetOctree",
+        "Octree_.UpdateGroups",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(0)",
+        "WrappingGroup_.ExecuteWrapping",
+        "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+        "WrappingGroup_.ExecuteWrapping",
+        "Doc_.EndWrapping",
+    ]
+    return actions
+
+
+WRAPPING_BODY_ACTIONS: list[str] = _wrapping_body_actions()
+
 # ── BAM（Analysis Model Wizard）录制锁定流程 ─────────────────────────────
 # 来源：box_scflow_mdl.vbs（2026/08/14）：BeginMDLWizard → GetMDLWizard →
 # CreateBoundary → CreateMultiEntityInfo ×6 → CreateMDL → FindAFFaceMatching
@@ -140,6 +371,8 @@ LOCKED_COMMANDS: dict[str, str] = {
     "generate_mesh": (                                               # :5276,5283 (v1)
         "MeshingGroup_.CreateMeshMonitor\nDoc_.WaitForWorker"),
     "set_mode_mesh": "Doc_.SetModeMesh",                             # :5285 (v1)
+    # Wrapping 从 x_t 曲面录制锁定（box_scflow_wrapping.vbs）
+    "begin_wrapping": "\n".join(WRAPPING_BODY_ACTIONS),
     "save_project": 'Doc_.SaveProject "{path}"',                     # :7209 (v1)
 }
 
@@ -170,11 +403,12 @@ DEFAULT_STEPS = [
 
 # GUI Execute 面板复选框 -> PipelinePlan 步骤（顺序固定为 BAM → Octree → Mesh）
 EXECUTE_STEP_MAP: dict[str, list[str]] = {
+    "wrapping": ["begin_wrapping"],
     "bam": ["build_analysis_model"],
     "oct": ["generate_octree", "set_mode_octree"],
     "mesh": ["generate_mesh", "set_mode_mesh"],
 }
-DEFAULT_EXECUTE_ORDER = ["bam", "oct", "mesh"]
+DEFAULT_EXECUTE_ORDER = ["wrapping", "bam", "oct", "mesh"]
 
 
 def steps_from_execute_plan(plan: dict) -> list[str]:
@@ -569,7 +803,7 @@ _WRAP_OP_COMMENTS: dict[str, str] = {
 
 
 def wrapping_actions(op: str, project_path: str | Path) -> list[str]:
-    """生成 Wrapping/Disc/Overset 宿主脚本草稿（含锁定的 PartsControl）。"""
+    """生成 Wrapping/Disc/Overset 宿主脚本（wrapping 序列已录制锁定）。"""
     path = Path(project_path).as_posix()
     comment = _WRAP_OP_COMMENTS.get(op, op)
     actions = [
@@ -578,7 +812,6 @@ def wrapping_actions(op: str, project_path: str | Path) -> list[str]:
         'CreateObject("scFLOWpre_Bx64net.Application.2025")',
         "Set Doc_ = App_.GetDocument",
         f'Doc_.OpenProject "{path}", False',
-        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
         "Set Conditions_ = Doc_.GetConditions",
     ]
     if op == "specify_disc":
@@ -586,10 +819,33 @@ def wrapping_actions(op: str, project_path: str | Path) -> list[str]:
             'Conditions_.SetPartsControl "Discontinuous", True')
     elif op == "overset_mesh":
         actions.append('Conditions_.SetPartsControl "Overset", True')
-    elif op in ("begin_wrap", "exec_wrap", "retry_wrap",
-                "cancel_wrap", "wrap_octree", "wrap_param"):
+    elif op == "begin_wrap":
         actions.append('Conditions_.SetPartsControl "Wrapping", True')
-        actions.append(f"' TODO: {comment}")
+        actions.extend(_wrapping_body_actions())
+    elif op in ("exec_wrap", "retry_wrap"):
+        actions.append('Conditions_.SetPartsControl "Wrapping", True')
+        actions.extend([
+            "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(0)",
+            "WrappingGroup_.ExecuteWrapping",
+            "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+            "WrappingGroup_.ExecuteWrapping",
+            "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
+            "Set Octree_ = WrappingGroup_.GetOctree",
+            "Octree_.UpdateGroups",
+        ])
+    elif op == "cancel_wrap":
+        actions.append('Conditions_.SetPartsControl "Wrapping", True')
+        actions.append("Doc_.CancelWrapping")
+    elif op == "wrap_octree":
+        actions.append('Conditions_.SetPartsControl "Wrapping", True')
+        actions.append("Doc_.BeginWrapping")
+        actions.append("Doc_.CreateWrappingGroup")
+        actions.extend(_wrapping_oct_param_actions())
+    elif op == "wrap_param":
+        actions.append('Conditions_.SetPartsControl "Wrapping", True')
+        actions.append("Doc_.BeginWrapping")
+        actions.append("Doc_.CreateWrappingGroup")
+        actions.extend(_wrapping_param_actions(0))
     else:
         actions.append(f"' TODO: {comment}")
     actions.append(f'Doc_.SaveProject "{path}"')
@@ -704,6 +960,7 @@ def build_execute_vbs(project_path: str | Path, plan: dict,
         actions[idx:idx] = oct_param_actions(octree_sess)
     if step_marker is not None:
         for anchor, step in (
+            ("Doc_.EndWrapping", "wrap"),
             ("MeshingGroup_.EndMDLWizard", "bam"),
             ("MeshingGroup_.CreateOctree", "octree"),
             ("Doc_.WaitForWorker", "mesh"),
