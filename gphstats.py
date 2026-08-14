@@ -331,6 +331,7 @@ def summarize(data) -> dict:
     links = links_summary(data)
     cvol = cvol_ids(data)
     n_vertices, dialect = nodes_vertex_count(data)
+    cells = _cells_summary(data)
     return {
         "links": links,
         "cvol_unique": None if cvol is None else np.unique(cvol).tolist(),
@@ -340,7 +341,23 @@ def summarize(data) -> dict:
         "surface_regions": surface_regions_summary(data),
         "volume_regions": string_list(data, "LS_VolumeRegions"),
         "parts": parts_summary(data, cvol),
+        "cells": cells,
     }
+
+
+def _cells_summary(data) -> Optional[dict]:
+    """单元重建摘要（单元类型直方图），供 summarize 使用；失败返回 None。"""
+    try:
+        mesh = parse_mesh(data)
+        if not mesh or not mesh.get("n_faces"):
+            return None
+        cm = build_cells(mesh["owner"], mesh["neigh"], mesh["npe"])
+        return {
+            "n_cells": cm["n_cells"],
+            "type_histogram": cm["type_histogram"],
+        }
+    except Exception:
+        return None
 
 
 def summarize_quick(data) -> dict:
@@ -365,6 +382,118 @@ def summarize_quick(data) -> dict:
 def summarize_file(path: str) -> dict:
     with open_buffer(path) as data:
         return summarize(data)
+
+
+# ── 单元重建与分类（把「轻量统计」补齐为完整单元模型）─────────────
+CELL_TETRAHEDRON = "tetrahedron"
+CELL_PYRAMID = "pyramid"
+CELL_PRISM = "prism"          # 三棱柱 / wedge
+CELL_HEXAHEDRON = "hexahedron"
+CELL_POLYHEDRAL = "polyhedral"
+
+
+def _cell_type(n_faces: int, tri: int, quad: int) -> str:
+    """按面数与三角形/四边形面数分类单元类型。"""
+    if n_faces == 4 and tri == 4:
+        return CELL_TETRAHEDRON
+    if n_faces == 6 and quad == 6:
+        return CELL_HEXAHEDRON
+    if n_faces == 5 and tri == 2 and quad == 3:
+        return CELL_PRISM
+    if n_faces == 5 and tri == 4 and quad == 1:
+        return CELL_PYRAMID
+    return CELL_POLYHEDRAL
+
+
+def classify_cell(npe_of_faces) -> str:
+    """按各面顶点数（npe）分类单个单元。
+
+    四节点面 = 四边形；三节点面 = 三角形；>4 = 多面体面。
+    """
+    npe_of_faces = np.asarray(npe_of_faces, dtype=np.int64)
+    n = int(npe_of_faces.size)
+    tri = int((npe_of_faces == 3).sum())
+    quad = int((npe_of_faces == 4).sum())
+    return _cell_type(n, tri, quad)
+
+
+def build_cells(owner, neigh, npe, n_cells=None) -> dict:
+    """从 LS_Links 面数据重建单元（单元→面邻接 + 单元类型直方图）。
+
+    ``owner``/``neigh``/``npe``：长度 ``n_faces``；``neigh == 0xFFFFFFFF``
+    为边界面。单元 ``c`` 的面 = 所有 ``owner == c`` **或** ``neigh == c``
+    的面（GPH 中内部面只存一次，由 owner/neigh 双向归属）。
+
+    返回：``n_cells`` / ``cell_face_offsets``(CSR) / ``cell_faces``(平铺面号)
+    / ``cell_face_counts`` / ``cell_types``(list[str]) / ``type_histogram``
+    (dict[str,int])。全 numpy 向量化，百万级单元亦可承受。
+    """
+    owner = np.asarray(owner, dtype=np.int64)
+    neigh = np.asarray(neigh, dtype=np.int64)
+    npe = np.asarray(npe, dtype=np.int64)
+    n_faces = int(owner.size)
+    empty = {
+        "n_cells": 0,
+        "cell_face_offsets": np.zeros(1, dtype=np.int64),
+        "cell_faces": np.empty(0, dtype=np.int64),
+        "cell_face_counts": np.empty(0, dtype=np.int64),
+        "cell_types": [],
+        "type_histogram": {},
+    }
+    if n_faces == 0:
+        return empty
+    internal = neigh != 0xFFFFFFFF
+    if n_cells is None:
+        hi = int(owner.max())
+        if internal.any():
+            hi = max(hi, int(neigh[internal].max()))
+        n_cells = hi + 1
+    if n_cells <= 0:
+        return empty
+    # 每个内部面贡献两个 (cell, face) 对，边界面贡献一个
+    cells = np.concatenate([owner, neigh[internal]])
+    faces = np.concatenate([
+        np.arange(n_faces, dtype=np.int64),
+        np.arange(n_faces, dtype=np.int64)[internal],
+    ])
+    order = np.argsort(cells, kind="stable")
+    cells = cells[order]
+    faces = faces[order]
+    counts = np.bincount(cells, minlength=n_cells).astype(np.int64)
+    offsets = np.zeros(n_cells + 1, dtype=np.int64)
+    np.cumsum(counts, out=offsets[1:])
+    npe_cf = npe[faces]
+    tri = np.add.reduceat((npe_cf == 3).astype(np.int64), offsets[:-1])
+    quad = np.add.reduceat((npe_cf == 4).astype(np.int64), offsets[:-1])
+    types = np.empty(n_cells, dtype=object)
+    types[:] = CELL_POLYHEDRAL
+    types[(counts == 4) & (tri == 4)] = CELL_TETRAHEDRON
+    types[(counts == 6) & (quad == 6)] = CELL_HEXAHEDRON
+    types[(counts == 5) & (tri == 2) & (quad == 3)] = CELL_PRISM
+    types[(counts == 5) & (tri == 4) & (quad == 1)] = CELL_PYRAMID
+    uniq, cnt = np.unique(types, return_counts=True)
+    return {
+        "n_cells": int(n_cells),
+        "cell_face_offsets": offsets,
+        "cell_faces": faces,
+        "cell_face_counts": counts,
+        "cell_types": [str(t) for t in types],
+        "type_histogram": dict(zip([str(u) for u in uniq],
+                                   [int(c) for c in cnt])),
+    }
+
+
+def mesh_cells(mesh: dict) -> dict:
+    """对 :func:`parse_mesh` 的结果重建单元。"""
+    if not mesh or not mesh.get("n_faces"):
+        return build_cells(np.empty(0, np.int64), np.empty(0, np.int64),
+                           np.empty(0, np.int64))
+    return build_cells(mesh["owner"], mesh["neigh"], mesh["npe"])
+
+
+def gph_cells(data) -> dict:
+    """打开 GPH buffer → 单元模型（单元类型直方图 + 单元→面邻接）。"""
+    return mesh_cells(parse_mesh(data))
 
 
 def parse_mesh(data) -> dict:
@@ -483,7 +612,11 @@ def write_gph_volume(filepath,
                      owner,
                      neigh,
                      app: str = "SCTpre",
-                     date: int = 20260812) -> "Path":
+                     date: int = 20260812,
+                     cvol=None,
+                     volume_regions=None,
+                     surface_regions=None,
+                     parts=None) -> "Path":
     """写完整 CRDL-FLD GPH 体网格（``LS_Links`` 含 owner/neigh）。
 
     ``vertices``：(n,3) 浮点坐标；``faces``：多边形顶点索引列表（0-based），
@@ -515,6 +648,8 @@ def write_gph_volume(filepath,
                     _descriptor(4, 1, 1) + _descriptor(4, date, 4))
     out += _section("HeaderDataEnd", b"")
     out += _section("OverlapStart_0", b"")
+    if cvol is not None:
+        out += _cvol_section(cvol)
 
     npe = _np.array([len(f) for f in faces], dtype=">u4")
     conn = _np.asarray(conn_flat, dtype=">u4")
@@ -536,8 +671,83 @@ def write_gph_volume(filepath,
         _block(verts[:, 1].astype(">f8").tobytes()) +
         _block(verts[:, 2].astype(">f8").tobytes()))
     out += _section("LS_Nodes", nodes)
+    if surface_regions is not None:
+        out += _surface_regions_section(surface_regions)
+    if volume_regions is not None:
+        out += _volume_regions_section(volume_regions)
+    if parts is not None:
+        out += _parts_section(parts)
     out += _section("OverlapEnd", b"")
 
     path = Path(filepath)
     path.write_bytes(bytes(out))
     return path
+
+def _cvol_section(cvol) -> bytes:
+    """LS_CvolIdOfElements：每单元 cvol id（I4[n_cells]，大端）。"""
+    cvol = np.asarray(cvol, dtype=">i4").reshape(-1)
+    n = int(cvol.size)
+    body = (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+            _descriptor(4, 1, 1) + _descriptor(4, n, 4) +
+            _descriptor(4, n, 1) + _block(cvol.tobytes()))
+    return _section("LS_CvolIdOfElements", body)
+
+
+def _name255(text: str) -> bytes:
+    return text.encode("ascii")[:255].ljust(255, b" ")
+
+
+def _volume_regions_section(names) -> bytes:
+    """LS_VolumeRegions：体区域名列表（box 布局：无内部种子点）。"""
+    names = list(names)
+    body = bytearray()
+    body += (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+             _descriptor(4, 1, 1) + _descriptor(4, len(names), 4) +
+             _descriptor(4, 1, 1) + _descriptor(4, 255, 4))
+    for name in names:
+        body += _block(_name255(name))
+        body += (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+                 _descriptor(4, 1, 1) + _descriptor(4, 1, 4))
+    return _section("LS_VolumeRegions", bytes(body))
+
+
+def _surface_regions_section(regions) -> bytes:
+    """LS_SurfaceRegions：面区域（名称 + 面号数组，大端 I4）。
+
+    ``regions`` 为 ``[(name, face_ids), ...]``，face_ids 为 0-based 面号。
+    """
+    regions = list(regions)
+    body = bytearray()
+    body += (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+             _descriptor(4, 1, 1) + _descriptor(4, len(regions), 4) +
+             _descriptor(4, 1, 1) + _descriptor(4, 255, 4))
+    for name, ids in regions:
+        ids = np.asarray(ids, dtype=">i4").reshape(-1)
+        n = int(ids.size)
+        body += _block(_name255(name))
+        body += (_descriptor(4, 1, 1) + _descriptor(4, n, 4) +
+                 _descriptor(4, n, 1) + _block(ids.tobytes()))
+        body += _descriptor(4, n, 1) + _block(
+            np.full(n, 1, dtype=">i4").tobytes())
+    return _section("LS_SurfaceRegions", bytes(body))
+
+
+def _parts_section(parts) -> bytes:
+    """LS_Parts：部件名 + cvol 规格（简单 int 或复合 id 列表）。"""
+    parts = list(parts)
+    body = bytearray()
+    body += (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+             _descriptor(4, 1, 1) + _descriptor(4, len(parts), 4) +
+             _descriptor(4, 1, 1) + _descriptor(4, 255, 4))
+    for name, spec in parts:
+        body += _block(_name255(name))
+        if isinstance(spec, (list, tuple, set)):
+            ids = sorted(set(int(x) for x in spec))
+            body += (_descriptor(4, 1, 1) + _descriptor(4, len(ids), 4) +
+                     _descriptor(4, 1, 1) + _descriptor(4, len(ids), 4) +
+                     _block(np.asarray(ids, dtype=">i4").tobytes()))
+        else:
+            cid = int(spec)
+            body += (_descriptor(4, 1, 1) + _descriptor(4, cid, 4) +
+                     _descriptor(4, 1, 1) + _descriptor(4, cid, 4))
+    return _section("LS_Parts", bytes(body))

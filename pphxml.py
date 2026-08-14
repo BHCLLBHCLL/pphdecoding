@@ -57,17 +57,31 @@ def serialize_main_xml(root: ET.Element) -> str:
                   r"<\1\2[\3]\4\5", text)
 
 
-# 快照 unit_type 码 → xenv 长度单位键（样例恒为 1 == MODEL_LENGTH_UNIT，
-# 即 'm'）。其余码值需多单位制样例确认后补充。
+# 快照 VWU 标签 → xenv 单位键（量纲感知）。unit_type 码实测恒为 1（SI）；
+# 完整「码值→单位系统」枚举需多单位制样例（与 units.VWU_TAG_TO_XENV_KEY 一致）。
+VWU_TAG_TO_XENV_KEY: dict[str, str] = {
+    "LENGTHVWU": "MODEL_LENGTH_UNIT",
+    "ANGLEVWU": "DEFAULT_ANGLE_UNIT",
+    "AREAVWU": "DEFAULT_AREA_UNIT",
+    "DENSITYVWU": "DEFAULT_DENSITY_UNIT",
+    "ENERGYVWU": "DEFAULT_ENERGY_UNIT",
+    "FORCEVWU": "DEFAULT_FORCE_UNIT",
+    "TIMEVWU": "DEFAULT_TIME_UNIT",
+    "VOLUMEVWU": "DEFAULT_VOLUME_UNIT",
+    "DPOINTU": "DEFAULT_COORDX_UNIT",
+}
+
 UNIT_TYPE_TO_XENV_KEY: dict[int, str] = {1: "MODEL_LENGTH_UNIT"}
 
 
 def resolve_snapshot_unit(unit_type: int,
-                          xenv: "XenvSettings") -> Optional[str]:
-    """把快照 ``LENGTHVWU``/``DPOINTU`` 的 ``unit_type`` 解析为 xenv 单位串。"""
-    key = UNIT_TYPE_TO_XENV_KEY.get(unit_type)
-    if key is None:
+                          xenv: "XenvSettings",
+                          tag: str = "LENGTHVWU") -> Optional[str]:
+    """把快照 ``LENGTHVWU``/``DPOINTU`` 等 VWU 记录的 ``unit_type`` 解析为
+    xenv 单位串；``tag`` 决定量纲（取哪个 DEFAULT_*_UNIT 键）。"""
+    if unit_type != 1:
         return None
+    key = VWU_TAG_TO_XENV_KEY.get(tag, "MODEL_LENGTH_UNIT")
     return xenv.get("UNIT", key)
 
 

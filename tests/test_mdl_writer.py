@@ -63,6 +63,27 @@ class TestWriteMdl(unittest.TestCase):
         self.assertEqual(pd.GetNumberOfCells(), 12)
         self.assertEqual(pd.GetNumberOfPoints(), 8)
 
+    def test_pentagon_roundtrip(self):
+        # n-gon（五边形面）：上下底各一个五边形 + 5 个四边形侧面
+        ang = [2 * np.pi * i / 5 for i in range(5)]
+        pts = np.array(
+            [[np.cos(a), np.sin(a), 0.0] for a in ang] +
+            [[np.cos(a), np.sin(a), 1.0] for a in ang], dtype=float)
+        bottom = [0, 1, 2, 3, 4]
+        top = [5, 6, 7, 8, 9]
+        sides = [[i, (i + 1) % 5, (i + 1) % 5 + 5, i + 5] for i in range(5)]
+        faces = [bottom, top] + sides
+        p = ROOT / "_test_ngon.mdl"
+        try:
+            mdl.write_mdl(p, pts, faces)
+            m = mdl.parse_mdl(str(p))
+        finally:
+            p.unlink(missing_ok=True)
+        self.assertEqual(m.n_faces, 7)
+        self.assertTrue(np.all(m.npe[[0, 1]] == 5))
+        self.assertTrue(np.all(m.npe[2:] == 4))
+        self.assertEqual(len(m.conn), 5 * 2 + 4 * 5)
+
     def test_deterministic_bytes(self):
         pts, faces = _unit_box_quads()
         with tempfile.TemporaryDirectory() as td:

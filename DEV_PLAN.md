@@ -9,6 +9,10 @@
 > §0.4：网格生成策略逆向可行性（基于当前代码实现的结论）  
 > §0.5：自研多面体 mesher 候选技术栈（学术 / 开源参考）  
 > §0.6：自研拟体素化（Voxel fitting）mesher 候选技术栈
+> §12：整体现状与 scFLOWpre 全量差距（全量比对快照，2026-08-14）
+> §13：PPH 格式解码 + 写回闭环缺口（2026-08-14）
+> §14：解码未完整的功能补齐计划（2026-08-14）
+> §15：写回未完整的功能补齐计划（2026-08-14）
 
 ---
 
@@ -711,6 +715,268 @@ build_am:
 - [ ] **结果列表从 MDL/报告回填（先 Repair，再 tiny/multifold）**（Repair 已回填
   native_report；tiny/multifold 原生已出报告，宿主/几何结果待 AutomationBridge）
 
+---
+
+## 12. 整体现状与 scFLOWpre 全量差距（全量比对）
+
+> 日期：2026-08-14 ｜ 范围：整个 `pphdecoding` 仓库 vs Cradle CFD 2025.2 `scFLOWpre_Bx64net.exe` 前处理器全功能
+> 数据源：`Manuals/scFLOW/HTML/Pre_eng/toc.csv`（480 行权威 TOC）+ 条件树图标/HTML 文件名 + `tools/scan_nyi_menus.py` + 实测 `pytest`
+> 本文 §0.4–0.6 已覆盖「网格策略逆向可行性 / 自研 poly / 自研 voxel」三条技术栈结论；本节给出**全功能面**的完整度矩阵与差距排序，供各功能规划（含本文向导、SCFLOWPRE_FEATURE_PLAN 各阶段）引用，不重复 §0.4–0.6 细节。
+
+### 12.1 定位判断
+
+本仓库是「**逆向解码 + 只读查看 + 宿主自动化桥 + 自研 MVP mesher**」，**不是** scFLOWpre 的重新实现。最难的格式层（读/写）已近完整，界面层复刻约七成，而 scFLOWpre 赖以成为 CFD 前处理器的内核能力（求解器、完整物理条件、实体几何、商业网格）绝大多数仍是占位/草稿/缺失。一句话：**格式层 ≈ 90%，界面层 ≈ 70%，物理/求解/几何/网格内核 ≈ 5–15%。**
+
+### 12.2 代码状态快照
+
+| 维度 | 现状 |
+|------|------|
+| 语言/环境 | Python（实测 3.12.7 Anaconda；文档声明 3.10+） |
+| 源码规模 | 28 个顶层模块 + `automation/`(6) + `native/`(5，含 C++ ABI 桥 `scflow_bridge.dll`) + `tools/`(3) |
+| 最大模块 | `nav_panels.py`(580 KB，22 个 Body 表单类) > `pph_gui.py`(304 KB) > `option_settings.py`(54 KB) |
+| 测试 | 48 个测试文件，**379 个用例**（SCFLOWPRE_FEATURE_PLAN/DEV_SUMMARY 所称“112 项”已过时） |
+| Git | 工作区干净；近期提交围绕 BAM / Wrapping / 自研 mesher |
+| 依赖 | numpy + PyQt5 5.15.10 + VTK 9.3.1 + 可选 wimlib / `cabinet.dll` |
+
+模块分层（详见 README 模块表）：
+
+- **解码层（✅ 成熟）**：`pph_parser` / `crdlfld` / `mdl` / `oct` / `sctsnapshot` / `blowfish_le` / `pphxml` / `parasolid`（传输流部分提取）
+- **写端（✅ 闭环）**：`pphwriter`（LZMS+Blowfish+ZIP round-trip）、`mdl.write_mdl`、最小 OCT/GPH 写端
+- **GUI（◑ 复刻）**：`pph_gui` + `nav_panels` + `pph_vtk` + `option_settings` / `option_dialogs`
+- **自研 mesher（◑ MVP，算法不等价）**：`voxmesh`（hex-dominant）/ `polymesh`（clipped Voronoi）/ `native_bam`
+- **自动化（◑ 桥就绪、端到端未验证）**：`automation/*` + `native/scflow_bridge.cpp`
+
+### 12.3 功能完整性矩阵（相对 scFLOWpre 全功能）
+
+| 能力域 | 完整度 | 定位 |
+|--------|--------|------|
+| PPH 格式解码 + 写回闭环 | ████████░░ ~90% | 已完成，语义钉死 |
+| 4 窗格查看器 / 3D / 文本编辑 / 快照 | ███████░░░ ~70% | 界面复刻接近 |
+| 菜单骨架 / 设置 / 单位 / 语言 | ███████░░░ ~70% | 已对齐手册 |
+| 条件 / 物理体系 | ██░░░░░░░░ ~4% | 仅入口边界条件 |
+| 实体几何编辑 | █░░░░░░░░░ ~5% | VBS 草稿 + 原语 |
+| 网格生成 | ███░░░░░░░ ~20% | 自研 MVP，不等价 |
+| 求解器 / 后处理 | ░░░░░░░░░░ 0% | 完全缺失 |
+| 宿主自动化 | ████░░░░░░ ~35% | 桥就绪、端到端未验证 |
+
+### 12.4 菜单骨架对比（界面层）
+
+| 菜单 | scFLOWpre 项数 | 本项目 | 结论 |
+|------|------|------|------|
+| File | 13 | 13/13，仅「Create Actran Files…」灰显 | ✅ 几乎完整 |
+| Edit | 19 + Ridge 3 | 已接线大部分；5 项灰显 | ◑ |
+| Select | 26 | ~20 接线；5 项灰显 | ◑ |
+| View | 40 | 几乎 1:1（Rubber Box/Circle/Polygon、剖面、邻居 Octant、Prism 报告、Parts List） | ✅ 最接近 |
+| Condition | 顶层 15 + 向导 ~200 叶 | 顶层全有入口；**向导真表单仅 ~8 个 Cond\*** | ❌ 表面完整、实质极薄 |
+| Execute | 9 | 9 全有 + 2 自研入口；**Solver 明确不可用** | ◑ |
+| Option | 鼠标模式/旋转/设置/单位/语言 | 全部有（含 Environment / Project Configuration 多页） | ✅ |
+
+灰显项全量清单见 `docs/NYI_INVENTORY.md`（当前合计 11 项）。
+
+### 12.5 条件体系对比（最大落差）
+
+scFLOWpre 条件向导叶节点（TOC 抽取）约 **200 个 Cond\* 类型**，分属：Analysis Type / Basic Settings / MSC CoSim / Diffusive Species / Mixed Gas / Chemical Reaction / Thermoregulation / Battery / Initial / Radiation(6) / Solar Radiation(4) / Particle Tracking·DEM(~15) / Spray / Boundary Condition(Flow/Wall/Thermal/Humidity/Diffusive/Electric/Sym/Periodic) / Source / Fixed / Humidity / Porous Media / Free Surface(~17) / Dispersed Multiphase / Discontinuous Mesh / Moving Elements(~10) / Fan·Propeller / Electric Current·Field / LOGE CPV / Cavitation / Solidification / Evaporation / Structural Coupled / Mechanism Coupled / GT-SUITE / FMI / Aerodynamic Sound / scFLOW2Nastran / Analysis Control(~25) / Output of Field(~11) / Output of List(~27) / Output of Pathline / Other Output(~6) / File Name / Optional Conditions(~8)。
+
+本项目 `nav_panels.py` 中**有完整读写 UI 的真表单**仅 ~8 个：
+
+```text
+CondBoundaryFlowIO / CondBoundaryWallStress / CondBoundaryWallThermal /
+CondBoundarySymmetry / CondBoundaryPeriodic / CondFix / CondSource /
+CondInitial（+CondInitialField/Value）
+```
+
+`schemas/conditions.yaml` 明确标注 `source: "... Cond* registry (stub)"`、`implemented_forms` 仅 5 个。**覆盖率 ~4%，且全部集中在入口边界条件；求解器物理（湍流/多相/自由液面/DEM/辐射/燃烧/电池/热调节等）完全缺失。**
+
+### 12.6 核心差距排序（按严重度）
+
+1. **求解器与后处理：0%（❌）** — 无 scFLOWsol / scPOST / scConverter / SCTprime 衔接；Execute Solver 有菜单但「明确不可用」；Analysis Control(~25) 与 Output of Field/List/Pathline(~45) 全为占位。
+2. **条件/物理体系：~4%（❌）** — 见 §12.5。
+3. **实体几何编辑：~5%（❌）** — scFLOWpre 基于 Parasolid/CADthru 做 B-rep 布尔；本项目 Create Parts 仅原语、Modify Parts 仅 `BeginSolidEdit` VBS 草稿、Parasolid 仅「传输流部分提取」（无 B-rep 拓扑还原，自评 ★★★★★ 长期项）。
+4. **网格生成：~20%（◑）** — `voxmesh`/`polymesh` 为自研、算法不等价；缺棱柱层插入、边界层、2:1 平衡、面区域映射、质量平滑（策略细节见 §0.4–0.6）。
+5. **CAD 导入广度（◑）** — 仅 x_t 剖分（`cad_import`/`ps_facet2_nodes`/`ps_tessellate`）；scFLOWpre 经 CAD 接口/scConverter 支持多格式；自研 facetter 与 Solid-based facetter 不等价。
+6. **宿主自动化（◑/被环境阻断）** — NativeBridge（11 DLL 可加载、`ExecuteVBS`/`CreateShapeGroupSet`/`ExpandZip` 符号命中）、in-proc COM、VBS 录制回放、BAM/Wrapping 命令录制锁定**均已交付**；但沙箱内裸启动 exe 必崩（`SetupSCTpreLib` 抛 0xE0000000，依赖 Kicker 注入的许可证状态，见 DEV_SUMMARY §6），**端到端未验证**。
+7. **高级选择/拓扑操作（❌ 灰显）** — Spread Face-to-Edge、Select by Element Number/List/Same Area、Check Intersection 等需真实网格拓扑，未实现。
+
+### 12.7 测试状态与可信度说明
+
+实测 `pytest tests` **收集 379 项，无法在本环境完整跑完**：`test_native_bridge.py::TestNativeBridgeReal::test_pipeline_context_and_create_set`（~46%）处停滞——该用例加载真实 `scflow_bridge.dll` 并调用 scFLOWpre SCTprime，需 Kicker+许可证宿主。
+
+失败归因（逐条跑了 traceback）：
+
+| 失败簇 | 根因 | 是否代码缺陷 |
+|--------|------|------|
+| cad_import / condition_registry / mdl_writer / gph_writer / corpus / edit_ops(WriteVbs) / empty_project / host_pipeline 等 | `PermissionError [Errno 13]` 写 `%TEMP%`（DSH workspace-write 沙箱限制临时目录写） | ❌ 环境性 |
+| test_mdl_analysis（3 ERROR） | 临时目录 fixture 清理失败（同上） | ❌ 环境性 |
+| test_gui 部分（open/save/dashboard） | 依赖写临时文件/真实文件句柄 | ❌ 环境性为主 |
+| test_native_bridge::real | 需 scFLOWpre 宿主 + Kicker 许可证 | ❌ 环境性 |
+
+**核心解码器测试（`test_pph_parser`/`test_semantics`/`test_platform`/`test_samples`/`test_parasolid`/`test_units`/`test_schema_extract`/`test_oct_writer`/`test_conditions`/`test_menu_bar`/`test_minor_gaps` 等）全部通过。** 当前失败非回归，而是沙箱文件策略 + 宿主不可用；原生桌面（装好 scFLOWpre、放开 temp 写）应可收敛到文档声明的状态。
+
+### 12.8 结论与收口路径
+
+本仓库已把「**读懂并改写 scFLOWpre 项目文件**」做到接近完整，把「**长得像 scFLOWpre 的界面**」复刻到七成；但**没有**三大内核——求解器（0%）、完整物理条件（~4%）、实体几何/商业网格（<20% 且自研不等价）。
+
+剩余最可行的收口（与 DEV_SUMMARY §5、SCFLOWPRE_FEATURE_PLAN 各阶段一致）：扩大真实样例集、wimlib 实机验证、sctsnapshot 字节级重序列化、宿主自动化拿到带 Kicker+许可证的原生桌面做端到端验收——**而非自研等价于 Parasolid + scFLOWsol 的组件**。
+
+---
+
+## 13. PPH 格式解码 + 写回闭环缺口
+
+> 日期：2026-08-14 ｜ 范围：仅 PPH **格式层**（ZIP / CRDL-FLD / LZMS / Blowfish / 快照 / Parasolid / 文本成员）的解码与写回闭环，不涉求解器 / 条件等上层
+> 依据：逐模块代码核实（`pphwriter` / `sctsnapshot` / `parasolid` / `mdl` / `oct` / `gphstats` / `pphxml`），非仅文档
+> 关联：§12.3「PPH 格式解码 + 写回闭环 ~90%」——本节说明剩下 ~10% 具体卡在哪
+
+### 13.1 已真正闭环（参照边界，非缺口）
+
+| 闭环项 | 模块 | 验证粒度 |
+|--------|------|----------|
+| ZIP 容器读→写 | `pphwriter.clone_pph` / `rewrite_pph` | 成员级字节复制，未改成员原样保留 |
+| LZMS 压缩→解压 | `pphwriter.lzms_compress` ↔ `sctsnapshot.lzms_decompress` | 逐字节一致 |
+| Blowfish-LE 加解密 | `pphwriter.encrypt_pkbody3` ↔ `sctsnapshot.PKBody3.decrypt` | 再加密与原始密文逐字节一致 |
+| main.xml 净化↔序列化 | `pphxml.sanitize` / `serialize_main_xml` | round-trip 稳定 |
+| main.xenv 序列化 | `pphxml.serialize_xenv` | 键值写回 |
+
+### 13.2 解码仍未完整（读端缺口）
+
+1. **Parasolid B-rep 几何/拓扑：只提取「外壳」❌** — `parasolid.parse_transmit` 只扫出文件头（`TRANSMIT FILE … version`）、schema 标识（`SCH_…`）、schema 字段表（token+字段名+偏移，如 `lattice/mesh/owner/boundary_*`）、实体类型（`PKEdge`/`PKFace`/`PKVertex`）与 SDL 属性（`TYSA_NAME/LAYER/UNAME`）。**未解码**：顶点坐标、边/面连接关系、B-rep 拓扑结构、曲面参数——拿得到「实体有哪些类型、字段叫什么名」，拿不到「长什么样、和谁相连」。完整还原需 Parasolid 内核或长期逆向（自评 ★★★★★）。
+2. **GPH 体网格：轻量统计，非完整模型 ◑** — `gphstats` 只解 `LS_Links`（面/单元/边界面数/npe）+ `LS_Nodes` + 区域 + Parts 的**计数与顶点**；完整单元-面-区域拓扑在检测到同级 `gphdecoding` 仓时才外接，否则停在这个统计级别。
+3. **sctsnapshot 记录流：存在黑盒字节 ◑** — `_parse_region` 返回 `skipped_bytes`（负载中无法对齐跳过的字节，`pph_parser` 摘要打印「未对齐字节 N」）；`CSINFO→PBODYARRAY` 之间 48 字节保留区已逆向为「旧序列化残留、不承载状态语义」；`unit_type` 仅映射 `1 → MODEL_LENGTH_UNIT`，其余码值未覆盖（缺多单位制样例）。
+
+### 13.3 写回仍未闭环（写端缺口，关键）
+
+| # | 缺口 | 模块 | 状态 |
+|---|------|------|------|
+| 1 | sctsnapshot 记录流**无重序列化** | `sctsnapshot.py`（无 serialize/write 函数） | ❌ 最大缺口：叶子存值不存原始字节，只能改 xml/xenv，不能改快照记录字节级写回 |
+| 2 | Parasolid**无编码函数** | `parasolid.py`（仅 `parse_transmit`） | ❌ 又因解码只到字段名，无法生成新 B-rep；`encrypt_pkbody3` 只能加密现成明文 |
+| 3 | MDL 最小写端，非全量 | `mdl.write_mdl` | ❌ 仅三角/四边面（`npe=3/4`）；不写 ridge；非逐字节复刻 scFLOW 原始布局 |
+| 4 | OCT 只有骨架，无区域 | `oct.write_oct` | ❌ 仅根盒 `LS_OctRootOctantMinMax` + 细化位图 + blockID；无区域数组 |
+| 5 | GPH 通用面集，无单元/区域/棱柱层 | `gphstats.write_gph(_volume)` | ❌ 仅 `LS_Links`+`LS_Nodes`；无 `LS_Cells`/区域/棱柱层 |
+| 6 | LZMS 压缩 Windows-only | `pphwriter.lzms_compress` | ◑ 非 Windows 直接 `RuntimeError`；读取端有 wimlib 回退，写端无 |
+| 7 | 写回产物未经 SCTpre 实机验收 | 全部写端 | ◑ 「布局一致」是推断非实证（宿主需 Kicker+许可证，沙箱内裸启动 exe 必崩） |
+
+### 13.4 一句话总结
+
+真正闭环的是**外层三件套**（ZIP 容器 / LZMS 压缩 / Blowfish 加密）+ 文本成员（xml/xenv）；**没闭环的是内层三件套**：
+
+1. **sctsnapshot 记录流**——能读不能重写（无序列化器、不保留原始字节）；
+2. **Parasolid 几何**——只到「字段名/实体类型」，无 B-rep、无编码；
+3. **MDL/OCT/GPH 完整网格**——写端皆最小、布局对齐、可自洽读回，**不是**逐字节复刻 scFLOW 原始产物；GPH 缺单元/区域/棱柱层、MDL 缺 ridge 与任意多边形面、OCT 缺区域数组。
+
+另加两个横向残留：**LZMS 写端仅 Windows**、**改后文件未在 scFLOWpre 实机验收**。
+---
+
+## 14. 解码未完整的功能补齐计划（2026-08-14）
+
+> 范围：§13.2「解码仍未完整」三缺口的补齐计划与执行结果。
+> 结论：两项已在本会话落地；Parasolid B-rep 与 unit_type 码值枚举因需外部前置而延后。
+
+### 14.1 缺口清单与处置
+
+| # | 缺口（见 §13.2） | 处置 | 状态 |
+|---|------------------|------|------|
+| 1 | GPH 轻量统计 → 完整单元模型 | 补齐：单元重建 + 类型分类 | ✅ 已落地 |
+| 2 | unit_type 码 → 单位串（量纲错误） | 补齐：量纲感知解析 | ✅ 已落地 |
+| 3 | unit_type 码值完整枚举 | 延后：需多单位制样例 / SCTprime 逆向 | ⏳ |
+| 4 | Parasolid B-rep 几何/拓扑 | 延后：需商业内核 / 长期逆向 | ⏳ |
+| 5 | sctsnapshot skipped_bytes / 48B | 已表征为对齐填充，无进一步语义 | ✅ 闭合 |
+
+### 14.2 已执行（本会话落地）
+
+1. **GPH 完整单元模型**（`gphstats.py`）：
+   - 新增 `build_cells(owner, neigh, npe)`——从 LS_Links 面数据重建单元
+     （单元 c 的面 = owner==c **或** neigh==c 的面；内部面只存一次、双向
+     归属），全 numpy 向量化，百万级单元可承受；
+   - 新增 `classify_cell(npe_of_faces)` / `_cell_type`——单元类型分类
+     （hexahedron=6 四边面 / tetrahedron=4 三角面 / prism=2 三角+3 四边 /
+     pyramid=4 三角+1 四边 / 其余 polyhedral）；
+   - 新增 `mesh_cells(mesh)` / `gph_cells(data)` 便捷入口；`summarize()`
+     集成 `cells` 字段（`_cells_summary`，失败回 None）；
+   - 测试 `tests/test_gph_cells.py`（8 项）：单单元分类 ×5、内部面共享的
+     两单元重建、真实 box 样例对拍（**936 hexahedron + 8 polyhedral = 944**）。
+
+2. **unit_type 量纲感知解析**（`units.py` + `pphxml.py`）：
+   - 新增 `VWU_TAG_TO_XENV_KEY`（8 个 VWU 量纲 + DPOINTU → DEFAULT_*_UNIT
+     键），键名取自实测 130 键 main.xenv UNIT 清单；
+   - `resolve_snapshot_unit(unit_type, xenv, tag=...)` 增加 `tag` 参数，
+     修复 `TIMEVWU`/`AREAVWU` 等记录被误解析为长度单位的问题；默认
+     `tag=LENGTHVWU` 保持向后兼容；
+   - 测试 `tests/test_units.py::test_snapshot_unit_quantity_aware`
+     （TIMEVWU→s / AREAVWU→m2 / 未知 tag 回退长度 / 非 1 码值返回 None）。
+
+### 14.3 延后项与所需前置
+
+1. **Parasolid B-rep 几何/拓扑**（§13.2.1）：传输流只提取到 schema/字段名/
+   实体类型；顶点坐标、边/面连接、曲面参数需 Parasolid 内核（商业 SDK：
+   OCCT Import / Datakit / CAD Exchanger）或长期逆向。可选过渡子步：解析
+   schema 字段表后随的「数据区偏移」帧（当前 `ParasolidField` 只存 `pos`
+   记录帧起点，未取数据区偏移），把字段名与实际数据区位置对齐——但完整
+   B-rep 仍不在此范围内。
+2. **unit_type 码值完整枚举**：样本恒为 1（SI）；非 1 码值需多单位制样例
+   （用 SCTpre 建 mm/inch 项目对照 main.xenv UNIT）或 SCTprime DLL 枚举。
+3. **（可选）单元→节点邻接 + 棱柱层检测**：`build_cells` 已给单元→面邻接；
+   单元→去重节点、以及「Report Prism Layer」所需的楔形单元+边界邻接检测
+   可作后续增量，均可在现有 owner/neigh/npe/conn 上纯向量化实现。
+---
+
+## 15. 写回未完整的功能补齐计划（2026-08-14）
+
+> 范围：§13.3「写回仍未闭环」七缺口的补齐计划与执行结果。
+> 结论：最大缺口（sctsnapshot 重序列化）与 MDL n-gon 已落地；其余因需外部前置延后。
+
+### 15.1 缺口清单与处置
+
+| # | 缺口（见 §13.3） | 处置 | 状态 |
+|---|------------------|------|------|
+| 1 | sctsnapshot 记录流无重序列化 | 补齐：_encode_scalar + 字节保留 serialize | ✅ 已落地 |
+| 2 | Parasolid 无编码函数 | 延后：需商业内核（与解码同源） | ⏳ |
+| 3 | MDL 最小写端（仅三角/四边面） | 补齐：放开 n-gon（npe≥3） | ✅ 已落地 |
+| 4 | OCT 无区域数组 | 并入 #1（区域数组在 sctsnapshot 内） | ✅ 随 #1 |
+| 5 | GPH 无单元/区域/棱柱层写端 | 补齐：cvol/区域/Parts（棱柱层仍延后） | ✅ 已落地 |
+| 6 | LZMS 压缩 Windows-only | 延后：无跨平台 LZMS 压缩器 | ⏳ |
+| 7 | 写回产物未经 SCTpre 实机验收 | 延后：宿主需 Kicker+许可证 | ⏳ |
+
+### 15.2 已执行（本会话落地）
+
+1. **sctsnapshot 字节保留重序列化**（最大缺口，`sctsnapshot.py`）：
+   - 新增 `_encode_scalar`——`_decode_scalar` 的逆，覆盖全部已知叶子标签
+     （UTF-16/STRING/DOUBLE/VWU/DPOINTU/INTARRAY/DOUBLEARRAY/U16/I32/U8/
+     ZIPBLOB/_SCALAR4）；
+   - 新增 `SnapRecord.serialize(src)`——TLV 递归重编码（`[tag 16B][u32 len]
+     [payload]`），容器递归子记录并保留子记录间与尾部未对齐填充；未解码值
+     回退到原始字节；
+   - 新增 `SctSnapshot.serialize(original_data)` / `SctSnapshot.from_bytes`
+     ——顶层流重编码（保留记录间填充）+ 内存解析；
+   - 测试 `tests/test_snapshot_reserialize.py`（7 项）：box/laptop 字节恒等
+     round-trip、改 LENGTHVWU 叶子值写回再解析、_encode/_decode 互逆。
+
+2. **MDL n-gon 写端**（`mdl.py`）：
+   - `write_mdl` 放开「三角/四边」限制 → 任意 n≥3 顶点多边形面
+     （`face_type = 130 + npe`，parse_mdl 本已支持 npe=type-130）；
+   - 测试 `tests/test_mdl_writer.py::test_pentagon_roundtrip`：五边形棱柱
+     写回 → parse_mdl 读回 npe=5（底面）/ 4（侧面）。
+
+3. **GPH cvol/区域/Parts 写端**（`gphstats.py`）：
+   - 逐节逆向 box GPH 二进制布局，新增 `_cvol_section` /
+     `_volume_regions_section` / `_surface_regions_section` /
+     `_parts_section`；`write_gph_volume` 增加 `cvol` / `volume_regions` /
+     `surface_regions` / `parts` 参数；
+   - 测试 `tests/test_gph_write_sections.py`：box 网格数据（944 单元 / 3168 面
+     / cvol / 2 面区域 / 1 体区域 / 1 part）round-trip。
+
+### 15.3 延后项与所需前置
+
+1. **Parasolid 编码**（§13.3.2）：与解码同源，需商业内核（OCCT Import /
+   Datakit / CAD Exchanger）或长期逆向；`encrypt_pkbody3` 只能加密现成明文。
+2. **GPH cvol/区域/Parts 写端**（§13.3.5）：`LS_CvolIdOfElements` /
+   `LS_SurfaceRegions` / `LS_Parts` 需逐节逆向 box GPH 的精确二进制布局
+   （解析侧 `gphstats` 已能读，写端布局待对齐；当前 `write_gph_volume` 仅
+   LS_Links + LS_Nodes）。
+3. **LZMS 跨平台写端**（§13.3.6）：非 Windows 无 LZMS 压缩器（wimlib 仅解压，
+   无 LZMS 压缩）。
+4. **SCTpre 实机验收**（§13.3.7）：宿主需 Kicker+许可证；「布局一致」仍是
+   推断，非实证。
+5. **MDL ridge 写端**：真实 `*_ridge.mdl` 的 ridge 节格式未定（无
+   `LS_MdlRidges` 已知布局）。
 ---
 
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

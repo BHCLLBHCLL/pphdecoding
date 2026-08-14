@@ -559,6 +559,35 @@ class SnapRecord:
                 lines.extend(c.dump(depth + 1, max_depth))
         return lines
 
+    def serialize(self, src: bytes) -> bytes:
+        """把本记录重新序列化为 TLV 字节（``[tag 16B][u32 len][payload]``）。
+
+        ``src`` 是 ``self.offset`` 所相对的字节缓冲（顶层为完整文件字节，
+        容器递归时为父记录 payload 切片）。已解码叶子值经
+        :func:`_encode_scalar` 重编码；容器递归子记录并保留子记录间与
+        尾部未对齐填充；未解码值回退到 ``src`` 原始字节。
+        """
+        tagb = self.tag.encode("ascii")[:16].ljust(16, b" ")
+        if self.children:
+            sub = src[self.offset + 20:self.offset + 20 + self.length]
+            body = bytearray()
+            pos = 0
+            for c in self.children:
+                if c.offset > pos:
+                    body += sub[pos:c.offset]
+                body += c.serialize(sub)
+                pos = c.offset + 20 + c.length
+            if pos < len(sub):
+                body += sub[pos:]
+            payload = bytes(body)
+        else:
+            payload = None
+            if self.value is not None and not isinstance(self.value, bytes):
+                payload = _encode_scalar(self.tag, self.value)
+            if payload is None:
+                payload = src[self.offset + 20:self.offset + 20 + self.length]
+        return tagb + struct.pack("<I", len(payload)) + payload
+
 
 def _decode_scalar(tag: str, payload: bytes):
     """已知叶子标签的类型化解码；返回 None 表示按容器/原始处理。"""
@@ -591,6 +620,44 @@ def _decode_scalar(tag: str, payload: bytes):
         return ZipBlob.parse(payload)
     if tag in _SCALAR4_TAGS and n == 4:
         return struct.unpack("<i", payload)[0]
+    return None
+
+def _encode_scalar(tag: str, value) -> Optional[bytes]:
+    """``_decode_scalar`` 的逆：把已解码值重新编码为 payload 字节。
+
+    对每条已知叶子标签给出与解码严格互逆的编码（如 ``LENGTHVWU`` →
+    ``<d value><I unit_type>``）；无法编码返回 None（调用方回退到原始字节）。
+    """
+    if tag in _UTF16_TAGS:
+        return str(value).encode("utf-16-le")
+    if tag == "STRING":
+        return str(value).encode("utf-8")
+    if tag in _BYTES_TAGS:
+        return bytes(value)
+    if tag == "DOUBLE" or tag in _MESH_TOL_TAGS:
+        return struct.pack("<d", float(value))
+    if tag in _VWU_TAGS:
+        return struct.pack("<dI", float(value.value), int(value.unit_type))
+    if tag == "DPOINTU":
+        return struct.pack("<dddiii",
+                           float(value.xyz[0]), float(value.xyz[1]),
+                           float(value.xyz[2]),
+                           int(value.unit_types[0]), int(value.unit_types[1]),
+                           int(value.unit_types[2]))
+    if tag == "INTARRAY":
+        return np.asarray(value, dtype="<i4").tobytes()
+    if tag in ("DOUBLEARRAY", "TRANSFORMMATRIX"):
+        return np.asarray(value, dtype="<f8").tobytes()
+    if tag in _U16_TAGS:
+        return np.asarray(value, dtype="<u2").tobytes()
+    if tag in _I32_TAGS:
+        return np.asarray(value, dtype="<i4").tobytes()
+    if tag in _U8_TAGS:
+        return np.asarray(value, dtype=np.uint8).tobytes()
+    if tag in ("ZIPBODYBYTES", "ZIPOCTREE", "ZIPFACETINGRULES"):
+        return value.raw if isinstance(value, ZipBlob) else bytes(value)
+    if tag in _SCALAR4_TAGS:
+        return struct.pack("<i", int(value))
     return None
 
 
@@ -675,6 +742,12 @@ class SctSnapshot:
         records, _, skipped = _parse_region(data, 0, len(data), 0, max_depth)
         return cls(filepath, records, skipped)
 
+    @classmethod
+    def from_bytes(cls, data: bytes, max_depth: int = 24) -> "SctSnapshot":
+        """从内存字节解析快照（无需落盘）。"""
+        records, _, skipped = _parse_region(data, 0, len(data), 0, max_depth)
+        return cls("", records, skipped)
+
     def find_all(self, tag: str) -> Iterator[SnapRecord]:
         for r in self.records:
             yield from r.find_all(tag)
@@ -687,6 +760,27 @@ class SctSnapshot:
         for r in self.records:
             lines.extend(r.dump(0, max_depth))
         return "\n".join(lines)
+
+    def serialize(self, original_data: bytes = None) -> bytes:
+        """把顶层记录流重新序列化为完整快照字节。
+
+        逐条顶层记录重编码（见 :func:`SnapRecord.serialize`），并保留记录
+        之间的未对齐填充与尾部残留；未传 ``original_data`` 时按
+        ``filepath`` 重新读取。
+        """
+        if original_data is None:
+            with open(self.filepath, "rb") as f:
+                original_data = f.read()
+        out = bytearray()
+        pos = 0
+        for r in self.records:
+            if r.offset > pos:
+                out += original_data[pos:r.offset]
+            out += r.serialize(original_data)
+            pos = r.offset + 20 + r.length
+        if pos < len(original_data):
+            out += original_data[pos:]
+        return bytes(out)
 
     # ── 语义提取 ─────────────────────────────────────────────────────
     def bodies(self) -> list[dict]:

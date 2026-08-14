@@ -355,8 +355,8 @@ def write_mdl(filepath,
               volume_regions=None) -> "Path":
     """写最小 CRDL-FLD MDL 面片（``*_part.mdl``，可被 :func:`parse_mdl` 读回）。
 
-    ``points``：(n,3) 坐标；``faces``：多边形顶点索引（3 或 4 顶点，
-    ``face_type = 130 + npe``，133=三角 / 134=四边）。
+    ``points``：(n,3) 坐标；``faces``：多边形顶点索引（任意 n≥3 顶点，
+    ``face_type = 130 + npe``，133=三角 / 134=四边 / 135+=n 边面）。
 
     ``csid``：面两侧闭体 id 元组，默认 ``(zeros, ones)`` —— 全部面为
     body 1 的边界面；``frid`` 默认全 0；``edge_state`` 默认全 0；
@@ -372,8 +372,8 @@ def write_mdl(filepath,
     n_vertices = len(verts)
     face_list = [np.asarray(f, dtype=np.int64).reshape(-1) for f in faces]
     npe = np.asarray([len(f) for f in face_list], dtype=np.int64)
-    if npe.size == 0 or np.any((npe != 3) & (npe != 4)):
-        raise ValueError("write_mdl supports triangle/quad faces only")
+    if npe.size == 0 or np.any(npe < 3):
+        raise ValueError("write_mdl faces must have at least 3 vertices")
     n_faces = len(face_list)
     face_type = (130 + npe).astype(">i4")
     conn_flat = np.concatenate(face_list) if n_faces else \

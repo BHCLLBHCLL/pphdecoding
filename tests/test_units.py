@@ -63,6 +63,17 @@ class TestUnitRegistry(unittest.TestCase):
         self.assertEqual(
             resolve_snapshot_unit(1, _xenv_like(xenv)), "m")
 
+    def test_snapshot_unit_quantity_aware(self):
+        xenv = self.reg.units
+        self.assertEqual(
+            resolve_snapshot_unit(1, _xenv_like(xenv), tag="TIMEVWU"), "s")
+        self.assertEqual(
+            resolve_snapshot_unit(1, _xenv_like(xenv), tag="AREAVWU"), "m2")
+        self.assertEqual(
+            resolve_snapshot_unit(1, _xenv_like(xenv), tag="UNKNOWNVWU"), "m")
+        self.assertIsNone(
+            resolve_snapshot_unit(2, _xenv_like(xenv), tag="TIMEVWU"))
+
 
 def _xenv_like(units):
     class _X:

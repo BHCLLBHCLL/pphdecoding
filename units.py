@@ -164,10 +164,24 @@ class UnitRegistry:
         return dict(self.units or {})
 
 
-# 快照 unit_type 码 → xenv 单位键（样本恒为 1；其余待多单位制样本补全）
-UNIT_TYPE_TO_XENV_KEY: dict[int, str] = {
-    1: "MODEL_LENGTH_UNIT",
+# 快照 VWU 标签 → xenv 单位键（量纲感知）。
+# unit_type 码目前实测恒为 1（= SI/模型单位制）；「码值→单位系统」的完整枚举
+# 仍需多单位制样例（或 SCTprime 逆向）确认。这里把「哪个量纲用哪个键」与
+# 「码值选哪个单位系统」解耦：量纲由 VWU 标签决定，单位串取自 xenv。
+VWU_TAG_TO_XENV_KEY: dict[str, str] = {
+    "LENGTHVWU": "MODEL_LENGTH_UNIT",
+    "ANGLEVWU": "DEFAULT_ANGLE_UNIT",
+    "AREAVWU": "DEFAULT_AREA_UNIT",
+    "DENSITYVWU": "DEFAULT_DENSITY_UNIT",
+    "ENERGYVWU": "DEFAULT_ENERGY_UNIT",
+    "FORCEVWU": "DEFAULT_FORCE_UNIT",
+    "TIMEVWU": "DEFAULT_TIME_UNIT",
+    "VOLUMEVWU": "DEFAULT_VOLUME_UNIT",
+    "DPOINTU": "DEFAULT_COORDX_UNIT",
 }
+
+# 已确认的 unit_type 码 → 单位系统（1 = SI/模型单位制）；待多单位制样例补全
+UNIT_TYPE_TO_XENV_KEY: dict[int, str] = {1: "MODEL_LENGTH_UNIT"}
 
 
 def snapshot_unit_type_to_key(unit_type: int) -> Optional[str]:
@@ -175,8 +189,14 @@ def snapshot_unit_type_to_key(unit_type: int) -> Optional[str]:
 
 
 def resolve_snapshot_unit(unit_type: int,
-                          xenv: pphxml.XenvSettings) -> Optional[str]:
-    key = snapshot_unit_type_to_key(unit_type)
-    if key is None:
+                          xenv: pphxml.XenvSettings,
+                          tag: str = "LENGTHVWU") -> Optional[str]:
+    """把快照 VWU/DPOINTU 记录的 ``unit_type`` 解析为 xenv 单位串。
+
+    ``tag`` 指定记录量纲（``LENGTHVWU``/``TIMEVWU``/``DPOINTU``…），决定
+    取哪个 DEFAULT_*_UNIT 键；``unit_type`` 目前仅支持 1（SI）。
+    """
+    if unit_type != 1:
         return None
+    key = VWU_TAG_TO_XENV_KEY.get(tag, "MODEL_LENGTH_UNIT")
     return xenv.get("UNIT", key)
