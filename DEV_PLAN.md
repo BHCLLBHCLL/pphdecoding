@@ -970,10 +970,19 @@ CondInitial（+CondInitialField/Value）
    - `write_mdl` 的 `edge_state` / `node_state` 参数即 ridge 写端；
    - 测试 `tests/test_mdl_writer.py::test_ridge_edge_state_roundtrip`。
 
+5. **pskernel Parasolid 编码**（`ps_facet2_nodes.py`）：
+   - 新增 frustrum `ffopwr`/`ffwrit`/`ffclos` 写回调（捕获输出），
+     `_TRANSMIT`（PK_PART_transmit_o_t 6 字段，对齐 cabdecoding），
+     `_PsSession.transmit_part` + 模块级 `transmit_xt`；
+   - 编码 round-trip：x_t → `PK_PART_receive` → `PK_PART_transmit` → x_t
+     （box.x_t 5 体，单体重编码 4424B，可再 receive）；
+   - 测试 `tests/test_ps_transmit.py`。
+
 ### 15.3 延后项与所需前置
 
-1. **Parasolid 编码**（§13.3.2）：与解码同源，需商业内核（OCCT Import /
-   Datakit / CAD Exchanger）或长期逆向；`encrypt_pkbody3` 只能加密现成明文。
+1. **Parasolid 编码**（§13.3.2）：`PK_PART_transmit` 已打通（见 §15.2.5）；
+   完整 B-rep 生成/编辑仍需 `PK_BODY_transform` 的 `PK_TRANSF_t` 布局逆向
+   （访问违例 @0x98，尚未钉死）。
 2. **GPH cvol/区域/Parts 写端**（§13.3.5）：`LS_CvolIdOfElements` /
    `LS_SurfaceRegions` / `LS_Parts` 需逐节逆向 box GPH 的精确二进制布局
    （解析侧 `gphstats` 已能读，写端布局待对齐；当前 `write_gph_volume` 仅

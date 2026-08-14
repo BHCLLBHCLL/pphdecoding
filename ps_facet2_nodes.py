@@ -317,6 +317,19 @@ class _START(Structure):
                 ("user_field", c_int), ("reserved", c_int)]
 
 
+class _TRANSMIT(Structure):
+    """PK_PART_transmit_o_t（对齐 cabdecoding，6 字段）。"""
+
+    _fields_ = [
+        ("o_t_version", c_int),
+        ("transmit_format", c_int),   # 0 = text
+        ("transmit_user_fields", c_int),
+        ("transmit_nw_version", c_int),
+        ("transmit_xmt_file", c_int),
+        ("transmit_attr", c_int),
+    ]
+
+
 class _RECV(Structure):
     _fields_ = [
         ("o_t_version", c_int), ("transmit_format", c_int),
@@ -340,6 +353,9 @@ class _PsSession:
         os.environ["P_SCHEMA"] = str(self.schema)
         self.pk = C.WinDLL(str(prog / "pskernel.dll"))
         self._files: dict = {}
+        self._write_files: dict = {}
+        self._write_paths: dict = {}
+        self._transmit_output: dict = {}
         self._next_id = 1
         self._mallo_bufs: list = []
         self._segs: list = []
@@ -350,6 +366,9 @@ class _PsSession:
     def _build_frustrum(self) -> None:
         pk = self.pk
         files = self._files
+        write_files = self._write_files
+        write_paths = self._write_paths
+        transmit_output = self._transmit_output
         schema = self.schema
         mallo = self._mallo_bufs
         segs = self._segs
@@ -416,9 +435,14 @@ class _PsSession:
             None, POINTER(c_int), POINTER(c_int), c_void_p, POINTER(c_int),
             c_void_p, POINTER(c_int), POINTER(c_int), POINTER(c_int),
         )
-        def FFOPWR(*a):
-            a[-2][0] = 1
-            a[-1][0] = 0
+        def FFOPWR(guise, form, name, namlen, skip, mode, strid, ifail):
+            key = string_at(name, namlen[0]).decode("ascii", "replace")
+            sid = self._next_id
+            self._next_id += 1
+            write_files[sid] = bytearray()
+            write_paths[sid] = key
+            strid[0] = sid
+            ifail[0] = 0
 
         @CFUNCTYPE(
             None, POINTER(c_int), POINTER(c_int), POINTER(c_int), c_void_p,
@@ -458,13 +482,26 @@ class _PsSession:
 
         @CFUNCTYPE(None, POINTER(c_int), POINTER(c_int), POINTER(c_int),
                    c_void_p, POINTER(c_int))
-        def FFWRIT(*a):
-            a[-1][0] = 0
+        def FFWRIT(guise, strid, n, buffer, ifail):
+            buf = write_files.get(strid[0])
+            if buf is None:
+                ifail[0] = 14
+                return
+            buf.extend(string_at(buffer, n[0]))
+            ifail[0] = 0
 
         @CFUNCTYPE(None, POINTER(c_int), POINTER(c_int), POINTER(c_int),
                    POINTER(c_int))
         def FFCLOS(guise, strid, action, ifail):
-            ifail[0] = 0 if files.pop(strid[0], None) is not None else 14
+            if files.pop(strid[0], None) is not None:
+                ifail[0] = 0
+                return
+            buf = write_files.pop(strid[0], None)
+            if buf is not None:
+                transmit_output[write_paths.pop(strid[0], "")] = bytes(buf)
+                ifail[0] = 0
+            else:
+                ifail[0] = 14
 
         @CFUNCTYPE(
             None, POINTER(c_int), POINTER(c_int), POINTER(c_int),
@@ -567,6 +604,26 @@ class _PsSession:
         if rc != 0:
             raise RuntimeError(f"PK_PART_receive failed: {rc}")
         return list(cast(parts, POINTER(c_int * n.value)).contents)
+
+    # -- part transmit（编码：PK_PART → 文本 .x_t）-----------------------
+    def transmit_part(self, tag: int, path: str = "") -> bytes:
+        """把 PK_PART 编码写回文本 .x_t（PK_PART_transmit，写文件经 frustrum）。"""
+        pk = self.pk
+        parts = [int(tag)]
+        arr = (c_int * len(parts))(*parts)
+        opts = _TRANSMIT()
+        memset(byref(opts), 0, sizeof(opts))
+        opts.o_t_version = 1
+        opts.transmit_format = 0  # 0 = text
+        pk.PK_PART_transmit.restype = c_int
+        pk.PK_PART_transmit.argtypes = [
+            c_int, POINTER(c_int), c_char_p, POINTER(_TRANSMIT)]
+        key = str(path or "out").encode()
+        rc = pk.PK_PART_transmit(len(parts), arr, key, byref(opts))
+        if rc != 0:
+            raise RuntimeError(f"PK_PART_transmit failed: {rc}")
+        # frustrum FFOPWR/FFWRIT 捕获的字节（键 = FFOPWR 收到的 name）
+        return self._transmit_output.get(str(path or "out"), b"")
 
     def body_name(self, tag: int) -> str:
         pk = self.pk
@@ -1056,6 +1113,20 @@ def _get_session() -> _PsSession:
 
 def tessellate_xt_file(path: str | Path, **kw) -> list[TessPart]:
     return tessellate_xt(Path(path).read_bytes(), **kw)
+
+
+def transmit_xt(xt_bytes: bytes, tag: Optional[int] = None) -> bytes:
+    """接收文本 .x_t，把首个（或指定）body 编码写回文本 .x_t 字节。
+
+    这是 :meth:`_PsSession.receive_xt` + PK_PART_transmit 的编码 round-trip
+    封装：输入 x_t → PK_PART_receive → PK_PART_transmit → 输出 x_t。
+    """
+    sess = _get_session()
+    tags = sess.receive_xt(xt_bytes)
+    if not tags:
+        raise RuntimeError("transmit_xt: no bodies received")
+    t = tags[0] if tag is None else int(tag)
+    return sess.transmit_part(t, "out")
 
 
 def tessellate_xt(xt_bytes: bytes, *, adaptive: bool = False,
