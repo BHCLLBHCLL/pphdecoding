@@ -989,8 +989,12 @@ CondInitial（+CondInitialField/Value）
    LS_Links + LS_Nodes）。
 3. **LZMS 跨平台写端**（§13.3.6）：非 Windows 无 LZMS 压缩器（wimlib 仅解压，
    无 LZMS 压缩）。
-4. **SCTpre 实机验收**（§13.3.7）：宿主需 Kicker+许可证；「布局一致」仍是
-   推断，非实证。
+4. **SCTpre 实机验收**（§13.3.7）：本机实测——设 `CRADLE_LICENSE_FILE=
+   27500@localhost` 后 `scFLOWpre_Bx64net.exe` **可正常启动**（不再复现
+   DEV_SUMMARY §6 的 `SetupSCTpreLib` 崩溃）；`win32com Dispatch(
+   "scFLOWpre_Bx64net.Application.2025")` 附加到运行实例，
+   `ExecuteVBSWithFile` 接受脚本（返回 True）。VBS 结果文件回写为空的
+   次级问题待查（编码/OpenProject 路径）；「布局一致」仍待完整 GUI 验收。
 5. ~~MDL ridge 写端~~ → 已闭环（见 §15.2.4，ridge 无独立节）。
 ---
 
