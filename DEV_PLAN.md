@@ -963,6 +963,13 @@ CondInitial（+CondInitialField/Value）
    - 测试 `tests/test_gph_write_sections.py`：box 网格数据（944 单元 / 3168 面
      / cvol / 2 面区域 / 1 体区域 / 1 part）round-trip。
 
+4. **MDL ridge 写端（确认已闭环）**（`mdl.py`）：
+   - 逆向 box `meshinggroup1_ridge.mdl`：与 `*_part.mdl` 同构（无独立
+     `LS_MdlRidges` 节），ridge = `LS_EdgeStateOfFaces`(1=特征边) +
+     `LS_StateOfNodes`(1=特征点)；
+   - `write_mdl` 的 `edge_state` / `node_state` 参数即 ridge 写端；
+   - 测试 `tests/test_mdl_writer.py::test_ridge_edge_state_roundtrip`。
+
 ### 15.3 延后项与所需前置
 
 1. **Parasolid 编码**（§13.3.2）：与解码同源，需商业内核（OCCT Import /
@@ -975,8 +982,7 @@ CondInitial（+CondInitialField/Value）
    无 LZMS 压缩）。
 4. **SCTpre 实机验收**（§13.3.7）：宿主需 Kicker+许可证；「布局一致」仍是
    推断，非实证。
-5. **MDL ridge 写端**：真实 `*_ridge.mdl` 的 ridge 节格式未定（无
-   `LS_MdlRidges` 已知布局）。
+5. ~~MDL ridge 写端~~ → 已闭环（见 §15.2.4，ridge 无独立节）。
 ---
 
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

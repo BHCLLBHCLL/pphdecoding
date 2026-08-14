@@ -63,6 +63,26 @@ class TestWriteMdl(unittest.TestCase):
         self.assertEqual(pd.GetNumberOfCells(), 12)
         self.assertEqual(pd.GetNumberOfPoints(), 8)
 
+    def test_ridge_edge_state_roundtrip(self):
+        # ridge 标记 = LS_EdgeStateOfFaces(1) + LS_StateOfNodes(1)
+        pts, faces = _unit_box_quads()  # 8 顶点，6 四边形面 = 24 半边
+        edge_state = np.zeros(24, dtype=np.uint8)
+        edge_state[0] = 1
+        edge_state[5] = 1
+        node_state = np.zeros(8, dtype=np.int64)
+        node_state[3] = 1
+        p = ROOT / "_test_ridge.mdl"
+        try:
+            mdl.write_mdl(p, pts, faces,
+                          edge_state=edge_state, node_state=node_state)
+            m = mdl.parse_mdl(str(p))
+        finally:
+            p.unlink(missing_ok=True)
+        self.assertEqual(len(m.edge_state), 24)
+        self.assertEqual(int((m.edge_state == 1).sum()), 2)
+        self.assertEqual(int((m.node_state == 1).sum()), 1)
+        self.assertEqual(m.edge_state.tolist()[0], 1)
+
     def test_pentagon_roundtrip(self):
         # n-gon（五边形面）：上下底各一个五边形 + 5 个四边形侧面
         ang = [2 * np.pi * i / 5 for i in range(5)]
