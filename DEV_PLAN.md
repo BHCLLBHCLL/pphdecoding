@@ -13,7 +13,8 @@
 > §13：PPH 格式解码 + 写回闭环缺口（2026-08-14）
 > §14：解码未完整的功能补齐计划（2026-08-14）
 > §15：写回未完整的功能补齐计划（2026-08-14）
-> §16：gphstats.py / oct.py / parasolid.py 系统改进（DLL 逆向，2026-08-15）
+> §16：gphstats.py / oct.py / parasolid.py 系统改进（DLL 逆向，2026-08-15；§16.5 pskernel 版本审计/V37 逆向）
+> §17：全量功能差距排序与改进计划（2026-08-16，详版见 function_gap_analysis.md）
 
 ---
 
@@ -1050,6 +1051,103 @@ CondInitial（+CondInitialField/Value）
 | P3 | 文本 B-rep 离线解析 | 长期项，仅当需要无内核场景 |
 
 **核心结论**：三模块改进方向已由 DLL 证据收敛——`gphstats.py` 补两个未解码节 + 用 `FLDUTIL` 真值对拍；`oct.py` 重心从「写区域」转向「oct↔快照↔网格三向对齐」；`parasolid.py` 拆成「内核介导 B-rep（box.x_t）」与「CADthru 分面二进制（PKBody3）」两条路径分别落地，其中内核路径是拿到解析几何的唯一现实办法。
+
+### 16.5 pskernel 版本审计 + V37 新增导出逆向补充（2026-08-16）
+
+> 承接 §16.0 的 DLL 定位，把 pskernel 从「636 个 ask_* 导出」的粗粒度升级为
+> **逐导出签名级接口映射**，并补齐 V35 手册未收录的 V36/V37 新增函数。
+> 新模块：`pskernel_abi.py`（导出 × 手册签名映射）、`pskernel_v37.py`（新增
+> 导出逆向补充）；测试 `test_pskernel_abi.py` / `test_pskernel_v37.py`。
+
+#### 16.5.1 版本三通道确证
+
+| 版本 | pskernel FileVersion | Schema | 运行期 PKBody3 |
+|------|----------------------|--------|----------------|
+| CradleCFD2023 | 34.01.153 | sch_34101 | modeller 3401153 / SCH_3401153_34101_13006 |
+| CradleCFD2025.2 | 37.01.153 | sch_37102 | modeller 3701153 / SCH_3701153_37102_13006 |
+
+案例遍历：2023.2 = 150 pph / 99 x_t / 24 dll；2025.2 = 151 pph / 109 x_t/x_b /
+22 dll。案例 x_t 输入为**原建模器版本**（V22..V34 分布，与 scFLOWpre 版本无关）。
+
+#### 16.5.2 pskernel_abi.py —— 导出 × V35 手册签名映射
+
+- 以 q-solid 托管 Parasolid_Docs_V35（逐函数签名页，最接近的公开文档）为语料，
+  逐导出抓取并解析 C 签名（返回类型 + 参数表），输出 `InterfaceEntry` 映射、
+  `gen_ctypes` 原型生成、`compare_versions` 多版本差异报告。
+- 覆盖率：V34.1 = 1081/1100 PK_*；V37 = 1101/1204（缺失 103 = V36/V37 新增）。
+  导出集 2023(1350, 1100 PK_*) ⊂ 2025.2(1454, 1204 PK_*)。
+- GW/wrapper DLL（ParasolidGW / PrimeParasolidGW / ParasolidFunction / kernel_io）
+  均不导出 PK_*（内部 C++ 封装，PK 表面只在 pskernel.dll）。
+
+#### 16.5.3 pskernel_v37.py —— V37 新增 104 个 PK_* 逆向补充
+
+| 手段 | 内容 |
+|------|------|
+| 家族归类 | LATTICE 26 / PARTITION 14 / FRAME 10 / REGION 10 / TOPOL 10 / BODY_cellular 6 / FACE 6 / MARK 4 / ASSEMBLY·GEOM·LBALL·SESSION·TRANSF 等；49 个 `_r_f` + 1 个 `_cb_r_f` 变体按命名约定配对基函数 |
+| 反汇编参数推断 | capstone x64 入口：4 寄存器参数首读 + 栈参数（rbp 帧偏移换算）+ 字节参数（logical/char）；先对文档化签名校准（PK_PART_transmit/recv argc 精确命中） |
+| 经验调用验证 | 子进程隔离：`PK_SESSION_ask_cellular_guise(PK_LOGICAL_t *)` rc=0（guise=27110）；`PK_FACE_ask_type` / `PK_REGION_ask_type` / `PK_REGION_ask_lattices` 以 ask 家族签名不崩溃、rc=5022 = guise 门禁（cellular 家族需 cellular-guise 会话，默认 modeling guise 被拒） |
+| schema 演进 | sch_34101 → sch_37102 新增 8 型：SKEWBOX / TPMS_SURF / IMPLICIT_SURF / IMPLICIT_VOLUME / PATTERN_BOUND / PATTERN_RECTILINEAR / PATTERN_AXIAL / LATTICE_DATA_PATTERN + 8 型变更 |
+
+**结论**：V35 手册为最接近的公开文档（V34.1 导出全量可定位）；V36/V37 新增的
+cellular / lattice / frame 家族只能靠「命名约定 + 反汇编 + 经验调用」三层补充，
+类型级签名（各指针结构体布局）仍待 cellular-guise 会话或官方 V37 文档深挖
+——与 §16.4「P1 照 V37 头文件钉结构体布局」为同一前置依赖。
+
+---
+
+## 17. 全量功能差距排序与改进计划（2026-08-16）
+
+> 完整分析（含功能域完整度对照图、分层现状、模块交叉表）见
+> [function_gap_analysis.md](function_gap_analysis.md)。本节为可执行摘要，
+> 与 §12（差距快照）的差异：§12 是 2026-08-14 的比对快照，本节是其后
+> 经 Wrapping 录制锁定、原生 BAM/网格交付、Parasolid 编辑算子落地后的
+> **重排序 + 分优先级计划**。
+
+### 17.1 差距排序（大 → 小）
+
+| # | 差距域 | 量化 | 一句话判断 |
+|---|---|---|---|
+| 1 | 条件体系 | 5/180 Cond* 有粗桩 UI | 最大差距：参数仅存 session、region 单 face 引用 |
+| 2 | 网格生成算法深度 | MVP 级 | 无 2:1 平衡/质量度量/区域映射；写端已生产级 |
+| 3 | 几何编辑闭环 | TODO 草稿 | **性价比最好**：ps_facet2_nodes 底层生产级，只欠接线 |
+| 4 | 外部 COM 全自动化 | 结构性阻塞 | LocalServer 直指裸 exe；in-proc 桥未实测；仅半自动 |
+| 5 | Wrapping/Disc/Overset | 录制≠验证 | Wrapping 锁定未实机执行；Disc/Overset 仅 stub |
+| 6 | native_bam 精度 | 几何近似 | 容差合并/Influence 与宿主内核不等价 |
+| 7 | 边缘 NYI + 质量基础设施 | 11 菜单灰显 | Select 高级 5 项 / Edit 3 项 / Ridge 2 项 / File 1 项 |
+
+### 17.2 改进计划（P0–P3）
+
+**P0 — 实机验证收尾 + 几何编辑接线（最高性价比）**
+
+1. 原生桌面按 DEV_SUMMARY §6.3 清单闭合 in-proc COM 桥首测
+   （`context_ready=True`、handle>0）；
+2. 修 `host_pipeline.py` 两处隐患（宿主外 CreateObject 兜底、`_run_gui`
+   拉裸 exe）；
+3. **`create_solid_block` / `boolean_bodies` / `transform_body` /
+   `face_delete` 接入 Create/Modify Parts 原生模式**（API 关闭时本地执行
+   写回 PPH），替代 `pipeline_plan.py` L855–892 TODO 草稿；
+4. edit_ops（Ridge/Octant）与 Wrapping 管线各一次实机执行验收。
+
+**P1 — 条件表单系统化（消灭最大差距）**
+
+1. schema-driven 通用表单生成器（基于 `condition_registry`），替代手写
+   180 表单；
+2. 17 个 bc_filters 类型先升级为真 XML 写入 + region 多面引用；
+3. `history_vbs` 解析真实项目录制持续反向补全字段样本。
+
+**P2 — 网格质量基础设施**
+
+1. voxmesh：2:1 平衡 + pairing、面区域映射（→ `LS_SurfaceRegions`）、
+   质量统计（非正交度/偏斜度直方图进 GUI）；
+2. polymesh：体积质心 Lloyd、角点专用 seed；
+3. 与 scFLOWpre 同几何量化对拍（单元数/质量分布）。
+
+**P3 — 深度对齐与长尾**
+
+1. native_bam 容差合并与 Influence 几何效应；
+2. OCTREEREGION 后序写端、sctsnapshot 记录级重序列化 + SCTpre 验收；
+3. Disc/Overset 录制锁定、11 个 NYI 菜单逐项消灭；
+4. 样例集扩充（3–5 个真实项目 pph）黄金文件对比。
 
 ---
 
