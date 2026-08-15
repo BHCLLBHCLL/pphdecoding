@@ -140,6 +140,37 @@ def cvol_ids(data) -> Optional[np.ndarray]:
         np.int64).copy()
 
 
+def element_info(data) -> Optional[tuple[int, np.ndarray]]:
+    """Element_InformationFlag -> (n_flag_types, flags[n_cells] I4).
+
+    scFLOW 体网格每单元一个「元素信息」标志；节内 (4, 31, 4) 描述符给出
+    31 种 flag 类型（box/laptop 均恒为 31），随后 I4[n_cells] 块为每单元
+    标志值（box 全 9 = 0b1001）。位语义待 FLDUTIL 对拍钉死（fldutil_bridge）。
+    """
+    section = _find_section(data, "Element_InformationFlag")
+    if section is None:
+        return None
+    descs = [(d.dim0, d.dim1)
+             for d in crdlfld.iter_descriptors(data, section)
+             if d.type_code == 4 and d.dim0 > 1]
+    flags: Optional[np.ndarray] = None
+    for b in crdlfld.iter_data_blocks(data, section):
+        if b.byte_count >= 4 and b.byte_count % 4 == 0:
+            flags = np.frombuffer(data, dtype=">i4", count=b.byte_count // 4,
+                                  offset=b.offset).astype(np.int64).copy()
+            break
+    if flags is None:
+        return None
+    n = int(flags.size)
+    flag_types = 31
+    for d0, d1 in descs:
+        if d0 == n and d1 == 4:
+            continue  # 数组描述符（dim0 == n_cells）
+        if 1 < d0 < n:
+            flag_types = int(d0)
+    return flag_types, flags
+
+
 def _ls_nodes_elem_bytes(data, sec_start: int, sec_end: int) -> Optional[int]:
     """从 LS_Nodes 类型描述符投票得到坐标元素尺寸（4=f32，8=f64）。"""
     counts = {4: 0, 8: 0}
@@ -691,6 +722,18 @@ def _cvol_section(cvol) -> bytes:
             _descriptor(4, 1, 1) + _descriptor(4, n, 4) +
             _descriptor(4, n, 1) + _block(cvol.tobytes()))
     return _section("LS_CvolIdOfElements", body)
+
+
+def _element_info_section(flags, flag_types: int = 31) -> bytes:
+    """Element_InformationFlag 写端（box 布局：9 描述符 + I4[n] 块）。"""
+    flags = np.asarray(flags, dtype=">i4").reshape(-1)
+    n = int(flags.size)
+    body = (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+            _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+            _descriptor(4, 1, 1) + _descriptor(4, int(flag_types), 4) +
+            _descriptor(4, 1, 1) + _descriptor(4, n, 4) +
+            _descriptor(4, n, 1) + _block(flags.tobytes()))
+    return _section("Element_InformationFlag", bytes(body))
 
 
 def _name255(text: str) -> bytes:
