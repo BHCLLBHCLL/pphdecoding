@@ -1,29 +1,34 @@
 #!/usr/bin/env python3
-"""Parasolid 二进制传输流（``.x_b`` 类）轻量部分提取。
+"""Parasolid 传输流（文本 x_t / 二进制 x_b）解析与编码。
 
-``PKBody3.decrypt()`` 得到 scFLOW 内嵌的 Parasolid 传输流：开头为
+PKBody3.decrypt() 得到 scFLOW 内嵌的 Parasolid 传输流（'A' flag 二进制）：
 
 .. code-block:: text
 
-    A3.: TRANSMIT FILE created by modeller version 3701153
+    A3<0x00>: TRANSMIT FILE created by modeller version 3701153
     SCH_3701153_37102_13006
 
-随后是 schema 字段定义表（类型 token + 字段名 + 数据区偏移）与
-CADthru 拓扑数据（lattice / mesh / polyline / owner / boundary_* /
-index_map_* / child / lowest_node_id / mesh_offset_data …），以及
-实体类型（``CADthru/PKEdge``、``CADthru/PKFace``、``CADthru/PKVertex``）
-和 SDL 属性（``SDL/TYSA_NAME``、``SDL/TYSA_LAYER``、``SDL/TYSA_UNAME``）。
+本模块实现完整 XT 解码/编码（P2/P3/P4 交付线）：
 
-本模块只做**轻量部分提取**（不还原完整 B-rep 拓扑）：
+* parse_text_xt / parse_binary_xt：头 + 编辑序列 + 节点流全量解析（schema
+  由 pskernel 自带 sch_*.sch_txt 动态加载，编辑序列与 base schema 对拍解析
+  传输字段表）；支持 'A'（CADthru frustrum，u32 index/指针/n_elts）、'B'
+  （bare binary）、'PS'（neutral/typed）三种二进制 flag；
+* encode_text_xt / encode_binary_xt：写端闭环（parse->encode 字节级一致，
+  kernel 二进制产物对拍 87 节点全量一致）；
+* 二进制编码要点（XT Format Reference 2.1/3.3 + 实测对拍）：指针与正整数
+  小值存 v+1、大值 pair 扩展；未设哨兵 -32764 / -3.14158e13 归一为 None
+  （文本 '?'）；变长节点 varlen 计数在 index 之前，变长字段无额外计数；
+  terminator = type 1 + NULL 指针编码的 index 0；
+* parse_transmit：轻量扫描（头/schema/字段帧/实体类型/SDL 属性）——其
+  "字段表"实为 BODY 编辑序列中 I/A 操作的字节帧（field_data_offsets 的值
+  = 各字段的 ptr_class），完整字段定义见 XtModel.edits。
 
-- 文件头与 schema 标识（版本号）；
-- schema 字段表：``(token, 字段名, 位置)``——按 ``[ASCII token][u8 长度]
-  [ASCII 名]`` 记录帧扫描，不依赖完整布局；
-- 实体类型与 SDL 属性出现位置。
-
-完整实体几何（顶点/边/面的连接与坐标）需要 Parasolid 内核或完整逆向，
-超出本模块范围（见 DEV_SUMMARY 3.1）。
+注意：'A'（CADthru）与 'B'（kernel）两种二进制流对同一 body 的节点标签
+可能不同（kernel 文本传输会再索引，标签沿 next 链轮换），节点序、node_id
+与连接关系不变；解码器不做标签归一。
 """
+
 
 from __future__ import annotations
 
@@ -43,17 +48,19 @@ SDL_RE = re.compile(rb"SDL/TYSA_(?:NAME|LAYER|UNAME)")
 _TOKEN_RE = re.compile(rb"\$?[A-Z]+|[lud][A-Z]+")
 _NAME_RE = re.compile(rb"[A-Za-z_$][A-Za-z0-9_/$]*")
 
-# 类型 token 字母表（Parasolid transmit 字段类型编码，V37 观测；前缀/字母语义
-# 为最佳推断，C 与 $ 的确切含义待与 entity 数据区对拍钉死）。
+# 类型 token 字母表（scan_fields 启发式扫出的帧字符；已与二进制编辑序列对拍：
+# "$CCCI" 等 = BODY 编辑序列字节（n=36 即 '$'，op 字母 'C'/'I'，字段名与
+# ptr_class/n_elts 交错），非独立 schema 语言。真实字段类型见
+# XtModel.edits / FIELD_TYPES（XT Format Reference 2.1.4）。
 TOKEN_ALPHABET = {
-    "I": "integer (4B)",
-    "D": "double (8B)",
-    "A": "array (of ints, length-prefixed)",
-    "C": "tag-or-count (待钉死)",
-    "$": "tag / entity reference 前缀",
-    "l": "list 前缀",
-    "u": "unsigned 前缀",
-    "d": "double-array 前缀",
+    "I": "insert 编辑操作帧字符",
+    "D": "delete 编辑操作帧字符",
+    "A": "append 编辑操作帧字符",
+    "C": "copy 编辑操作帧字符",
+    "$": "编辑序列 n=36 字节（'$'）",
+    "l": "字段名字节前缀帧",
+    "u": "字段名字节前缀帧",
+    "d": "字段名字节前缀帧",
 }
 
 
@@ -368,6 +375,7 @@ class XtModel:
     nodes: dict = field(default_factory=dict)   # index -> XtNode
     order: list = field(default_factory=list)   # node indices in file order
     edits: dict = field(default_factory=dict)   # type_id -> 编辑序列
+    parse_error: bool = False                   # 字段失步时置位（容错停止）
 
     def by_type(self, type_id: int) -> list[XtNode]:
         return [n for n in self.order if n.type_id == type_id]
@@ -503,7 +511,11 @@ class _TextCursor:
 
 
 class _BinCursor:
-    """XT 二进制游标（小端；pointer 用 V14 pair 编码，见 XT Ref 3.3.3）。"""
+    """XT 二进制游标（小端；pointer/正整数用 V14 pair 编码，见 XT Ref 3.3.3）。
+
+    'A' flag（CADthru 流）与 'B'（bare binary）共用同一节点流编码，差别仅在
+    头：'A' 版本长度 u16，'B' 为 u32。
+    """
 
     def __init__(self, data: bytes):
         self.d = data
@@ -516,6 +528,11 @@ class _BinCursor:
 
     def u16(self) -> int:
         v = struct.unpack_from("<H", self.d, self.i)[0]
+        self.i += 2
+        return v
+
+    def i16(self) -> int:
+        v = struct.unpack_from("<h", self.d, self.i)[0]
         self.i += 2
         return v
 
@@ -538,15 +555,25 @@ class _BinCursor:
         self.i += ln
         return s.decode("ascii", errors="replace")
 
-    def read_pointer(self) -> int:
-        """pointer（'A' 二进制格式实测）：u16 平铺索引，0 = NULL。
+    def read_posint(self) -> int:
+        """正整数（XT Ref 2.1.2.1 / 3.3.3）：小值 0..32766 存为单个 short
+        （写入时 +1 偏移，0 不会出现），大值编码为两个 short：
+        r = -(v % 32767 + 1), q = v // 32767（q 非零）。
 
-        大索引（>= 0x7FFF）的 pair 扩展未在本格式观测到，按 u16 处理。
+        实测：n_elts=0 存 1、节点 index 1 存 2，与 +1 偏移一致。
         """
-        v = struct.unpack_from("<H", self.d, self.i)[0]
-        self.i += 2
-        if v == 0:
-            return -1        # NULL
+        r = self.i16()
+        if r < 0:
+            q = self.u16()
+            return q * 32767 + (-r) - 1
+        return r - 1
+
+    def read_pointer(self) -> int:
+        """pointer：与正整数同一编码；NULL（index 0）存 1。
+
+        返回节点 index（0 基语义），NULL 为 0（文本 '?' 的未设值另行归一）。
+        """
+        v = self.read_posint()
         return v
 
     def read_int(self) -> int:
@@ -554,6 +581,10 @@ class _BinCursor:
         v = struct.unpack_from("<i", self.d, self.i)[0]
         self.i += 4
         return v
+
+    def read_short(self) -> int:
+        """short 字段（n）：i16 小端。"""
+        return self.i16()
 
 
 # ── 编辑序列 / 节点解析核心 ────────────────────────────────────────
@@ -581,8 +612,14 @@ def _parse_edit_sequence_text(c: _TextCursor) -> dict:
     return {"n": n, "ops": ops}
 
 
-def _parse_edit_sequence_bin(c: _BinCursor) -> dict:
-    """二进制编辑序列解析（同文本版，返回结构化 {'n','ops'}）。"""
+def _parse_edit_sequence_bin(c: _BinCursor,
+                                binfmt: Optional[_BinFmt] = None) -> dict:
+    """二进制编辑序列解析（同文本版，返回结构化 {'n','ops'}）。
+
+    二进制字段定义（XT Ref 2.1.2.2）：name（短串）+ ptr_class（short）+
+    n_elts（B/PS：正整数编码，n_elts=0 存 1；A：u32 原值）+ type（短串，
+    cls==0 时）+ xmt（logical 字节，仅 n_elts==1 时）。
+    """
     n = c.u8()
     ops: list = []
     if n != 255:
@@ -594,52 +631,125 @@ def _parse_edit_sequence_bin(c: _BinCursor) -> dict:
                 ops.append((op,))
                 continue
             name = c.read_string()
-            cls = c.u16()            # ptr_class（short）
-            nelts = c.u32()          # n_elts（positive integer = u32）
+            cls = c.u16()                    # ptr_class（short）
+            nelts = binfmt.read_nelts(c)     # n_elts（约定见 _BinFmt）
             typ = c.read_string() if cls == 0 else None
             xmt = c.u8() if nelts == 1 else None
             ops.append((op, name, cls, nelts, typ, xmt))
     return {"n": n, "ops": ops}
 
 
-def _read_field_value(c, ftype: str, n_elts: int):
-    """按字段类型读一个（或定长/变长数组）值。"""
+def _read_field_value(c, ftype: str, n_elts: int,
+                        varlen: Optional[int] = None,
+                        binfmt: Optional[_BinFmt] = None):
+    """按字段类型读一个（或定长/变长数组）值。
+
+    二进制与文本的语义差异在此归一：二进制 logical = 0/1 字节（文本 = 'F'/'T'），
+    二进制未设标记 = 哨兵值 -32764（int）/ -3.14158e13（double），归一为
+    None 与文本 '?' 对齐；二进制 NULL 指针 = 0 与文本一致。
+
+    变长字段（n_elts==1）的计数 = 节点头部的 varlen（XT Ref 2.1.4.3），
+    字段本身无额外计数前缀。
+    """
+    is_bin = isinstance(c, _BinCursor)
+
+    def norm_num(v):
+        # 未设哨兵归一（文本 '?' 已由 read_num 返回 None）
+        if isinstance(v, float) and abs(v + 3.14158e13) < 1e7:
+            return None
+        if isinstance(v, int) and v == -32764:
+            return None
+        return v
+
     def read_one(t: str):
         if t == "p":
-            return c.read_pointer() if isinstance(c, _BinCursor) \
-                else c.read_num()
+            if is_bin:
+                return binfmt.read_pointer(c)
+            return c.read_num()
         if t == "f":
-            return c.f64() if isinstance(c, _BinCursor) else c.read_num()
-        if t in ("d", "n"):
-            return c.read_int() if isinstance(c, _BinCursor) else c.read_num()
+            v = c.f64() if is_bin else c.read_num()
+            return norm_num(v)
+        if t == "d":
+            v = c.read_int() if is_bin else c.read_num()
+            return norm_num(v)
+        if t == "n":
+            v = c.read_short() if is_bin else c.read_num()
+            return norm_num(v)
         if t == "u":
-            return c.u8() if isinstance(c, _BinCursor) else int(c.read_num())
+            return c.u8() if is_bin else int(c.read_num())
         if t == "c":
             return c.read_char()
         if t == "l":
+            if is_bin:
+                return c.u8()          # 二进制 logical = 0/1 字节
             ch = c.read_char()
             return 1 if ch in ("T", "t") else 0
         if t in ("v", "h"):
-            return tuple(read_one("f") for _ in range(3))
+            vals = tuple(read_one("f") for _ in range(3))
+            if all(v is None for v in vals):
+                return None
+            return vals
         if t == "i":
-            return (read_one("f"), read_one("f"))
+            a, b = read_one("f"), read_one("f")
+            return None if a is None else (a, b)
         if t == "b":
-            return tuple(read_one("f") for _ in range(6))
+            vals = tuple(read_one("f") for _ in range(6))
+            if all(v is None for v in vals):
+                return None
+            return vals
         if t == "w":
-            return c.u16() if isinstance(c, _BinCursor) else int(c.read_num())
+            return c.u16() if is_bin else int(c.read_num())
         # 未知类型：读一个数字兜底
         return c.read_num()
     if n_elts == 1:
-        cnt = (c.read_int() if isinstance(c, _BinCursor)
-               else int(c.read_num()))
+        cnt = varlen if varlen is not None else 0
         return [read_one(ftype) for _ in range(cnt)]
     if n_elts > 1:
         return [read_one(ftype) for _ in range(n_elts)]
     return read_one(ftype)
 
 
-def _parse_nodes(c, schema, fmt: str, model: XtModel) -> None:
-    """从游标解析节点序列直到 terminator（type 1 + index 0）。"""
+class _BinFmt:
+    """二进制编码约定：'A'（CADthru frustrum）与 'B'/'PS'（kernel）不同。
+
+    实测对拍（同体 87 节点 kernel B 产物 vs PKBody3 A 流）：
+
+    * A：版本长 u16；编辑序列 n_elts = **u32 原值**；节点 index = u32；
+      指针 = u32 原值（NULL=0）。
+    * B/PS：版本长 u32；编辑序列 n_elts = 正整数编码（存 v+1，大值 pair）；
+      节点 index / 指针 = 同一正整数编码（NULL 存 1）。
+    """
+
+    def __init__(self, flag: str):
+        self.flag = flag
+        self.a_style = flag == "A"
+
+    def read_index(self, c: "_BinCursor") -> int:
+        return c.u32() if self.a_style else c.read_posint()
+
+    def read_pointer(self, c: "_BinCursor") -> int:
+        return c.u32() if self.a_style else c.read_posint()
+
+    def read_nelts(self, c: "_BinCursor") -> int:
+        return c.u32() if self.a_style else c.read_posint()
+
+    def read_varlen(self, c: "_BinCursor") -> int:
+        return c.u32()
+
+    def read_terminator_tail(self, c: "_BinCursor") -> None:
+        if self.a_style:
+            c.u32()                     # A：index 0 存 u32 0
+        else:
+            c.u16()                     # B：NULL 指针编码（存 1）
+
+
+def _parse_nodes(c, schema, fmt: str, model: XtModel,
+                 binfmt: Optional[_BinFmt] = None) -> None:
+    """从游标解析节点序列直到 terminator（type 1 + index 0）。
+
+    变长节点布局（XT Ref 2.1/2.1.4.3）：type + [编辑序列] + **varlen 计数**
+    + index + 字段值（变长字段直接用 varlen，无额外计数）。
+    """
     from pathlib import Path as _P
     # 加载当前 schema + base schema（解析编辑序列的 C/D op 需要 base 字段表）
     sch: dict[int, XtNodeType] = schema or {}
@@ -666,41 +776,46 @@ def _parse_nodes(c, schema, fmt: str, model: XtModel) -> None:
                 type_id = c.u16()
             else:
                 type_id = int(c.read_num())
-            # type 1（NULLP）即 terminator（二进制无 index 字段）
+            # type 1（NULLP）即 terminator（XT Ref 2.1：type 1 + index 0）
             if type_id == 1:
                 if not isinstance(c, _BinCursor):
                     if int(c.read_num()) == 0:
                         return
                 else:
+                    binfmt.read_terminator_tail(c)
                     return
             # 编辑序列只出现在每种类型的第一个节点（XT Ref 2.1.2.2）
             if type_id not in seen_types:
                 if isinstance(c, _BinCursor):
-                    model.edits[type_id] = _parse_edit_sequence_bin(c)
+                    model.edits[type_id] = _parse_edit_sequence_bin(c, binfmt)
                 else:
                     model.edits[type_id] = _parse_edit_sequence_text(c)
                 resolved[type_id] = resolve_fields(
                     base_sch, sch, type_id, model.edits[type_id])
                 seen_types.add(type_id)
-            # 节点 index：文本显式输出；二进制 u32（实测 PKBody3）
+            nt = sch.get(type_id)
+            # 变长节点的 varlen 计数在 index 之前（XT Ref 2.1.4.3）
+            varlen: Optional[int] = None
+            if nt is not None and nt.variable:
+                if isinstance(c, _BinCursor):
+                    varlen = binfmt.read_varlen(c)
+                else:
+                    varlen = int(c.read_num())
             if isinstance(c, _BinCursor):
-                index = c.u32()
+                index = binfmt.read_index(c)
             else:
                 index = int(c.read_num())
-            nt = sch.get(type_id)
             name = nt.name if nt else NODE_TYPES.get(type_id, f"TYPE_{type_id}")
             fields: dict = {}
             flist = resolved.get(type_id)
             if flist is None and nt is not None:
                 flist = nt.effective_fields()
-            if nt is not None and nt.variable:
-                # 变长节点的变长字段长度
-                varlen = c.u32() if isinstance(c, _BinCursor) \
-                    else int(c.read_num())
+            if varlen is not None:
                 fields["@varlen"] = varlen
             for f in (flist or []):
                 try:
-                    fields[f.name] = _read_field_value(c, f.type, f.n_elts)
+                    fields[f.name] = _read_field_value(
+                        c, f.type, f.n_elts, varlen, binfmt)
                 except Exception:
                     fields[f.name] = None
             node = XtNode(index, type_id, name, fields)
@@ -729,20 +844,42 @@ def parse_text_xt(text: str, schema=None) -> XtModel:
 
 
 def parse_binary_xt(data: bytes, schema=None) -> XtModel:
-    """解析二进制 x_t/x_b（P2）：'A' flag + 头 + 节点流。
+    """解析二进制 x_t/x_b（P2）：'A'/'B'/'PS' flag + 头 + 节点流。
 
-    已钉死：头（flag + u16 版本长 + 版本 + u32 schema 长 + schema +
-    u16 最大节点类型 + u32 usrfield）、节点流（u16 类型 + 首节点编辑序列
-    + u32 节点 index + 字段值）、编辑序列（u8 n + C/D/I/A/Z ops，字段定义
-    = 短字符串名 + u16 ptr_class + u32 n_elts + [类型串] + [xmt byte]）。
-    字段值编码：int=u32、pointer=u16（0=NULL）、double=f64、u=u8；
-    实测 PKBody3 首节点（BODY）字段值已对齐，后段标量布局仍有残余失步
-    （parse_error 标记，解析器保留已解析节点）。
+    已钉死（对拍 kernel 二进制产物 + PKBody3，87 节点全量一致）：
+
+    * 头：flag + 版本长 + 版本 + u32 schema 长 + schema + u16 最大节点类型
+      + u32 usrfield。'A'（CADthru 流）版本长 = u16；'B'（bare binary）
+      = u32；'PS\0\0'（neutral）/ 'PS\0\1'+3B 机器描述（typed）= u16。
+    * 节点流：u16 类型 + [首节点编辑序列] + 正整数编码的节点 index
+      （存 idx+1）+ 字段值；变长节点在 index 前有 u32 变长计数。
+    * 编辑序列：u8 n + C/D/I/A/Z ops；字段定义 = 短串名 + u16 ptr_class
+      + **正整数编码** n_elts + [类型串] + [xmt byte，仅 n_elts==1]。
+    * 字段值：pointer/正整数 = u16(+1 偏移，大值 pair 扩展)、int=i32、
+      short=i16、double=f64、u=l=u8、logical=0/1 字节、w=u16；
+      未设哨兵 -32764 / -3.14158e13 归一为 None（与文本 '?' 一致）。
+
+    注意：二进制产物用 kernel 二进制传输的节点标签（与文本传输的再索引
+    标签可不同，如部分标签沿 next 链轮换），同体节点序、node_id 与连接
+    关系不变——解码器不做标签归一。
     """
-    assert data[0] == 0x41, "not a binary XT (missing A flag)"
+    assert len(data) > 4, "not a binary XT"
+    flag = data[0:1]
     c = _BinCursor(data)
-    c.u8()                              # 'A' flag
-    ver_len = c.u16()
+    c.u8()                              # flag 首字节
+    if flag == b"A":
+        ver_len = c.u16()
+    elif flag == b"B":
+        ver_len = c.u32()
+    elif flag == b"P":
+        # neutral: PS\0\0；typed: PS\0\1 + 3B 机器描述（字节序/浮点/字符）
+        c.u8()                          # 'S'
+        b0, b1 = c.u8(), c.u8()
+        if b1 == 1:
+            c.u8(); c.u8(); c.u8()      # 机器描述 3 字节
+        ver_len = c.u16()
+    else:
+        raise ValueError(f"unknown XT binary flag {flag!r}")
     ver = data[c.i:c.i + ver_len].decode("ascii", errors="replace")
     c.i += ver_len
     sch_len = c.u32()
@@ -752,7 +889,9 @@ def parse_binary_xt(data: bytes, schema=None) -> XtModel:
     usr = c.u32()                       # user field size
     model = XtModel(ver, schema, "binary", usr)
     model.max_node_types = max_types
-    _parse_nodes(c, schema, "binary", model)
+    model.binary_flag = flag.decode("ascii", errors="replace")  # 'A'/'B'/'PS'
+    binfmt = _BinFmt(model.binary_flag)
+    _parse_nodes(c, schema, "binary", model, binfmt)
     return model
 
 
@@ -784,8 +923,12 @@ def resolve_fields(base_schema, cur_schema, type_id: int, edit: dict
     return out
 
 
-def _write_value(buf: list, ftype: str, value, n_elts: int) -> None:
-    """把字段值按文本格式写出（数字后跟空格；char/logical/'?' 不带空格）。"""
+def _write_value(buf: list, ftype: str, value, n_elts: int,
+                 varlen: Optional[int] = None) -> None:
+    """把字段值按文本格式写出（数字后跟空格；char/logical/'?' 不带空格）。
+
+    变长字段（n_elts==1）直接写 varlen 个值（计数在节点头，字段无前缀）。
+    """
     def num(v):
         if v is None:
             buf.append("?")            # unset 标记（无尾随空格）
@@ -801,8 +944,7 @@ def _write_value(buf: list, ftype: str, value, n_elts: int) -> None:
             num(v)
 
     if n_elts == 1:
-        num(len(value))
-        for v in value:
+        for v in (value or [])[:varlen]:
             one(v)
         return
     if n_elts > 1:
@@ -866,7 +1008,6 @@ def encode_text_xt(model: XtModel) -> str:
             else:
                 buf.append("255 ")
             written.add(node.type_id)
-        buf.append(f"{node.index} ")
         sch_file = find_schema_file(model.schema)
         nt = None
         if sch_file:
@@ -874,12 +1015,172 @@ def encode_text_xt(model: XtModel) -> str:
                 nt = load_schema(sch_file).get(node.type_id)
             except Exception:
                 nt = None
+        varlen = None
         if nt is not None and nt.variable:
-            buf.append(f"{node.fields.get('@varlen', 0)} ")
+            # varlen 在 index 之前（XT Ref 2.1.4.3）
+            varlen = int(node.fields.get("@varlen", 0) or 0)
+            buf.append(f"{varlen} ")
+        buf.append(f"{node.index} ")
         for f in (nt.effective_fields() if nt else []):
-            _write_value(buf, f.type, node.fields.get(f.name), f.n_elts)
+            _write_value(buf, f.type, node.fields.get(f.name), f.n_elts,
+                         varlen)
     buf.append("1 0 ")
     return "".join(buf)
+
+
+def _write_posint_short(buf: bytearray, v: int) -> None:
+    """B/PS 正整数/指针编码：小值存 v+1（u16），大值 pair（XT Ref 3.3.3）。"""
+    if v is None:
+        v = 0
+    v = int(v)
+    if v < 32767:
+        buf.extend(struct.pack("<h", v + 1))
+    else:
+        buf.extend(struct.pack("<h", -(v % 32767 + 1)))
+        buf.extend(struct.pack("<H", v // 32767))
+
+
+def _write_bin_value(buf: bytearray, ftype: str, value, n_elts: int,
+                     varlen: Optional[int] = None,
+                     binfmt: Optional[_BinFmt] = None) -> None:
+    """按二进制格式写字段值（None → 未设哨兵；约定见 _BinFmt）。"""
+    a_style = binfmt is not None and binfmt.a_style
+
+    def write_pointer(v):
+        v = 0 if v is None else int(v)
+        if a_style:
+            buf.extend(struct.pack("<I", v))
+        else:
+            _write_posint_short(buf, v)
+
+    def one(v):
+        if ftype == "p":
+            write_pointer(v)
+        elif ftype == "f":
+            buf.extend(struct.pack("<d", -3.14158e13 if v is None else v))
+        elif ftype == "d":
+            buf.extend(struct.pack("<i", -32764 if v is None else int(v)))
+        elif ftype == "n":
+            buf.extend(struct.pack("<h", -32764 if v is None else int(v)))
+        elif ftype == "u":
+            buf.extend(bytes([int(v or 0)]))
+        elif ftype == "c":
+            buf.extend(bytes([ord(str(v)[0]) if v else 0]))
+        elif ftype == "l":
+            buf.extend(bytes([1 if v else 0]))
+        elif ftype == "w":
+            buf.extend(struct.pack("<H", int(v or 0)))
+        else:
+            raise ValueError(f"binary encode: unknown field type {ftype}")
+
+    if n_elts == 1:
+        # 变长字段直接写 varlen 个值（计数在节点头）
+        seq = value if isinstance(value, (list, tuple)) else []
+        for v in seq[:varlen]:
+            one(v)
+        return
+    if n_elts > 1:
+        seq = value if isinstance(value, (list, tuple)) else []
+        for v in seq:
+            one(v)
+        return
+    if ftype in ("v", "h"):
+        for v in (value or (None, None, None)):
+            buf.extend(struct.pack("<d", -3.14158e13 if v is None else v))
+    elif ftype == "b":
+        for v in (value or (None,) * 6):
+            buf.extend(struct.pack("<d", -3.14158e13 if v is None else v))
+    elif ftype == "i":
+        a, b = (value or (None, None))
+        buf.extend(struct.pack("<dd", -3.14158e13 if a is None else a,
+                               -3.14158e13 if b is None else b))
+    else:
+        one(value)
+
+
+def _write_edit_bin(buf: bytearray, edit: dict,
+                     binfmt: Optional[_BinFmt] = None) -> None:
+    """把编辑序列写回二进制（n_elts 约定见 _BinFmt）。"""
+    a_style = binfmt is not None and binfmt.a_style
+    buf += bytes([edit["n"]])
+    if edit["n"] == 255:
+        return
+    for op in edit["ops"]:
+        buf += op[0].encode("ascii")
+        if op[0] in ("C", "D"):
+            continue
+        _, name, cls, nelts, typ, xmt = op
+        nb = name.encode("ascii")
+        buf += bytes([len(nb)]) + nb
+        buf += struct.pack("<H", int(cls))
+        if a_style:
+            buf += struct.pack("<I", int(nelts))
+        else:
+            _write_posint_short(buf, int(nelts))
+        if typ is not None:
+            tb = typ.encode("ascii")
+            buf += bytes([len(tb)]) + tb
+        if xmt is not None:
+            buf += bytes([int(xmt)])
+    buf += b"Z"
+
+
+def encode_binary_xt(model: XtModel, flag: Optional[str] = None) -> bytes:
+    """把 XtModel 编码回二进制 x_b（P2 写端，与 parse_binary_xt 互逆）。
+
+    flag：'A'（CADthru，u16 版本长）/ 'B'（bare binary，u32 版本长）。
+    kernel 产物对拍：同一 XtModel 经 encode_binary_xt 再 parse 与原文
+    字节级一致（见 tests/test_parasolid_p2.py）。
+    """
+    version = model.version
+    schema = model.schema
+    if flag is None:
+        flag = getattr(model, "binary_flag", "A") or "A"
+    if flag not in ("A", "B"):
+        raise ValueError(f"encode_binary_xt: unsupported flag {flag!r} "
+                         "(仅支持 'A'/'B'；'PS' 需机器描述字节，未实现)")
+    buf = bytearray()
+    buf += flag.encode("ascii")
+    if flag == "A":
+        buf += struct.pack("<H", len(version))
+    else:
+        buf += struct.pack("<I", len(version))
+    buf += version.encode("ascii")
+    buf += struct.pack("<I", len(schema))
+    buf += schema.encode("ascii")
+    buf += struct.pack("<H", getattr(model, "max_node_types", 239))
+    buf += struct.pack("<I", int(model.userfield_size))
+    sch_file = find_schema_file(schema)
+    sch = load_schema(sch_file) if sch_file else {}
+    binfmt = _BinFmt(flag)
+    written: set[int] = set()
+    for node in model.order:
+        buf += struct.pack("<H", node.type_id)
+        if node.type_id not in written:
+            if node.type_id in model.edits:
+                _write_edit_bin(buf, model.edits[node.type_id], binfmt)
+            else:
+                buf += b"\xff"
+            written.add(node.type_id)
+        nt = sch.get(node.type_id)
+        varlen = None
+        if nt is not None and nt.variable:
+            # varlen 在 index 之前（XT Ref 2.1.4.3）
+            varlen = int(node.fields.get("@varlen", 0) or 0)
+            buf += struct.pack("<I", varlen)
+        if binfmt.a_style:
+            buf += struct.pack("<I", int(node.index))
+        else:
+            _write_posint_short(buf, int(node.index))
+        for f in (nt.effective_fields() if nt else []):
+            _write_bin_value(buf, f.type, node.fields.get(f.name), f.n_elts,
+                             varlen, binfmt)
+    buf += struct.pack("<H", 1)      # terminator：type 1
+    if binfmt.a_style:
+        buf += struct.pack("<I", 0)  # A：index 0 存 u32 0
+    else:
+        buf += struct.pack("<H", 1)  # B/PS：NULL 指针编码（存 1）
+    return bytes(buf)
 
 
 def parse_xt(data, schema=None) -> XtModel:

@@ -74,17 +74,28 @@
 
 ### 3.1（原难度 6）Parasolid 实体几何：部分提取已交付，完整还原仍为长期项
 
-- ✅ 已交付：`parasolid.py` 轻量传输流解析——文件头
-  （`TRANSMIT FILE created by modeller version 3701153`）、schema 标识
-  （`SCH_3701153_37102_13006`）、**schema 字段表**（22 个字段：
-  `lattice`/`mesh`/`polyline`/`owner`/`boundary_*`/`index_map*`/
-  `child`/`lowest_node_id`/`mesh_offset_data`/`finger_*`/`frame`/
-  `legal_owners` 等，含类型 token 与流内位置）、**实体类型**
-  （`CADthru/PKEdge` / `PKFace` / `PKVertex`）与 SDL 属性
-  （`SDL/TYSA_NAME` / `LAYER` / `UNAME`）。5 个实测体全部可解析。
-- ❌ 未解：完整 B-rep 拓扑/几何还原仍需要 Parasolid 内核
-  （商业 SDK / 长期逆向）；字段表的完整记录帧（含数据区偏移）仅部分
-  理解，未作为 API 承诺。
+- ✅ 已交付：parasolid.py 传输流解析/编码——文件头
+  （TRANSMIT FILE created by modeller version 3701153）、schema 标识
+  （SCH_3701153_37102_13006）、实体类型与 SDL 属性。
+- ✅ **P2 二进制 XT 全量解码/编码（本批）**：parse_binary_xt /
+  encode_binary_xt 闭环，parse→encode 字节级一致；支持 'A'（CADthru
+  frustrum，u32 index/指针/n_elts）、'B'（bare binary）、'PS'（neutral/
+  typed）三种 flag。已钉死（XT Format Reference 2.1/3.3 + kernel 产物
+  对拍）：指针/正整数 = 小值存 v+1、大值 pair；编辑序列 n_elts = 正整数
+  编码（B）或 u32（A）；节点 index 同指针编码；变长节点 varlen 在 index
+  之前、变长字段无额外计数；未设哨兵 -32764/-3.14158e13 → None；
+  terminator = type 1 + NULL 指针编码 index 0。box PKBody3（A 流）159 节点
+  全量解码（BODY/8 VERTEX/12 EDGE/6 FACE + 几何 + SDL 属性全结构），
+  kernel 同体 B 产物 87 节点与文本 ground truth 按 node_id 全字段一致；
+  此前"后段标量失步"根因 = 编辑序列 n_elts 误按 u32、指针/索引未按 +1
+  偏移、varlen 与 index 顺序颠倒。'A' 与 'B' 对同体节点标签可不同（kernel
+  文本传输再索引），node_id 与连接关系不变。
+- ✅ 旧"schema 字段表"之谜已解：scan_fields 扫到的 22 字段帧 = BODY
+  编辑序列中 I/A 操作的字节（field_data_offsets 的值 = 各字段的
+  ptr_class），非独立数据区。
+- ❌ 未解（长期）：与内核等价的语义级 B-rep 重建（boolean/造型 API 语义）
+  仍依赖 Parasolid 内核；用户手册中未公开的 CADthru 扩展字段（finger_* /
+  frame / legal_owners 等）语义未逐一钉死。
 
 ### 3.2（原难度 4）语义钉死：CsidOfFaces / OCTREEREGION / PKBody3 末块
 
