@@ -83,6 +83,8 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
 | `blowfish_le.py` | PKBody3 Blowfish 小端变体 ECB（`blowfish_tables.py`） |
 | `pphxml.py` | `main.xml`（索引标签方言）/ `main.prp` / `main.xenv` / `main.js` |
 | `gphstats.py` | 仓库内轻量 GPH 统计（gphdecoding 仓不可用时的降级） |
+| `fldstats.py` | scPOST 求解器 FLD 场文件统计（官方 Samples_POST/FLD 样例；f32/f64 方言、六面体/混合单元、材料、BC 区域、场量） |
+| `fldutil_bridge.py` | FLDUTIL_Bx64.dll Rosetta（FEM 中性格式 I/O 库）+ 容器级真值对拍 |
 | `native_bam.py` | 原生 BAM（对齐 Analysis Model Wizard 步骤：闭体识别/多重边/匹配/微小面/Repair/CheckErrors/ridge） |
 | `voxmesh.py` | 自研 Voxel/hex-dominant mesher（MDL/STL → octree → hex/poly → `.oct`+`.gph`） |
 | `polymesh.py` | 自研原生多面体 mesher（clipped Voronoi：Lloyd/近壁层/VoroCrust 式特征保形 → `.gph`） |

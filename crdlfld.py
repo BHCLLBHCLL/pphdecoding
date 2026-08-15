@@ -119,6 +119,11 @@ KNOWN_SECTION_NAMES = [
     "LS_Faces", "LS_CsidOfFaces", "LS_FridOfFaces", "LS_EdgeStateOfFaces",
     "LS_StateOfNodes", "LS_MdlClosedVolumes", "LS_MdlVolumeRegions",
     "LS_MdlSurfaceRegions",
+    # scPOST 求解器 FLD 节（Samples_POST/FLD + flddecoding 仓）
+    "LS_Elements", "LS_MatOfElements", "LS_VolumeGeometryArray",
+    "LS_SurfaceGeometryArray", "LS_SFile", "LS_STREAMcoc",
+    "LS_STREAMmultiblock", "LS_SolverUnusedRegions",
+    "Pressure", "Temperature", "CN01", "VECT", "HVEC", "POTENTIAL",
     "OverlapEnd",
 ]
 
@@ -141,19 +146,19 @@ def _valid_section_start(data, idx: int, n: int) -> bool:
     必须用后继内容消歧：真实节的名称之后是记录流（``[I4=12]`` 起始）、
     另一个节头（``[I4=32]`` + 可打印名称）、或文件尾/全零填充。
     """
-    after = idx + 36
-    if after + 4 > n:
+    rec = idx + 40
+    if rec + 4 > n:
         return True  # 文件尾
-    marker = read_i32_be(data, after)
-    if marker == 12:
+    m2 = read_i32_be(data, rec)
+    if m2 == 12:
         return True  # 记录流起始
-    if marker == 32 and after + 36 <= n:
-        raw = bytes(data[after + 4 : after + 36])
+    if m2 == 32 and rec + 36 <= n:
+        raw = bytes(data[rec + 4 : rec + 36])
         if all(b == 32 or 33 <= b < 127 for b in raw):
             return True  # 紧邻的下一个节头（40 字节空节，如 HeaderDataEnd）
-    if marker == 0:
+    if m2 == 0:
         # 全零填充区（向前看一小段）
-        tail = bytes(data[after : min(after + 64, n)])
+        tail = bytes(data[rec : min(rec + 64, n)])
         if not any(tail):
             return True
     return False
