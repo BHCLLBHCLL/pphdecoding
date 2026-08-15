@@ -98,6 +98,24 @@ class OctModel:
             n += 1
         return {"n_leaves": n, "depth_histogram": dict(sorted(depths.items()))}
 
+    def block_partition(self) -> dict:
+        """LS_OctOctantBlockID 分区语义（O1）。
+
+        box/laptop 样本 block_id 全 -1（未分区）；并行/多块网格下非负值为
+        分区（block）id，用于域分解。返回
+        {n_octants, partitioned, n_blocks, block_ids, block_id}。
+        """
+        bids = self.block_id
+        uniq = (np.unique(bids[bids >= 0]) if bids.size
+                else np.array([], dtype=np.int64))
+        return {
+            "n_octants": int(bids.size),
+            "partitioned": bool(uniq.size > 0),
+            "n_blocks": int(uniq.size),
+            "block_ids": [int(v) for v in uniq],
+            "block_id": bids,
+        }
+
 
 def parse_oct(filepath: str) -> OctModel:
     """解析 OCT 文件，返回 :class:`OctModel`。"""
@@ -173,6 +191,82 @@ def parse_oct(filepath: str) -> OctModel:
             refinement=refinement, block_id=block_id,
             unit=unit, last_gen_year=last_gen_year,
         )
+
+
+def oct_leaf_table(model: OctModel, flags=None) -> list[tuple]:
+    """叶子表：(preorder_index, min_corner, max_corner, depth, region_flag)。
+
+    与 OctModel.iter_leaves 同序，但额外产出前序下标与可选区域标志
+    （flags 为与 refinement 同下标的对齐数组，见 oct_region_map）。
+    """
+    ref = model.refinement
+    rows: list[tuple] = []
+    x0, y0, z0 = (float(v) for v in model.root_min)
+    x1, y1, z1 = (float(v) for v in model.root_max)
+    stack = [(x0, y0, z0, x1, y1, z1, 0)]
+    pos = 0
+    while stack:
+        ax, ay, az, bx, by, bz, d = stack.pop()
+        r = int(ref[pos])
+        idx = pos
+        pos += 1
+        if r == 0:
+            flag = int(flags[idx]) if flags is not None else -1
+            rows.append((idx, (ax, ay, az), (bx, by, bz), d, flag))
+            continue
+        cx, cy, cz = (ax + bx) / 2.0, (ay + by) / 2.0, (az + bz) / 2.0
+        for i in range(7, -1, -1):
+            nax = cx if i & 1 else ax
+            nay = cy if i & 2 else ay
+            naz = cz if i & 4 else az
+            nbx = bx if i & 1 else cx
+            nby = by if i & 2 else cy
+            nbz = bz if i & 4 else cz
+            stack.append((nax, nay, naz, nbx, nby, nbz, d + 1))
+    return rows
+
+
+def oct_region_map(snapshot, model: OctModel) -> dict:
+    """oct ↔ 快照区域对齐（O2）：OCTREEREGION 后序字节 → .oct 前序下标。
+
+    snapshot 需提供 octree_region_as_oct_order(refinement)（SctSnapshot）。
+    返回 {flags, n_leaves, n_active, active_bbox, leaves}；active_bbox 为
+    flag=1 叶子的并集包围盒 (lo, hi)。
+    """
+    flags = None
+    if snapshot is not None:
+        flags = snapshot.octree_region_as_oct_order(model.refinement)
+    leaves = oct_leaf_table(model, flags)
+    active = [r for r in leaves if r[4] == 1]
+    if active:
+        mins = np.array([r[1] for r in active], dtype=float)
+        maxs = np.array([r[2] for r in active], dtype=float)
+        bbox = (mins.min(axis=0), maxs.max(axis=0))
+    else:
+        bbox = (None, None)
+    return {
+        "flags": flags,
+        "n_leaves": len(leaves),
+        "n_active": len(active),
+        "active_bbox": bbox,
+        "leaves": leaves,
+    }
+
+
+def oct_cell_mask(model: OctModel, snapshot, centroids) -> np.ndarray:
+    """octant → 单元几何链路（O3）：活跃八叉区域内单元质心掩码。
+
+    centroids：(n_cells, 3)。活跃区域 = OCTREEREGION flag=1 叶子并集包围盒；
+    返回 bool[n_cells]（质心落在活跃区域内的单元）。区域索引/cvol 语义见快照
+    OCTREERESTRRGN / GPH LS_CvolIdOfElements；此处给出几何侧链路。
+    """
+    rmap = oct_region_map(snapshot, model)
+    bbox = rmap["active_bbox"]
+    if bbox[0] is None:
+        return np.zeros(len(centroids), dtype=bool)
+    lo, hi = bbox
+    c = np.asarray(centroids, dtype=float).reshape(-1, 3)
+    return np.all((c >= lo) & (c <= hi), axis=1)
 
 
 def _i32(value: int) -> bytes:
