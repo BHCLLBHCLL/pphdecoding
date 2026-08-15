@@ -28,6 +28,7 @@ index_map_* / child / lowest_node_id / mesh_offset_data …），以及
 from __future__ import annotations
 
 import re
+import struct
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -253,6 +254,485 @@ def parse_transmit(data: bytes) -> ParasolidStream:
     result.sdl_attributes = [m.group().decode("ascii")
                              for m in SDL_RE.finditer(data)]
     return result
+
+
+# ============================================================================
+# P3/P2：完整 XT 解码器（文本 + 二进制）
+# 依据：Siemens XT Format Reference（q-solid.com 托管）+ Cradle pskernel 自带
+# sch_37102.sch_txt schema 文件 + 内核 PK_PART_transmit 产物对拍。
+# ============================================================================
+
+# 字段类型字母（XT Format Reference 2.1.4 + schema 文件实测）
+FIELD_TYPES = {
+    "u": ("byte", 1),
+    "c": ("char", 1),
+    "l": ("logical", 1),
+    "n": ("short", 2),
+    "w": ("unicode", 2),
+    "d": ("int", 4),
+    "p": ("pointer", 4),
+    "f": ("double", 8),
+    "i": ("interval", 16),
+    "v": ("vector", 24),
+    "b": ("box", 48),
+    "h": ("array3_double", 24),
+    "q": ("quaternion", 32),
+}
+
+# 节点类型表（V37 sch_37102；常用子集，完整表经 load_schema 动态加载）
+NODE_TYPES = {
+    10: "ASSEMBLY", 11: "INSTANCE", 12: "BODY", 13: "SHELL", 14: "FACE",
+    15: "LOOP", 16: "EDGE", 17: "HALFEDGE", 18: "VERTEX", 19: "REGION",
+    29: "POINT", 30: "LINE", 31: "CIRCLE", 32: "ELLIPSE", 38: "INTERSECTION",
+    50: "PLANE", 51: "CYLINDER", 52: "CONE", 53: "SPHERE", 54: "TORUS",
+    60: "OFFSET_SURF", 67: "SWEPT_SURF", 68: "SPUN_SURF",
+    70: "LIST", 74: "POINTER_LIS_BLOCK", 79: "ATT_DEF_ID", 80: "ATTRIB_DEF",
+    81: "ATTRIBUTE", 82: "INT_VALUES", 83: "REAL_VALUES", 84: "CHAR_VALUES",
+    85: "POINT_VALUES", 86: "VECTOR_VALUES", 87: "AXIS_VALUES", 88: "TAG_VALUES",
+    89: "DIRECTION_VALUES", 90: "FEATURE", 91: "MEMBER_OF_FEATURE",
+    98: "UNICODE_VALUES", 99: "FIELD_NAMES", 100: "TRANSFORM", 101: "WORLD",
+    102: "KEY", 120: "PE_SURF", 124: "B_SURFACE", 125: "SURFACE_DATA",
+    126: "NURBS_SURF", 127: "KNOT_MULT", 128: "KNOT_SET", 130: "PE_CURVE",
+    133: "TRIMMED_CURVE", 134: "B_CURVE", 135: "CURVE_DATA", 136: "NURBS_CURVE",
+    137: "SP_CURVE", 141: "GEOMETRIC_OWNER", 176: "PART_XMT_BLOCK",
+    185: "POLYLINE_DATA", 189: "PSM_MESH", 190: "INTEGER_TOOTH",
+    191: "INTEGER_COMB", 192: "VECTOR_TOOTH", 193: "VECTOR_COMB",
+    200: "POLYLINE", 201: "MESH", 204: "INTERSECTION_DATA", 205: "OFFSET_VALUES",
+    206: "MESH_OFFSET_DATA", 207: "SCHEMA_CHAR_VALUES", 208: "NEW_NODE_MAP",
+    209: "MOD_NODE_MAP", 210: "NEW_FIELD_MAP", 211: "SCHEMA_DATA",
+    212: "OLD_NODE_MAP", 213: "OLD_FIELD_MAP", 220: "REAL_TOOTH",
+    221: "REAL_COMB", 222: "LATTICE", 223: "LATTICE_DATA_IRREGULAR",
+    224: "GRAPH_COMPACT", 238: "LATTICE_DATA_PATTERN",
+}
+
+# 节点类（union of pointers）表 —— 指针字段的 ptr_class 值
+NODE_CLASSES = {
+    1005: "PART", 1006: "SURFACE", 1008: "CURVE", 1019: "ATTRIB_FEAT",
+    1040: "SURFACE_OWNER", 1043: "NODE_MAP", 1044: "FIELD_MAP",
+    1045: "LATTICE_OWNER", 1046: "LATTICE_DATA", 1049: "PATTERN_OWNER",
+    1050: "PATTERN_DATA", 1051: "PATTERN_FORM",
+}
+
+
+@dataclass
+class XtField:
+    """XT 节点字段定义（schema 语言一行：name; type; xmt class n_elts）。"""
+
+    name: str
+    type: str          # p/d/f/u/c/l/n/v/b/i/h/q...
+    xmt: int           # 1 = 传输
+    cls: int           # 指针的节点类/类型（非指针为 0）
+    n_elts: int        # 0=标量 1=变长 n>1=定长数组
+
+
+@dataclass
+class XtNodeType:
+    """XT 节点类型定义。"""
+
+    type_id: int
+    name: str
+    xmt: int
+    variable: bool
+    fields: list[XtField]
+
+    def effective_fields(self) -> list[XtField]:
+        return [f for f in self.fields if f.xmt or f.n_elts == 1]
+
+
+@dataclass
+class XtNode:
+    """XT 节点实例。"""
+
+    index: int
+    type_id: int
+    name: str
+    fields: dict
+
+    def ref(self, key: str) -> Optional["XtNode"]:
+        return self.fields.get(key)
+
+
+@dataclass
+class XtModel:
+    """解析后的 XT 文件。"""
+
+    version: str
+    schema: str
+    fmt: str            # 'text' | 'binary'
+    userfield_size: int
+    nodes: dict = field(default_factory=dict)   # index -> XtNode
+    order: list = field(default_factory=list)   # node indices in file order
+
+    def by_type(self, type_id: int) -> list[XtNode]:
+        return [n for n in self.order if n.type_id == type_id]
+
+    def summary(self) -> str:
+        from collections import Counter
+        counts = Counter(n.name for n in self.order)
+        lines = [f"XT {self.fmt}: version={self.version} schema={self.schema}",
+                 f"nodes={len(self.order)} " +
+                 ", ".join(f"{k}x{v}" for k, v in sorted(counts.items()))]
+        return chr(10).join(lines)
+
+
+def load_schema(path: str) -> dict[int, XtNodeType]:
+    """解析 Parasolid .sch_txt schema 文件（如 pskernel 自带 sch_37102）。
+
+    格式（XT Format Reference 2.1.1）：
+    <nodetype> <nodename>; <desc>; <xmt> <n_fields> <variable>
+    <fieldname>; <type>; <xmt> <class> <n_elts>
+    """
+    out: dict[int, XtNodeType] = {}
+    cur: Optional[XtNodeType] = None
+    with open(path, "r", encoding="ascii", errors="replace") as f:
+        for line in f:
+            segs = [s.strip() for s in line.split(";")]
+            if len(segs) < 3:
+                continue
+            head = segs[0].split()
+            tail = segs[2].split()
+            if head and head[0].isdigit() and len(tail) >= 3:
+                # <type> <name>; <desc>; <xmt> <n_fields> <variable>
+                try:
+                    t = int(head[0])
+                    cur = XtNodeType(t, head[1], int(tail[0]),
+                                     bool(int(tail[2])), [])
+                    out[t] = cur
+                except (ValueError, IndexError):
+                    pass
+            elif cur is not None and head and len(tail) >= 3:
+                # <name>; <type>; <xmt> <class> <n_elts>
+                try:
+                    cur.fields.append(XtField(
+                        head[0], segs[1], int(tail[0]),
+                        int(tail[1]), int(tail[2])))
+                except ValueError:
+                    pass
+    return out
+
+
+def find_schema_file(schema_name: str, programs_dir: Optional[str] = None
+                     ) -> Optional[str]:
+    """按 SCH_<modeller>_<schema> 名定位 schema 文件（pskernel Schemas 目录）。"""
+    from pathlib import Path as _P
+    if programs_dir is None:
+        from scflowpre_probe import programs_dir as _pd
+        programs_dir = _pd()
+    if not programs_dir:
+        return None
+    m = re.match(r"SCH_\d+_(\d+)(?:_\d+)?", schema_name or "")
+    if not m:
+        return None
+    base = _P(programs_dir) / "Schemas"
+    for name in (f"sch_{m.group(1)}.sch_txt", f"sch_{m.group(1)}.s_t"):
+        p = base / name
+        if p.exists():
+            return str(p)
+    return None
+
+
+# ── 游标（文本 token 流 / 二进制字节流）──────────────────────────
+
+
+class _TextCursor:
+    """XT 文本格式游标：数字以空白分隔；char/logical 为单字符无尾随空格。"""
+
+    def __init__(self, text: str):
+        self.t = text
+        self.i = 0
+
+    def _skip(self) -> None:
+        while self.i < len(self.t) and self.t[self.i].isspace():
+            self.i += 1
+
+    def peek(self) -> str:
+        self._skip()
+        return self.t[self.i] if self.i < len(self.t) else ""
+
+    def read_num(self):
+        """读一个数字 token（'?'=未设标记返回 None；'F'/'T'=logical）。"""
+        self._skip()
+        if self.i < len(self.t) and self.t[self.i] == "?":
+            # 未设标记：1 字符、无尾随空格（如 "?10" = '?' + 10 两 token）
+            self.i += 1
+            return None
+        j = self.i
+        s = []
+        while j < len(self.t):
+            ch = self.t[j]
+            if ch in "\r\n":      # 换行不重要，可出现在数字内部
+                j += 1
+                continue
+            if ch.isspace():
+                break
+            s.append(ch)
+            j += 1
+        self.i = j
+        s = "".join(s)
+        if not s:
+            raise ValueError("text cursor: unexpected EOF")
+        if s == "F":
+            return 0
+        if s == "T":
+            return 1
+        return float(s) if any(ch in s for ch in ".eE") else int(s)
+
+    def read_char(self) -> str:
+        self._skip()
+        ch = self.t[self.i]
+        self.i += 1
+        return ch
+
+    def read_string(self) -> str:
+        ln = int(self.read_num())
+        self._skip()              # 长度数字后的分隔空格
+        out = []
+        while len(out) < ln and self.i < len(self.t):
+            ch = self.t[self.i]
+            self.i += 1
+            if ch in "\r\n":    # 换行/CR 不重要（行折行），串内跳过
+                continue
+            out.append(ch)
+        return "".join(out)
+
+
+class _BinCursor:
+    """XT 二进制游标（小端；pointer 用 V14 pair 编码，见 XT Ref 3.3.3）。"""
+
+    def __init__(self, data: bytes):
+        self.d = data
+        self.i = 0
+
+    def u8(self) -> int:
+        v = self.d[self.i]
+        self.i += 1
+        return v
+
+    def u16(self) -> int:
+        v = struct.unpack_from("<H", self.d, self.i)[0]
+        self.i += 2
+        return v
+
+    def u32(self) -> int:
+        v = struct.unpack_from("<I", self.d, self.i)[0]
+        self.i += 4
+        return v
+
+    def f64(self) -> float:
+        v = struct.unpack_from("<d", self.d, self.i)[0]
+        self.i += 8
+        return v
+
+    def read_char(self) -> str:
+        return chr(self.u8())
+
+    def read_string(self) -> str:
+        ln = self.u8()
+        s = self.d[self.i:self.i + ln]
+        self.i += ln
+        return s.decode("ascii", errors="replace")
+
+    def read_pointer(self) -> int:
+        """pointer（'A' 二进制格式实测）：u16 平铺索引，0 = NULL。
+
+        大索引（>= 0x7FFF）的 pair 扩展未在本格式观测到，按 u16 处理。
+        """
+        v = struct.unpack_from("<H", self.d, self.i)[0]
+        self.i += 2
+        if v == 0:
+            return -1        # NULL
+        return v
+
+    def read_int(self) -> int:
+        """int 字段（d）：i32 小端。"""
+        v = struct.unpack_from("<i", self.d, self.i)[0]
+        self.i += 4
+        return v
+
+
+# ── 编辑序列 / 节点解析核心 ────────────────────────────────────────
+
+
+def _skip_edit_sequence_text(c: _TextCursor):
+    """跳过首节点的 schema 编辑序列（'C'/'D'/'I'/'A'...'Z'）。"""
+    n = c.read_num()
+    if n == 255:
+        return
+    while True:
+        op = c.read_char()
+        if op == "Z":
+            return
+        if op in ("C", "D"):
+            continue
+        if op in ("I", "A"):
+            c.read_string()          # name
+            cls = int(c.read_num())  # ptr_class
+            nelts = int(c.read_num())
+            if cls == 0:
+                c.read_string()      # type
+            if nelts == 1:
+                c.read_char()        # xmt_code (logical)
+
+
+def _skip_edit_sequence_bin(c: _BinCursor):
+    n = c.u8()
+    if n == 255:
+        return
+    while True:
+        op = c.read_char()
+        if op == "Z":
+            return
+        if op in ("C", "D"):
+            continue
+        if op in ("I", "A"):
+            c.read_string()
+            cls = c.u16()            # ptr_class
+            nelts = c.u16()
+            if cls == 0:
+                c.read_string()      # type（非指针字段）
+            if nelts == 1:
+                c.u8()               # xmt_code（变长字段）
+
+
+def _read_field_value(c, ftype: str, n_elts: int):
+    """按字段类型读一个（或定长/变长数组）值。"""
+    def read_one(t: str):
+        if t == "p":
+            return c.read_pointer() if isinstance(c, _BinCursor) \
+                else c.read_num()
+        if t == "f":
+            return c.f64() if isinstance(c, _BinCursor) else c.read_num()
+        if t in ("d", "n"):
+            return c.read_int() if isinstance(c, _BinCursor) else c.read_num()
+        if t == "u":
+            return c.u8() if isinstance(c, _BinCursor) else int(c.read_num())
+        if t == "c":
+            return c.read_char()
+        if t == "l":
+            ch = c.read_char()
+            return 1 if ch in ("T", "t") else 0
+        if t in ("v", "h"):
+            return tuple(read_one("f") for _ in range(3))
+        if t == "i":
+            return (read_one("f"), read_one("f"))
+        if t == "b":
+            return tuple(read_one("f") for _ in range(6))
+        if t == "w":
+            return c.u16() if isinstance(c, _BinCursor) else int(c.read_num())
+        # 未知类型：读一个数字兜底
+        return c.read_num()
+    if n_elts == 1:
+        cnt = (c.read_int() if isinstance(c, _BinCursor)
+               else int(c.read_num()))
+        return [read_one(ftype) for _ in range(cnt)]
+    if n_elts > 1:
+        return [read_one(ftype) for _ in range(n_elts)]
+    return read_one(ftype)
+
+
+def _parse_nodes(c, schema, fmt: str, model: XtModel) -> None:
+    """从游标解析节点序列直到 terminator（type 1 + index 0）。"""
+    from pathlib import Path as _P
+    # 尝试加载完整 schema 文件（含全部字段定义）
+    sch: dict[int, XtNodeType] = schema or {}
+    sch_file = find_schema_file(model.schema)
+    if sch_file:
+        try:
+            sch = load_schema(sch_file)
+        except Exception:
+            pass
+    seen_types: set[int] = set()
+    next_index = 1
+    while True:
+        try:
+            if isinstance(c, _BinCursor):
+                type_id = c.u16()
+            else:
+                type_id = int(c.read_num())
+            # type 1（NULLP）即 terminator（二进制无 index 字段）
+            if type_id == 1:
+                if not isinstance(c, _BinCursor):
+                    if int(c.read_num()) == 0:
+                        return
+                else:
+                    return
+            # 编辑序列只出现在每种类型的第一个节点（XT Ref 2.1.2.2）
+            if type_id not in seen_types:
+                if isinstance(c, _BinCursor):
+                    _skip_edit_sequence_bin(c)
+                else:
+                    _skip_edit_sequence_text(c)
+                seen_types.add(type_id)
+            # 节点 index：文本显式输出；二进制 u32（实测 PKBody3）
+            if isinstance(c, _BinCursor):
+                index = c.u32()
+            else:
+                index = int(c.read_num())
+            nt = sch.get(type_id)
+            name = nt.name if nt else NODE_TYPES.get(type_id, f"TYPE_{type_id}")
+            fields: dict = {}
+            if nt is not None and nt.variable:
+                # 变长节点的变长字段长度
+                varlen = c.u32() if isinstance(c, _BinCursor) \
+                    else int(c.read_num())
+                fields["@varlen"] = varlen
+            for f in (nt.effective_fields() if nt else []):
+                try:
+                    fields[f.name] = _read_field_value(c, f.type, f.n_elts)
+                except Exception:
+                    fields[f.name] = None
+            node = XtNode(index, type_id, name, fields)
+            model.nodes[index] = node
+            model.order.append(node)
+        except (ValueError, IndexError, struct.error):
+            # 容错：字段失步时停止解析，保留已解析节点
+            model.parse_error = True
+            return
+
+
+def parse_text_xt(text: str, schema=None) -> XtModel:
+    """解析文本 x_t（P3）：头 + 节点流。"""
+    t = text.lstrip()
+    assert t[0] == "T", "not a text XT (missing T flag)"
+    c = _TextCursor(t)
+    c.read_char()                       # 'T' flag
+    version = c.read_string()           # ": TRANSMIT FILE created by modeller version X"
+    schema_name = c.read_string()
+    max_types = int(c.read_num())       # embedded schema：最大节点类型数
+    usr = int(c.read_num())             # user field size
+    model = XtModel(version, schema_name, "text", usr)
+    model.max_node_types = max_types
+    _parse_nodes(c, schema, "text", model)
+    return model
+
+
+def parse_binary_xt(data: bytes, schema=None) -> XtModel:
+    """解析二进制 x_t/x_b（P2）：'A' flag + 头 + 节点流。"""
+    assert data[0] == 0x41, "not a binary XT (missing A flag)"
+    c = _BinCursor(data)
+    c.u8()                              # 'A' flag
+    ver_len = c.u16()
+    ver = data[c.i:c.i + ver_len].decode("ascii", errors="replace")
+    c.i += ver_len
+    sch_len = c.u32()
+    schema = data[c.i:c.i + sch_len].decode("ascii", errors="replace")
+    c.i += sch_len
+    max_types = c.u16()                 # embedded schema：最大节点类型数
+    usr = c.u32()                       # user field size
+    model = XtModel(ver, schema, "binary", usr)
+    model.max_node_types = max_types
+    _parse_nodes(c, schema, "binary", model)
+    return model
+
+
+def parse_xt(data, schema=None) -> XtModel:
+    """自动识别文本/二进制并解析。"""
+    if isinstance(data, bytes):
+        if data[:1] == b"T":
+            return parse_text_xt(data.decode("ascii", errors="replace"),
+                                 schema)
+        return parse_binary_xt(data, schema)
+    return parse_text_xt(data, schema)
 
 
 def parse_file(path: str) -> ParasolidStream:
