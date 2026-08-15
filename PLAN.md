@@ -117,6 +117,20 @@ ABI 细节——通过 S3 反汇编 + S4 用内核构造函数可闭环，无不
 
 ---
 
+## 2.4 执行状态（2026-08-15，V1–V4 已落地 ✅）
+
+- 新增 `automation/vbs_acceptance.py`：`build_open_vbs`（UTF-16 VBS，
+  GetApplication → GetDocument → OpenProject + 分步写结果）、`run_open`
+  （直接 COM `OpenProject(path, False)`）、`run_open_vbs`（VBS + COM 复核）；
+- 实测：`run_open(box.pph)` → `{ok: true}`、`run_open_vbs(box.pph)` →
+  `{ok: true, exec_ok: true}`——宿主接受写端产出的 PPH；
+- 测试 `tests/test_vbs_acceptance.py`（UTF-16 断言 + 打开 box.pph）全过；
+- **遗留**：VBS 自身 FSO `CreateTextFile`/`WriteLine` 产出的结果文件为 0 字节
+  （宿主 VBS 引擎内 FSO 写未落盘，疑似异步/受限），故验收以「直接 COM
+  OpenProject 返回值」为准，VBS 文件仅为脚本通道载体。
+
+---
+
 ## 3. 总体判断与建议执行顺序
 
 1. **先做 S1（移植 boolean_2 + face_delete）**——零逆向风险、立刻获得「编辑」
