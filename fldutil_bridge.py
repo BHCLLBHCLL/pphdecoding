@@ -68,6 +68,29 @@ COVERAGE = {
     "pregn": "LS_VolumeRegions",
 }
 
+# 反汇编钉死的 ABI（capstone，RVA 见各注释）：
+#   FLDUTIL_Open_File @0x32260：rcx=path，edx=a2，r8d=a3 → int
+#   FLDUTIL_Get_NodeNum @0x31380：ecx=handle（仅日志用，数据在全局）→ int
+#   FLDUTIL_Close_File @0x30f20：ecx=handle → int(0)
+#   FLDUTIL_Get_NodePX @0x31570：edx=node index（全局指针表）→ double
+#   FLDUTIL_Get_NodeNumOfPanel @0x31400：edx=panel index → int
+#   FLDUTIL_GetLastErrorString @0x31140：void → const char*
+# 状态保存在 DLL 全局（单一当前文件），handle 仅用于日志/校验。
+SIGNATURES = {
+    "FLDUTIL_Open_File": (("path", "char*"), ("a2", "int"), ("a3", "int"), "int"),
+    "FLDUTIL_Close_File": (("handle", "int"), None, None, "int"),
+    "FLDUTIL_Get_NodeNum": (("handle", "int"), None, None, "int"),
+    "FLDUTIL_Get_NodePX": (("index", "int"), None, None, "double"),
+    "FLDUTIL_Get_NodePY": (("index", "int"), None, None, "double"),
+    "FLDUTIL_Get_NodePZ": (("index", "int"), None, None, "double"),
+    "FLDUTIL_Get_NodeNumOfPanel": (("index", "int"), None, None, "int"),
+    "FLDUTIL_Get_PanelNum": (("handle", "int"), None, None, "int"),
+    "FLDUTIL_Get_SolidNum": (("handle", "int"), None, None, "int"),
+    "FLDUTIL_Get_SregnNum": (("handle", "int"), None, None, "int"),
+    "FLDUTIL_Get_PregnNum": (("handle", "int"), None, None, "int"),
+    "FLDUTIL_GetLastErrorString": (None, None, None, "char*"),
+}
+
 
 def fldutil_dll() -> Optional[Path]:
     """定位 FLDUTIL_Bx64.dll，找不到返回 None。"""
@@ -115,28 +138,36 @@ p = r"{Path(path).resolve()}"
 dll = ctypes.CDLL(r"{dll}")
 print("loaded", dll._name)
 try:
+    # 反汇编钉死：Open_File(path, int, int) → int；状态在 DLL 全局
     f = dll.FLDUTIL_Open_File
     f.restype = ctypes.c_int
-    f.argtypes = [ctypes.c_char_p]
-    h = f(p.encode("ascii"))
+    f.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int]
+    h = f(p.encode("ascii"), 0, 0)
     print("open_handle", h)
-    if h and int(h) > 0:
-        for nm in ("FLDUTIL_Get_NodeNum", "FLDUTIL_Get_PanelNum",
-                   "FLDUTIL_Get_SolidNum", "FLDUTIL_Get_SregnNum",
-                   "FLDUTIL_Get_PregnNum"):
-            try:
-                fn = getattr(dll, nm)
-                fn.restype = ctypes.c_int
-                fn.argtypes = [ctypes.c_int]
-                print(nm, fn(int(h)))
-            except Exception as e:
-                print(nm, "ERR", repr(e))
+    for nm, narg in (("FLDUTIL_Get_NodeNum", 1), ("FLDUTIL_Get_PanelNum", 1),
+                     ("FLDUTIL_Get_SolidNum", 1), ("FLDUTIL_Get_SregnNum", 1),
+                     ("FLDUTIL_Get_PregnNum", 1),
+                     ("FLDUTIL_Get_NodeNumOfPanel", 1)):
+        try:
+            fn = getattr(dll, nm)
+            fn.restype = ctypes.c_int
+            fn.argtypes = [ctypes.c_int] * narg
+            print(nm, fn(0 if narg == 1 else 0))
+        except Exception as e:
+            print(nm, "ERR", repr(e))
+    try:
+        gx = dll.FLDUTIL_Get_NodePX
+        gx.restype = ctypes.c_double
+        gx.argtypes = [ctypes.c_int]
+        print("FLDUTIL_Get_NodePX(0)", gx(0))
+    except Exception as e:
+        print("NodePX ERR", repr(e))
     try:
         dll.FLDUTIL_Close_File.restype = ctypes.c_int
         dll.FLDUTIL_Close_File.argtypes = [ctypes.c_int]
-        dll.FLDUTIL_Close_File(int(h)) if h else None
-    except Exception:
-        pass
+        print("Close_File", dll.FLDUTIL_Close_File(int(h)))
+    except Exception as e:
+        print("Close ERR", repr(e))
 except Exception as e:
     print("ERR", repr(e))
 '''
