@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+FLDUTIL.log
 *.pyo
 *.obj
 *.exp
