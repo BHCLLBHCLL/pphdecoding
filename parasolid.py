@@ -581,24 +581,25 @@ def _parse_edit_sequence_text(c: _TextCursor) -> dict:
     return {"n": n, "ops": ops}
 
 
-def _skip_edit_sequence_bin(c: _BinCursor):
+def _parse_edit_sequence_bin(c: _BinCursor) -> dict:
+    """二进制编辑序列解析（同文本版，返回结构化 {'n','ops'}）。"""
     n = c.u8()
-    if n == 255:
-        return
-    while True:
-        op = c.read_char()
-        if op == "Z":
-            return
-        if op in ("C", "D"):
-            continue
-        if op in ("I", "A"):
-            c.read_string()
-            cls = c.u16()            # ptr_class
-            nelts = c.u16()
-            if cls == 0:
-                c.read_string()      # type（非指针字段）
-            if nelts == 1:
-                c.u8()               # xmt_code（变长字段）
+    ops: list = []
+    if n != 255:
+        while True:
+            op = c.read_char()
+            if op == "Z":
+                break
+            if op in ("C", "D"):
+                ops.append((op,))
+                continue
+            name = c.read_string()
+            cls = c.u16()            # ptr_class（short）
+            nelts = c.u32()          # n_elts（positive integer = u32）
+            typ = c.read_string() if cls == 0 else None
+            xmt = c.u8() if nelts == 1 else None
+            ops.append((op, name, cls, nelts, typ, xmt))
+    return {"n": n, "ops": ops}
 
 
 def _read_field_value(c, ftype: str, n_elts: int):
@@ -640,7 +641,7 @@ def _read_field_value(c, ftype: str, n_elts: int):
 def _parse_nodes(c, schema, fmt: str, model: XtModel) -> None:
     """从游标解析节点序列直到 terminator（type 1 + index 0）。"""
     from pathlib import Path as _P
-    # 尝试加载完整 schema 文件（含全部字段定义）
+    # 加载当前 schema + base schema（解析编辑序列的 C/D op 需要 base 字段表）
     sch: dict[int, XtNodeType] = schema or {}
     sch_file = find_schema_file(model.schema)
     if sch_file:
@@ -648,6 +649,16 @@ def _parse_nodes(c, schema, fmt: str, model: XtModel) -> None:
             sch = load_schema(sch_file)
         except Exception:
             pass
+    base_sch: dict[int, XtNodeType] = {}
+    m = re.search(r"SCH_\d+_\d+_(\d+)$", model.schema or "")
+    if m and sch_file:
+        try:
+            base_path = _P(sch_file).with_name(f"sch_{m.group(1)}.sch_txt")
+            base_sch = load_schema(str(base_path))
+        except Exception:
+            pass
+    # 每类型解析后的字段表缓存
+    resolved: dict[int, list[XtField]] = {}
     seen_types: set[int] = set()
     while True:
         try:
@@ -665,9 +676,11 @@ def _parse_nodes(c, schema, fmt: str, model: XtModel) -> None:
             # 编辑序列只出现在每种类型的第一个节点（XT Ref 2.1.2.2）
             if type_id not in seen_types:
                 if isinstance(c, _BinCursor):
-                    _skip_edit_sequence_bin(c)
+                    model.edits[type_id] = _parse_edit_sequence_bin(c)
                 else:
                     model.edits[type_id] = _parse_edit_sequence_text(c)
+                resolved[type_id] = resolve_fields(
+                    base_sch, sch, type_id, model.edits[type_id])
                 seen_types.add(type_id)
             # 节点 index：文本显式输出；二进制 u32（实测 PKBody3）
             if isinstance(c, _BinCursor):
@@ -677,12 +690,15 @@ def _parse_nodes(c, schema, fmt: str, model: XtModel) -> None:
             nt = sch.get(type_id)
             name = nt.name if nt else NODE_TYPES.get(type_id, f"TYPE_{type_id}")
             fields: dict = {}
+            flist = resolved.get(type_id)
+            if flist is None and nt is not None:
+                flist = nt.effective_fields()
             if nt is not None and nt.variable:
                 # 变长节点的变长字段长度
                 varlen = c.u32() if isinstance(c, _BinCursor) \
                     else int(c.read_num())
                 fields["@varlen"] = varlen
-            for f in (nt.effective_fields() if nt else []):
+            for f in (flist or []):
                 try:
                     fields[f.name] = _read_field_value(c, f.type, f.n_elts)
                 except Exception:
@@ -713,7 +729,16 @@ def parse_text_xt(text: str, schema=None) -> XtModel:
 
 
 def parse_binary_xt(data: bytes, schema=None) -> XtModel:
-    """解析二进制 x_t/x_b（P2）：'A' flag + 头 + 节点流。"""
+    """解析二进制 x_t/x_b（P2）：'A' flag + 头 + 节点流。
+
+    已钉死：头（flag + u16 版本长 + 版本 + u32 schema 长 + schema +
+    u16 最大节点类型 + u32 usrfield）、节点流（u16 类型 + 首节点编辑序列
+    + u32 节点 index + 字段值）、编辑序列（u8 n + C/D/I/A/Z ops，字段定义
+    = 短字符串名 + u16 ptr_class + u32 n_elts + [类型串] + [xmt byte]）。
+    字段值编码：int=u32、pointer=u16（0=NULL）、double=f64、u=u8；
+    实测 PKBody3 首节点（BODY）字段值已对齐，后段标量布局仍有残余失步
+    （parse_error 标记，解析器保留已解析节点）。
+    """
     assert data[0] == 0x41, "not a binary XT (missing A flag)"
     c = _BinCursor(data)
     c.u8()                              # 'A' flag
@@ -729,6 +754,34 @@ def parse_binary_xt(data: bytes, schema=None) -> XtModel:
     model.max_node_types = max_types
     _parse_nodes(c, schema, "binary", model)
     return model
+
+
+def resolve_fields(base_schema, cur_schema, type_id: int, edit: dict
+                   ) -> list[XtField]:
+    """把编辑序列应用到 base schema 字段表 → 实际传输字段表（含类型）。
+
+    'C' = 复制 base 字段；'D' = 删除；'I'/'A' = 插入（edit 数据携带
+    name/ptr_class/n_elts/type/xmt）。n==255 表示与 base 完全一致。
+    """
+    base = base_schema.get(type_id) if base_schema else None
+    bfields = base.effective_fields() if base else []
+    if not edit or edit.get("n") == 255:
+        return bfields
+    out: list[XtField] = []
+    bi = 0
+    for op in edit["ops"]:
+        if op[0] == "C":
+            if bi < len(bfields):
+                out.append(bfields[bi])
+            bi += 1
+        elif op[0] == "D":
+            bi += 1
+        else:
+            _, name, cls, nelts, typ, xmt = op
+            if typ is None:
+                typ = "p"
+            out.append(XtField(name.rstrip("R"), typ, 1, cls, nelts))
+    return out
 
 
 def _write_value(buf: list, ftype: str, value, n_elts: int) -> None:
