@@ -106,6 +106,31 @@ def parse_text_entities(xt_text: str) -> dict:
     }
 
 
+def encode_brep(body_tags: list[int]) -> bytes:
+    """P4：内核编码 body → 文本 x_t（PK_PART_transmit，与 decode_brep 互逆）。
+
+    decode_brep(x_t) 返回的 brep 含 bodies 标签；encode_brep(bodies) 把首个
+    body 经内核编码回文本 x_t（可再 receive）。完整 round-trip 见
+    ps_facet2_nodes.transmit_xt。
+    """
+    if not body_tags:
+        raise ValueError("encode_brep: empty body list")
+    from ps_facet2_nodes import _get_session
+    sess = _get_session()
+    return sess.transmit_part(int(body_tags[0]), "out")
+
+
+def encode_facet_mesh(mesh) -> bytes:
+    """P4：分面（CADthru lattice/mesh/polyline）二进制编码。
+
+    **未实现**：P2 只钉到 schema 字段数据区偏移，尚未解出 lattice（顶点格）/
+    mesh（面连通）/polyline（边折线）在 entity 数据区的精确布局，故无法从
+    FacetMesh 反写。依赖：完成 P2 的 entity 数据区布局解码后补。
+    """
+    raise NotImplementedError(
+        "encode_facet_mesh requires P2 entity data-region layout (pending)")
+
+
 @dataclass
 class ParasolidField:
     """schema 字段定义记录。"""
