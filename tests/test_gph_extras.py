@@ -38,6 +38,35 @@ class TestAssemblies(unittest.TestCase):
         self.assertEqual(gphstats.assemblies_xml(buf), xml)
 
 
+class TestPrismLayers(unittest.TestCase):
+    BOUNDARY = 0xFFFFFFFF
+
+    def test_two_prism_column(self):
+        # 两个三棱柱共享一个内部面（face 4）→ 一列长 2
+        owner = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1], dtype=np.int64)
+        neigh = np.array([self.BOUNDARY] * 4 + [1] + [self.BOUNDARY] * 4,
+                         dtype=np.int64)
+        npe = np.array([3, 4, 4, 4, 3, 4, 4, 4, 3], dtype=np.int64)
+        r = gphstats.prism_layers(owner, neigh, npe)
+        self.assertEqual(r["n_prism"], 2)
+        self.assertEqual(r["n_columns"], 1)
+        self.assertEqual(r["column_lengths"], [2])
+        self.assertEqual(r["length_histogram"], {2: 1})
+
+    def test_no_prism(self):
+        owner = np.zeros(6, dtype=np.int64)
+        neigh = np.full(6, self.BOUNDARY, dtype=np.int64)
+        npe = np.full(6, 4, dtype=np.int64)
+        r = gphstats.prism_layers(owner, neigh, npe)
+        self.assertEqual(r["n_prism"], 0)
+
+    def test_box_no_prism(self):
+        with gphstats.open_buffer(str(BOX_GPH)) as data:
+            mesh = gphstats.parse_mesh(data)
+        r = gphstats.prism_layers(mesh["owner"], mesh["neigh"], mesh["npe"])
+        self.assertEqual(r["n_prism"], 0)
+
+
 class TestByteExactSections(unittest.TestCase):
     """写端字节对齐：新节与原始 box 逐字节一致（含 40B 节头 + 20B 哨兵）。"""
 

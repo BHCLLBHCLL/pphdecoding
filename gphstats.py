@@ -530,6 +530,61 @@ def build_cells(owner, neigh, npe, n_cells=None) -> dict:
     }
 
 
+def prism_layers(owner, neigh, npe, n_cells=None) -> dict:
+    """边界层 prism 列分析（G3）。
+
+    体网格的棱柱（wedge）单元以「列/栈」形式堆叠成边界层：列内单元经内部面
+    相连，列长即棱柱层数。本函数把 prism 单元按内部面连通性聚成列，返回
+    column_lengths（每列层数）与 length_histogram（层数直方图）。
+
+    局限：不区分「哪一侧是壁面」，故给出列深（= 层数）而非「距壁面层号」；
+    后者需结合 Element_InformationFlag 位 / 面区域（G4）。
+    """
+    owner = np.asarray(owner, dtype=np.int64)
+    neigh = np.asarray(neigh, dtype=np.int64)
+    npe = np.asarray(npe, dtype=np.int64)
+    cm = build_cells(owner, neigh, npe, n_cells)
+    n = cm["n_cells"]
+    types = np.array(cm["cell_types"])
+    prism_mask = types == CELL_PRISM
+    n_prism = int(prism_mask.sum())
+    empty = {"n_prism": 0, "n_columns": 0,
+             "column_lengths": [], "length_histogram": {}}
+    if n_prism == 0:
+        return empty
+
+    # 内部面两端均为 prism 的边
+    internal = neigh != 0xFFFFFFFF
+    a = owner[internal]
+    b = neigh[internal]
+    keep = prism_mask[a] & prism_mask[b]
+    edges = np.column_stack([a[keep], b[keep]])
+
+    # 并查集求 prism 连通列
+    parent = np.arange(n)
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+    for u, v in edges:
+        ru, rv = int(find(u)), int(find(v))
+        if ru != rv:
+            parent[ru] = rv
+
+    from collections import Counter
+    roots = [find(int(c)) for c in np.where(prism_mask)[0]]
+    lengths = Counter(roots)
+    cols = sorted(lengths.values())
+    hist = Counter(cols)
+    return {
+        "n_prism": n_prism,
+        "n_columns": len(lengths),
+        "column_lengths": cols,
+        "length_histogram": {int(k): int(v) for k, v in sorted(hist.items())},
+    }
+
+
 def mesh_cells(mesh: dict) -> dict:
     """对 :func:`parse_mesh` 的结果重建单元。"""
     if not mesh or not mesh.get("n_faces"):
