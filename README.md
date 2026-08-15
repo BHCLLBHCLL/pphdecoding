@@ -84,6 +84,7 @@ ZIP 容器）与 `parasolid.py`（解密传输流的 schema/字段名/实体类�
 | `pphxml.py` | `main.xml`（索引标签方言）/ `main.prp` / `main.xenv` / `main.js` |
 | `gphstats.py` | 仓库内轻量 GPH 统计（gphdecoding 仓不可用时的降级） |
 | `fldstats.py` | scPOST 求解器 FLD 场文件统计（官方 Samples_POST/FLD 样例；f32/f64 方言、六面体/混合单元、材料、BC 区域、场量） |
+| `pskernel_v37.py` | V37 新增 104 个 PK_* 导出逆向补充（家族归类/反汇编参数推断/经验调用验证/34101-vs-37102 schema 演进） |
 | `pskernel_abi.py` | pskernel Parasolid 接口全面解析（2023=V34.1 / 2025.2=V37 导出 x q-solid V35 手册签名映射 + ctypes 原型生成） |
 | `fph.py` | scFLOW 多面体求解器 FPH 解析（官方 Samples_POST/FPH 样例；LS_Links 拓扑 0 基连接表、零件/材料/区域、EC_/FC_ 单元·面中心场量） |
 | `ifld.py` | scPOST 插值源 iFLD 解析（CRDL-PST 容器 + 32 字节条目目录；SURF/ELEMBLOCK 插值索引块、VAR_MS/OS/MV/OV 小端 f32 场量） |

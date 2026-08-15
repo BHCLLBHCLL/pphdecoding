@@ -79,6 +79,12 @@
 - ✅ 导出集：2023 = 1350（1100 PK_*）⊂ 2025.2 = 1454（1204 PK_*），V37 新增 PK_BODY_slice / PK_FACE_ask_type 等 104 项；GW/wrapper DLL 不导出 PK_*。
 - ✅ pskernel_abi.py：以 q-solid Parasolid_Docs_V35 手册（逐函数签名页）为语料做接口映射——V34.1 映射 1081/1100（98.3%），V37 映射 1101/1204（其余为 V35 之后新增）；含 PE 导出解析、签名解析、ctypes 原型生成、多版本差异报告。V34.1/V37 的 'A' 流二进制 XT 解码器跨版本验证通过（exA05 PKBody3 394 节点字节级 round-trip）。
 
+### 3.05 版本审计补：CradleCFD2025.2 = Parasolid V37（新增导出逆向补充）
+
+- ✅ 遍历 2025.2 程序与 2025.2 案例（151 个 pph、109 个原生 x_t/x_b、22 个随案例 DLL），pph/快照/PKBody3 链路全部可解析；案例 x_t 输入为原建模器版本（V22..V34 分布同 2023 集）。
+- ✅ 版本三通道确证 V37：pskernel.dll FileVersion 37.01.153、Schemas 含 sch_37102、运行期 PKBody3 = modeller version 3701153。
+- ✅ pskernel_v37.py：V35 手册未收录的 **104 个 V36/V37 新增 PK_*** 导出补充——家族归类（LATTICE 26 / PARTITION 14 / FRAME 10 / REGION 10 / TOPOL 10 / BODY/FACE/MARK/SESSION 等；49 个 _r_f + 1 个 _cb_r_f 变体）、反汇编参数推断（x64 入口首读/栈参数/字节参数，经文档化签名校准）、经验调用验证（PK_SESSION_ask_cellular_guise rc=0、guise=27110；FACE/REGION ask_type 等 cellular 家族函数因默认 modeling guise 返回 5022 门禁——签名形态已确认，待 cellular-guise 会话复核）、sch_34101-vs-sch_37102 节点类型演进 （新增 SKEWBOX/TPMS_SURF/IMPLICIT_SURF/IMPLICIT_VOLUME/PATTERN_* /LATTICE_DATA_PATTERN 8 型）。
+
 ### 3.1（原难度 6）Parasolid 实体几何：部分提取已交付，完整还原仍为长期项
 
 - ✅ 已交付：parasolid.py 传输流解析/编码——文件头
@@ -328,3 +334,30 @@ GUI 运行：`python pph_gui.py [项目.pph]`；依赖缺失时
 - ⚠️ `host_pipeline.py:_run_gui`（约 236 行）：无进程时直接
   `Application.start(exe)` 拉起裸 exe，同样绕过 Kicker。gui 后端应
   改为"要求先经 Kicker 启动实例在跑"，否则复现同样崩溃。
+
+## 7. 功能完整度对照结论（vs scFLOWpre，2026-08-16）
+
+> 完整分析含功能域完整度对照图与模块交叉表，见
+> [function_gap_analysis.md](function_gap_analysis.md)；改进计划（P0–P3）
+> 见 [DEV_PLAN.md](DEV_PLAN.md) §17。本节为状态快照结论。
+
+**总体判断：项目呈「底层强、上层弱」的哑铃结构。**
+
+- **生产级（80–95%）**：PPH 解析/写端、.oct/.gph/.mdl 写端、Parasolid
+  内核直调（facet/boolean/transform/B-rep 全闭环）、Select/View/3D
+  （真 VTK 拾取 + 橡皮框选，仅 11 项 NYI 灰显）、Register Region
+  （真写 main.xml）；
+- **中间层（55–70%）**：BAM（API 模式录制锁定 + 实测 err=0；原生 12/12
+  步对齐但缺容差合并/Influence）、Octree（参数链路实测达标）、宿主自动化
+  （主链路三份日志 err=0；in-proc COM 桥未实测、外部 COM 被 LocalServer
+  结构性阻塞）；
+- **差距层（10–30%）**：条件体系（**~180 个 Cond\* 仅 5 个粗桩**，最大
+  差距）、自研网格（voxmesh/polymesh 双 MVP，无 2:1 平衡/质量度量/区域
+  映射）、几何编辑（Create/Modify 为 TODO 草稿，**底层算子已生产级只欠
+  接线**——性价比最好的改进点）、Wrapping（录制锁定未实机执行）、
+  Solver/FPH（明确延后，合理）。
+
+GUI 壳层完成度高（112/123 菜单项接线），但部分「接线」背后是 VBS 草稿
+或 session 存根，深度不及表面；差距排序与 P0–P3 改进计划以
+DEV_PLAN §17 为准（P0 = 实机验证收尾 + 几何编辑接线；P1 = 条件表单
+schema-driven 系统化；P2 = 网格质量基础设施；P3 = 深度对齐与长尾）。
