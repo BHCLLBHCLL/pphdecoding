@@ -635,7 +635,19 @@ def _block(payload: bytes) -> bytes:
 
 
 def _section(name: str, body: bytes) -> bytes:
-    return _i32(32) + name.ljust(32).encode("ascii") + body
+    """命名节头（40 字节）：[I4=32][name 32B][I4=32] + 记录流。
+
+    实测所有节（FileRevision/LS_* / OverlapEnd）在 name 之后都有一个
+    [I4=32] 尾随标记，随后才是描述符/数据块；crdlfld.Section 的
+    records_start = start + 40 亦印证 40 字节节头（此前缺尾随 32，导致
+    写端首描述符被读端跳过 4 字节——字节对齐修正）。
+    """
+    out = _i32(32) + name.ljust(32).encode("ascii") + _i32(32) + body
+    if body:
+        # 非空节尾部有 20 字节「节结束哨兵」[12][0][0][0][12]（读端按
+        # bc=0 跳过）；空节（OverlapEnd 等）无此哨兵。
+        out += _i32(12) + _i32(0) + _i32(0) + _i32(0) + _i32(12)
+    return out
 
 
 def write_gph(filepath,
@@ -663,12 +675,19 @@ def write_gph_volume(filepath,
                      cvol=None,
                      volume_regions=None,
                      surface_regions=None,
-                     parts=None) -> "Path":
-    """写完整 CRDL-FLD GPH 体网格（``LS_Links`` 含 owner/neigh）。
+                     parts=None,
+                     assemblies=None,
+                     element_info=None,
+                     comments=None) -> "Path":
+    """写完整 CRDL-FLD GPH 体网格（LS_Links 含 owner/neigh）。
 
-    ``vertices``：(n,3) 浮点坐标；``faces``：多边形顶点索引列表（0-based），
-    ``owner``/``neigh``：与 ``faces`` 等长的单元索引；``neigh == -1`` 表示
+    vertices：(n,3) 浮点坐标；faces：多边形顶点索引列表（0-based），
+    owner/neigh：与 faces 等长的单元索引；neigh == -1 表示
     边界面（写盘时转存为 0xFFFFFFFF）。
+
+    可选节：assemblies（UTF-8 XML 字符串 → LS_Assemblies）、
+    element_info（I4[n_cells] → Element_InformationFlag）、
+    comments（ASCII 字符串 → Comments）。
     """
     import numpy as _np
 
@@ -693,6 +712,8 @@ def write_gph_volume(filepath,
                     _descriptor(4, 1, 1) + _descriptor(4, 3, 4))
     out += _section("Date",
                     _descriptor(4, 1, 1) + _descriptor(4, date, 4))
+    if comments is not None:
+        out += _comments_section(comments)
     out += _section("HeaderDataEnd", b"")
     out += _section("OverlapStart_0", b"")
     if cvol is not None:
@@ -724,6 +745,10 @@ def write_gph_volume(filepath,
         out += _volume_regions_section(volume_regions)
     if parts is not None:
         out += _parts_section(parts)
+    if assemblies is not None:
+        out += _assemblies_section(assemblies)
+    if element_info is not None:
+        out += _element_info_section(element_info)
     out += _section("OverlapEnd", b"")
 
     path = Path(filepath)
@@ -758,8 +783,17 @@ def _assemblies_section(xml) -> bytes:
     n = len(b)
     body = (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
             _descriptor(4, 1, 1) + _descriptor(4, n, 4) +
+            _descriptor(1, n, 1) +
             _block(b))
     return _section("LS_Assemblies", bytes(body))
+
+
+def _comments_section(text: str = "PolyHedra") -> bytes:
+    """Comments 写端（box 布局：字符串描述符 (1,n,1) + 80B ASCII 块，实存 mesher 名）。"""
+    b = (text.encode("ascii") if isinstance(text, str) else bytes(text))
+    b = b[:80].ljust(80)
+    body = _descriptor(1, len(b), 1) + _block(b)
+    return _section("Comments", bytes(body))
 
 
 def _name255(text: str) -> bytes:

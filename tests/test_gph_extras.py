@@ -38,6 +38,60 @@ class TestAssemblies(unittest.TestCase):
         self.assertEqual(gphstats.assemblies_xml(buf), xml)
 
 
+class TestByteExactSections(unittest.TestCase):
+    """写端字节对齐：新节与原始 box 逐字节一致（含 40B 节头 + 20B 哨兵）。"""
+
+    def _sec_bytes(self, name):
+        with open(BOX_GPH, "rb") as f:
+            data = f.read()
+        s = gphstats._find_section(data, name)
+        return bytes(data[s.start:s.end])
+
+    def test_cvol_byte_exact(self):
+        with gphstats.open_buffer(str(BOX_GPH)) as data:
+            cvol = gphstats.cvol_ids(data)
+        self.assertEqual(gphstats._cvol_section(cvol),
+                         self._sec_bytes("LS_CvolIdOfElements"))
+
+    def test_element_info_byte_exact(self):
+        with gphstats.open_buffer(str(BOX_GPH)) as data:
+            _, flags = gphstats.element_info(data)
+        self.assertEqual(gphstats._element_info_section(flags),
+                         self._sec_bytes("Element_InformationFlag"))
+
+    def test_assemblies_byte_exact(self):
+        with gphstats.open_buffer(str(BOX_GPH)) as data:
+            xml = gphstats.assemblies_xml(data)
+        self.assertEqual(gphstats._assemblies_section(xml),
+                         self._sec_bytes("LS_Assemblies"))
+
+    def test_comments_byte_exact(self):
+        self.assertEqual(gphstats._comments_section("PolyHedra"),
+                         self._sec_bytes("Comments"))
+
+    def test_write_gph_volume_roundtrip_with_new_sections(self):
+        with gphstats.open_buffer(str(BOX_GPH)) as data:
+            mesh = gphstats.parse_mesh(data)
+            cvol = gphstats.cvol_ids(data)
+            ei = gphstats.element_info(data)
+            xml = gphstats.assemblies_xml(data)
+        faces = [
+            mesh["conn"][mesh["face_offsets"][i]:mesh["face_offsets"][i + 1]].tolist()
+            for i in range(mesh["n_faces"])
+        ]
+        p = ROOT / "_roundtrip2.gph"
+        try:
+            gphstats.write_gph_volume(
+                p, mesh["vertices"], faces, mesh["owner"], mesh["neigh"],
+                cvol=cvol, element_info=ei[1], assemblies=xml)
+            with gphstats.open_buffer(str(p)) as raw:
+                self.assertEqual(gphstats.element_info(raw)[1].tolist(),
+                                 ei[1].tolist())
+                self.assertEqual(gphstats.assemblies_xml(raw), xml)
+        finally:
+            p.unlink(missing_ok=True)
+
+
 class TestElementInfo(unittest.TestCase):
     def test_box_decode(self):
         with gphstats.open_buffer(str(BOX_GPH)) as data:
