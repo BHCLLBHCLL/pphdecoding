@@ -702,6 +702,101 @@ class _PsSession:
             raise RuntimeError(f"PK_PART_receive failed: {rc}")
         return list(cast(parts, POINTER(c_int * n.value)).contents)
 
+    # -- B-rep 拓扑/几何提取（P1：decode_brep 内核介导）-----------------
+    _PK_CLASS_NAMES = {
+        2501: "point", 3001: "curve", 4001: "surface",
+        5001: "vertex", 5002: "edge", 5003: "loop",
+        5004: "face", 5005: "fin", 5006: "body", 5007: "part",
+    }
+
+    def _ask_class(self, entity: int) -> int:
+        pk = self.pk
+        pk.PK_ENTITY_ask_class.restype = c_int
+        pk.PK_ENTITY_ask_class.argtypes = [c_int, POINTER(c_int)]
+        k = c_int(0)
+        if pk.PK_ENTITY_ask_class(int(entity), byref(k)) != 0:
+            return -1
+        return k.value
+
+    def extract_brep(self, body_tags: list[int]) -> dict:
+        """从 body 标签提取 B-rep 拓扑/几何（P1，内核介导）。
+
+        receive_xt / create_solid_block 返回的即 body 标签（class 5006），
+        直接 PK_BODY_ask_* 遍历：BODY -> FACE/EDGE/VERTEX，FACE->SURFACE，
+        EDGE->CURVE，VERTEX->POINT->coords。返回：
+        {bodies, faces, edges, vertices, points[(x,y,z)|None],
+         face_surfaces, edge_curves, classes{tag:name}}。
+        """
+        pk = self.pk
+
+        def ask_arr(fn, entity):
+            f = getattr(pk, fn)
+            f.restype = c_int
+            f.argtypes = [c_int, POINTER(c_int), POINTER(c_void_p)]
+            n = c_int(0)
+            arr = c_void_p()
+            if f(int(entity), byref(n), byref(arr)) != 0 or not n.value:
+                return []
+            return list(cast(arr, POINTER(c_int * n.value)).contents)
+
+        faces: list[int] = []
+        edges: list[int] = []
+        vertices: list[int] = []
+        for b in body_tags:
+            faces += ask_arr("PK_BODY_ask_faces", b)
+            edges += ask_arr("PK_BODY_ask_edges", b)
+            vertices += ask_arr("PK_BODY_ask_vertices", b)
+
+        pk.PK_VERTEX_ask_point.restype = c_int
+        pk.PK_VERTEX_ask_point.argtypes = [c_int, POINTER(c_int)]
+        pk.PK_POINT_ask.restype = c_int
+        pk.PK_POINT_ask.argtypes = [c_int, POINTER(c_double * 3)]
+        points: list = []
+        for v in vertices:
+            pt = c_int(0)
+            if pk.PK_VERTEX_ask_point(int(v), byref(pt)) == 0 and pt.value:
+                xyz = (c_double * 3)()
+                if pk.PK_POINT_ask(int(pt.value), xyz) == 0:
+                    points.append([float(xyz[0]), float(xyz[1]), float(xyz[2])])
+                    continue
+            points.append(None)
+
+        def ask_ref(fn, entity):
+            f = getattr(pk, fn)
+            f.restype = c_int
+            f.argtypes = [c_int, POINTER(c_int)]
+            t = c_int(0)
+            if f(int(entity), byref(t)) == 0 and t.value:
+                return int(t.value)
+            return None
+
+        face_surfaces = [ask_ref("PK_FACE_ask_surf", f) for f in faces]
+        edge_curves = [ask_ref("PK_EDGE_ask_curve", e) for e in edges]
+
+        classes: dict[int, str] = {}
+        for tag in list(body_tags) + faces + edges + vertices:
+            k = self._ask_class(tag)
+            classes[int(tag)] = self._PK_CLASS_NAMES.get(k, f"class_{k}")
+        for s in face_surfaces:
+            if s is not None and s not in classes:
+                k = self._ask_class(s)
+                classes[s] = self._PK_CLASS_NAMES.get(k, f"class_{k}")
+        for c in edge_curves:
+            if c is not None and c not in classes:
+                k = self._ask_class(c)
+                classes[c] = self._PK_CLASS_NAMES.get(k, f"class_{k}")
+
+        return {
+            "bodies": [int(b) for b in body_tags],
+            "faces": [int(f) for f in faces],
+            "edges": [int(e) for e in edges],
+            "vertices": [int(v) for v in vertices],
+            "points": points,
+            "face_surfaces": face_surfaces,
+            "edge_curves": edge_curves,
+            "classes": classes,
+        }
+
     # -- part transmit（编码：PK_PART → 文本 .x_t）-----------------------
     def transmit_part(self, tag: int, path: str = "") -> bytes:
         """把 PK_PART 编码写回文本 .x_t（PK_PART_transmit，写文件经 frustrum）。"""
@@ -1409,6 +1504,21 @@ def transmit_xt(xt_bytes: bytes, tag: Optional[int] = None) -> bytes:
         raise RuntimeError("transmit_xt: no bodies received")
     t = tags[0] if tag is None else int(tag)
     return sess.transmit_part(t, "out")
+
+
+def decode_brep(xt_bytes: bytes) -> dict:
+    """P1：接收 x_t → 提取 B-rep 拓扑/几何（内核介导）。
+
+    接收的 body（class 5006）直接 PK_BODY_ask_faces/edges/vertices 遍历，
+    VERTEX→POINT→coords、FACE→SURFACE、EDGE→CURVE。返回 extract_brep 结果
+    （{bodies, faces, edges, vertices, points, face_surfaces, edge_curves,
+    classes}）。
+    """
+    sess = _get_session()
+    bodies = sess.receive_xt(xt_bytes)
+    if not bodies:
+        raise RuntimeError("decode_brep: no bodies received")
+    return sess.extract_brep(bodies)
 
 def boolean_bodies(xt_bytes: bytes, target_index: int = 0,
                    tools_indices: Optional[list[int]] = None,
