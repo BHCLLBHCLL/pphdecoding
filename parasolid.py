@@ -66,6 +66,46 @@ def field_data_offsets(stream: "ParasolidStream") -> dict[str, int]:
             for f in stream.fields if f.data_offset >= 0}
 
 
+# V37 实体 class 枚举（PK_ENTITY_ask_class 实测，见 ps_facet2_nodes.extract_brep）。
+PK_CLASS_NAMES = {
+    2501: "point", 3001: "curve", 4001: "surface",
+    5001: "vertex", 5002: "edge", 5003: "loop",
+    5004: "face", 5005: "fin", 5006: "body", 5007: "part",
+}
+
+
+def parse_text_entities(xt_text: str) -> dict:
+    """解析文本 x_t（无内核）：头元数据 + 实体类型码 + 回引计数（P3）。
+
+    文本 x_t（FORMAT=text, GUISE=transmit）头为 **PART1/2/3 元数据，之后是
+    实体流：T<n> 为实体类型定义（每类一次），?n 为对已定义实体的回引
+    （≈ 实体实例数）。返回 {header, version, schema, type_counts, n_refs,
+    sdl_attributes}。
+    """
+    header: dict[str, str] = {}
+    for key in ("MC", "FORMAT", "GUISE", "KEY", "MC_MODEL"):
+        m = re.search(rf"^{key}=(.*?);", xt_text, re.M)
+        if m:
+            header[key] = m.group(1)
+    ver = _parse_version(xt_text.encode("ascii", "replace"))
+    sch = SCHEMA_RE.search(xt_text.encode("ascii", "replace"))
+    from collections import Counter
+    type_counts = {int(k): v
+                   for k, v in sorted(Counter(
+                       int(x) for x in re.findall(r"\bT(\d+)\b", xt_text)
+                   ).items())}
+    n_refs = len(re.findall(r"\?(\d+)", xt_text))
+    sdl = sorted(set(re.findall(r"SDL/[A-Z_]+", xt_text)))
+    return {
+        "header": header,
+        "version": ver,
+        "schema": sch.group().decode("ascii") if sch else None,
+        "type_counts": type_counts,
+        "n_refs": n_refs,
+        "sdl_attributes": sdl,
+    }
+
+
 @dataclass
 class ParasolidField:
     """schema 字段定义记录。"""
