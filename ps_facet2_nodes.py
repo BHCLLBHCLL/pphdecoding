@@ -413,6 +413,17 @@ class _AXIS2(Structure):
     ]
 
 
+class _BodyTransformOpts(Structure):
+    """PK_BODY_transform_o_t（V37，4 int；o_t_version=1 实测可用）。"""
+
+    _fields_ = [
+        ("o_t_version", c_int),
+        ("merge_face", c_int),
+        ("check_fa_fa", c_int),
+        ("update", c_int),
+    ]
+
+
 class _FaceDeleteOpts(Structure):
     """PK_FACE_delete_o_t（cabdecoding 已实测 o_t_version=1）。"""
 
@@ -804,6 +815,36 @@ class _PsSession:
         if rc != 0 or not body.value:
             raise RuntimeError(f"PK_BODY_create_solid_block failed: {rc}")
         return int(body.value)
+
+    # -- transform（编辑：平移）------------------------------------------
+    def transform_body(self, body: int, dx: float = 0.0, dy: float = 0.0,
+                       dz: float = 0.0) -> None:
+        """平移 body：PK_TRANSF_create_translation → PK_BODY_transform_2。
+
+        关键：Cradle pskernel 是 Parasolid V37，``PK_TRANSF_t`` 是 32 位 tag
+        （非 V35 的 4x4 矩阵），由 ``PK_TRANSF_create_translation`` 返回，
+        ``PK_BODY_transform_2`` 按值接收该 tag。
+        """
+        pk = self.pk
+        disp = (c_double * 3)(float(dx), float(dy), float(dz))
+        tag = c_int(0)
+        pk.PK_TRANSF_create_translation.restype = c_int
+        pk.PK_TRANSF_create_translation.argtypes = [
+            POINTER(c_double * 3), POINTER(c_int)]
+        rc = pk.PK_TRANSF_create_translation(disp, byref(tag))
+        if rc != 0 or not tag.value:
+            raise RuntimeError(f"PK_TRANSF_create_translation failed: {rc}")
+        opts = _BodyTransformOpts(1, 1, 1, 0)
+        track = (c_byte * 256)()
+        res = (c_byte * 256)()
+        pk.PK_BODY_transform_2.restype = c_int
+        pk.PK_BODY_transform_2.argtypes = [
+            c_int, c_int, c_double, POINTER(_BodyTransformOpts),
+            c_void_p, c_void_p]
+        rc = pk.PK_BODY_transform_2(
+            int(body), int(tag.value), 1e-6, byref(opts), track, res)
+        if rc != 0:
+            raise RuntimeError(f"PK_BODY_transform_2 failed: {rc}")
 
     def body_name(self, tag: int) -> str:
         pk = self.pk
@@ -1325,6 +1366,13 @@ def delete_faces(face_tags: list[int], *, heal: str = "cap") -> None:
     """PK_FACE_delete_2（cap/shrink 愈合）。"""
     sess = _get_session()
     sess.face_delete(face_tags, heal=heal)
+
+
+def translate_body(body: int, dx: float = 0.0, dy: float = 0.0,
+                  dz: float = 0.0) -> None:
+    """PK_TRANSF_create_translation + PK_BODY_transform_2 平移 body。"""
+    sess = _get_session()
+    sess.transform_body(body, dx, dy, dz)
 
 
 def tessellate_xt(xt_bytes: bytes, *, adaptive: bool = False,

@@ -144,15 +144,19 @@ scFLOWpre 有 VB 手册；两者加上本仓库已验证的 capstone 反汇编�
 - 测试 `tests/test_ps_edit.py`：两实体块 unite（bbox x=1.5）/ subtract /
   删面 cap，全过。
 
-### 4.2 S2–S4（transform，受阻 ⏳）
+### 4.2 S2–S4（transform，已解决 ✅）
 
-- 已拿到 V35 公开签名（6 参数）与 `PK_BODY_transform_o_t`（4 int）；
-- 但 **Cradle 2025 的 pskernel 是 Parasolid V37**（transmit 头
-  `modeller version 3701153`），其 `PK_BODY_transform_2` 的 ABI 与 V35 不同：
-  反汇编显示 `mov dword [rbp-0x48], edx`（arg2 是 32 位）、
-  `movsd [rbp-0x18], xmm2`（tolerance 在 XMM2，非 XMM0）、`r9`（非 r8）——
-  与 V35 文档的 `(body, transf(96B by-ref), tolerance, options, tracking, results)`
-  布局不一致；多种 transf（96/128B）与 options（16/160B）组合均访问违例 @0x98；
-- **下一步**：反汇编 V37 的 option converter（对齐 cabdecoding 钉
-  `PK_TOPOL_facet_2_o_t` v5 / `PK_BODY_boolean_o_t` v2 的做法），钉死 V37
-  `PK_TRANSF_t` / `PK_BODY_transform_o_t` 真实布局后再实现 transform。
+**根因**：Cradle 2025 pskernel 是 **Parasolid V37**（transmit 头
+`modeller version 3701153`），其 `PK_TRANSF_t` 与 V35 不同——**V37 里
+`PK_TRANSF_t` 是 32 位 tag（非 V35 的 4x4 矩阵）**，由
+`PK_TRANSF_create_translation` 返回，`PK_BODY_transform_2` 按值接收该 tag。
+
+- 反汇编证据：`PK_BODY_transform_2` 的 arg2 存为 `mov dword [rbp-0x48], edx`
+  （32 位），与「transf 是 96/128 字节矩阵按引用传」矛盾——真相是 transf 就是
+  这个 32 位 tag；
+- 实测验证：`PK_TRANSF_create_translation((10,0,0), &tag)` → tag=138；
+  `PK_BODY_transform_2(body, 138, 1e-6, opts(o_t_version=1), ...)` → rc=0，
+  body 平移 +10（bbox delta [10,0,0]）；
+- **已落地**：`ps_facet2_nodes.py` 新增 `_BodyTransformOpts`（4 int）+
+  `transform_body`（`PK_TRANSF_create_translation` → `PK_BODY_transform_2`）+
+  模块级 `translate_body`；测试 `tests/test_ps_edit.py::test_translate_body` 全过。

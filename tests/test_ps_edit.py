@@ -60,5 +60,22 @@ class TestFaceDelete(unittest.TestCase):
         self.sess.face_delete([fl[0]], heal="cap")
 
 
+class TestTransform(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if not psf.available():
+            raise unittest.SkipTest("pskernel.dll not available")
+        cls.sess = psf._get_session()
+
+    def test_translate_body(self):
+        body = self.sess.create_solid_block((1.0, 1.0, 1.0))
+        p1 = self.sess.facet_body(body)
+        lo1 = p1.points.min(axis=0)
+        self.sess.transform_body(body, dx=10.0)
+        p2 = self.sess.facet_body(body)
+        lo2 = p2.points.min(axis=0)
+        self.assertAlmostEqual(lo2[0] - lo1[0], 10.0, delta=0.05)
+
+
 if __name__ == "__main__":
     unittest.main()
