@@ -816,7 +816,22 @@ class _PsSession:
             raise RuntimeError(f"PK_BODY_create_solid_block failed: {rc}")
         return int(body.value)
 
-    # -- transform（编辑：平移）------------------------------------------
+    # -- transform（编辑：平移 / 旋转 / 等比缩放 / 镜像）-----------------
+    def _apply_transf_tag(self, body: int, tag: int) -> None:
+        """把已创建的变换 tag 应用到 body（PK_BODY_transform_2）。"""
+        pk = self.pk
+        opts = _BodyTransformOpts(1, 1, 1, 0)
+        track = (c_byte * 256)()
+        res = (c_byte * 256)()
+        pk.PK_BODY_transform_2.restype = c_int
+        pk.PK_BODY_transform_2.argtypes = [
+            c_int, c_int, c_double, POINTER(_BodyTransformOpts),
+            c_void_p, c_void_p]
+        rc = pk.PK_BODY_transform_2(
+            int(body), int(tag), 1e-6, byref(opts), track, res)
+        if rc != 0:
+            raise RuntimeError(f"PK_BODY_transform_2 failed: {rc}")
+
     def transform_body(self, body: int, dx: float = 0.0, dy: float = 0.0,
                        dz: float = 0.0) -> None:
         """平移 body：PK_TRANSF_create_translation → PK_BODY_transform_2。
@@ -834,17 +849,63 @@ class _PsSession:
         rc = pk.PK_TRANSF_create_translation(disp, byref(tag))
         if rc != 0 or not tag.value:
             raise RuntimeError(f"PK_TRANSF_create_translation failed: {rc}")
-        opts = _BodyTransformOpts(1, 1, 1, 0)
-        track = (c_byte * 256)()
-        res = (c_byte * 256)()
-        pk.PK_BODY_transform_2.restype = c_int
-        pk.PK_BODY_transform_2.argtypes = [
-            c_int, c_int, c_double, POINTER(_BodyTransformOpts),
-            c_void_p, c_void_p]
-        rc = pk.PK_BODY_transform_2(
-            int(body), int(tag.value), 1e-6, byref(opts), track, res)
-        if rc != 0:
-            raise RuntimeError(f"PK_BODY_transform_2 failed: {rc}")
+        self._apply_transf_tag(body, tag.value)
+
+    def rotate_body(self, body: int, *, axis=(0.0, 0.0, 1.0),
+                    angle_deg: float = 0.0, position=(0.0, 0.0, 0.0)) -> None:
+        """绕 axis 轴旋转 body angle_deg 度（position 为轴上一点）。
+
+        PK_TRANSF_create_rotation(position, axis, angle_radians, &tag)。
+        """
+        import math
+        pk = self.pk
+        pos = (c_double * 3)(*position)
+        ax = (c_double * 3)(*axis)
+        tag = c_int(0)
+        pk.PK_TRANSF_create_rotation.restype = c_int
+        pk.PK_TRANSF_create_rotation.argtypes = [
+            POINTER(c_double * 3), POINTER(c_double * 3), c_double,
+            POINTER(c_int)]
+        rc = pk.PK_TRANSF_create_rotation(
+            pos, ax, math.radians(float(angle_deg)), byref(tag))
+        if rc != 0 or not tag.value:
+            raise RuntimeError(f"PK_TRANSF_create_rotation failed: {rc}")
+        self._apply_transf_tag(body, tag.value)
+
+    def scale_body(self, body: int, *, scale: float = 1.0,
+                   centre=(0.0, 0.0, 0.0)) -> None:
+        """等比缩放 body（centre 为缩放中心）。
+
+        PK_TRANSF_create_equal_scale(scale, centre, &tag)。
+        """
+        pk = self.pk
+        cen = (c_double * 3)(*centre)
+        tag = c_int(0)
+        pk.PK_TRANSF_create_equal_scale.restype = c_int
+        pk.PK_TRANSF_create_equal_scale.argtypes = [
+            c_double, POINTER(c_double * 3), POINTER(c_int)]
+        rc = pk.PK_TRANSF_create_equal_scale(float(scale), cen, byref(tag))
+        if rc != 0 or not tag.value:
+            raise RuntimeError(f"PK_TRANSF_create_equal_scale failed: {rc}")
+        self._apply_transf_tag(body, tag.value)
+
+    def reflect_body(self, body: int, *, normal=(1.0, 0.0, 0.0),
+                     position=(0.0, 0.0, 0.0)) -> None:
+        """关于平面（position + normal）镜像 body。
+
+        PK_TRANSF_create_reflection(position, normal, &tag)。
+        """
+        pk = self.pk
+        pos = (c_double * 3)(*position)
+        nrm = (c_double * 3)(*normal)
+        tag = c_int(0)
+        pk.PK_TRANSF_create_reflection.restype = c_int
+        pk.PK_TRANSF_create_reflection.argtypes = [
+            POINTER(c_double * 3), POINTER(c_double * 3), POINTER(c_int)]
+        rc = pk.PK_TRANSF_create_reflection(pos, nrm, byref(tag))
+        if rc != 0 or not tag.value:
+            raise RuntimeError(f"PK_TRANSF_create_reflection failed: {rc}")
+        self._apply_transf_tag(body, tag.value)
 
     def body_name(self, tag: int) -> str:
         pk = self.pk
@@ -1373,6 +1434,27 @@ def translate_body(body: int, dx: float = 0.0, dy: float = 0.0,
     """PK_TRANSF_create_translation + PK_BODY_transform_2 平移 body。"""
     sess = _get_session()
     sess.transform_body(body, dx, dy, dz)
+
+
+def rotate_body(body: int, *, axis=(0.0, 0.0, 1.0), angle_deg: float = 0.0,
+                position=(0.0, 0.0, 0.0)) -> None:
+    """PK_TRANSF_create_rotation + PK_BODY_transform_2 旋转 body。"""
+    sess = _get_session()
+    sess.rotate_body(body, axis=axis, angle_deg=angle_deg, position=position)
+
+
+def scale_body(body: int, *, scale: float = 1.0,
+               centre=(0.0, 0.0, 0.0)) -> None:
+    """PK_TRANSF_create_equal_scale + PK_BODY_transform_2 等比缩放 body。"""
+    sess = _get_session()
+    sess.scale_body(body, scale=scale, centre=centre)
+
+
+def reflect_body(body: int, *, normal=(1.0, 0.0, 0.0),
+                 position=(0.0, 0.0, 0.0)) -> None:
+    """PK_TRANSF_create_reflection + PK_BODY_transform_2 镜像 body。"""
+    sess = _get_session()
+    sess.reflect_body(body, normal=normal, position=position)
 
 
 def tessellate_xt(xt_bytes: bytes, *, adaptive: bool = False,

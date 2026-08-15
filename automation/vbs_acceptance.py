@@ -22,13 +22,6 @@ from automation import vbs_bridge
 PROGID_HOST = "scFLOWpre_Bx64net.Application.2025"
 
 
-def _dispatch():
-    import win32com.client
-    app = win32com.client.Dispatch(PROGID_HOST)
-    app._FlagAsMethod("ExecuteVBSWithFile", "ExecuteVBS", "GetDocument")
-    return app
-
-
 def build_open_vbs(result_path: str | Path, project_path: str | Path) -> Path:
     """生成「打开工程 + 分步写结果」的 UTF-16 VBS，返回 .vbs 路径。"""
     result_path = Path(result_path)

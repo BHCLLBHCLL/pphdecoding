@@ -76,6 +76,36 @@ class TestTransform(unittest.TestCase):
         lo2 = p2.points.min(axis=0)
         self.assertAlmostEqual(lo2[0] - lo1[0], 10.0, delta=0.05)
 
+    def _bbox(self, body):
+        p = self.sess.facet_body(body)
+        return p.points.min(axis=0), p.points.max(axis=0)
+
+    def test_rotate_body_90deg_z(self):
+        body = self.sess.create_solid_block((2.0, 1.0, 1.0))
+        lo, hi = self._bbox(body)
+        self.assertAlmostEqual(hi[0] - lo[0], 2.0, delta=0.05)
+        self.assertAlmostEqual(hi[1] - lo[1], 1.0, delta=0.05)
+        self.sess.rotate_body(body, axis=(0.0, 0.0, 1.0), angle_deg=90.0)
+        lo, hi = self._bbox(body)
+        self.assertAlmostEqual(hi[0] - lo[0], 1.0, delta=0.05)
+        self.assertAlmostEqual(hi[1] - lo[1], 2.0, delta=0.05)
+
+    def test_scale_body_uniform(self):
+        body = self.sess.create_solid_block((2.0, 1.0, 1.0))
+        self.sess.scale_body(body, scale=2.0)
+        lo, hi = self._bbox(body)
+        self.assertAlmostEqual(hi[0] - lo[0], 4.0, delta=0.05)
+        self.assertAlmostEqual(hi[1] - lo[1], 2.0, delta=0.05)
+        self.assertAlmostEqual(hi[2] - lo[2], 2.0, delta=0.05)
+
+    def test_reflect_body_x_plane(self):
+        # 块以 (3,0,0) 为中心（x∈[2,4]），关于 x=0 镜像后 x∈[-4,-2]。
+        body = self.sess.create_solid_block((2.0, 1.0, 1.0), (3.0, 0.0, 0.0))
+        self.sess.reflect_body(body, normal=(1.0, 0.0, 0.0))
+        lo, hi = self._bbox(body)
+        self.assertAlmostEqual(lo[0], -4.0, delta=0.05)
+        self.assertAlmostEqual(hi[0], -2.0, delta=0.05)
+
 
 if __name__ == "__main__":
     unittest.main()
