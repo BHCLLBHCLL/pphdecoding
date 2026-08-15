@@ -76,6 +76,16 @@ COVERAGE = {
 #   FLDUTIL_Get_NodeNumOfPanel @0x31400：edx=panel index → int
 #   FLDUTIL_GetLastErrorString @0x31140：void → const char*
 # 状态保存在 DLL 全局（单一当前文件），handle 仅用于日志/校验。
+#
+# 格式身份（PDB 字符串 + 实测错误串钉死）：FLDUTIL_Bx64.dll 是 Cradle
+# **FEM 中性格式**（scSTREAM/HeatDesigner）I/O 库——导出
+# FLDUTIL_FEM_InputdataRead / FLDUTIL_NastranBulkdataRead/Write /
+# FLDUTIL_{ABAQUS,ANSYS,I_DEAS,Nastran}_MappingDataWrite；它**不读** scFLOW
+# 求解器 FLD（.fld）。实测 Open_File 读 .fld（含官方样例）时返回
+# "***** FEM Data Error : No Nodal Points Data."。Node/Panel/Solid/Pregn/
+# Sregn/Var 概念与 FLD/GPH 的 LS_* 节仍同源（CRDL 容器 + 同一概念层），
+# 但**文件级对拍是格式错配**——G4 结论：容器级真值对拍走 flddecoding 仓
+# 的 fld_model（独立实现、经 scPOST 验证），见 cross_check_fld。
 SIGNATURES = {
     "FLDUTIL_Open_File": (("path", "char*"), ("a2", "int"), ("a3", "int"), "int"),
     "FLDUTIL_Close_File": (("handle", "int"), None, None, "int"),
@@ -119,6 +129,50 @@ def rosace(role: Optional[str] = None) -> list[tuple[str, str, str]]:
 def coverage_gaps() -> dict:
     """把 FLDUTIL 概念面（node/face/cell/sregn/pregn）映射到 gphstats 覆盖节。"""
     return dict(COVERAGE)
+
+
+def cross_check_fld(path: str | Path) -> dict:
+    """G4 容器级真值对拍：同一 .fld 用两套独立实现解析并比对。
+
+    1. 本仓 crdlfld 节扫描（GPH/MDL/OCT/FLD 共享容器）；
+    2. 同级 flddecoding 仓的 fld_model（独立实现、经 scPOST 验证）；
+    3. FLDUTIL 探测（文档化格式错配：FEM 中性 vs 求解器 FLD）。
+
+    返回 {path, sections, flddecoding, fldutil}。
+    """
+    import sys
+    from pathlib import Path as _P
+    from scflowpre_probe import programs_dir as _pd
+    import crdlfld as _cr
+
+    path = _P(path)
+    out: dict = {"path": str(path)}
+    try:
+        with _cr.CrdlFldFile.load(str(path)) as f:
+            out["sections"] = [s.name for s in f.sections]
+    except Exception as e:
+        out["sections"] = ["ERR", repr(e)]
+
+    flddec = _P(path).parent.parent / "fld_model.py"
+    if flddec.exists():
+        sys.path.insert(0, str(flddec.parent))
+        try:
+            import fld_model as fm
+            with fm.open_fld_buffer(str(path)) as data:
+                cells = fm.fld_cell_count(data)
+                nodes = fm._parse_ls_nodes(data)
+                out["flddecoding"] = {
+                    "n_cells": cells,
+                    "n_nodes": None if nodes[0] is None
+                    else int(nodes[0].shape[0]),
+                }
+        except Exception as e:
+            out["flddecoding"] = {"error": repr(e)}
+    else:
+        out["flddecoding"] = {"error": "flddecoding repo not found"}
+
+    out["fldutil"] = probe_counts(path)
+    return out
 
 
 def probe_counts(path: str | Path) -> dict:

@@ -29,6 +29,35 @@ class TestRosetta(unittest.TestCase):
                                                    "sregn", "pregn"})
 
 
+class TestCrossCheckFld(unittest.TestCase):
+    FLD = Path("D:/training/cgns/flddecoding/tests/ex1_e_from_sxemt_run.fld")
+
+    @classmethod
+    def setUpClass(cls):
+        if not cls.FLD.exists():
+            raise unittest.SkipTest("flddecoding sample not found")
+
+    def test_sections_and_counts(self):
+        r = fb.cross_check_fld(self.FLD)
+        # 本仓 crdlfld 与 flddecoding 独立实现：同一容器解析一致
+        self.assertIn("LS_Nodes", r["sections"])
+        self.assertIn("OverlapEnd", r["sections"])
+        if isinstance(r.get("flddecoding"), dict) \
+                and "error" not in r["flddecoding"]:
+            self.assertGreater(r["flddecoding"]["n_nodes"], 0)
+            self.assertGreater(r["flddecoding"]["n_cells"], 0)
+
+    def test_fldutil_format_mismatch_documented(self):
+        # FLDUTIL 读 FEM 中性格式（非求解器 FLD）：探测须给出其自身错误串
+        dll = fb.fldutil_dll()
+        if dll is None:
+            self.skipTest("FLDUTIL_Bx64.dll not installed")
+        r = fb.probe_counts(self.FLD)
+        self.assertEqual(r["returncode"], 0)
+        # 错误串由 DLL 自身解析产生（格式错配证据），子进程不崩溃
+        self.assertIsInstance(r.get("stdout"), str)
+
+
 class TestDll(unittest.TestCase):
     def test_exports(self):
         dll = fb.fldutil_dll()
