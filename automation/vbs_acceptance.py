@@ -33,22 +33,24 @@ def build_open_vbs(result_path: str | Path, project_path: str | Path) -> Path:
     """生成「打开工程 + 分步写结果」的 UTF-16 VBS，返回 .vbs 路径。"""
     result_path = Path(result_path)
     project_path = Path(project_path).resolve()
+    # 注意：VBS 变量名不能用 ``log``（scFLOWpre VBS 引擎保留字），否则
+    # ``Set log = ...`` 静默失败、文件落盘为空；统一用 ``out``。
     actions = [
         "On Error Resume Next",
         'Set fso = CreateObject("Scripting.FileSystemObject")',
-        f'Set log = fso.CreateTextFile("{result_path.as_posix()}", True)',
-        'log.WriteLine "start"',
+        f'Set out = fso.CreateTextFile("{result_path.as_posix()}", True)',
+        'out.WriteLine "start"',
         "Set App_ = GetApplication()",
-        'log.WriteLine "app=" & CStr(Not (App_ Is Nothing)) & " err=" & CStr(Err.Number)',
+        'out.WriteLine "app=" & CStr(Not (App_ Is Nothing)) & " err=" & CStr(Err.Number)',
         "Err.Clear",
         "Set Doc_ = App_.GetDocument",
-        'log.WriteLine "doc=" & CStr(Not (Doc_ Is Nothing)) & " err=" & CStr(Err.Number)',
+        'out.WriteLine "doc=" & CStr(Not (Doc_ Is Nothing)) & " err=" & CStr(Err.Number)',
         "Err.Clear",
         f'Param1_ = "{project_path.as_posix()}"',
         "Doc_.OpenProject Param1_, False",
-        'log.WriteLine "open_err=" & CStr(Err.Number)',
+        'out.WriteLine "open_err=" & CStr(Err.Number)',
         "Err.Clear",
-        "log.Close",
+        "out.Close",
     ]
     out = result_path.with_suffix(".vbs")
     vbs_bridge.write_vbs_file(actions, out)
@@ -126,8 +128,9 @@ def run_open_vbs(project_path: str | Path, result_path: str | Path | None = None
             and result_path.stat().st_size == 0:
         time.sleep(0.5)
     if result_path.is_file() and result_path.stat().st_size:
-        out["vbs_result"] = result_path.read_text(encoding="utf-16",
-                                                    errors="replace")
+        # FSO CreateTextFile 默认按系统 ANSI 编码写入（非 UTF-16）
+        out["vbs_result"] = result_path.read_bytes().decode(
+            "utf-8", errors="replace").strip()
     out["com_open"] = run_open(project_path)
     out["ok"] = bool(out["com_open"].get("ok"))
     return out

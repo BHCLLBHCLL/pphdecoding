@@ -125,9 +125,12 @@ ABI 细节——通过 S3 反汇编 + S4 用内核构造函数可闭环，无不
 - 实测：`run_open(box.pph)` → `{ok: true}`、`run_open_vbs(box.pph)` →
   `{ok: true, exec_ok: true}`——宿主接受写端产出的 PPH；
 - 测试 `tests/test_vbs_acceptance.py`（UTF-16 断言 + 打开 box.pph）全过；
-- **遗留**：VBS 自身 FSO `CreateTextFile`/`WriteLine` 产出的结果文件为 0 字节
-  （宿主 VBS 引擎内 FSO 写未落盘，疑似异步/受限），故验收以「直接 COM
-  OpenProject 返回值」为准，VBS 文件仅为脚本通道载体。
+- **FSO 空文件根因已定位并修复**：`log` 是 scFLOWpre VBS 引擎的保留字
+  （内置日志对象），`Set log = CreateTextFile(...)` 静默失败 → 文件落盘为空；
+  改用变量名 `out` 后结果文件正常写出（`start / app=True / doc=True /
+  open_err=0`）。已同步修复 `vbs_acceptance.py` 与 `host_pipeline.py` 两处
+  `log` 变量；结果文件为 FSO 默认 ANSI 编码（非 UTF-16），读取端已改为
+  UTF-8 容错解码。测试 `test_vbs_acceptance.py` 增加 `vbs_result` 断言。
 
 ---
 

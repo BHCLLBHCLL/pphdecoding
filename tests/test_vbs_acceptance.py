@@ -31,6 +31,14 @@ class TestRunOpen(unittest.TestCase):
             self.skipTest("scFLOWpre host not available")
         self.assertTrue(r.get("ok"), r)
 
+    def test_run_open_vbs_writes_result(self):
+        r = va.run_open_vbs(ROOT / "box.pph",
+                            result_path=ROOT / "_t_accept.txt", timeout=30)
+        if not r.get("ok") and "scFLOWpre" in str(r.get("error", "")):
+            self.skipTest("scFLOWpre host not available")
+        # FSO 结果文件应包含分步结果（log 保留字修复后不再为空）
+        self.assertIn("open_err=0", r.get("vbs_result", ""))
+
 
 if __name__ == "__main__":
     unittest.main()
