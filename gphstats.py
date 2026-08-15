@@ -171,6 +171,22 @@ def element_info(data) -> Optional[tuple[int, np.ndarray]]:
     return flag_types, flags
 
 
+def assemblies_xml(data) -> Optional[str]:
+    """LS_Assemblies -> 内嵌 UTF-8 XML 字符串（assembly/part 层级）。
+
+    box 样例：\'<root><assembly name="box" expand="T"><part name="Part"/>\
+</assembly></root>\'（单 114B 字符串块）。
+    """
+    section = _find_section(data, "LS_Assemblies")
+    if section is None:
+        return None
+    for b in crdlfld.iter_data_blocks(data, section):
+        raw = bytes(data[b.offset:b.offset + b.byte_count])
+        if b"xml" in raw.lower() or raw.lstrip().startswith(b"<"):
+            return raw.decode("utf-8", errors="replace").strip("\x00").rstrip()
+    return None
+
+
 def _ls_nodes_elem_bytes(data, sec_start: int, sec_end: int) -> Optional[int]:
     """从 LS_Nodes 类型描述符投票得到坐标元素尺寸（4=f32，8=f64）。"""
     counts = {4: 0, 8: 0}
@@ -734,6 +750,16 @@ def _element_info_section(flags, flag_types: int = 31) -> bytes:
             _descriptor(4, 1, 1) + _descriptor(4, n, 4) +
             _descriptor(4, n, 1) + _block(flags.tobytes()))
     return _section("Element_InformationFlag", bytes(body))
+
+
+def _assemblies_section(xml) -> bytes:
+    """LS_Assemblies 写端（box 布局：4 描述符 + UTF-8 XML 字符串块）。"""
+    b = xml.encode("utf-8") if isinstance(xml, str) else bytes(xml)
+    n = len(b)
+    body = (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
+            _descriptor(4, 1, 1) + _descriptor(4, n, 4) +
+            _block(b))
+    return _section("LS_Assemblies", bytes(body))
 
 
 def _name255(text: str) -> bytes:

@@ -24,6 +24,20 @@ def _minimal_gph(sections: list[bytes]) -> bytes:
     return hdr + b"".join(sections) + end
 
 
+class TestAssemblies(unittest.TestCase):
+    def test_box_decode(self):
+        with gphstats.open_buffer(str(BOX_GPH)) as data:
+            xml = gphstats.assemblies_xml(data)
+        self.assertTrue(xml.startswith('<?xml version="1.0"'))
+        self.assertIn('<assembly name="box"', xml)
+        self.assertIn('<part name="Part"/>', xml)
+
+    def test_write_readback(self):
+        xml = '<?xml version="1.0" encoding="utf-8"?>\n<root><a/></root>'
+        buf = _minimal_gph([gphstats._assemblies_section(xml)])
+        self.assertEqual(gphstats.assemblies_xml(buf), xml)
+
+
 class TestElementInfo(unittest.TestCase):
     def test_box_decode(self):
         with gphstats.open_buffer(str(BOX_GPH)) as data:
