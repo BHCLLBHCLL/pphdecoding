@@ -13,6 +13,7 @@
 > §13：PPH 格式解码 + 写回闭环缺口（2026-08-14）
 > §14：解码未完整的功能补齐计划（2026-08-14）
 > §15：写回未完整的功能补齐计划（2026-08-14）
+> §16：gphstats.py / oct.py / parasolid.py 系统改进（DLL 逆向，2026-08-15）
 
 ---
 
@@ -996,6 +997,60 @@ CondInitial（+CondInitialField/Value）
    `ExecuteVBSWithFile` 接受脚本（返回 True）。VBS 结果文件回写为空的
    次级问题待查（编码/OpenProject 路径）；「布局一致」仍待完整 GUI 验收。
 5. ~~MDL ridge 写端~~ → 已闭环（见 §15.2.4，ridge 无独立节）。
+## 16. gphstats.py / oct.py / parasolid.py 系统改进（DLL 逆向，2026-08-15）
+
+> 范围：三个格式层模块的**解码深度与写回完整性**补强。依据：scFLOWpre 关键
+> DLL（`pskernel` / `ParasolidGW` / `FLDUTIL` / `STpreMesh` /
+> `CreateFPHOCT`）导出表扫描 + box/laptop 样本节表 dump + `PKBody3` 解密 +
+> pskernel 二进制 receive 实测。与 §12–§15 的差异：本节给出**逐模块、逐节、
+> 逐导出**的可执行措施与验证锚点。RE 脚本留于 `tests/box/_dump_sections.py`、
+> `_investigate*.py`、`_dump_parasolid.py`、`_try_binary_receive.py`。
+
+### 16.0 逆向结论（本轮新证据）
+
+| 对象 | 关键发现 |
+|------|----------|
+| GPH（23 节） | 已解码 `LS_Links/LS_Nodes/LS_CvolIdOfElements/LS_SurfaceRegions/LS_VolumeRegions/LS_Parts`；**未解码** `LS_Assemblies`（内嵌 UTF-8 XML，114/101B）与 `Element_InformationFlag`（每单元 I4 位掩码，31 种 flag，box 全 `9=0b1001`）；**无显式 `LS_Cells`**——单元只能由 LS_Links owner/neigh 反推（`build_cells` 方向正确） |
+| OCT（12 节） | `.oct` 本体仅 12 节；`LS_OctOctantBlockID` 在 laptop **全 -1**（未用）；**区域数组不在 .oct**，而在快照 `ZIPOCTREE`（`OCTREEREGION/OCTREEDIVISION/INDEXARRAY`） |
+| Parasolid 双形态 | ① `box.x_t` = Parasolid V34 文本 B-rep（`SCH_3400153_34001`，实体码 `T51/T6/T5/T4/T3/T2`），pskernel **receive rc=0（5 parts）**；② `PKBody3` = Parasolid V37 二进制 **CADthru 分面网格**（`SCH_3701153_37102_13006`，22 字段 `lattice/mesh/polyline/owner/boundary_*/index_map*/finger_*/frame/legal_owners/child/lowest_node_id/mesh_offset_data/list_type/notransmit`），pskernel **receive rc=58/937 失败**（自定义 schema，须手解二进制） |
+| DLL 定位 | `pskernel.dll`：**636 个 `PK_*_ask_*` 拓扑/几何查询导出**（`PK_BODY_ask_topology/faces/edges/vertices/fins/loops/regions`、`PK_FACE_ask_surf`、`PK_EDGE_ask_curve`、`PK_CURVE_eval`、`PK_SURFACE_ask_*`）；`ParasolidGW_Bx64.dll` = Cradle `LocalParasolid`/`Barray_*` 几何网关；`FLDUTIL_Bx64.dll` = GPH/MDL 节语义罗塞塔石碑（`Add/Get_Node/Panel/Solid/Pregn/Sregn/Var`）；`STpreMesh_Bx64.dll` = 体网格引擎（`CCelBlock/PartSet/FaceSet/Region`） |
+
+### 16.1 gphstats.py
+
+- **G1 解码 `Element_InformationFlag`**：新增 `element_info(data) -> (flag_types, flags[n_cells])`；位掩码语义（`9=0b1001`）用 `FLDUTIL.Get_TypeOfSolid/Get_TypeOfPanel` 对拍钉死；写端补 `_element_info_section`。
+- **G2 解码 `LS_Assemblies`**：UTF-8 XML 解块 → `assemblies_xml(data)`；写端支持回写。
+- **G3 棱柱层语义**：棱柱单元已在 LS_Links（wedge=5 面，2 tri+3 quad），`build_cells` 已分类；结合 Element_InformationFlag 位 + 边界邻接标定「边界层 prism」，输出 `layer_histogram`。
+- **G4 以 `FLDUTIL_Bx64.dll` 为真值 oracle**：`ctypes` 调 `FLDUTIL_Open_File/Get_*` 逐项对拍本模块启发式解析；钉死 `Pregn` ↔ `LS_VolumeRegions` 映射，把启发式升级为实证。
+- **G5 写端字节对齐 + 健壮性**：补写 `Element_InformationFlag`/`LS_Assemblies`/`Cycle`/`Comments`；加固 `_iter_surface_region_blocks`（laptop 5 区域、块尺寸 70984/2671012/949452 字节不等）。
+
+### 16.2 oct.py
+
+- **O1 `LS_OctOctantBlockID` 语义**：保留现有解析；分区/并行网格下非 -1 时输出 partition 映射，`write_oct` 已支持真实 block id。
+- **O2 oct ↔ 快照区域对齐（核心增量）**：新增 `oct_to_region_map(oct_model, octree_division, octree_region)`，对齐 `.oct` 前序/子序 0..7 ↔ 快照 `OCTREEDIVISION`(子序 1,3,2,0,5,7,6,4)/`OCTREEREGION`(后序)，产出「叶子→区域」映射（复用 `sctsnapshot.octree_region_as_oct_order`）。
+- **O3 oct ↔ GPH 单元**：经 `LS_CvolIdOfElements` + 区域标志建立 octant→cvol→cells 链路。
+- **O4 `write_oct` 字节补全**：补 `Cycle/Comments/last_gen_year`；**区域数组明确归 `sctsnapshot.py`（OCTREEREGION 序列化），不在 oct.py 重复实现**——修正 §13.3.4「OCT 缺区域数组」的定位误差（区域在快照，不在 .oct）。
+
+### 16.3 parasolid.py
+
+- **P1【首选】内核介导 B-rep 提取（box.x_t 路径）**：新增 `decode_brep(xt_bytes) -> BrepModel`，基于 `ps_facet2_nodes.receive_xt` 后走完整拓扑遍历：拓扑 `PK_BODY_ask_topology/faces/edges/vertices/fins/loops/regions/shells`、`PK_FACE_ask_loops`、`PK_LOOP_ask_fins`、`PK_FIN_ask_edge/face`、`PK_EDGE_ask_vertices/curve`、`PK_VERTEX_ask_point`、`PK_ENTITY_ask_class/identifier`；几何 `PK_FACE_ask_surf`→`PK_SURFACE_ask_b_surface`（NURBS 控制点/节点/阶）、`PK_EDGE_ask_curve`→`PK_CURVE_ask_bcurve`、`PK_POINT_ask_coords`。**唯一拿到解析几何的路径**。
+- **P2 CADthru 分面二进制解析（PKBody3 路径，无法走内核）**：先钉 token 字母表（`I`=int、`D`=double、`A`=array、`C`=?；前缀 `$`=tag、`l`=list、`u`=unsigned、`d`=double-array），再解 `lattice`=顶点格 / `mesh`=面连通 / `polyline`=边折线 / `owner`=归属 / `finger_*`=FIN / `frame`=坐标架 / `index_map*`=重映射；产出 `FacetMesh`（与 `PK_TOPOL_facet_2` 结果同构，可对拍验证）。
+- **P3【可选】文本 B-rep 离线解析**：由 `PK_ENTITY_ask_class` 反查钉死实体 class 枚举表，把 `T51/T6/…` 映射到 PART/BODY/FACE/…，实现无内核离线 x_t 解析。
+- **P4 编码闭环**：`encode_brep` 走 `PK_PART_transmit`（已具备）；分面侧 `encode_facet_mesh` 按 P2 token 布局写回。
+
+### 16.4 执行顺序与风险
+
+| 优先级 | 措施 | 依据/风险 |
+|---|---|---|
+| P0（先验证） | 钉 token 字母表 + FLDUTIL `Pregn` 语义 | 一次性小实验，解锁 P2/G4 |
+| G1/G2 | Element_InformationFlag + LS_Assemblies | 纯数据解析，零风险 |
+| O2 | oct↔快照区域对齐 | 复用既有 `octree_region_as_oct_order`，低风险 |
+| P1 | 内核 B-rep 提取 | 高价值、标准 ABI；风险在 `PK_SURFACE_ask_b_surface` 结构体布局（照 V37 头文件钉 `PK_B_SURFACE_s`） |
+| P2 | CADthru 分面二进制 | 中等逆向量；`facet_2` 结果作验证锚 |
+| G4 | FLDUTIL 对拍 | `ctypes` 只读加载，沙箱内可行 |
+| P3 | 文本 B-rep 离线解析 | 长期项，仅当需要无内核场景 |
+
+**核心结论**：三模块改进方向已由 DLL 证据收敛——`gphstats.py` 补两个未解码节 + 用 `FLDUTIL` 真值对拍；`oct.py` 重心从「写区域」转向「oct↔快照↔网格三向对齐」；`parasolid.py` 拆成「内核介导 B-rep（box.x_t）」与「CADthru 分面二进制（PKBody3）」两条路径分别落地，其中内核路径是拿到解析几何的唯一现实办法。
+
 ---
 
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*
