@@ -218,5 +218,50 @@ class TestKernelBinaryB(unittest.TestCase):
             self.assertIn(n.name, ("EDGE", "VERTEX", "FACE"))
 
 
+class TestV341AStream(unittest.TestCase):
+    """2023 版（Parasolid V34.1）PKBody3 'A' 流跨版本解码（可选依赖）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        p = Path("D:/training/cradle/CradleCFD_2023.2_scFLOW_Example/"
+                 "Exercise/exA05/exA05-1/Org/exA05-1.pph")
+        if not p.exists():
+            raise unittest.SkipTest("2023.2 example not installed")
+        import pph_parser
+        arch = pph_parser.PphArchive.open(str(p))
+        snap_bytes = arch.read_member("main.sctsnapshot")
+        snap = sctsnapshot.SctSnapshot.from_bytes(snap_bytes)
+
+        def walk(recs):
+            for r in recs:
+                if r.tag == "ZIPBODYBYTES":
+                    v = r.value
+                    zb = (v if isinstance(v, sctsnapshot.ZipBlob)
+                          else sctsnapshot.ZipBlob.parse(bytes(v)))
+                    try:
+                        return zb.decompress_body().decrypt()
+                    except Exception:
+                        continue
+                if r.children:
+                    x = walk(r.children)
+                    if x:
+                        return x
+            return None
+
+        cls.plain = walk(snap.records)
+        assert cls.plain is not None
+
+    def test_v341_decode(self):
+        m = parasolid.parse_binary_xt(self.plain)
+        self.assertFalse(m.parse_error)
+        self.assertEqual(m.schema, "SCH_3401153_34101_13006")
+        self.assertEqual(m.binary_flag, "A")
+        self.assertGreater(len(m.order), 100)
+
+    def test_v341_roundtrip(self):
+        m = parasolid.parse_binary_xt(self.plain)
+        self.assertEqual(parasolid.encode_binary_xt(m), self.plain)
+
+
 if __name__ == "__main__":
     unittest.main()

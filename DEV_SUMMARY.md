@@ -72,6 +72,13 @@
 
 ## 3. 六个关键点的解决状态
 
+### 3.0 版本审计：CradleCFD2023 = Parasolid V34.1（非 V35）
+
+- ✅ 遍历 CradleCFD2023/Programs_x64 与 2023.2 官方案例（150 个 pph、99 个原生 x_t、24 个随案例 DLL）：pph 容器/快照/压缩链路与 2025.2 同族，全部可解析；运行期 PKBody3 全量解码 + 字节级 round-trip。
+- ✅ **版本三通道确证 V34.1**：pskernel.dll FileVersion 34.01.153；Schemas 含 sch_34101；PKBody3 = modeller version 3401153 / SCH_3401153_34101_13006。案例 x_t 输入横跨 V22..V34（原建模器版本，非 scFLOWpre 版本）。MSCCTAssistant 自带 pskernel = V30.01。
+- ✅ 导出集：2023 = 1350（1100 PK_*）⊂ 2025.2 = 1454（1204 PK_*），V37 新增 PK_BODY_slice / PK_FACE_ask_type 等 104 项；GW/wrapper DLL 不导出 PK_*。
+- ✅ pskernel_abi.py：以 q-solid Parasolid_Docs_V35 手册（逐函数签名页）为语料做接口映射——V34.1 映射 1081/1100（98.3%），V37 映射 1101/1204（其余为 V35 之后新增）；含 PE 导出解析、签名解析、ctypes 原型生成、多版本差异报告。V34.1/V37 的 'A' 流二进制 XT 解码器跨版本验证通过（exA05 PKBody3 394 节点字节级 round-trip）。
+
 ### 3.1（原难度 6）Parasolid 实体几何：部分提取已交付，完整还原仍为长期项
 
 - ✅ 已交付：parasolid.py 传输流解析/编码——文件头
