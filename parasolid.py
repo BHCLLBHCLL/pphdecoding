@@ -42,6 +42,29 @@ SDL_RE = re.compile(rb"SDL/TYSA_(?:NAME|LAYER|UNAME)")
 _TOKEN_RE = re.compile(rb"\$?[A-Z]+|[lud][A-Z]+")
 _NAME_RE = re.compile(rb"[A-Za-z_$][A-Za-z0-9_/$]*")
 
+# 类型 token 字母表（Parasolid transmit 字段类型编码，V37 观测；前缀/字母语义
+# 为最佳推断，C 与 $ 的确切含义待与 entity 数据区对拍钉死）。
+TOKEN_ALPHABET = {
+    "I": "integer (4B)",
+    "D": "double (8B)",
+    "A": "array (of ints, length-prefixed)",
+    "C": "tag-or-count (待钉死)",
+    "$": "tag / entity reference 前缀",
+    "l": "list 前缀",
+    "u": "unsigned 前缀",
+    "d": "double-array 前缀",
+}
+
+
+def field_data_offsets(stream: "ParasolidStream") -> dict[str, int]:
+    """字段名 → 数据区偏移（P2）。
+
+    共享同偏移的字段互为别名——实测 lattice/boundary_lattice 同 222、
+    mesh/boundary_mesh 同 1006、polyline/boundary_polyline 同 1008。
+    """
+    return {f.name: f.data_offset
+            for f in stream.fields if f.data_offset >= 0}
+
 
 @dataclass
 class ParasolidField:
@@ -50,6 +73,7 @@ class ParasolidField:
     token: str       # 类型 token（I / A / Z / CI / CCCI / CCCA / CCCC…DI 等）
     name: str        # 字段名（lattice / mesh / owner / CADthru/PKEdge 等）
     pos: int         # 记录在流中的字节偏移
+    data_offset: int = -1   # 字段数据区偏移（名字之后的小端 u32；-1 未解析）
 
 
 @dataclass
@@ -120,13 +144,23 @@ def scan_fields(data: bytes, start: int = 0, end: Optional[int] = None
         # 尾随标记字节（'R'/'P' 等）不计入 len，但紧跟 0x00 时并入名字
         # （实测 index_mapR / node_id_index_mapR / schema_embedding_mapR）。
         end = name_end
+        suffix = 0
         while (end + 1 < n and 65 <= data[end] <= 90 and data[end + 1] == 0
                and _NAME_RE.fullmatch(
                    name + bytes([data[end]]))):
             name = name + bytes([data[end]])
             end += 1
+            suffix += 1
+        # 数据区偏移：名字（含 R/P 后缀）之后的小端 u32；R/P 后缀紧接 0x00
+        # 分隔符再跟 u32（实测 index_mapR / node_id_index_mapR 等）。
+        doff_pos = end
+        if suffix and doff_pos + 5 <= n and data[doff_pos] == 0:
+            doff_pos += 1
+        data_offset = -1
+        if doff_pos + 4 <= n:
+            data_offset = int.from_bytes(data[doff_pos:doff_pos + 4], "little")
         out.append(ParasolidField(
-            m.group().decode("ascii"), name.decode("ascii"), pos))
+            m.group().decode("ascii"), name.decode("ascii"), pos, data_offset))
         pos = end
     return out
 
