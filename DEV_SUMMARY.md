@@ -84,6 +84,7 @@
 - ✅ 遍历 2025.2 程序与 2025.2 案例（151 个 pph、109 个原生 x_t/x_b、22 个随案例 DLL），pph/快照/PKBody3 链路全部可解析；案例 x_t 输入为原建模器版本（V22..V34 分布同 2023 集）。
 - ✅ 版本三通道确证 V37：pskernel.dll FileVersion 37.01.153、Schemas 含 sch_37102、运行期 PKBody3 = modeller version 3701153。
 - ✅ pskernel_v37.py：V35 手册未收录的 **104 个 V36/V37 新增 PK_*** 导出补充——家族归类（LATTICE 26 / PARTITION 14 / FRAME 10 / REGION 10 / TOPOL 10 / BODY/FACE/MARK/SESSION 等；49 个 _r_f + 1 个 _cb_r_f 变体）、反汇编参数推断（x64 入口首读/栈参数/字节参数，经文档化签名校准）、经验调用验证（PK_SESSION_ask_cellular_guise rc=0、guise=27110；FACE/REGION ask_type 等 cellular 家族函数因默认 modeling guise 返回 5022 门禁——签名形态已确认，待 cellular-guise 会话复核）、sch_34101-vs-sch_37102 节点类型演进 （新增 SKEWBOX/TPMS_SURF/IMPLICIT_SURF/IMPLICIT_VOLUME/PATTERN_* /LATTICE_DATA_PATTERN 8 型）。
+- ✅ **完整签名补全（pskernel_v37_sigs.py）**：四层手段收敛为 104 个导出的 C 签名表（15 high / 89 med），_r_f 变体 = 基参数 + PK_FRUSTUM_t *frustrum（PK_GEOM_copy vs _r_f 反汇编钉死），PK_MARK_create_r_f 的基函数映射到 PK_MARK_create_2（命名去 _2）；全表渲染于 docs/V37_SIGNATURES.md。
 
 ### 3.1（原难度 6）Parasolid 实体几何：部分提取已交付，完整还原仍为长期项
 
