@@ -341,6 +341,92 @@ class _RECV(Structure):
         ("receive_using_seek", c_int), ("receive_mixed", c_int),
     ]
 
+# --- Parasolid 编辑 token（V35 数值码，对齐 cabdecoding）----------------
+PK_boolean_intersect_c = 15901
+PK_boolean_subtract_c = 15902
+PK_boolean_unite_c = 15903
+PK_boolean_fence_none_c = 18212
+PK_boolean_check_fa_yes_c = 21801
+PK_FACE_heal_cap_c = 18081
+PK_FACE_heal_shrink_c = 18084
+PK_local_ops_update_default_c = 24330
+PK_repair_fa_fa_no_c = 24360
+PK_delete_track_no_c = 26340
+
+_BOOLEAN_OP_FUNC = {
+    "unite": PK_boolean_unite_c,
+    "subtract": PK_boolean_subtract_c,
+    "intersect": PK_boolean_intersect_c,
+}
+
+
+class _BooleanOpts(Structure):
+    """PK_BODY_boolean_o_t（cabdecoding 已实测 o_t_version=2）。"""
+
+    _fields_ = [
+        ("o_t_version", c_int),
+        ("function", c_int),
+        ("configuration", c_void_p),
+        ("matched_region", c_void_p),
+        ("merge_imprinted", c_int),
+        ("prune_in_solid", c_int),
+        ("prune_in_void", c_int),
+        ("fence", c_int),
+        ("allow_disjoint", c_int),
+        ("selective_merge", c_int),
+        ("check_fa", c_int),
+        ("default_tol", c_double),
+        ("max_tol", c_double),
+        ("tracking", c_int),
+        ("merge_attributes", c_int),
+        ("keep_target_edges", c_int),
+    ]
+
+
+class _TrackR(Structure):
+    _fields_ = [
+        ("n_track_records", c_int),
+        ("track_records", c_void_p),
+        ("internal_origs", c_void_p),
+        ("internal_classes", c_void_p),
+        ("internal_prods", c_void_p),
+    ]
+
+
+class _BooleanR(Structure):
+    _fields_ = [
+        ("result", c_int),
+        ("n_bodies", c_int),
+        ("bodies", POINTER(c_int)),
+        ("n_reports", c_int),
+        ("reports", c_void_p),
+    ]
+
+
+class _AXIS2(Structure):
+    """PK_AXIS2_sf_t：坐标系（location + axis + ref_direction）。"""
+
+    _fields_ = [
+        ("location", c_double * 3),
+        ("axis", c_double * 3),
+        ("ref_direction", c_double * 3),
+    ]
+
+
+class _FaceDeleteOpts(Structure):
+    """PK_FACE_delete_o_t（cabdecoding 已实测 o_t_version=1）。"""
+
+    _fields_ = [
+        ("o_t_version", c_int),
+        ("update", c_int),
+        ("heal_action", c_int),
+        ("heal_loops", c_int),
+        ("local_check", c_int),
+        ("allow_disjoint", c_int),
+        ("repair_fa_fa", c_int),
+        ("track", c_int),
+    ]
+
 
 class _PsSession:
     """One pskernel session with text x_t receive + facet_2 + GO fallback."""
@@ -624,6 +710,100 @@ class _PsSession:
             raise RuntimeError(f"PK_PART_transmit failed: {rc}")
         # frustrum FFOPWR/FFWRIT 捕获的字节（键 = FFOPWR 收到的 name）
         return self._transmit_output.get(str(path or "out"), b"")
+
+    # -- body boolean（编辑：并/差/交）---------------------------------
+    def body_boolean(self, target: int, tools: list[int], op: str) -> list[int]:
+        """PK_BODY_boolean_2（6 参数，o_t_version=2）；返回结果 body tag 列表。
+
+        ``op``：unite / subtract / intersect；tool bodies 被内核消耗。
+        """
+        func = _BOOLEAN_OP_FUNC.get(op)
+        if func is None:
+            raise ValueError(f"unsupported boolean op: {op}")
+        if not tools:
+            raise ValueError("no tool bodies")
+        pk = self.pk
+        opts = _BooleanOpts()
+        memset(byref(opts), 0, sizeof(opts))
+        opts.o_t_version = 2
+        opts.function = func
+        opts.fence = PK_boolean_fence_none_c
+        opts.check_fa = PK_boolean_check_fa_yes_c
+        opts.default_tol = 1.0e-5
+        opts.max_tol = 0.0
+        track = _TrackR()
+        memset(byref(track), 0, sizeof(track))
+        res = _BooleanR()
+        memset(byref(res), 0, sizeof(res))
+        arr = (c_int * len(tools))(*[int(t) for t in tools])
+        pk.PK_BODY_boolean_2.restype = c_int
+        pk.PK_BODY_boolean_2.argtypes = [
+            c_int, c_int, POINTER(c_int), POINTER(_BooleanOpts),
+            POINTER(_TrackR), POINTER(_BooleanR)]
+        rc = pk.PK_BODY_boolean_2(
+            int(target), len(tools), arr, byref(opts), byref(track),
+            byref(res))
+        if rc != 0:
+            raise RuntimeError(f"PK_BODY_boolean_2 failed: {rc}")
+        if res.n_bodies <= 0 or not res.bodies:
+            raise RuntimeError(
+                f"PK_BODY_boolean_2 produced no bodies (result={res.result})")
+        return [int(res.bodies[i]) for i in range(res.n_bodies)]
+
+
+    # -- face delete（编辑：删面）-------------------------------------
+    def face_delete(self, face_tags: list[int], *, heal: str = "cap") -> None:
+        """PK_FACE_delete_2（cap/shrink 愈合，同 body）。"""
+        if not face_tags:
+            return
+        pk = self.pk
+        opts = _FaceDeleteOpts()
+        memset(byref(opts), 0, sizeof(opts))
+        opts.o_t_version = 1
+        opts.update = PK_local_ops_update_default_c
+        opts.heal_action = (
+            PK_FACE_heal_shrink_c if heal == "shrink" else PK_FACE_heal_cap_c)
+        opts.heal_loops = 0
+        opts.local_check = 1
+        opts.repair_fa_fa = PK_repair_fa_fa_no_c
+        opts.track = PK_delete_track_no_c
+        track = _TrackR()
+        memset(byref(track), 0, sizeof(track))
+        arr = (c_int * len(face_tags))(*[int(t) for t in face_tags])
+        pk.PK_FACE_delete_2.restype = c_int
+        pk.PK_FACE_delete_2.argtypes = [
+            c_int, POINTER(c_int), POINTER(_FaceDeleteOpts), POINTER(_TrackR)]
+        rc = pk.PK_FACE_delete_2(len(face_tags), arr, byref(opts), byref(track))
+        if rc != 0:
+            raise RuntimeError(f"PK_FACE_delete_2 failed: {rc}")
+
+    # -- create solid block（编辑：造实体，供布尔/变换测试）---------------
+    def create_solid_block(self, size_m, origin_m=(0.0, 0.0, 0.0)) -> int:
+        """PK_BODY_create_solid_block → body tag（单位米）。"""
+        pk = self.pk
+        body = c_int(0)
+        ox, oy, oz = (float(v) for v in origin_m)
+        if abs(ox) + abs(oy) + abs(oz) < 1e-15:
+            pk.PK_BODY_create_solid_block.restype = c_int
+            pk.PK_BODY_create_solid_block.argtypes = [
+                c_double, c_double, c_double, c_void_p, POINTER(c_int)]
+            rc = pk.PK_BODY_create_solid_block(
+                float(size_m[0]), float(size_m[1]), float(size_m[2]),
+                None, byref(body))
+        else:
+            ax = _AXIS2()
+            ax.location[:] = (ox, oy, oz)
+            ax.axis[:] = (0.0, 0.0, 1.0)
+            ax.ref_direction[:] = (1.0, 0.0, 0.0)
+            pk.PK_BODY_create_solid_block.restype = c_int
+            pk.PK_BODY_create_solid_block.argtypes = [
+                c_double, c_double, c_double, POINTER(_AXIS2), POINTER(c_int)]
+            rc = pk.PK_BODY_create_solid_block(
+                float(size_m[0]), float(size_m[1]), float(size_m[2]),
+                byref(ax), byref(body))
+        if rc != 0 or not body.value:
+            raise RuntimeError(f"PK_BODY_create_solid_block failed: {rc}")
+        return int(body.value)
 
     def body_name(self, tag: int) -> str:
         pk = self.pk
@@ -1127,6 +1307,24 @@ def transmit_xt(xt_bytes: bytes, tag: Optional[int] = None) -> bytes:
         raise RuntimeError("transmit_xt: no bodies received")
     t = tags[0] if tag is None else int(tag)
     return sess.transmit_part(t, "out")
+
+def boolean_bodies(xt_bytes: bytes, target_index: int = 0,
+                   tools_indices: Optional[list[int]] = None,
+                   op: str = "unite") -> tuple[list[int], list[int]]:
+    """接收 x_t → PK_BODY_boolean_2 → 返回 (结果 tags, 原 body tags)。"""
+    sess = _get_session()
+    tags = sess.receive_xt(xt_bytes)
+    if not tags:
+        raise RuntimeError("no bodies received")
+    tools = [tags[i] for i in (tools_indices or list(range(1, len(tags))))]
+    res = sess.body_boolean(tags[target_index], tools, op)
+    return res, tags
+
+
+def delete_faces(face_tags: list[int], *, heal: str = "cap") -> None:
+    """PK_FACE_delete_2（cap/shrink 愈合）。"""
+    sess = _get_session()
+    sess.face_delete(face_tags, heal=heal)
 
 
 def tessellate_xt(xt_bytes: bytes, *, adaptive: bool = False,

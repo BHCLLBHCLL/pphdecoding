@@ -129,3 +129,30 @@ ABI 细节——通过 S3 反汇编 + S4 用内核构造函数可闭环，无不
 scFLOWpre 有 VB 手册；两者加上本仓库已验证的 capstone 反汇编工具链，足以把
 `PK_TRANSF_t` 布局和 `OpenProject` 签名钉死，从而完整补全「Parasolid 编辑」与
 「SCTpre VBS 结果回写」。
+
+---
+
+## 4. 执行状态（2026-08-15）
+
+### 4.1 S1（已落地 ✅）
+
+- `ps_facet2_nodes.py` 新增：`_BooleanOpts`/`_TrackR`/`_BooleanR`/
+  `_FaceDeleteOpts`/`_AXIS2` 结构、`body_boolean`（`PK_BODY_boolean_2`，
+  o_t_version=2）、`face_delete`（`PK_FACE_delete_2`，o_t_version=1）、
+  `create_solid_block`（`PK_BODY_create_solid_block`）及模块级
+  `boolean_bodies`/`delete_faces`；
+- 测试 `tests/test_ps_edit.py`：两实体块 unite（bbox x=1.5）/ subtract /
+  删面 cap，全过。
+
+### 4.2 S2–S4（transform，受阻 ⏳）
+
+- 已拿到 V35 公开签名（6 参数）与 `PK_BODY_transform_o_t`（4 int）；
+- 但 **Cradle 2025 的 pskernel 是 Parasolid V37**（transmit 头
+  `modeller version 3701153`），其 `PK_BODY_transform_2` 的 ABI 与 V35 不同：
+  反汇编显示 `mov dword [rbp-0x48], edx`（arg2 是 32 位）、
+  `movsd [rbp-0x18], xmm2`（tolerance 在 XMM2，非 XMM0）、`r9`（非 r8）——
+  与 V35 文档的 `(body, transf(96B by-ref), tolerance, options, tracking, results)`
+  布局不一致；多种 transf（96/128B）与 options（16/160B）组合均访问违例 @0x98；
+- **下一步**：反汇编 V37 的 option converter（对齐 cabdecoding 钉
+  `PK_TOPOL_facet_2_o_t` v5 / `PK_BODY_boolean_o_t` v2 的做法），钉死 V37
+  `PK_TRANSF_t` / `PK_BODY_transform_o_t` 真实布局后再实现 transform。
