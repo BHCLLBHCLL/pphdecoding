@@ -122,14 +122,19 @@ def encode_brep(body_tags: list[int]) -> bytes:
 
 
 def encode_facet_mesh(mesh) -> bytes:
-    """P4：分面（CADthru lattice/mesh/polyline）二进制编码。
+    """P4：分面（CADthru lattice/mesh/polyline）编码。
 
-    **未实现**：P2 只钉到 schema 字段数据区偏移，尚未解出 lattice（顶点格）/
-    mesh（面连通）/polyline（边折线）在 entity 数据区的精确布局，故无法从
-    FacetMesh 反写。依赖：完成 P2 的 entity 数据区布局解码后补。
+    格式层已闭环：mesh 为 XtModel 时经 encode_text_xt 编码为文本 x_t
+    （P2/P3 已钉死 XT 全格式：头/编辑序列/节点流/字段值）。从裸
+    lattice/mesh/polyline 数组组装节点图（LATTICE 222 / MESH 201 /
+    PSM_MESH 189 / POLYLINE 200 节点结构）仍待补——结构定义已由
+    load_schema 提供，属组装层工作。
     """
+    if isinstance(mesh, XtModel):
+        return encode_text_xt(mesh).encode("ascii")
     raise NotImplementedError(
-        "encode_facet_mesh requires P2 entity data-region layout (pending)")
+        "encode_facet_mesh: pass an XtModel (format-level encode done); "
+        "raw-array -> node-graph assembly pending")
 
 
 @dataclass
@@ -362,6 +367,7 @@ class XtModel:
     userfield_size: int
     nodes: dict = field(default_factory=dict)   # index -> XtNode
     order: list = field(default_factory=list)   # node indices in file order
+    edits: dict = field(default_factory=dict)   # type_id -> 编辑序列
 
     def by_type(self, type_id: int) -> list[XtNode]:
         return [n for n in self.order if n.type_id == type_id]
@@ -553,25 +559,26 @@ class _BinCursor:
 # ── 编辑序列 / 节点解析核心 ────────────────────────────────────────
 
 
-def _skip_edit_sequence_text(c: _TextCursor):
-    """跳过首节点的 schema 编辑序列（'C'/'D'/'I'/'A'...'Z'）。"""
-    n = c.read_num()
-    if n == 255:
-        return
-    while True:
-        op = c.read_char()
-        if op == "Z":
-            return
-        if op in ("C", "D"):
-            continue
-        if op in ("I", "A"):
-            c.read_string()          # name
-            cls = int(c.read_num())  # ptr_class
+def _parse_edit_sequence_text(c: _TextCursor) -> dict:
+    """解析首节点的 schema 编辑序列，返回结构化
+    {'n': int, 'ops': [(op, name, cls, nelts, typ, xmt)|(op,)]}。"""
+    n = int(c.read_num())
+    ops: list = []
+    if n != 255:
+        while True:
+            op = c.read_char()
+            if op == "Z":
+                break
+            if op in ("C", "D"):
+                ops.append((op,))
+                continue
+            name = c.read_string()
+            cls = int(c.read_num())
             nelts = int(c.read_num())
-            if cls == 0:
-                c.read_string()      # type
-            if nelts == 1:
-                c.read_char()        # xmt_code (logical)
+            typ = c.read_string() if cls == 0 else None
+            xmt = c.read_char() if nelts == 1 else None
+            ops.append((op, name, cls, nelts, typ, xmt))
+    return {"n": n, "ops": ops}
 
 
 def _skip_edit_sequence_bin(c: _BinCursor):
@@ -642,7 +649,6 @@ def _parse_nodes(c, schema, fmt: str, model: XtModel) -> None:
         except Exception:
             pass
     seen_types: set[int] = set()
-    next_index = 1
     while True:
         try:
             if isinstance(c, _BinCursor):
@@ -661,7 +667,7 @@ def _parse_nodes(c, schema, fmt: str, model: XtModel) -> None:
                 if isinstance(c, _BinCursor):
                     _skip_edit_sequence_bin(c)
                 else:
-                    _skip_edit_sequence_text(c)
+                    model.edits[type_id] = _parse_edit_sequence_text(c)
                 seen_types.add(type_id)
             # 节点 index：文本显式输出；二进制 u32（实测 PKBody3）
             if isinstance(c, _BinCursor):
@@ -723,6 +729,104 @@ def parse_binary_xt(data: bytes, schema=None) -> XtModel:
     model.max_node_types = max_types
     _parse_nodes(c, schema, "binary", model)
     return model
+
+
+def _write_value(buf: list, ftype: str, value, n_elts: int) -> None:
+    """把字段值按文本格式写出（数字后跟空格；char/logical/'?' 不带空格）。"""
+    def num(v):
+        if v is None:
+            buf.append("?")            # unset 标记（无尾随空格）
+        elif isinstance(v, float):
+            buf.append(f"{v:g} ")
+        else:
+            buf.append(f"{v} ")
+
+    def one(v):
+        if ftype in ("c", "l"):
+            buf.append(("T" if v else "F") if ftype == "l" else str(v))
+        else:
+            num(v)
+
+    if n_elts == 1:
+        num(len(value))
+        for v in value:
+            one(v)
+        return
+    if n_elts > 1:
+        for v in value:
+            one(v)
+        return
+    if ftype in ("v", "h"):
+        for v in value:
+            num(v)
+    elif ftype == "b":
+        for v in value:
+            num(v)
+    elif ftype == "i":
+        num(value[0]); num(value[1])
+    else:
+        one(value)
+
+
+def _write_edit(buf: list, edit: dict) -> None:
+    """把编辑序列写回文本（'C'/'D' 单字符；'I'/'A' 带字段定义）。"""
+    buf.append(f"{edit['n']} ")
+    if edit["n"] == 255:
+        return
+    for op in edit["ops"]:
+        buf.append(op[0])
+        if op[0] in ("C", "D"):
+            continue
+        _, name, cls, nelts, typ, xmt = op
+        buf.append(f"{len(name)} ")
+        buf.append(name)
+        buf.append(f"{cls} {nelts} ")
+        if typ is not None:
+            buf.append(f"{len(typ)} ")
+            buf.append(typ)
+        if xmt is not None:
+            buf.append(xmt)
+    buf.append("Z")
+
+
+def encode_text_xt(model: XtModel) -> str:
+    """把 XtModel 编码回文本 x_t（P4，与 parse_text_xt 互逆）。
+
+    头（T flag + 版本 + schema + 最大节点类型 + usrfield）→ 节点流（首节点
+    类型带编辑序列）→ terminator '1 0'。字符串/数字按 XT 文本规则写。
+    """
+    buf: list = ["T"]
+    version = model.version
+    buf.append(f"{len(version)} ")
+    buf.append(version)
+    schema = model.schema
+    buf.append(f"{len(schema)} ")
+    buf.append(schema)
+    buf.append(f"{getattr(model, 'max_node_types', 239)} ")
+    buf.append(f"{model.userfield_size} ")
+    written: set[int] = set()
+    for node in model.order:
+        buf.append(f"{node.type_id} ")
+        if node.type_id not in written:
+            if node.type_id in model.edits:
+                _write_edit(buf, model.edits[node.type_id])
+            else:
+                buf.append("255 ")
+            written.add(node.type_id)
+        buf.append(f"{node.index} ")
+        sch_file = find_schema_file(model.schema)
+        nt = None
+        if sch_file:
+            try:
+                nt = load_schema(sch_file).get(node.type_id)
+            except Exception:
+                nt = None
+        if nt is not None and nt.variable:
+            buf.append(f"{node.fields.get('@varlen', 0)} ")
+        for f in (nt.effective_fields() if nt else []):
+            _write_value(buf, f.type, node.fields.get(f.name), f.n_elts)
+    buf.append("1 0 ")
+    return "".join(buf)
 
 
 def parse_xt(data, schema=None) -> XtModel:

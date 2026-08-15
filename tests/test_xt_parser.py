@@ -127,6 +127,33 @@ class TestParseBinaryXt(unittest.TestCase):
         self.assertEqual(self.model.order[0].name, "BODY")
 
 
+class TestEncodeRoundtrip(unittest.TestCase):
+    def test_parse_encode_parse(self):
+        if not FIXTURE.exists():
+            self.skipTest("_block_bin.x_b fixture missing")
+        t = FIXTURE.read_text(encoding="ascii", errors="replace")
+        m = parasolid.parse_text_xt(t)
+        out = parasolid.encode_text_xt(m)
+        m2 = parasolid.parse_text_xt(out)
+        self.assertFalse(getattr(m2, "parse_error", False))
+        self.assertEqual(len(m2.order), len(m.order))
+        self.assertEqual(m2.order[0].fields, m.order[0].fields)
+        # 逐节点字段一致
+        for a, b in zip(m.order, m2.order):
+            self.assertEqual(a.name, b.name)
+            self.assertEqual(a.fields, b.fields)
+
+    def test_encode_facet_mesh_xtmodel(self):
+        if not FIXTURE.exists():
+            self.skipTest("_block_bin.x_b fixture missing")
+        m = parasolid.parse_text_xt(
+            FIXTURE.read_text(encoding="ascii", errors="replace"))
+        data = parasolid.encode_facet_mesh(m)
+        self.assertTrue(data.startswith(b"T"))
+        m2 = parasolid.parse_xt(data)
+        self.assertEqual(len(m2.order), len(m.order))
+
+
 class TestOldApi(unittest.TestCase):
     def test_parse_text_entities_still_works(self):
         p = BOX / "box.x_t"
