@@ -217,6 +217,72 @@ def _find_scflow_process():
     return pids
 
 
+def _instance_window_info(pid: int) -> dict:
+    """返回某 scFLOWpre 进程的主框架窗口可见性（尽力而为，无 pywinauto
+    时退化为仅 pid）。主框架类名为 ``Afx:...``（2025.2 实测）或
+    ``AfxMDIFrame``；隐藏窗口（Kicker 长驻实例常隐藏）``visible=False``。
+
+    ``findwindows.find_elements`` 返回 ``ElementInfo``，其窗口标题是
+    ``.name`` 属性、可见性是 ``.visible`` 属性（非 BaseWrapper 的
+    ``window_text()``/``is_visible()`` 方法）。
+    """
+    info: dict = {"pid": pid, "visible": False, "window_title": "",
+                  "window_handle": None}
+    try:
+        from pywinauto import findwindows
+    except Exception:  # noqa: BLE001
+        return info
+    try:
+        for w in findwindows.find_elements(visible_only=False):
+            if w.process_id != pid:
+                continue
+            cls = w.class_name or ""
+            if not (cls.startswith("Afx:") or cls.startswith("AfxMDIFrame")):
+                continue
+            info["window_title"] = w.name or ""
+            info["window_handle"] = w.handle
+            info["visible"] = bool(w.visible)
+            break
+    except Exception:  # noqa: BLE001
+        pass
+    return info
+
+
+def host_status() -> dict:
+    """探测宿主运行态（P6-5「宿主交互环境收敛」诊断口）。
+
+    返回 scFLOWpre 是否安装、Kicker 启动器位置、在跑实例及其主框架
+    窗口可见性。gui 后端需要「带可见主框架的 Kicker 实例」才能完整
+    驱动 File → Execute VBScript（隐藏窗口受 Win32 前台锁 + Kicker
+    长驻闲置态交互限制，见 REANALYSIS_2026-08-17 §7.4）；manual 后端
+    始终可用。实测（2026-08-17）：常驻实例由 svchost 拉起（headless），
+    主框架窗口 MainWindowHandle=0，``any_visible=False``。
+    """
+    exe = scflowpre_probe.find_program("scFLOWpre_Bx64net.exe")
+    kicker = scflowpre_probe.find_program("Kicker_Bx64.exe")
+    pids = _find_scflow_process()
+    instances = [_instance_window_info(pid) for pid in pids]
+    visible = [i for i in instances if i.get("visible")]
+    if visible:
+        hint = "gui 后端可自动驱动（存在可见主框架）"
+    elif pids:
+        hint = ("scFLOWpre 在跑但无可见主框架：请经 Kicker_Bx64.exe 启动"
+                "一个前台实例后再用 gui 后端（manual 后端始终可用）")
+    else:
+        hint = ("scFLOWpre 未运行：请经 Kicker_Bx64.exe 启动宿主"
+                "（直接拉起裸 exe 会因缺少 Kicker 许可注入而崩溃）")
+    return {
+        "installed": exe is not None,
+        "exe": str(exe) if exe else None,
+        "kicker_launcher": str(kicker) if kicker else None,
+        "running_pids": pids,
+        "instances": instances,
+        "any_visible": bool(visible),
+        "gui_ready": bool(visible),
+        "hint": hint,
+    }
+
+
 def _click_menu_item_real(frame, top_label: str, item_label: str) -> bool:
     """真实鼠标点击菜单项（2026-08-17 实机验证的配方）。
 
@@ -611,9 +677,9 @@ def _run_gui(vbs_path: Path, timeout: float, menu: dict) -> dict:
         # Kicker 启动宿主，再使用 gui 后端。
         return {
             "backend": "gui", "ok": False,
-            "error": "scFLOWpre 未运行：请先经 Kicker 正常启动 scFLOWpre，"
-                     "再选择 gui 后端（直接拉起裸 exe 会因缺少 Kicker 注入"
-                     "的许可状态而崩溃，见 DEV_SUMMARY §6.1/§6.4）",
+            "error": "scFLOWpre 未运行：请先经 Kicker_Bx64.exe 正常启动 "
+                     "scFLOWpre，再选择 gui 后端（直接拉起裸 exe 会因缺少 "
+                     "Kicker 注入的许可状态而崩溃，见 DEV_SUMMARY §6.1/§6.4）",
             "script": str(vbs_path),
         }
 
@@ -766,6 +832,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                     help="register the bridge COM server (HKCU)")
     ap.add_argument("--unregister", action="store_true",
                     help="unregister the bridge COM server")
+    ap.add_argument("--status", action="store_true",
+                    help="report host runtime status (instances + window "
+                         "visibility + Kicker launcher)")
     ap.add_argument("--write-vbs", metavar="OUT", help="write host VBS only")
     ap.add_argument("--run", action="store_true",
                     help="run the pipeline in the host")
@@ -781,6 +850,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         result = register_com()
     elif args.unregister:
         result = unregister_com()
+    elif args.status:
+        result = host_status()
     elif args.write_vbs:
         out = Path(args.write_vbs)
         result_path = out.with_name(out.stem + "_result.txt")

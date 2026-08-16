@@ -105,6 +105,18 @@ Solver/FPH 链路         ████░░░░░░░░░░░░░░
 > （P3-2）但无测试锁定；新增 `tests/test_oct_region_write.py`（3 项）
 > 验证「前序→后序→前序」互逆 + 「写回 ZIPOCTREE→重读」一致，Octree 域
 > 表面接线补上验证信用。
+>
+> **2026-08-17 BAM 分析模型补全**：`BamReport` 此前 docstring 承诺
+> Influence 参数随报告透传但未实现；新增 `influence_enable`/
+> `influence_targets` 字段 + `summary_lines` 输出 + `build_analysis_model`
+> 回填（`dd7ba88`，test_native_bam 22 项）。Influence 几何效应仍在宿主
+> 内核（原生仅记录配置，如实标注）。
+>
+> **2026-08-17 宿主自动化 COM/VBS 补全**：新增 `host_status()` 诊断口
+> （`--status`）探测安装/在跑实例/主框架可见性/Kicker 启动器；实测定位
+> Kicker_Bx64.exe 启动器 + 常驻实例 headless（svchost 拉起、窗口隐藏、
+> `gui_ready=False`）。gui 后端错误提示改为明确指向 Kicker_Bx64.exe。
+> （`test_host_pipeline` 16 项）
 ## 1. 总体判断
 
 项目呈**「底层强、上层弱」的哑铃结构**：
@@ -137,7 +149,7 @@ Solver/FPH 链路         ████░░░░░░░░░░░░░░
 |---|---|---|
 | BAM 分析模型 | 双轨：API 模式 100 行 BAM Wizard VBS（`pipeline_plan.BAM_WIZARD_ACTIONS`）已录制锁定并实机 err=0；原生 `native_bam.py` 对齐 Wizard 12/12 步（闭体识别/多重边/面匹配/微小面/Repair/CheckErrors/ridge），写端生产级 | 原生缺：多重实体**容差合并**（仅精确拓扑识别）、Influence 几何效应（仅记录 targets）、AF faceter 等价路径（不重剖分）、微小面坍缩为几何近似 |
 | Octree | API 参数链路（DeleteOctree+Initialize+SetOctType+SetMeshNum+SetMinSize）实测边长 0.001/单元约 1000 达标；本地 refine/merge 并行可用；区域 Size 按 main.xml 零件展开 | OCTREEREGION 后序写端 roundtrip 锁定（test_oct_region_write.py）；voxmesh 2:1 平衡/pairing 已补齐 |
-| 宿主自动化 | `pipeline_plan.LOCKED_COMMANDS` 主链路（open_project/begin_solid_edit/parts_control/build_analysis_model/generate_octree/generate_mesh/save_project）三份日志（box_com_diag1–3）err=0；Wrapping 录制锁定（79 参数对） | in-proc COM 桥（ScflowPipeline）**从未实机验证**（版本相关 RVA 0xD212B8 风险）；外部 COM 被 LocalServer 裸 exe 崩溃结构性阻塞（绕过 Kicker 必崩 0xE0000000）；edit_ops 全部 Ridge/Octant 操作未实测；batch_bridge 仅 dry-run |
+| 宿主自动化 | `pipeline_plan.LOCKED_COMMANDS` 主链路三份日志（box_com_diag1–3）err=0；Wrapping 360 步实机 err=0；in-proc COM 桥实机验证（RVA 0xD212B8 保留）；`host_status()` 诊断口定位 Kicker_Bx64.exe + 常驻实例 headless | Kicker 实例内 `context_ready=1 → set_handle>0` 完整管线待前台实例复跑（隐藏窗口受 Win32 前台锁）；edit_ops 全部 Ridge/Octant 操作未实测；batch_bridge 仅 dry-run |
 
 ### 2.3 差距层（MVP 或桩，10–30%）
 

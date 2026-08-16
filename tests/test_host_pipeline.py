@@ -163,5 +163,103 @@ class TestRegistration(unittest.TestCase):
                          ["STpre_Bx64net.Application.2025"])
 
 
+class TestHostStatus(unittest.TestCase):
+    """P6-5 宿主交互环境收敛：host_status 诊断口。"""
+
+    def _fake_program(self, name):
+        base = Path(r"C:\Program Files\Cradle\CradleCFD2025.2\Programs_x64")
+        return base / name
+
+    def test_host_status_visible_instance(self):
+        exe = self._fake_program("scFLOWpre_Bx64net.exe")
+        kicker = self._fake_program("Kicker_Bx64.exe")
+        with mock.patch.object(host_pipeline.scflowpre_probe, "find_program",
+                               side_effect=lambda n: {exe.name: exe,
+                                                      kicker.name: kicker}[n]), \
+             mock.patch.object(host_pipeline, "_find_scflow_process",
+                               return_value=[21240, 22468]), \
+             mock.patch.object(host_pipeline, "_instance_window_info",
+                               side_effect=[
+                                   {"pid": 21240, "visible": False,
+                                    "window_title": "", "window_handle": None},
+                                   {"pid": 22468, "visible": True,
+                                    "window_title": "scFLOWpre",
+                                    "window_handle": 123},
+                               ]):
+            status = host_pipeline.host_status()
+        self.assertTrue(status["installed"])
+        self.assertEqual(status["kicker_launcher"], str(kicker))
+        self.assertEqual(status["running_pids"], [21240, 22468])
+        self.assertTrue(status["any_visible"])
+        self.assertTrue(status["gui_ready"])
+        self.assertIn("gui 后端可自动驱动", status["hint"])
+
+    def test_host_status_no_visible_instance(self):
+        exe = self._fake_program("scFLOWpre_Bx64net.exe")
+        kicker = self._fake_program("Kicker_Bx64.exe")
+        with mock.patch.object(host_pipeline.scflowpre_probe, "find_program",
+                               side_effect=lambda n: {exe.name: exe,
+                                                      kicker.name: kicker}[n]), \
+             mock.patch.object(host_pipeline, "_find_scflow_process",
+                               return_value=[21240]), \
+             mock.patch.object(host_pipeline, "_instance_window_info",
+                               return_value={"pid": 21240, "visible": False,
+                                             "window_title": "",
+                                             "window_handle": None}):
+            status = host_pipeline.host_status()
+        self.assertFalse(status["any_visible"])
+        self.assertFalse(status["gui_ready"])
+        self.assertIn("Kicker_Bx64.exe", status["hint"])
+
+    def test_host_status_not_running(self):
+        exe = self._fake_program("scFLOWpre_Bx64net.exe")
+        kicker = self._fake_program("Kicker_Bx64.exe")
+        with mock.patch.object(host_pipeline.scflowpre_probe, "find_program",
+                               side_effect=lambda n: {exe.name: exe,
+                                                      kicker.name: kicker}[n]), \
+             mock.patch.object(host_pipeline, "_find_scflow_process",
+                               return_value=[]):
+            status = host_pipeline.host_status()
+        self.assertFalse(status["any_visible"])
+        self.assertIn("Kicker_Bx64.exe", status["hint"])
+        self.assertEqual(status["instances"], [])
+
+    def test_instance_window_info_matches_frame(self):
+        class _W:
+            process_id = 42
+            class_name = "Afx:00007FF683D10000:0"
+            name = "scFLOWpre"
+            handle = 12345
+            visible = True
+
+        class _Other:
+            process_id = 43
+            class_name = "#32770"
+            name = "dialog"
+            handle = 999
+            visible = False
+
+        with mock.patch("pywinauto.findwindows.find_elements",
+                        return_value=[_Other(), _W()]):
+            info = host_pipeline._instance_window_info(42)
+        self.assertTrue(info["visible"])
+        self.assertEqual(info["window_handle"], 12345)
+        self.assertEqual(info["window_title"], "scFLOWpre")
+
+    def test_instance_window_info_no_frame(self):
+        class _W:
+            process_id = 42
+            class_name = "#32770"
+            name = "dialog"
+            handle = 999
+            visible = True
+
+        with mock.patch("pywinauto.findwindows.find_elements",
+                        return_value=[_W()]):
+            info = host_pipeline._instance_window_info(42)
+        self.assertFalse(info["visible"])
+        self.assertIsNone(info["window_handle"])
+
+
 if __name__ == "__main__":
     unittest.main()

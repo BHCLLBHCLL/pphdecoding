@@ -1198,6 +1198,11 @@ cellular / lattice / frame 家族只能靠「命名约定 + 反汇编 + 经验�
 > 条件相关 53 测试全绿）。**未达「≥60」**：权威 XML 键仅样本（10）+ 求解
 > 设置树（9）可支撑；HTML 帮助页只有显示名（无 XML 键），自动关键词匹配
 > 误匹配率高已弃用；突破 60 需 P6-5 真实录制或扩充样本工程。
+>
+> **P6-3 / Octree / BAM / 宿主自动化（2026-08-17）已交付**：P6-3 网格
+> 量化对拍（`6a8624e`）+ Octree 后序写端 roundtrip（`8ea7ec7`）+ BAM
+> Influence 透传（`dd7ba88`）+ 宿主 `host_status()` 诊断口（Kicker_Bx64.exe
+> 定位 + 常驻实例 headless 实测）。
 
 1. **P6-1 条件字段级扩面**（最高 ROI）：~~165 注册类型 → ≥60 类型带
    字段 schema~~ → **已交付 10 → 25 类型**（见上），余量挂 P6-5 真实录制；
@@ -1211,8 +1216,10 @@ cellular / lattice / frame 家族只能靠「命名约定 + 反汇编 + 经验�
    （`test_oct_region_write.py` 3 项，互逆 + 写回重读一致）；
 4. **P6-4 几何 VBS 草稿清理**（pipeline_plan TODO 占位）；
 5. **P6-5 宿主交互环境收敛**（环境依赖，随时插入）：gui 后端框架
-   发现已修（`68891e1`：Afx:hex:0 类名 + 隐藏窗口枚举），待新鲜
-   Kicker 宿主窗口复跑 `context_ready=1 → set_handle>0`；
+   发现已修（`68891e1`：Afx:hex:0 类名 + 隐藏窗口枚举）；新增
+   `host_status()` 诊断口（`--status`，实测定位 Kicker_Bx64.exe 启动器
+   + 常驻实例 headless）；待新鲜 Kicker 前台实例复跑
+   `context_ready=1 → set_handle>0`；
 6. **P6-6 cellular-guise 子进程实验**（低优先）。
 
 Solver/FPH 维持合理延后。
