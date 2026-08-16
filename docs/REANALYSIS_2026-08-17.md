@@ -1,4 +1,4 @@
-# pphdecoding 全面重分析：代码状态 × STpre 功能完整度与深度（2026-08-17）
+# pphdecoding 全面重分析：代码状态 × scFLOWpre 功能完整度与深度（2026-08-17）
 
 > 日期：2026-08-17 ｜ 仓库：pphdecoding ｜ 对照：Cradle CFD 2025.2 scFLOWpre
 >
@@ -11,6 +11,28 @@
 > 关联：[function_gap_analysis.md](function_gap_analysis.md)（P0–P4 差距全量）、
 > [DEV_PLAN.md](DEV_PLAN.md) §12–§17、[docs/pskernel_user_guide.md](docs/pskernel_user_guide.md)
 > （内核调用手册）、[docs/V37_SIGNATURES.md](docs/V37_SIGNATURES.md)（V37 签名表）。
+
+---
+
+## 0.0 对照基准：scFLOWpre 功能面（明确比对对象）
+
+> 本文与 function_gap_analysis.md 的对照对象均为 **Cradle CFD 2025.2 的
+> scFLOWpre**（scFLOWpre_Bx64net.exe 前处理器；内部 DLL 名 SCTprime /
+> SCTpreCore 是组件名，产品名统一为 scFLOWpre，勿与 scSTREAM 的 STpre 混淆）。
+> 其功能面（本仓复刻/逼近的目标）如下：
+
+| 基准域 | scFLOWpre 功能面 |
+|---|---|
+| 工程容器 | .pph（ZIP + main.xml/xenv/js/prp/sctsnapshot + OCT/MDL/GPH/FLD 成员） |
+| 几何 | Parasolid B-rep（CAD 导入 x_t/x_b 等）+ CADthru 分面 + Solid-based/AF faceter |
+| 菜单 | File 13 / Edit 19+Ridge 3 / Select 26 / View 40 / Condition 顶层 15 + 向导 ~200 叶 / Execute 9 / Option 多页 |
+| 条件向导 | ~180–200 个 Cond* 类型（流/壁/热/辐射/多相/粒子/风扇/电池…） |
+| 网格 | Polyhedral（BAM 9 页向导）与 Voxel fitting 两条 mesher 路径；八叉树细化 |
+| 高级网格 | Wrapping / Discontinuous / Overset / 棱柱层 / 质量度量 |
+| 求解衔接 | scFLOWsolver 输入（FLD/FPH）、scPOST 后处理（FLD/iFLD 读取） |
+
+本仓策略（DEV_PLAN §0.4）：**格式层复刻 + 界面层逼近 + 宿主自动化驱动官方
+内核 + 自研 mesher 兼容产物**，明确不以「重写 scFLOWpre 内核」为目标。
 
 ---
 
@@ -128,7 +150,8 @@
 
 1. Wrapping 端到端实机执行（需 Kicker 宿主，沙箱外）；
 2. in-proc COM（ScflowPipeline）实机验证 RVA 0xD212B8 假设；
-3. sctsnapshot 记录流字节级重序列化 + SCTpre 实机验收（DEV_SUMMARY §13 遗留）。
+3. sctsnapshot 记录流字节级重序列化 + **scFLOWpre** 实机验收
+   （DEV_SUMMARY §13 遗留；内部组件名 SCTprime/SCTpreCore）。
 
 ---
 
