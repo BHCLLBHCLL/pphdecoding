@@ -969,6 +969,106 @@ class _PsSession:
             raise RuntimeError(f"PK_BODY_create_solid_sphere failed: {rc}")
         return int(body.value)
 
+    def create_solid_cone(self, radius: float, height: float,
+                          semi_angle: float, bottom=(0.0, 0.0, 0.0),
+                          direction=(0.0, 0.0, 1.0)) -> int:
+        """PK_BODY_create_solid_cone(radius, height, semi_angle, basis, &body)。
+
+        V35 签名（pskernel_abi 已映射）：radius(可 0=尖锥) / height(>0) /
+        semi_angle(>0, <Pi/2，锥半角，弧度)。basis_set.location = 底面圆心。
+        """
+        pk = self.pk
+        n = np.asarray(direction, dtype=np.float64)
+        nn = float(np.linalg.norm(n))
+        if nn < 1e-12:
+            raise ValueError("direction must be non-zero")
+        n = n / nn
+        seed = np.array([1.0, 0.0, 0.0])
+        if abs(float(n @ seed)) > 0.9:
+            seed = np.array([0.0, 1.0, 0.0])
+        ref = np.cross(n, np.cross(seed, n))
+        ref = ref / float(np.linalg.norm(ref))
+        ax = _AXIS2()
+        ax.location[:] = (float(bottom[0]), float(bottom[1]), float(bottom[2]))
+        ax.axis[:] = n
+        ax.ref_direction[:] = ref
+        body = c_int(0)
+        pk.PK_BODY_create_solid_cone.restype = c_int
+        pk.PK_BODY_create_solid_cone.argtypes = [
+            c_double, c_double, c_double, POINTER(_AXIS2), POINTER(c_int)]
+        rc = pk.PK_BODY_create_solid_cone(
+            float(radius), float(height), float(semi_angle),
+            byref(ax), byref(body))
+        if rc != 0 or not body.value:
+            raise RuntimeError(f"PK_BODY_create_solid_cone failed: {rc}")
+        return int(body.value)
+
+    def create_solid_torus(self, major_radius: float, minor_radius: float,
+                           centre=(0.0, 0.0, 0.0),
+                           axis=(0.0, 0.0, 1.0)) -> int:
+        """PK_BODY_create_solid_torus(major, minor, basis, &body)。
+
+        V35 签名：major_radius / minor_radius(>0)；basis_set.location =
+        环心，axis = 环轴（法向）。
+        """
+        pk = self.pk
+        n = np.asarray(axis, dtype=np.float64)
+        nn = float(np.linalg.norm(n))
+        if nn < 1e-12:
+            raise ValueError("axis must be non-zero")
+        n = n / nn
+        seed = np.array([1.0, 0.0, 0.0])
+        if abs(float(n @ seed)) > 0.9:
+            seed = np.array([0.0, 1.0, 0.0])
+        ref = np.cross(n, np.cross(seed, n))
+        ref = ref / float(np.linalg.norm(ref))
+        ax = _AXIS2()
+        ax.location[:] = (float(centre[0]), float(centre[1]), float(centre[2]))
+        ax.axis[:] = n
+        ax.ref_direction[:] = ref
+        body = c_int(0)
+        pk.PK_BODY_create_solid_torus.restype = c_int
+        pk.PK_BODY_create_solid_torus.argtypes = [
+            c_double, c_double, POINTER(_AXIS2), POINTER(c_int)]
+        rc = pk.PK_BODY_create_solid_torus(
+            float(major_radius), float(minor_radius), byref(ax), byref(body))
+        if rc != 0 or not body.value:
+            raise RuntimeError(f"PK_BODY_create_solid_torus failed: {rc}")
+        return int(body.value)
+
+    def create_sheet_rectangle(self, x: float, y: float,
+                               origin=(0.0, 0.0, 0.0),
+                               normal=(0.0, 0.0, 1.0)) -> int:
+        """PK_BODY_create_sheet_rectangle(x, y, basis, &body)。
+
+        V35 签名：x/y = 面内两维尺寸（>0）；basis_set.location = 矩形中心，
+        axis = 法向（垂直于矩形的轴）。返回 sheet body tag。
+        """
+        pk = self.pk
+        n = np.asarray(normal, dtype=np.float64)
+        nn = float(np.linalg.norm(n))
+        if nn < 1e-12:
+            raise ValueError("normal must be non-zero")
+        n = n / nn
+        seed = np.array([1.0, 0.0, 0.0])
+        if abs(float(n @ seed)) > 0.9:
+            seed = np.array([0.0, 1.0, 0.0])
+        ref = np.cross(n, np.cross(seed, n))
+        ref = ref / float(np.linalg.norm(ref))
+        ax = _AXIS2()
+        ax.location[:] = (float(origin[0]), float(origin[1]), float(origin[2]))
+        ax.axis[:] = n
+        ax.ref_direction[:] = ref
+        body = c_int(0)
+        pk.PK_BODY_create_sheet_rectangle.restype = c_int
+        pk.PK_BODY_create_sheet_rectangle.argtypes = [
+            c_double, c_double, POINTER(_AXIS2), POINTER(c_int)]
+        rc = pk.PK_BODY_create_sheet_rectangle(
+            float(x), float(y), byref(ax), byref(body))
+        if rc != 0 or not body.value:
+            raise RuntimeError(f"PK_BODY_create_sheet_rectangle failed: {rc}")
+        return int(body.value)
+
     # -- transform（编辑：平移 / 旋转 / 等比缩放 / 镜像）-----------------
     def _apply_transf_tag(self, body: int, tag: int) -> None:
         """把已创建的变换 tag 应用到 body（PK_BODY_transform_2）。"""

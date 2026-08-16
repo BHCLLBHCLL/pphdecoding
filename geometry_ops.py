@@ -335,6 +335,29 @@ def create_sphere(radius_m: float, centre_m=(0.0, 0.0, 0.0)) -> int:
     return session().create_solid_sphere(radius_m, centre_m)
 
 
+def create_cone(radius_m: float, height_m: float, semi_angle_rad: float,
+                bottom_m=(0.0, 0.0, 0.0),
+                direction=(0.0, 0.0, 1.0)) -> int:
+    """锥体（semi_angle_rad = 锥半角，弧度；radius_m 可为 0 = 尖锥）。"""
+    return session().create_solid_cone(radius_m, height_m, semi_angle_rad,
+                                       bottom_m, direction)
+
+
+def create_torus(major_radius_m: float, minor_radius_m: float,
+                 centre_m=(0.0, 0.0, 0.0),
+                 axis=(0.0, 0.0, 1.0)) -> int:
+    """环体（axis = 环轴/法向）。"""
+    return session().create_solid_torus(major_radius_m, minor_radius_m,
+                                        centre_m, axis)
+
+
+def create_rectangle_sheet(x_m: float, y_m: float,
+                           origin_m=(0.0, 0.0, 0.0),
+                           normal=(0.0, 0.0, 1.0)) -> int:
+    """矩形片体（normal = 垂直于矩形的轴）。"""
+    return session().create_sheet_rectangle(x_m, y_m, origin_m, normal)
+
+
 def translate_body(body: int, dx: float = 0.0, dy: float = 0.0,
                    dz: float = 0.0) -> None:
     session().transform_body(body, dx, dy, dz)
@@ -403,8 +426,8 @@ def transmit_body(tag: int) -> bytes:
 def execute_create_parts(draft: dict, unit: Optional[str] = "m") -> dict:
     """CreateParts 草稿 → {name, tag, tess, xt, fluid}（单位→米）。
 
-    支持 Cuboid / Cylinder / Sphere；Rectangle（sheet 件）暂走 VBS 宿主
-    路径，本函数抛 NotImplementedError。
+    支持 Cuboid / Cylinder / Sphere / Rectangle（sheet，PK_BODY_create_
+    sheet_rectangle 原生建片体）；不支持的形状抛 NotImplementedError。
     """
     shape = draft.get("shape") or "Cuboid"
     k = unit_factor(unit)
@@ -437,6 +460,22 @@ def execute_create_parts(draft: dict, unit: Optional[str] = "m") -> dict:
         if r <= 0:
             raise ValueError(f"Sphere radius must be positive: {r}")
         tag = sess.create_solid_sphere(r * k, tuple(v * k for v in c))
+    elif shape == "Rectangle":
+        # 垂直于 axis 的矩形片体：position = 矩形中心（GUI 语义），
+        # size 的两面内分量 = 矩形两维尺寸
+        axis = str(draft.get("axis") or "Z axis").strip().upper()[:1]
+        normal = {"X": (1.0, 0.0, 0.0), "Y": (0.0, 1.0, 0.0),
+                  "Z": (0.0, 0.0, 1.0)}.get(axis, (0.0, 0.0, 1.0))
+        pos = tuple(float(v) for v in draft.get("position") or (0, 0, 0))
+        size = tuple(float(v) for v in draft.get("size") or (1, 1, 1))
+        ai = {"X": 0, "Y": 1, "Z": 2}[axis]
+        inplane = [size[i] for i in range(3) if i != ai]
+        x_m, y_m = inplane[0] * k, inplane[1] * k
+        if x_m <= 0 or y_m <= 0:
+            raise ValueError(f"Rectangle in-plane size must be positive: "
+                             f"{inplane}")
+        tag = sess.create_sheet_rectangle(
+            x_m, y_m, tuple(v * k for v in pos), normal)
     else:
         raise NotImplementedError(
             f"shape {shape!r} 暂不支持原生创建（请走 scFLOWpre 宿主 VBS）")
