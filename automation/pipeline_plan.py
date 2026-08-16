@@ -770,6 +770,9 @@ def parts_control_actions(pc_sess: Optional[dict] = None) -> list[str]:
     录制证据：``Conditions_.SetPartsControl "Wrapping", False``（box_vbs:16-18）。
     Discontinuous / Overset 与对话框三项勾选一一对应。
 
+    P4-3 COM 实测锁定（box_com_diag4.log）：Discontinuous / Overset 的
+    True/False 四种调用在宿主内全部 err=0。
+
     宿主脚本里 ``Conditions_`` 不是隐式全局对象，须先
     ``Set Conditions_ = Doc_.GetConditions``（COM 实测 err=424 否则）。
     """
@@ -789,7 +792,9 @@ def parts_control_actions(pc_sess: Optional[dict] = None) -> list[str]:
     ]
 
 
-# Wrapping / Disc / Overset 导航项 → VBS 草稿（高层命令未在 v1–v4 录制锁定）
+# Wrapping / Disc / Overset 导航项 → VBS 草稿
+# （Wrapping 序列 v1–v4 录制锁定；Disc/Overset P4-3 COM 实测锁定，
+#   见 box_com_diag4.log：SetPartsControl 四种调用全部 err=0）
 _WRAP_OP_COMMENTS: dict[str, str] = {
     "begin_wrap": "Begin Wrapping — NativeBridge/SCTprime CreateWrap…",
     "cancel_wrap": "Cancel Wrapping",

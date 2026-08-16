@@ -232,7 +232,11 @@ def run_in_host(vbs_path: str | Path, *, backend: str = "manual",
 
 
 def locate_scflowpre() -> dict:
-    """自动定位 scFLOWpre 安装目录与 COM ProgID（供 GUI 日志/校验）。"""
+    """自动定位 scFLOWpre 安装目录与 COM ProgID（供 GUI 日志/校验）。
+
+    P4-3：附带 windtool VBS 背书的关联 ProgID（STpre / scConverter
+    S/D 变体）注册状态，供自动化桥选择几何转换等宿主入口。
+    """
     root = scflowpre_probe.find_install()
     if root is None:
         return {"installed": False, "progid": PROGID_HOST}
@@ -241,6 +245,9 @@ def locate_scflowpre() -> dict:
         "install_dir": str(root),
         "programs_dir": str(root / scflowpre_probe.PROGRAMS_SUBDIR),
         "progid": PROGID_HOST,
+        "related_progpids": {
+            k: v for k, v in
+            scflowpre_probe.probe_com_progpids().items() if k != PROGID_HOST},
     }
 
 

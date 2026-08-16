@@ -1,0 +1,10 @@
+GetApplication/GetDocument err=0 
+OpenProject box err=0 
+GetConditions err=0 
+SetPartsControl Discontinuous=True err=0 
+SaveProject box_disc err=0 
+SetPartsControl Discontinuous=False err=0 
+SetPartsControl Overset=True err=0 
+SaveProject box_overset err=0 
+SetPartsControl Overset=False(restore) err=0 
+CloseProject(no save) err=438 Object doesn't support this property or method

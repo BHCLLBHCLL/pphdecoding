@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import struct
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -40,6 +41,17 @@ KEY_EXES = [
     "SCTpref_Dx64net.exe",
     "scConverter_Dx64net.exe",
 ]
+
+# Cradle COM ProgID 目录（P4-3）：windtool\*.vbs 注释行背书的厂商 ProgID
+# （STtools.vbs:4、STpre_STsolver.vbs:7-8），非本仓自造。
+COM_PROGIDS: dict[str, str] = {
+    "scFLOWpre_Bx64net.Application.2025": "scFLOWpre 宿主（本仓 COM 桥入口）",
+    "STpre_Bx64net.Application.2025": "SC/Tetra 前处理宿主（STpre_STsolver.vbs）",
+    "scConverter_Sx64net.Application.2025": "几何转换 S 变体（STtools.vbs）",
+    "scConverter_Dx64net.Application.2025": "几何转换 D 变体",
+    "STsolver_Bx64net.Application.2025": "SC/Tetra 求解器（需另装 Solver 产品）",
+    "scPOST_Bx64net.Application.2025": "后处理（需另装 scPOST 产品）",
+}
 
 
 def find_install() -> Optional[Path]:
@@ -117,6 +129,28 @@ def pe_exports(path: str | Path) -> list[str]:
     return names
 
 
+def probe_com_progpids() -> dict[str, bool]:
+    """探测 :data:`COM_PROGIDS` 在 HKCR 的注册状态（只读）。
+
+    2026-08-16 实测：scFLOWpre / STpre / scConverter S/D 四项已注册；
+    STsolver / scPOST 需另装产品。仅在 Windows 可查，其余平台返回空。
+    """
+    if sys.platform != "win32":  # pragma: no cover
+        return {}
+    try:
+        import winreg
+    except ImportError:  # pragma: no cover
+        return {}
+    out: dict[str, bool] = {}
+    for progid in COM_PROGIDS:
+        try:
+            with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, progid):
+                out[progid] = True
+        except OSError:
+            out[progid] = False
+    return out
+
+
 def probe() -> dict:
     """汇总安装/API 探测结果。"""
     root = find_install()
@@ -138,6 +172,7 @@ def probe() -> dict:
         "programs_dir": str(base),
         "exes": exes,
         "dll_export_counts": dlls,
+        "com_progpids": probe_com_progpids(),
     }
 
 

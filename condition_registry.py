@@ -81,6 +81,12 @@ class ConditionType:
     count: int = 0
     regions: list[str] = field(default_factory=list)
     fields: dict[str, ConditionField] = field(default_factory=dict)
+    # 目录元数据（cond_types.json，二进制扫描 + HTML 帮助交叉核对）
+    category: str = ""
+    display: str = ""
+    help_file: str = ""
+    lineage: str = ""      # sample（pph 样本）/ gui / cmd
+    sample_count: int = 0
 
     def field_meta(self, skip: tuple[str, ...] = ("type", "name")) -> list[dict]:
         """按首次出现顺序返回字段元数据（通用表单生成输入）。
@@ -109,11 +115,18 @@ class ConditionType:
         return out
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "count": self.count,
             "regions": list(self.regions),
             "fields": {k: v.to_dict() for k, v in self.fields.items()},
         }
+        for k in ("category", "display", "help_file", "lineage"):
+            v = getattr(self, k)
+            if v:
+                d[k] = v
+        if self.sample_count:
+            d["sample"] = self.sample_count
+        return d
 
     @classmethod
     def from_dict(cls, name: str, data: dict) -> "ConditionType":
@@ -123,6 +136,11 @@ class ConditionType:
             regions=list(data.get("regions", [])),
             fields={k: ConditionField.from_dict(k, v)
                     for k, v in data.get("fields", {}).items()},
+            category=str(data.get("category", "")),
+            display=str(data.get("display", "")),
+            help_file=str(data.get("help", data.get("help_file", ""))),
+            lineage=str(data.get("lineage", "")),
+            sample_count=int(data.get("sample", 0)),
         )
 
 
@@ -132,6 +150,7 @@ class ConditionRegistry:
     def __init__(self, projects: Optional[list[str]] = None):
         self.projects: list[str] = projects or []
         self.types: dict[str, ConditionType] = {}
+        self.aliases: dict[str, str] = {}  # 旧式类型名 → Cond* 规范名
 
     @classmethod
     def from_archive(cls, arch: PphArchive,
@@ -239,6 +258,44 @@ class ConditionRegistry:
             if kf.count >= known.count:
                 issues.append(f"missing required field: {fname}")
         return {"type": tname, "issues": issues}
+
+    def resolve_alias(self, name: str) -> str:
+        r"""旧式类型名 → 规范 ``Cond*`` 名（无别名定义时原样返回）。"""
+        return self.aliases.get(name, name)
+
+    def by_category(self, cats: list[str]) -> list[str]:
+        """按目录 category 过滤类型名（含样本背书类型）。"""
+        want = set(cats)
+        return sorted(n for n, t in self.types.items()
+                      if t.category in want)
+
+    def merge_catalog(self, path: str | Path) -> int:
+        """合并 ``cond_types.json`` 目录（P4-1）。
+
+        样本已背书的类型回填 display/category/help 等元数据；
+        其余二进制扫描类型以空字段形态入库（通用表单仅 name+regions，
+        字段 schema 待更多样本补全）。返回新增类型数。
+        """
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        self.aliases.update(data.get("aliases", {}))
+        added = 0
+        for name, meta in data.get("types", {}).items():
+            t = self.types.get(name)
+            if t is None:
+                t = self.types[name] = ConditionType(name=name)
+                added += 1
+            if not t.category:
+                t.category = meta.get("category", "")
+            if not t.display:
+                t.display = meta.get("display", "")
+            if not t.help_file:
+                t.help_file = meta.get("help", "")
+            if not t.lineage:
+                t.lineage = "gui" if "GUI" in meta.get(
+                    "evidence", []) else meta.get("lineage", "cmd")
+            if meta.get("sample") and not t.sample_count:
+                t.sample_count = int(meta["sample"])
+        return added
 
 
 def registry_from_archives(archives: list[PphArchive]) -> ConditionRegistry:

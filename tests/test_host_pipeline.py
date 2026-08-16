@@ -141,11 +141,26 @@ class TestRegistration(unittest.TestCase):
         fake_root = Path(r"C:\Program Files\Cradle\CradleCFD2025.2")
         with mock.patch.object(host_pipeline.scflowpre_probe,
                                "find_install",
-                               return_value=fake_root):
+                               return_value=fake_root), \
+             mock.patch.object(
+                 host_pipeline.scflowpre_probe, "probe_com_progpids",
+                 return_value={
+                     "scFLOWpre_Bx64net.Application.2025": True,
+                     "scConverter_Sx64net.Application.2025": True,
+                     "STpre_Bx64net.Application.2025": False,
+                 }) as probe_pids:
             info = host_pipeline.locate_scflowpre()
         self.assertTrue(info["installed"])
         self.assertEqual(info["install_dir"], str(fake_root))
         self.assertTrue(info["programs_dir"].endswith("Programs_x64"))
+        # P4-3：关联 ProgID（scConverter / STpre 等）随探测结果返回
+        probe_pids.assert_called_once()
+        self.assertNotIn("scFLOWpre_Bx64net.Application.2025",
+                         info["related_progpids"])
+        self.assertTrue(info["related_progpids"]
+                        ["scConverter_Sx64net.Application.2025"])
+        self.assertFalse(info["related_progpids"]
+                         ["STpre_Bx64net.Application.2025"])
 
 
 if __name__ == "__main__":

@@ -67,6 +67,30 @@ class TestProbe(unittest.TestCase):
             self.assertIn("dll_export_counts", result)
             self.assertIn("scFLOWpreCmd_Bx64net.dll",
                           result["dll_export_counts"])
+            self.assertIn("com_progpids", result)
+
+
+class TestComProgids(unittest.TestCase):
+    """P4-3：COM ProgID 注册表探测。"""
+
+    def test_catalog_contains_windtool_progpids(self):
+        # windtool VBS 注释行背书的厂商 ProgID 必须在目录内
+        for pid in ("scConverter_Sx64net.Application.2025",
+                    "STpre_Bx64net.Application.2025",
+                    "scFLOWpre_Bx64net.Application.2025"):
+            self.assertIn(pid, probe_mod.COM_PROGIDS)
+
+    def test_probe_com_progpids_shape(self):
+        result = probe_mod.probe_com_progpids()
+        self.assertEqual(set(result), set(probe_mod.COM_PROGIDS))
+        self.assertTrue(all(isinstance(v, bool) for v in result.values()))
+
+    def test_probe_com_progpids_installed(self):
+        if probe_mod.find_install() is None:
+            self.skipTest("本机未安装 scFLOWpre")
+        result = probe_mod.probe_com_progpids()
+        # 2026-08-16 实测：scFLOWpre 宿主 ProgID 必须已注册
+        self.assertTrue(result["scFLOWpre_Bx64net.Application.2025"])
 
 
 if __name__ == "__main__":

@@ -86,6 +86,29 @@ def _extract_nyi_from_source(src: str) -> list[tuple[str, str]]:
     return items
 
 
+# P4-4 逐项评估结论（依据 Manuals\scFLOW\HTML\Pre_eng 帮助页，
+# 2026-08-16）。key 为菜单标签，value 为处置说明。
+EVALUATIONS: dict[str, str] = {
+    "Create Actran Files…":
+        "**产品边界**：仅 scFLOW2Actran Acoustic Session 可用"
+        "（帮助页原文），保持灰显。",
+    "Define Facet Part…":
+        "**暂缓**：依赖 facet(patch) 数据导入链路，查看器暂无 patch 导入。",
+    "Create Non-Facet/Closed Volume Part…":
+        "**暂缓**：坐标指定 part 表单可做，但需补 pph 写回语义验证。",
+    "Create 2D Sub-mesh Meshing Unit…":
+        "**暂缓**：2D sub-mesh 单元编辑属 mesher 深水区（且 patch/网格"
+        "导入/wrapping 场景不可用）。",
+    "Restore Closed Volume Data…":
+        "**产品边界**：仅 patch 导入 + Store and Open 再导入场景可用。",
+    "Fix Marked Element Shape":
+        "**暂缓**：选中单元形状修改（网格编辑），需单元级编辑器。",
+    "Spread Selected Face to Selected Edge":
+        "**暂缓**：仅 MDL 导入时有效；需边约束的面扩散算法"
+        "（可基于 polymesh 邻接后续实现）。",
+}
+
+
 def render_md(items: list[tuple[str, str]]) -> str:
     lines = [
         "# PPH Viewer NYI 菜单清单",
@@ -93,7 +116,7 @@ def render_md(items: list[tuple[str, str]]) -> str:
         "> 由 `tools/scan_nyi_menus.py` 自动生成。",
         "> 对应日志：`[…] not available in PPH viewer`（现已灰显）。",
         "",
-        f"合计 **{len(items)}** 项。",
+        f"合计 **{len(items)}** 项。P4-4 逐项评估见各条附注。",
         "",
     ]
     cur = None
@@ -102,7 +125,9 @@ def render_md(items: list[tuple[str, str]]) -> str:
             cur = menu
             lines.append(f"## {menu}")
             lines.append("")
-        lines.append(f"- {label}")
+        note = EVALUATIONS.get(label)
+        lines.append(f"- {label}"
+                     + (f" — {note}" if note else ""))
     lines.append("")
     return "\n".join(lines)
 

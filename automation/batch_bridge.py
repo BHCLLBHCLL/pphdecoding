@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-"""scFLOWpre 批处理桥（Windows CLI bat + SCTpreCLIHelper）。"""
+"""scFLOWpre 批处理桥（Windows CLI bat + SCTpreCLIHelper）。
+
+SCTpreCLIHelper 实测要点（2026-08-16，P4-3）：
+
+* 子命令：``confirm-arg`` / ``preproc-cmd`` / ``mpirun-path`` /
+  ``mpi-glo-opt`` / ``mpi-num-exe`` / ``mpi-loc-opt <n>`` /
+  ``exe-cmdline <n>`` / ``all-cmdline``；comb 变体另有 ``cmb-*`` 族。
+* 校验顺序：先文件存在、后扩展名；``.pph`` 一律 "not supported"
+  （该 CLI 面向 SC/Tetra 工程文件，如 ``.prj``），scFLOWpre 工程需在
+  宿主内另存为 CLI 兼容格式后方可批处理。
+"""
 
 from __future__ import annotations
 

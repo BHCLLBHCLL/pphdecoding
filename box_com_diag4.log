@@ -1,0 +1,7 @@
+GetApplication/GetDocument err=0 
+OpenProject err=0 
+GetConditions err=0 
+SetPartsControl Discontinuous=True err=0 
+SetPartsControl Overset=True err=0 
+SetPartsControl Discontinuous=False(restore) err=0 
+SetPartsControl Overset=False(restore) err=0 

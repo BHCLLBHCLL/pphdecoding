@@ -29,6 +29,7 @@ from PyQt5.QtWidgets import (
     QTabWidget, QTextEdit, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
+import condition_tree
 import pphxml
 
 
@@ -3934,6 +3935,47 @@ def _prp_lookup(prp, key: str) -> Optional[tuple]:
     return None
 
 
+_INSTALL_PRP_CACHE = None
+
+
+def install_prp_fallback():
+    """P4-2：安装目录属性库兜底（scFLOWpre.prp + STpre 双库合并）。
+
+    项目 pph 未带 main.prp（或为空）时，材料树用安装目录的完整库
+    （流体 ~130 + 固体 ~160）构建；形态与 :class:`PrpDatabase` 一致。
+    """
+    global _INSTALL_PRP_CACHE
+    if _INSTALL_PRP_CACHE is not None:
+        return _INSTALL_PRP_CACHE or None
+    try:
+        from material_lib import material_lib_cached
+        from pphxml import PrpDatabase
+        lib = material_lib_cached()
+        if lib is None:
+            _INSTALL_PRP_CACHE = False
+            return None
+        groups: dict[str, ET.Element] = {}
+        order: list[ET.Element] = []
+        for m in lib.property_entries():
+            g = groups.get(m.group)
+            if g is None:
+                g = groups[m.group] = ET.Element("group")
+                ET.SubElement(g, "key").text = m.group
+                order.append(g)
+            e = ET.SubElement(g, "entry")
+            ET.SubElement(e, "key").text = m.name
+            if m.kind:
+                ET.SubElement(e, "type").text = m.kind
+            for k, v in m.props.items():
+                ET.SubElement(e, k).text = v
+        db = PrpDatabase(groups=order)
+        _INSTALL_PRP_CACHE = db
+        return db
+    except Exception:  # noqa: BLE001
+        _INSTALL_PRP_CACHE = False
+        return None
+
+
 def _ui_attribute_from_property(prop: str, prp) -> str:
     prop = (prop or "").strip()
     if not prop or prop in ("@Obstacle", "Obstacle"):
@@ -4369,7 +4411,11 @@ class PartMaterialBody(_Body):
         d = self._part_tab if which == "part" else self._sheet_tab
         tree: QTreeWidget = d["mat_tree"]
         tree.clear()
+        # P4-2：项目 prp 缺失/为空时回退安装目录属性库（~130 流体
+        # + ~160 固体）
         prp = self._ctx.get("prp")
+        if prp is None or not prp.groups:
+            prp = install_prp_fallback()
         if which == "part":
             attr = self._current_part_attr()
             if attr == "Obstacle":
@@ -6071,6 +6117,186 @@ except Exception:  # noqa: BLE001
     pass
 
 
+class SolverSettingsDialog(QDialog):
+    """条件树驱动的求解设置编辑器（P4-0）。
+
+    数据来自厂商 ``scflow_main.xml`` 解析出的
+    ``schemas/condition_tree.json``（9 大类 / 10 section / 349 变量，
+    含英/日显示名、单位键、依赖条件）。左侧类别树选 section，右侧
+    渲染变量表单；值读写走 :mod:`condition_tree` 的 main.xml 绑定，
+    OK 后置 ``xml_dirty``。条件型 section 按实例（type=name）切换。
+    """
+
+    def __init__(self, ctx: dict, parent=None):
+        super().__init__(parent)
+        self._ctx = ctx
+        self.setWindowTitle("Solver Settings — condition tree")
+        self.setMinimumSize(800, 560)
+        self._tree = condition_tree.load_condition_tree() or {"categories": []}
+        xml = ctx.get("xml")
+        self._cond_root = xml.section("conditions") if xml is not None else None
+        self._sections: list[dict] = []
+        # (instance, variable, editor, old_value)
+        self._rows: list[tuple[ET.Element, dict, QLineEdit, str]] = []
+
+        outer = QVBoxLayout(self)
+        split = QHBoxLayout()
+
+        self.nav = QTreeWidget()
+        self.nav.setHeaderHidden(True)
+        self.nav.setMinimumWidth(230)
+        self.nav.setMaximumWidth(300)
+        for cat in self._tree.get("categories", []):
+            top = QTreeWidgetItem([cat.get("eng") or "?"])
+            top.setFlags(top.flags() & ~Qt.ItemIsSelectable)
+            self.nav.addTopLevelItem(top)
+            top.setExpanded(True)
+            for sec in cat.get("sections", []):
+                it = QTreeWidgetItem(
+                    [sec.get("eng") or sec.get("xml_name") or "(section)"])
+                it.setData(0, Qt.UserRole, len(self._sections))
+                self._sections.append(sec)
+                top.addChild(it)
+        split.addWidget(self.nav)
+
+        right = QVBoxLayout()
+        self.lab_section = QLabel("")
+        self.lab_section.setStyleSheet("font-weight:bold;")
+        self.cb_instance = QComboBox()
+        self.cb_instance.setVisible(False)
+        right.addWidget(self.lab_section)
+        right.addWidget(self.cb_instance)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        self.form_host = QWidget()
+        self.form = QFormLayout(self.form_host)
+        self.form.setLabelAlignment(Qt.AlignRight)
+        scroll.setWidget(self.form_host)
+        right.addWidget(scroll, 1)
+        split.addLayout(right, 1)
+        outer.addLayout(split, 1)
+
+        self.lab_note = _note(
+            "灰显行 = 当前实例未满足依赖条件（如 flow_io_type 模式）；"
+            "值留空不写回。")
+        outer.addWidget(self.lab_note)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self._on_ok)
+        bb.rejected.connect(self.reject)
+        outer.addWidget(bb)
+
+        self.nav.currentItemChanged.connect(self._on_nav)
+        self.cb_instance.currentIndexChanged.connect(self._render_section)
+        first_top = self.nav.topLevelItem(0)
+        if first_top is not None and first_top.childCount():
+            self.nav.setCurrentItem(first_top.child(0))
+
+    # ── section / 实例选择 ────────────────────────────────────────
+    def _current_section(self) -> Optional[dict]:
+        it = self.nav.currentItem()
+        if it is None:
+            return None
+        idx = it.data(0, Qt.UserRole)
+        return self._sections[idx] if isinstance(idx, int) else None
+
+    def _on_nav(self) -> None:
+        sec = self._current_section()
+        self._rows = []
+        self.cb_instance.blockSignals(True)
+        self.cb_instance.clear()
+        if sec is None:
+            self.lab_section.setText("")
+            self.cb_instance.setVisible(False)
+            self.cb_instance.blockSignals(False)
+            self._render_section()
+            return
+        insts = (condition_tree.section_instances(self._cond_root, sec)
+                 if self._cond_root is not None else [])
+        self.lab_section.setText(
+            f"{sec.get('eng')}   [{len(sec.get('variables', []))} vars]")
+        if sec.get("xml_name") == "condition":
+            self.cb_instance.setVisible(True)
+            if insts:
+                for el in insts:
+                    self.cb_instance.addItem(
+                        f"{el.findtext('type') or '?'} — "
+                        f"{el.findtext('name') or '?'}")
+            else:
+                self.cb_instance.addItem("(no matching condition instance)")
+        else:
+            self.cb_instance.setVisible(False)
+        self.cb_instance.blockSignals(False)
+        self._render_section()
+
+    def _current_instance(self) -> Optional[ET.Element]:
+        sec = self._current_section()
+        if sec is None or self._cond_root is None:
+            return None
+        insts = condition_tree.section_instances(self._cond_root, sec)
+        if not insts:
+            return None
+        if len(insts) == 1:
+            return insts[0]
+        i = self.cb_instance.currentIndex()
+        return insts[i] if 0 <= i < len(insts) else None
+
+    # ── 表单渲染 ──────────────────────────────────────────────────
+    def _render_section(self) -> None:
+        while self.form.count():
+            item = self.form.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+        self._rows = []
+        sec = self._current_section()
+        el = self._current_instance()
+        for v in (sec or {}).get("variables", []):
+            ed = QLineEdit()
+            unit_txt = ""
+            val = None
+            if el is not None:
+                val = condition_tree.read_variable(el, v)
+                # 单位子键当前值（展示用）
+                ukey = v.get("unit_key")
+                if ukey:
+                    tgt = el.find("/".join(v.get("path") or []))
+                    if tgt is not None and tgt.find(ukey) is not None:
+                        unit_txt = (tgt.find(ukey).text or "").strip()
+            ed.setText(val if val is not None else "")
+            roww = QWidget()
+            h = QHBoxLayout(roww)
+            h.setContentsMargins(0, 0, 0, 0)
+            h.addWidget(ed, 1)
+            if unit_txt:
+                lab_u = QLabel(unit_txt)
+                lab_u.setStyleSheet("color:#888;")
+                h.addWidget(lab_u)
+            active = (el is not None
+                      and condition_tree.variable_active(el, v))
+            ed.setEnabled(active)
+            if not active:
+                deps = "; ".join(
+                    "/".join(cd.get("keys") or []) + "=" + (cd.get("value") or "")
+                    for cd in v.get("conditions", []))
+                ed.setToolTip(f"requires: {deps}" if deps else "no instance")
+            label = v.get("display") or v["name"]
+            self.form.addRow(label, roww)
+            self._rows.append((el, v, ed, val or ""))
+
+    # ── 写回 ──────────────────────────────────────────────────────
+    def _on_ok(self) -> None:
+        changed = False
+        for el, v, ed, old in self._rows:
+            new = ed.text().strip()
+            if el is None or not new or new == old:
+                continue
+            if condition_tree.write_variable(el, v, new):
+                changed = True
+        if changed:
+            self._ctx["xml_dirty"] = True
+        self.accept()
+
+
 class ConditionsBody(_Body):
     """[Condition] – [Conditions] → Condition Wizard（对齐 scFLOWpre）。"""
 
@@ -6453,6 +6679,9 @@ class ConditionsBody(_Body):
             rv.addWidget(btn)
             page._ic_buttons.append(btn)  # type: ignore[attr-defined]
 
+        btn_more = QPushButton("More condition types...")
+        btn_more.clicked.connect(lambda: self._open_cond_catalog("initial"))
+        rv.addWidget(btn_more)
         btn_ex = QPushButton("Existing Conditions...")
         btn_ex.clicked.connect(
             lambda: self._show_existing("Initial Condition"))
@@ -6525,6 +6754,9 @@ class ConditionsBody(_Body):
                 self._open_flow_bc_editor(k, lab, new=True))
             bv.addWidget(btn)
             page._flow_btns[kind] = (btn, gate)  # type: ignore[attr-defined]
+        btn_more = QPushButton("More condition types...")
+        btn_more.clicked.connect(lambda: self._open_cond_catalog("bc_flow"))
+        bv.addWidget(btn_more)
         btn_ex = QPushButton("Existing Conditions...")
         btn_ex.clicked.connect(
             lambda: self._show_existing("Flow Boundary"))
@@ -6903,6 +7135,9 @@ class ConditionsBody(_Body):
                 self._open_wall_bc_editor(k, lab, new=True))
             bv.addWidget(btn)
             page._wall_btns[kind] = (btn, gate)  # type: ignore[attr-defined]
+        btn_more = QPushButton("More condition types...")
+        btn_more.clicked.connect(lambda: self._open_cond_catalog("bc_wall"))
+        bv.addWidget(btn_more)
         btn_ex = QPushButton("Existing Conditions...")
         btn_ex.clicked.connect(
             lambda: self._show_existing("Wall Boundary"))
@@ -7291,6 +7526,10 @@ class ConditionsBody(_Body):
                 self._open_thermal_bc_editor(k, lab, new=True))
             bv.addWidget(btn)
             page._thermal_btns[kind] = (btn, gate)  # type: ignore[attr-defined]
+        btn_more = QPushButton("More condition types...")
+        btn_more.clicked.connect(
+            lambda: self._open_cond_catalog("bc_thermal"))
+        bv.addWidget(btn_more)
         btn_ex = QPushButton("Existing Conditions...")
         btn_ex.clicked.connect(
             lambda: self._show_existing("Thermal Boundary"))
@@ -7321,8 +7560,18 @@ class ConditionsBody(_Body):
         self.cb_thermal_transfer = QComboBox()
         for t in ("Heat transfer", "Adiabatic", "User definition"):
             self.cb_thermal_transfer.addItem(t)
+        row_transfer = QHBoxLayout()
+        row_transfer.addWidget(self.cb_thermal_transfer, 1)
+        # P4-2：厂商换热系数预设（heattransfer_ENG.xml）
+        self.btn_thermal_preset = QPushButton("Preset...")
+        self.btn_thermal_preset.clicked.connect(self._pick_ht_preset)
+        row_transfer.addWidget(self.btn_thermal_preset)
+        w_transfer = QWidget()
+        lv_t = QVBoxLayout(w_transfer)
+        lv_t.setContentsMargins(0, 0, 0, 0)
+        lv_t.addLayout(row_transfer)
         form.addRow("Name", self.ed_thermal_name)
-        form.addRow("Transfer Type", self.cb_thermal_transfer)
+        form.addRow("Transfer Type", w_transfer)
         ev.addLayout(form)
         self.thermal_param_tree = QTreeWidget()
         self.thermal_param_tree.setHeaderLabels(
@@ -7332,11 +7581,15 @@ class ConditionsBody(_Body):
         ev.addWidget(self.thermal_param_tree, 1)
         row = QHBoxLayout()
         row.addStretch(1)
+        # P4-2：太阳辐射站点选择（solar_ENG.xml / SolarNEDO11.xml）
+        self.btn_thermal_location = QPushButton("Location...")
+        self.btn_thermal_location.clicked.connect(self._pick_solar_site)
         self.btn_thermal_back_new = QPushButton("<< New condition")
         self.btn_thermal_preview = QPushButton("Preview")
         self.btn_thermal_preview.setEnabled(False)
         self.btn_thermal_remove = QPushButton("Remove")
         self.btn_thermal_set = QPushButton("Set")
+        row.addWidget(self.btn_thermal_location)
         row.addWidget(self.btn_thermal_back_new)
         row.addWidget(self.btn_thermal_preview)
         row.addWidget(self.btn_thermal_remove)
@@ -7377,9 +7630,21 @@ class ConditionsBody(_Body):
                 ("Absorptivity", "0.5", "-"),
                 ("Reflectivity", "0.5", "-"),
                 ("Transmissivity", "0", "-"),
+                ("Location", "(not set)", "", ""),
             ):
-                tree.addTopLevelItem(
-                    QTreeWidgetItem([name, val, unit, ""]))
+                it = QTreeWidgetItem([name, val, unit, ""])
+                tree.addTopLevelItem(it)
+                if name == "Location":
+                    for cname, cval, cunit in (
+                        ("Site", "", ""),
+                        ("Latitude", "35.68", "deg"),
+                        ("Longitude", "139.77", "deg"),
+                        ("Standard meridian", "135", "deg"),
+                        ("Elevation", "0", "m"),
+                    ):
+                        it.addChild(QTreeWidgetItem(
+                            [cname, cval, cunit, ""]))
+                    it.setExpanded(True)
             return
         process = QTreeWidgetItem(
             ["Heat transfer process", "Heat conduction", "", ""])
@@ -7434,8 +7699,59 @@ class ConditionsBody(_Body):
         else:
             self.ed_thermal_name.setText(name or "WallHeat")
         self.cb_thermal_transfer.setEnabled(kind in ("heat", "porous"))
+        # P4-2：预设按钮仅换热模式；站点按钮仅太阳模式
+        self.btn_thermal_preset.setVisible(kind in ("heat", "porous"))
+        self.btn_thermal_location.setVisible(kind == "solar")
         self._rebuild_thermal_params()
         stack.setCurrentIndex(1)
+
+    def _pick_ht_preset(self) -> None:
+        """P4-2：换热系数预设 → 写入参数树。"""
+        dlg = HeatTransferPresetDialog(self)
+        if dlg.exec_() != QDialog.Accepted or dlg.preset is None:
+            return
+        p = dlg.preset
+        vals = (p.values + [0.0, 0.0])[:2]
+        tree = self.thermal_param_tree
+        for i in range(tree.topLevelItemCount()):
+            if tree.topLevelItem(i).text(0) == "Heat transfer coefficient":
+                tree.takeTopLevelItem(i)
+                break
+        node = QTreeWidgetItem([
+            "Heat transfer coefficient", p.subname or p.name, "W/m2K",
+            "preset"])
+        node.addChild(QTreeWidgetItem(
+            ["Coefficient (heat flow up)", f"{vals[0]:g}", "W/m2K", ""]))
+        node.addChild(QTreeWidgetItem(
+            ["Coefficient (heat flow down)", f"{vals[1]:g}", "W/m2K", ""]))
+        node.setExpanded(True)
+        tree.addTopLevelItem(node)
+
+    def _pick_solar_site(self) -> None:
+        """P4-2：太阳站点选择 → 写入 Location 节点。"""
+        dlg = SolarSiteDialog(self)
+        if dlg.exec_() != QDialog.Accepted or dlg.site is None:
+            return
+        name, lat, lon, std, elev = dlg.site
+        tree = self.thermal_param_tree
+        for i in range(tree.topLevelItemCount()):
+            it = tree.topLevelItem(i)
+            if it.text(0) != "Location":
+                continue
+            it.setText(1, name)
+            for j in range(it.childCount()):
+                ch = it.child(j)
+                if ch.text(0) == "Site":
+                    ch.setText(1, name)
+                elif ch.text(0) == "Latitude":
+                    ch.setText(1, f"{lat:g}")
+                elif ch.text(0) == "Longitude":
+                    ch.setText(1, f"{lon:g}")
+                elif ch.text(0) == "Standard meridian":
+                    ch.setText(1, f"{std:g}")
+                elif ch.text(0) == "Elevation":
+                    ch.setText(1, f"{elev:g}")
+            break
 
     def _selected_thermal_region(self) -> str:
         page = self._pages.get("bc_thermal")
@@ -7671,6 +7987,9 @@ class ConditionsBody(_Body):
                 self._apply_sym_bc(k, lab))
             bv.addWidget(btn)
             page._sym_btns[kind] = (btn, gate)  # type: ignore[attr-defined]
+        btn_more = QPushButton("More condition types...")
+        btn_more.clicked.connect(lambda: self._open_cond_catalog("bc_sym"))
+        bv.addWidget(btn_more)
         tip = QLabel(
             "* There is no parameter to set for a plain symmetrical "
             "boundary condition.\n"
@@ -8255,6 +8574,9 @@ class ConditionsBody(_Body):
                 self._open_source_bc_editor(k, lab, new=True))
             bv.addWidget(btn)
             page._source_btns[kind] = (btn, gate)  # type: ignore[attr-defined]
+        btn_more = QPushButton("More condition types...")
+        btn_more.clicked.connect(lambda: self._open_cond_catalog("source"))
+        bv.addWidget(btn_more)
         btn_ex = QPushButton("Existing Conditions...")
         btn_ex.clicked.connect(
             lambda: self._show_existing("Source Condition"))
@@ -10211,6 +10533,9 @@ class ConditionsBody(_Body):
                 self._open_optional(k, lab))
             rv.addWidget(btn)
             page._opt_btns.append(btn)  # type: ignore[attr-defined]
+        btn_more = QPushButton("Condition Type Catalog (all)...")
+        btn_more.clicked.connect(lambda: self._open_cond_catalog(""))
+        rv.addWidget(btn_more)
         tip = QLabel(
             "* Created Condition lists all user-defined conditions.\n"
             "* Table / Script / UDF / Mapping open the corresponding "
@@ -10333,6 +10658,11 @@ class ConditionsBody(_Body):
             self.apply(self._ctx)
 
     def _on_detailed(self) -> None:
+        # P4-0：条件树可用时打开全树编辑器；否则退回提示
+        if condition_tree.load_condition_tree() is not None:
+            dlg = SolverSettingsDialog(self._ctx, self)
+            dlg.exec_()
+            return
         key = self._current_key() or ""
         QMessageBox.information(
             self, "Detailed Settings",
@@ -10346,13 +10676,27 @@ class ConditionsBody(_Body):
             "Base temperature / pressure offsets are stored under "
             "basic_param/base_temp in main.xml.")
 
+    def _open_cond_catalog(self, page_key: str = "") -> None:
+        """打开条件类型目录（P4-1），按当前页过滤 category。"""
+        cats = _PAGE_CATEGORIES.get(page_key)
+        dlg = CondTypeCatalogDialog(self._ctx, cats, self)
+        dlg.exec_()
+
     def _stub_new_condition(self, page: str, kind: str) -> None:
         # P1-3：schema 里有该类型 → 打开通用表单并写 main.xml；
+        # P4-1：cond_types 目录命中（类型名/别名/显示名）亦可打开；
         # 否则维持旧的“仅记录 session”桩。
         ctype = None
         reg = condition_registry_cached()
         if reg is not None:
-            ctype = reg.get(kind)
+            ctype = reg.get(reg.resolve_alias(kind))
+            if ctype is None:
+                # 按显示名匹配（按钮标签是 UI 文案而非类型名）
+                kl = kind.strip().lower()
+                for t in reg.types.values():
+                    if (t.display or "").strip().lower() == kl:
+                        ctype = t
+                        break
         if ctype is None:
             sess = self._ctx.setdefault("session", {}).setdefault(
                 "conditions", {})
@@ -10364,7 +10708,7 @@ class ConditionsBody(_Body):
                 "No schema for this condition type; "
                 "full creation UI runs in scFLOWpre.")
             return
-        dlg = GenericCondBody(kind, ctype, self._ctx, self)
+        dlg = GenericCondBody(ctype.name, ctype, self._ctx, self)
         if dlg.exec_() != QDialog.Accepted:
             return
         data = dlg.result_cond()
@@ -13799,7 +14143,12 @@ _COND_REGISTRY_CACHE: Optional[object] = None
 
 
 def condition_registry_cached():
-    """从 ``schemas/*.json`` 构建并缓存 ConditionRegistry（无则 None）。"""
+    """从 ``schemas/*.json`` 构建并缓存 ConditionRegistry（无则 None）。
+
+    P4-1：额外合并 ``schemas/cond_types.json`` 目录（scFLOWpre 二进制
+    扫描的 ~165 个 Cond* 类型 + HTML 帮助页交叉核对元数据），使全部
+    已知类型可经通用表单新建。
+    """
     global _COND_REGISTRY_CACHE
     if _COND_REGISTRY_CACHE is not None:
         return _COND_REGISTRY_CACHE or None
@@ -13809,11 +14158,19 @@ def condition_registry_cached():
         schemas_dir = Path(__file__).resolve().parent / "schemas"
         items = []
         for p in sorted(schemas_dir.glob("*.json")):
+            if p.name in ("cond_types.json", "condition_tree.json",
+                          "cond_html_meta.json"):
+                continue  # 目录/树元数据走 merge_catalog，非样本 schema
             try:
                 items.append((load_schema_json(p), p.stem))
             except Exception:  # noqa: BLE001
                 continue
-        reg = ConditionRegistry.from_schemas(items) if items else None
+        reg = ConditionRegistry.from_schemas(items) if items \
+            else ConditionRegistry()
+        catalog = schemas_dir / "cond_types.json"
+        if catalog.is_file():
+            reg.merge_catalog(catalog)
+        reg = reg if reg.types else None
         _COND_REGISTRY_CACHE = reg or False
         return reg
     except Exception:  # noqa: BLE001
@@ -14010,6 +14367,358 @@ class GenericCondBody(QDialog):
             "regions": regions,
             "fields": fields,
         }
+
+
+# 页 key → 目录 category（CondTypeCatalogDialog 过滤用）
+_PAGE_CATEGORIES: dict[str, list[str]] = {
+    "initial": ["initial"],
+    "bc_flow": ["bc_flow"],
+    "bc_wall": ["bc_wall"],
+    "bc_thermal": ["bc_thermal", "radiation", "solar", "humidity"],
+    "bc_sym": ["bc_sym"],
+    "bc_periodic": ["bc_periodic"],
+    "source": ["source"],
+    "fixed": ["fixed"],
+}
+
+_CATEGORY_LABELS: list[tuple[str, str]] = [
+    ("initial", "Initial Condition"),
+    ("bc_flow", "Flow Boundary"),
+    ("bc_wall", "Wall Boundary"),
+    ("bc_thermal", "Thermal Boundary"),
+    ("bc_sym", "Symmetrical Boundary"),
+    ("bc_periodic", "Periodic Boundary"),
+    ("source", "Source Condition"),
+    ("fixed", "Fixed Condition"),
+    ("particle", "Particle / DEM"),
+    ("moving", "Moving Condition"),
+    ("porous", "Porous Media"),
+    ("humidity", "Humidity"),
+    ("radiation", "Radiation"),
+    ("solar", "Solar Radiation"),
+    ("reaction", "Reaction / Combustion"),
+    ("multiphase", "Multiphase / Free Surface"),
+    ("output", "Output"),
+    ("overset", "Overset Mesh"),
+    ("cosim", "Co-simulation (Nastran/Actran/FMI)"),
+    ("battery", "Battery"),
+    ("human", "Thermoregulation (JOS)"),
+    ("basic", "Basic / Solver"),
+    ("misc", "Miscellaneous"),
+]
+
+
+class CondTypeCatalogDialog(QDialog):
+    """条件类型目录（P4-1）：二进制扫描目录 → 通用表单入口。
+
+    左侧 category 分组树（含计数），右侧类型列表（显示名 + 类型名 +
+    字段 schema/样本背书标记 + 帮助页）；顶部搜索框过滤双击新建，
+    走 :class:`GenericCondBody`（样本类型带字段表单，目录类型仅
+    name+regions，字段待样本补全）。
+    """
+
+    def __init__(self, ctx: dict, categories: list[str] | None = None,
+                 parent=None):
+        super().__init__(parent)
+        self._ctx = ctx
+        self._cats = categories  # None = 全部
+        self._selected: str = ""
+        reg = condition_registry_cached()
+        self._reg = reg
+
+        self.setWindowTitle("Condition Type Catalog — scFLOWpre Cond*")
+        self.setMinimumSize(760, 520)
+
+        outer = QVBoxLayout(self)
+        top = QHBoxLayout()
+        self.ed_search = QLineEdit()
+        self.ed_search.setPlaceholderText(
+            "Filter by display name / type name ...")
+        self.ed_search.textChanged.connect(self._refilter)
+        top.addWidget(self.ed_search, 1)
+        outer.addLayout(top)
+
+        split = QHBoxLayout()
+        self.nav = QTreeWidget()
+        self.nav.setHeaderHidden(True)
+        self.nav.setMinimumWidth(220)
+        self.nav.setMaximumWidth(280)
+        split.addWidget(self.nav)
+
+        right = QVBoxLayout()
+        self.lst = QTreeWidget()
+        self.lst.setHeaderLabels(
+            ["Condition", "Type", "Fields", "Origin"])
+        self.lst.setRootIsDecorated(False)
+        self.lst.setAlternatingRowColors(True)
+        self.lst.setColumnWidth(0, 280)
+        self.lst.setColumnWidth(1, 220)
+        self.lst.itemDoubleClicked.connect(self._on_create)
+        right.addWidget(self.lst, 1)
+        self.lab_detail = QLabel("")
+        self.lab_detail.setWordWrap(True)
+        self.lab_detail.setStyleSheet("color:#555; font-size:11px;")
+        right.addWidget(self.lab_detail)
+        self.lst.currentItemChanged.connect(self._on_select)
+        split.addLayout(right, 1)
+        outer.addLayout(split, 1)
+
+        self.lab_note = _note(
+            "双击类型打开通用表单。Fields 列：样本 schema 数（空 = 目录"
+            "级，表单仅 name+regions）；Origin：sample=本地 pph 样本、"
+            "gui/cmd=scFLOWpre 二进制目录。")
+        outer.addWidget(self.lab_note)
+        bb = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText("New condition")
+        bb.accepted.connect(self._on_create_btn)
+        bb.rejected.connect(self.reject)
+        outer.addWidget(bb)
+
+        self._build_nav()
+
+    def _build_nav(self) -> None:
+        reg = self._reg
+        counts: dict[str, int] = {}
+        if reg is not None:
+            for t in reg.types.values():
+                counts[t.category or "misc"] = counts.get(
+                    t.category or "misc", 0) + 1
+        self.nav.clear()
+        all_item = QTreeWidgetItem(["All types"])
+        all_item.setData(0, Qt.UserRole, None)
+        self.nav.addTopLevelItem(all_item)
+        for key, label in _CATEGORY_LABELS:
+            n = counts.get(key, 0)
+            if self._cats is not None and key not in self._cats:
+                continue
+            if n == 0:
+                continue
+            it = QTreeWidgetItem([f"{label} ({n})"])
+            it.setData(0, Qt.UserRole, [key])
+            self.nav.addTopLevelItem(it)
+        self.nav.setCurrentItem(all_item)
+        self.nav.currentItemChanged.connect(lambda *_: self._refilter())
+        self._refilter()
+
+    def _refilter(self) -> None:
+        reg = self._reg
+        self.lst.clear()
+        if reg is None:
+            return
+        item = self.nav.currentItem()
+        cats = item.data(0, Qt.UserRole) if item else None
+        if cats is None and self._cats is not None:
+            cats = self._cats
+        text = self.ed_search.text().strip().lower()
+        for name in sorted(reg.types):
+            t = reg.types[name]
+            if cats is not None and (t.category or "misc") not in cats:
+                continue
+            disp = t.display or name
+            if text and text not in disp.lower() \
+                    and text not in name.lower():
+                continue
+            it = QTreeWidgetItem([
+                disp, name,
+                str(len(t.fields)) if t.fields else "—",
+                "sample" if t.sample_count or t.count else t.lineage,
+            ])
+            it.setData(0, Qt.UserRole, name)
+            self.lst.addTopLevelItem(it)
+
+    def _on_select(self, cur, _prev) -> None:
+        if cur is None:
+            self.lab_detail.setText("")
+            return
+        name = cur.data(0, Qt.UserRole)
+        t = self._reg.types.get(name) if self._reg else None
+        if t is None:
+            return
+        bits = []
+        if t.display and t.display != name:
+            bits.append(t.display)
+        if t.help_file:
+            bits.append(f"help: {t.help_file}")
+        if t.sample_count or t.count:
+            bits.append(f"samples: {t.sample_count or t.count}")
+        self.lab_detail.setText("  |  ".join(bits))
+
+    def _on_create(self, *_args) -> None:
+        it = self.lst.currentItem()
+        if it is None:
+            return
+        name = it.data(0, Qt.UserRole)
+        ctype = self._reg.types.get(name) if self._reg else None
+        if ctype is None:
+            return
+        dlg = GenericCondBody(name, ctype, self._ctx, self)
+        if dlg.exec_() != QDialog.Accepted:
+            return
+        data = dlg.result_cond()
+        if write_condition_to_xml(self._ctx, ctype, data):
+            sess = self._ctx.setdefault("session", {}).setdefault(
+                "conditions", {})
+            sess.setdefault("created", []).append({
+                "page": "catalog", "kind": name, "name": data["name"],
+                "written": True,
+            })
+            nav = self.parent()
+            fill = getattr(nav, "_fill_condition_lists", None)
+            if fill is not None:
+                fill()
+            self.accept()
+
+    def _on_create_btn(self) -> None:
+        if self.lst.currentItem() is None:
+            QMessageBox.information(
+                self, "Condition Type Catalog", "请先选择一个条件类型。")
+            return
+        self._on_create()
+
+
+class HeatTransferPresetDialog(QDialog):
+    """换热系数预设选择器（P4-2，heattransfer_ENG.xml）。
+
+    厂商预设（外壁 / 屋顶 / 地板 / 室内等 20 组，两向热流系数），
+    双击返回 :class:`HeatTransferPreset`。
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.preset = None
+        self.setWindowTitle("Heat Transfer Coefficient Presets")
+        self.setMinimumSize(520, 420)
+        from material_lib import material_lib_cached
+        lib = material_lib_cached()
+
+        v = QVBoxLayout(self)
+        self.lst = QTreeWidget()
+        self.lst.setHeaderLabels(
+            ["Category", "Surface", "Up [W/m2K]", "Down [W/m2K]"])
+        self.lst.setRootIsDecorated(False)
+        self.lst.setAlternatingRowColors(True)
+        self.lst.itemDoubleClicked.connect(self._pick)
+        v.addWidget(self.lst, 1)
+        labels = {1: "Wall (vertical)", 2: "Floor / horizontal",
+                  3: "Indoor", 4: "Other"}
+        if lib is not None:
+            for p in lib.heat_transfer_presets():
+                vals = p.values + [0.0, 0.0]
+                it = QTreeWidgetItem([
+                    labels.get(p.type_id, str(p.type_id)),
+                    p.subname or p.name,
+                    f"{vals[0]:g}", f"{vals[1]:g}",
+                ])
+                it.setData(0, Qt.UserRole, p)
+                self.lst.addTopLevelItem(it)
+        v.addWidget(_note("双击应用预设；来源 heattransfer_ENG.xml"
+                          "（scSTREAM 建筑空调手册值）。"))
+
+    def _pick(self, item, *_a):
+        self.preset = item.data(0, Qt.UserRole)
+        self.accept()
+
+
+class SolarSiteDialog(QDialog):
+    """太阳辐射站点选择器（P4-2：solar_ENG.xml + SolarNEDO11.xml）。
+
+    世界城市（~10）+ 日本 NEDO 气象站点（837，按都道府县分组）；
+    双击返回 ``(name, latitude, longitude, standard, elevation)``。
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.site = None
+        self.setWindowTitle("Solar Location — world cities / NEDO")
+        self.setMinimumSize(600, 480)
+        from material_lib import material_lib_cached
+        lib = material_lib_cached()
+
+        v = QVBoxLayout(self)
+        self.ed_search = QLineEdit()
+        self.ed_search.setPlaceholderText("Filter sites ...")
+        v.addWidget(self.ed_search)
+        self.tabs = QTabWidget()
+        v.addWidget(self.tabs, 1)
+
+        self.lst_world = QTreeWidget()
+        self._fill_world(lib)
+        self.tabs.addTab(self.lst_world, "World cities")
+        self.lst_nedo = QTreeWidget()
+        self._fill_nedo(lib)
+        self.tabs.addTab(self.lst_nedo, "NEDO (Japan)")
+        for lst in (self.lst_world, self.lst_nedo):
+            lst.itemDoubleClicked.connect(self._pick)
+        self.ed_search.textChanged.connect(self._filter)
+        v.addWidget(_note("双击选用站点；来源 solar_ENG.xml / "
+                          "SolarNEDO11.xml（MONSOLA-11, METPV-11）。"))
+
+    @staticmethod
+    def _columns() -> list[str]:
+        return ["Site", "Latitude [deg]", "Longitude [deg]",
+                "Standard [deg]", "Elevation [m]"]
+
+    def _fill_world(self, lib):
+        self.lst_world.setHeaderLabels(self._columns())
+        self.lst_world.setRootIsDecorated(False)
+        if lib is None:
+            return
+        for loc in lib.solar_locations():
+            it = QTreeWidgetItem([
+                loc.name, f"{loc.latitude:g}", f"{loc.longitude:g}",
+                f"{loc.standard:g}", ""])
+            it.setData(0, Qt.UserRole,
+                       (loc.name, loc.latitude, loc.longitude,
+                        loc.standard, 0.0))
+            self.lst_world.addTopLevelItem(it)
+
+    def _fill_nedo(self, lib):
+        self.lst_nedo.setHeaderLabels(self._columns())
+        if lib is None:
+            return
+        cats: dict[str, QTreeWidgetItem] = {}
+        for s in lib.nedo_sites():
+            top = cats.get(s.category)
+            if top is None:
+                top = cats[s.category] = QTreeWidgetItem(
+                    [f"{s.category} / {s.category_jpn}"])
+                top.setFlags(top.flags() & ~Qt.ItemIsSelectable)
+                self.lst_nedo.addTopLevelItem(top)
+            label = s.name or s.name_jpn
+            it = QTreeWidgetItem([
+                f"{label} ({s.no})", f"{s.latitude:g}",
+                f"{s.longitude:g}", f"{s.standard:g}",
+                f"{s.elevation:g}",
+            ])
+            it.setData(0, Qt.UserRole,
+                       (label, s.latitude, s.longitude, s.standard,
+                        s.elevation))
+            top.addChild(it)
+
+    def _filter(self, text: str) -> None:
+        t = text.strip().lower()
+        for lst in (self.lst_world, self.lst_nedo):
+            for i in range(lst.topLevelItemCount()):
+                top = lst.topLevelItem(i)
+                if top.childCount() == 0:
+                    top.setHidden(bool(t) and t not in
+                                  top.text(0).lower())
+                    continue
+                nvis = 0
+                for j in range(top.childCount()):
+                    ch = top.child(j)
+                    hide = bool(t) and t not in ch.text(0).lower()
+                    ch.setHidden(hide)
+                    nvis += 0 if hide else 1
+                top.setHidden(nvis == 0)
+
+    def _pick(self, item, *_a):
+        data = item.data(0, Qt.UserRole)
+        if data is None:
+            return
+        self.site = data
+        self.accept()
 
 
 def write_condition_to_xml(ctx: dict, ctype, data: dict) -> bool:

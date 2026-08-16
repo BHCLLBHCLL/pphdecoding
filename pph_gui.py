@@ -4088,7 +4088,10 @@ class PphViewer(QMainWindow):
         add_act(m, "Select by Element Number…",
                 self._select_by_element_number, key="sel_by_elem",
                 tip="输入 MDL 面编号列表（支持区间）过滤显示")
-        add_act(m, "Select Elements by List File…", key="sel_by_list")
+        add_act(m, "Select Elements by List File…",
+                self._select_by_list_file, key="sel_by_list",
+                tip="读取求解器稳定化功能输出的单元列表文件，选中对应"
+                    " MDL 面（复用 Select by Element Number 解析）")
         add_act(m, "Select Faces That Have the Same Area",
                 self._select_same_area, key="sel_same_area",
                 tip="以 Mouse Pick 拾取的面为参考，选中同面积的全部面")
@@ -4980,6 +4983,50 @@ class PphViewer(QMainWindow):
         self.show_page("draw")
         self.view3d.set_model_filter({"kind": "faces", "values": valid})
         self.log(f"Select by Element Number [{g}] — {len(valid)} faces"
+                 + (f"，忽略 {dropped} 个越界编号" if dropped else ""))
+
+    def _select_by_list_file(self) -> None:
+        """Select Elements by List File（P4-4）：列表文件 → 面过滤。
+
+        scFLOWpre 语义：读取求解器稳定化（Measures Against Divergence）
+        输出的单元列表文件并选中。列表文件为自由文本（编号 + 可选区间），
+        直接复用 :meth:`_parse_element_numbers`。
+        """
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Elements by List File", "",
+            "List files (*.txt *.dat *.lis *.list);;All files (*.*)")
+        if not path:
+            return
+        try:
+            text = Path(path).read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            QMessageBox.warning(self, "Select Elements by List File",
+                                f"无法读取文件：{exc}")
+            return
+        ids = self._parse_element_numbers(text)
+        if not ids:
+            QMessageBox.warning(
+                self, "Select Elements by List File",
+                f"未在 {Path(path).name} 中解析出任何编号。")
+            return
+        g, model = self._current_mdl_model()
+        n = model.n_faces if model is not None else 0
+        if n == 0:
+            QMessageBox.warning(
+                self, "Select Elements by List File",
+                f"组 {g or '(?)'} 无 MDL 几何。请先生成/载入 MDL。")
+            return
+        valid = sorted({i for i in ids if 0 <= i < n})
+        dropped = len(set(ids)) - len(valid)
+        if not valid:
+            QMessageBox.warning(
+                self, "Select Elements by List File",
+                f"编号全部越界（有效范围 0..{n - 1}）。")
+            return
+        self.show_page("draw")
+        self.view3d.set_model_filter({"kind": "faces", "values": valid})
+        self.log(f"Select Elements by List File [{g}] {Path(path).name} — "
+                 f"{len(valid)} faces"
                  + (f"，忽略 {dropped} 个越界编号" if dropped else ""))
 
     def _select_same_area(self) -> None:
