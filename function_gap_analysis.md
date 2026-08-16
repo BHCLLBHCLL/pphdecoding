@@ -75,6 +75,13 @@ Solver/FPH 链路         ████░░░░░░░░░░░░░░
 > 45→55（P5-1 cone/torus/rectangle-sheet 原生接线）、自研网格 45→55
 > （P5-4 质量报告入 CLI + 2:1 平衡独立校验 + 面区域映射实测）、条件体系
 > 55→60（P5-3 region 多 face 引用）。原差距区仅剩 Solver/FPH 合理延后。
+>
+> **2026-08-17「历史环境阻塞标注」回填验证**（细节见 REANALYSIS §6.2）：
+> test_native_bridge::real 本机 7/7 全绿；`-vbs` CLI 实测不存在（cli 后端
+> 改显式 unsupported）；写端回填实测 **1 项负面发现**——宿主 face region
+> 注册表权威在 MDL 成员而非 main.xml，P5-3 GUI region 写端需补 MDL
+> region 名表写端才宿主生效（新增待办）；Kicker 实例内管线验证的 gui
+> 配方已通到 Execute 步，结果证据如实记为待补。
 ## 1. 总体判断
 
 项目呈**「底层强、上层弱」的哑铃结构**：

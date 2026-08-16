@@ -217,6 +217,197 @@ def _find_scflow_process():
     return pids
 
 
+def _click_menu_item_real(frame, top_label: str, item_label: str) -> bool:
+    """真实鼠标点击菜单项（2026-08-17 实机验证的配方）。
+
+    前置：调用方应先 AttachThreadInput + ShowWindow + SetForegroundWindow
+    让主框架可见且前台。GetMenuBarInfo 的 rcBar 是**屏幕坐标**；弹窗项
+    坐标用 GetMenuItemRect(NULL, hsub, idx)（也是屏幕坐标）。
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+
+    class _RECT(ctypes.Structure):
+        _fields_ = [('left', wintypes.LONG), ('top', wintypes.LONG),
+                    ('right', wintypes.LONG), ('bottom', wintypes.LONG)]
+
+    class _MENUBARINFO(ctypes.Structure):
+        _fields_ = [('cbSize', wintypes.DWORD), ('rcBar', _RECT),
+                    ('hMenu', wintypes.HMENU), ('hwndMenu', wintypes.HWND),
+                    ('fBarFocused', wintypes.BOOL),
+                    ('fFocused', wintypes.BOOL)]
+
+    user32.GetMenuBarInfo.restype = wintypes.BOOL
+    user32.GetMenuBarInfo.argtypes = [wintypes.HWND, wintypes.LONG,
+                                      wintypes.LONG,
+                                      ctypes.POINTER(_MENUBARINFO)]
+    user32.GetMenuItemRect.restype = wintypes.BOOL
+    user32.GetMenuItemRect.argtypes = [wintypes.HWND, wintypes.HMENU,
+                                       wintypes.UINT, ctypes.POINTER(_RECT)]
+    user32.GetMenu.restype = wintypes.HMENU
+    user32.GetMenu.argtypes = [wintypes.HWND]
+    user32.GetSubMenu.restype = wintypes.HMENU
+    user32.GetSubMenu.argtypes = [wintypes.HMENU, ctypes.c_int]
+    user32.GetMenuItemCount.restype = ctypes.c_int
+    user32.GetMenuItemCount.argtypes = [wintypes.HMENU]
+    user32.GetMenuStringW.restype = ctypes.c_int
+    user32.GetMenuStringW.argtypes = [wintypes.HMENU, wintypes.UINT,
+                                      wintypes.LPWSTR, ctypes.c_int,
+                                      wintypes.UINT]
+    user32.SetCursorPos.restype = wintypes.BOOL
+    user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+    user32.mouse_event.restype = None
+    user32.mouse_event.argtypes = [wintypes.DWORD, wintypes.DWORD,
+                                   wintypes.DWORD, wintypes.DWORD,
+                                   ctypes.c_void_p]
+
+    def _click(x: int, y: int) -> None:
+        user32.SetCursorPos(x, y)
+        time.sleep(0.25)
+        user32.mouse_event(2, 0, 0, 0, None)   # LEFTDOWN
+        time.sleep(0.05)
+        user32.mouse_event(4, 0, 0, 0, None)   # LEFTUP
+
+    # 前台恢复（AttachThreadInput 突破后台进程前台锁）
+    try:
+        k32 = ctypes.windll.kernel32
+        k32.GetCurrentThreadId.restype = wintypes.DWORD
+        user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+        user32.GetWindowThreadProcessId.argtypes = [
+            wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+        user32.AttachThreadInput.restype = wintypes.BOOL
+        fg = user32.GetForegroundWindow()
+        t_fg = user32.GetWindowThreadProcessId(fg, None)
+        t_tgt = user32.GetWindowThreadProcessId(frame.handle, None)
+        t_me = k32.GetCurrentThreadId()
+        user32.AttachThreadInput(t_me, t_fg, True)
+        user32.AttachThreadInput(t_me, t_tgt, True)
+        user32.ShowWindow(frame.handle, 9)          # SW_RESTORE
+        user32.SetForegroundWindow(frame.handle)
+        user32.BringWindowToTop(frame.handle)
+        user32.AttachThreadInput(t_me, t_fg, False)
+        user32.AttachThreadInput(t_me, t_tgt, False)
+        time.sleep(0.6)
+    except Exception:  # noqa: BLE001
+        pass
+
+    hmenu = user32.GetMenu(frame.handle)
+    if not hmenu:
+        return False
+    sub = None
+    top_idx = -1
+    for i in range(user32.GetMenuItemCount(hmenu)):
+        buf = ctypes.create_unicode_buffer(256)
+        if user32.GetMenuStringW(hmenu, i, buf, 256, 0x400) > 0:
+            if buf.value.replace('&', '').lower() == top_label.lower():
+                sub = user32.GetSubMenu(hmenu, i)
+                top_idx = i
+                break
+    if sub is None:
+        return False
+    # 1) 点击菜单栏上的 File（rcBar 已是屏幕坐标，勿加窗口偏移）
+    mbi = _MENUBARINFO()
+    mbi.cbSize = ctypes.sizeof(_MENUBARINFO)
+    if not user32.GetMenuBarInfo(frame.handle, 0xFFFFFFFD, top_idx,
+                                 ctypes.byref(mbi)):
+        return False
+    _click((mbi.rcBar.left + mbi.rcBar.right) // 2,
+           (mbi.rcBar.top + mbi.rcBar.bottom) // 2)
+    time.sleep(1.0)
+    # 2) 找弹窗菜单窗口（#32768）并点击目标项
+    from pywinauto import findwindows
+    popup = None
+    deadline = time.time() + 5
+    while time.time() < deadline and popup is None:
+        for w in findwindows.find_elements(visible_only=False):
+            if w.process_id == frame.process_id and w.class_name == '#32768':
+                popup = w
+                break
+        time.sleep(0.3)
+    if popup is None:
+        return False
+    item_idx = -1
+    for j in range(user32.GetMenuItemCount(sub)):
+        buf = ctypes.create_unicode_buffer(256)
+        if user32.GetMenuStringW(sub, j, buf, 256, 0x400) > 0:
+            if buf.value.replace('&', '').replace('...', '').lower() == \
+                    item_label.replace('...', '').lower():
+                item_idx = j
+                break
+    if item_idx < 0:
+        return False
+    rc = _RECT()
+    if not user32.GetMenuItemRect(None, sub, item_idx, ctypes.byref(rc)) \
+            or rc.right <= rc.left:
+        return False
+    _click((rc.left + rc.right) // 2, (rc.top + rc.bottom) // 2)
+    return True
+
+
+def _fill_execute_vbs_dialog(dlg_handle, vbs_path: Path) -> bool:
+    """填充 "Specify VBScript or filename" 对话框并点击 Execute。
+
+    优先 UIA（ValuePattern.SetValue + Invoke）——普通 Win32 消息
+    （WM_SETTEXT/WM_CHAR/EM_REPLACESEL）实测被该自绘控件忽略；
+    失败时回退经典消息路径。返回是否已提交。
+    """
+    vbs_path = Path(vbs_path)
+    # 1) UIA 主路径
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+        user32.GetWindowThreadProcessId.argtypes = [
+            wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+        dlg_pid = user32.GetWindowThreadProcessId(dlg_handle, None)
+        from pywinauto import Application
+        app = Application(backend='uia').connect(process=dlg_pid,
+                                                 timeout=15)
+        dlg = app.window(handle=dlg_handle)
+        edit = dlg.child_window(control_type='Edit')
+        edit.wrapper_object().iface_value.SetValue(str(vbs_path))
+        time.sleep(0.3)
+        btn = None
+        for cand in dlg.descendants(control_type='Button'):
+            if 'Execute' in (cand.window_text() or ''):
+                btn = cand
+                break
+        if btn is None:
+            for cand in dlg.descendants(control_type='Button'):
+                if 'Open' in (cand.window_text() or '') or 'OK' in (
+                        cand.window_text() or ''):
+                    btn = cand
+                    break
+        if btn is None:
+            return False
+        btn.wrapper_object().iface_invoke.Invoke()
+        return True
+    except Exception:  # noqa: BLE001
+        pass
+    # 2) 经典 Win32 消息回退
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    user32.GetDlgItem.restype = wintypes.HWND
+    user32.GetDlgItem.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.SendMessageW.restype = wintypes.LPARAM
+    user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT,
+                                    wintypes.WPARAM, wintypes.LPARAM]
+    edit = user32.GetDlgItem(dlg_handle, 0x480)
+    if not edit:
+        return False
+    user32.SendMessageW(edit, 0x000C, 0, str(vbs_path))
+    for btn_id in (1, 0x1):
+        btn = user32.GetDlgItem(dlg_handle, btn_id)
+        if btn:
+            user32.SendMessageW(btn, 0x00F5, 0, 0)
+            return True
+    return False
+
+
 def _post_menu_command(frame, top_label: str, item_label: str) -> bool:
     """按菜单文本定位命令 ID 并向主框架 PostMessage WM_COMMAND。
 
@@ -460,19 +651,23 @@ def _run_gui(vbs_path: Path, timeout: float, menu: dict) -> dict:
 
     file_menu = menu.get("file", "File")
     execute_item = menu.get("execute_vbs", "Execute VBScript...")
-    # 菜单点击优先走 WM_COMMAND：宿主主框架常被最小化/隐藏，且后台进程
-    # 无法 SetForegroundWindow（Win32 前台锁），menu_select 的可见性检查
-    # 会失败。WM_COMMAND 对隐藏窗口同样生效。
-    if not _post_menu_command(frame, file_menu, execute_item):
-        try:
-            frame.menu_select(f"{file_menu}->{execute_item}")
-        except Exception as exc:  # noqa: BLE001
-            return {"backend": "gui", "ok": False,
-                    "error": f"menu failed: {exc}",
-                    "started_by_us": started_by_us}
+    # 2026-08-17 实机配方（Kicker 实例 22468 验证到 Execute 步）：
+    # 1) AttachThreadInput 突破 Win32 前台锁后 ShowWindow+SetForeground；
+    # 2) 真实鼠标点击菜单——GetMenuBarInfo 的 rcBar 是**屏幕坐标**（曾经
+    #    误加窗口偏移导致点空）；WM_COMMAND / menu_select 对该宿主实测
+    #    不触发对话框（消息被吞 / 可见性检查失败），仅作回退。
+    clicked_menu = _click_menu_item_real(frame, file_menu, execute_item)
+    if not clicked_menu:
+        if not _post_menu_command(frame, file_menu, execute_item):
+            try:
+                frame.menu_select(f"{file_menu}->{execute_item}")
+            except Exception as exc:  # noqa: BLE001
+                return {"backend": "gui", "ok": False,
+                        "error": f"menu failed: {exc}",
+                        "started_by_us": started_by_us}
 
     dlg = None
-    deadline = time.time() + 20
+    deadline = time.time() + 25
     while time.time() < deadline and dlg is None:
         try:
             for w in app.windows():
@@ -496,34 +691,14 @@ def _run_gui(vbs_path: Path, timeout: float, menu: dict) -> dict:
                 "error": "Execute VBScript 对话框未出现",
                 "started_by_us": started_by_us, "script": str(vbs_path)}
 
-    # 对话框交互全部走原生 Win32 消息（前台无关）：Edit 设 WM_SETTEXT，
-    # 确认按钮按 IDOK 兜底 BM_CLICK。
-    import ctypes
-    from ctypes import wintypes
-    user32 = ctypes.windll.user32
-    user32.GetDlgItem.restype = wintypes.HWND
-    user32.GetDlgItem.argtypes = [wintypes.HWND, ctypes.c_int]
-    user32.SendMessageW.restype = wintypes.LPARAM
-    user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT,
-                                    wintypes.WPARAM, wintypes.LPARAM]
-
-    edit = user32.GetDlgItem(dlg.handle, 0x480)   # 文件对话框文件名 Edit
-    if not edit:
+    # 对话框是宿主自绘的 "Specify VBScript or filename"（Edit id=3123 +
+    # Execute id=1085，无 Browse）：普通 Win32 消息（WM_SETTEXT/WM_CHAR/
+    # EM_REPLACESEL）实测全部被忽略，必须走 UIA ValuePattern.SetValue +
+    # Invoke；失败时回退经典 Win32 消息。
+    filled = _fill_execute_vbs_dialog(dlg.handle, vbs_path)
+    if not filled:
         return {"backend": "gui", "ok": False,
-                "error": "对话框文件名 Edit 控件未找到",
-                "started_by_us": started_by_us, "script": str(vbs_path)}
-    user32.SendMessageW(edit, 0x000C, 0, str(vbs_path))   # WM_SETTEXT
-    time.sleep(0.3)
-    clicked = False
-    for btn_id in (1, 0x1):   # IDOK（FileDialog 中为 Open/OK 按钮）
-        btn = user32.GetDlgItem(dlg.handle, btn_id)
-        if btn:
-            user32.SendMessageW(btn, 0x00F5, 0, 0)        # BM_CLICK
-            clicked = True
-            break
-    if not clicked:
-        return {"backend": "gui", "ok": False,
-                "error": "对话框确认按钮未找到",
+                "error": "Execute VBScript 对话框填充失败",
                 "started_by_us": started_by_us, "script": str(vbs_path)}
     return {"backend": "gui", "ok": True, "submitted": str(vbs_path),
             "started_by_us": started_by_us, "pid": frame.process_id}

@@ -221,12 +221,34 @@ Kicker 启动的 scFLOWpre 常驻运行。三项全部获得实机证据：
      `context_ready = [G+8] != null`（SEH 保护），新增 Status /
      ContextReadyRaw / LastExceptionCode 诊断口。
    - 待补项（如实记录）：在 Kicker 实例内（File → Execute VBScript）跑
-     通 `context_ready=1 → set_handle>0` 的完整管线需宿主主框架可见；
-     当前两实例窗口隐藏且后台进程受 Win32 前台锁，WM_COMMAND 已可发命令
-     但文件对话框未弹出。`automation/host_pipeline.py` gui 后端已重写
-     （MDI 框架实例选择 + WM_COMMAND + 原生 Win32 对话框填充），待宿主
-     窗口可见时一键复跑；manual 后端随时可用。
+     通 `context_ready=1 → set_handle>0` 的完整管线。**2026-08-17 回填**：
+     gui 后端按实机配方重写并验证到 Execute 步（AttachThreadInput 前台
+     恢复 → GetMenuBarInfo 屏幕坐标真实点击菜单 → #32768 弹窗项点击 →
+     自绘对话框 UIA ValuePattern+Invoke 填充提交；WM_COMMAND/menu_select
+     /WM_SETTEXT/WM_CHAR 对该宿主实测全部无效）。Execute 生效关闭对话框，
+     但未产出结果文件（疑为对话框把内容当脚本正文而非文件名，或宿主 UI
+     被并发人工操作干扰）——用户选择如实记为待补；宿主窗口就绪后 gui
+     后端一键复跑或 manual 后端人工执行即可。
 3. **sctsnapshot 字节级重序列化 + scFLOWpre 实机验收**：parse→serialize
    字节恒等（box 27,539 B）已有 23 项回归测试；本轮新增实机验收：
    重序列化后经 `pphwriter.clone_pph` 回写 PPH（9 成员，deflate 后
    751 KB），宿主 `OpenProject` 验收 **ok=True**。
+
+### 6.2 「历史环境阻塞标注」回填验证（2026-08-17）
+
+1. **test_native_bridge::real（DEV_PLAN §12.7 的 pytest 46% 停滞用例）**：
+   `SCF_RUN_BRIDGE_TESTS=1` 本机实跑 **7/7 全绿（0.38s）**——加载厂商
+   DLL、符号解析、context-not-ready 优雅路径全部验证；旧沙箱停滞不复现。
+2. **`-vbs` CLI 参数（DEV_SUMMARY §6.3 清单第 5 条"待实机确认"）**：
+   实测**不存在**——两种形式（`-vbs <path>` / `-vbs=<path>`）均正常启动
+   GUI 且忽略脚本（标记脚本 90s/60s 无输出，进程被终止）。
+   `vbs_bridge.py` cli 后端改为返回显式 unsupported（不再静默拉起 GUI），
+   测试同步更新（`b6bf39e`）。
+3. **写回产物宿主验收（DEV_PLAN §13.3/§15.1 #7）**：新增 main.xml
+   region 改写回填实测——宿主打开改写 PPH ok，但
+   `QueryFaceRegionByName("@P5BackfillRegion")` 返回 Nothing（连完整
+   克隆原 region 结构仅改名也不生效）。**负面发现：宿主 face region
+   注册表权威在 MDL 成员**（`@PartSurface_Part` 仅在
+   `meshinggroup1_part.mdl` 字节流出现，main.xml 的 `<regions>` 只是
+   镜像），P5-3 GUI region 写端（只写 main.xml）对宿主不生效，需补
+   MDL region 名表写端（新增待办）。

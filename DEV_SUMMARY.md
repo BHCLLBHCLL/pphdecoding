@@ -339,9 +339,16 @@ GUI 运行：`python pph_gui.py [项目.pph]`；依赖缺失时
    `--write-vbs host_pipeline.vbs --project <pph>`，宿主内
    File → Execute VBScript 执行 → 验证结果文件
    `context_ready=True`、`set_handle / group_handle > 0`、`mdl=True`
-   （此步完全不碰 COM 激活）。**状态：脚本/后端/COM 注册均已就绪并实测，
-   仅差"宿主主框架窗口可见"这一操作条件——窗口隐藏时 gui 后端会被
-   前台锁挡在文件对话框之外，manual 后端（人工点菜单）随时可用**；
+   （此步完全不碰 COM 激活）。**状态（2026-08-17 回填实测）**：gui 后端
+   已按实机配方重写并验证到 Execute 步——AttachThreadInput 前台恢复 →
+   GetMenuBarInfo（屏幕坐标！）真实点击 File → #32768 弹窗项
+   GetMenuItemRect(NULL,…) 真实点击 → 自绘 "Specify VBScript or
+   filename" 对话框（Edit id=3123 / Execute id=1085）走 **UIA
+   ValuePattern+Invoke**（WM_SETTEXT/WM_CHAR/EM_REPLACESEL 实测被该
+   控件忽略）→ Execute 生效关闭对话框。**执行结果证据（result file）
+   待补**：上次 Execute 后未产出结果文件（疑为对话框把内容当脚本正文
+   而非文件名，或宿主 UI 被并发人工操作干扰），用户选择如实记为待补；
+   下次宿主窗口就绪时 gui 后端一键复跑或 manual 后端人工执行即可；
 3. 外部脚本试 `GetObject(, "scFLOWpre_Bx64net.Application.2025")`
    **ROT 附加**。**实测：失败（宿主未注册 ROT，GetActiveObject 抛
    MK_E_UNAVAILABLE），此路不通**；

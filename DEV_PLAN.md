@@ -810,7 +810,7 @@ CondInitial（+CondInitialField/Value）
 | cad_import / condition_registry / mdl_writer / gph_writer / corpus / edit_ops(WriteVbs) / empty_project / host_pipeline 等 | `PermissionError [Errno 13]` 写 `%TEMP%`（DSH workspace-write 沙箱限制临时目录写） | ❌ 环境性 |
 | test_mdl_analysis（3 ERROR） | 临时目录 fixture 清理失败（同上） | ❌ 环境性 |
 | test_gui 部分（open/save/dashboard） | 依赖写临时文件/真实文件句柄 | ❌ 环境性为主 |
-| test_native_bridge::real | 需 scFLOWpre 宿主 + Kicker 许可证 | ❌ 环境性（~~沙箱不可用~~ → 2026-08-17 本机已具备：安装 + 27500 许可 + Kicker 实例常驻，见 DEV_SUMMARY §6.3 前置块；该用例现仅受宿主主框架窗口可见性约束） |
+| test_native_bridge::real | 需 scFLOWpre 宿主 + Kicker 许可证 | ❌ 环境性（~~沙箱不可用~~ → **2026-08-17 本机已跑通**：`SCF_RUN_BRIDGE_TESTS=1` 下 7/7 全绿 0.38s——实机用例加载厂商 DLL 与 context-not-ready 优雅路径均验证；旧沙箱 46% 停滞不复现） |
 
 **核心解码器测试（`test_pph_parser`/`test_semantics`/`test_platform`/`test_samples`/`test_parasolid`/`test_units`/`test_schema_extract`/`test_oct_writer`/`test_conditions`/`test_menu_bar`/`test_minor_gaps` 等）全部通过。** 当前失败非回归，而是沙箱文件策略 + 宿主不可用；原生桌面（装好 scFLOWpre、放开 temp 写）应可收敛到文档声明的状态。
 
@@ -859,7 +859,7 @@ CondInitial（+CondInitialField/Value）
 | 4 | OCT 只有骨架，无区域 | `oct.write_oct` | ❌ 仅根盒 `LS_OctRootOctantMinMax` + 细化位图 + blockID；无区域数组 |
 | 5 | GPH 通用面集，无单元/区域/棱柱层 | `gphstats.write_gph(_volume)` | ❌ 仅 `LS_Links`+`LS_Nodes`；无 `LS_Cells`/区域/棱柱层 |
 | 6 | LZMS 压缩 Windows-only | `pphwriter.lzms_compress` | ◑ 非 Windows 直接 `RuntimeError`；读取端有 wimlib 回退，写端无 |
-| 7 | 写回产物未经 SCTpre 实机验收 | 全部写端 | ◑ 「布局一致」是推断非实证（~~宿主需 Kicker+许可证，沙箱内裸启动 exe 必崩~~ → **部分实证**：2026-08-17 本机环境已具备（DEV_SUMMARY §6.3），sctsnapshot 重序列化 PPH 宿主 `OpenProject` ok、Wrapping 产物宿主重开 err=0；其余写端产物待逐一过宿主） |
+| 7 | 写回产物未经 SCTpre 实机验收 | 全部写端 | ◑ 「布局一致」是推断非实证（~~宿主需 Kicker+许可证，沙箱内裸启动 exe 必崩~~ → **部分实证 + 1 项负面发现**：sctsnapshot 重序列化 PPH 宿主 `OpenProject` ok、Wrapping 产物宿主重开 err=0、main.xml region 改写宿主可打开但 `QueryFaceRegionByName` 找不到新 region——**宿主 face region 注册表权威在 MDL**（`@PartSurface_Part` 仅存在于 `meshinggroup1_part.mdl` 字节流，main.xml 的 regions 只是镜像），P5-3 GUI region 写端需补 MDL region 名表写端才宿主生效） |
 
 ### 13.4 一句话总结
 
@@ -940,7 +940,7 @@ CondInitial（+CondInitialField/Value）
 | 4 | OCT 无区域数组 | 并入 #1（区域数组在 sctsnapshot 内） | ✅ 随 #1 |
 | 5 | GPH 无单元/区域/棱柱层写端 | 补齐：cvol/区域/Parts（棱柱层仍延后） | ✅ 已落地 |
 | 6 | LZMS 压缩 Windows-only | 延后：无跨平台 LZMS 压缩器 | ⏳ |
-| 7 | 写回产物未经 SCTpre 实机验收 | ~~延后：宿主需 Kicker+许可证~~ → **部分完成**：本机宿主环境可用（DEV_SUMMARY §6.3），sctsnapshot 重序列化产物已过宿主验收；其余写端产物随时可补 | ◑ |
+| 7 | 写回产物未经 SCTpre 实机验收 | ~~延后：宿主需 Kicker+许可证~~ → **部分完成 + 1 项负面发现**：sctsnapshot 重序列化产物已过宿主验收；回填实测 main.xml region 改写宿主不生效（权威在 MDL，见 §13.3 #7）→ 新增待办：MDL region 名表写端 | ◑ |
 
 ### 15.2 已执行（本会话落地）
 
