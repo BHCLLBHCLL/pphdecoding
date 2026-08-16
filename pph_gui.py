@@ -2281,6 +2281,7 @@ class View3DTab(QWidget):
         self._rubber_style: Optional[object] = None
         self._rubber_center_cache: dict = {}
         self.last_pick: Optional[dict] = None
+        self.picked_faces: list = []   # P5-3：面拾取累计（注册区域多面引用）
         self._picked_status = ""
         self._cache: dict[tuple, object] = {}
         self._hidden: dict[str, tuple[set, set]] = {}
@@ -3298,10 +3299,16 @@ class View3DTab(QWidget):
         self.last_pick = {
             "mode": "face", "face": cell, "body": body_id,
             "frid": frid, **meta}
+        # P5-3：累计面拾取（注册 Surface Region 时写多面引用）
+        key = (meta.get("path"), cell)
+        if all(k != key for k in self.picked_faces):
+            self.picked_faces.append(key)
         self.set_model_filter({"kind": "face", "value": cell})
         self.status.setText(
             f"已拾取面 #{cell}"
-            + (f" frid={frid}" if frid is not None else ""))
+            + (f" frid={frid}" if frid is not None else "")
+            + (f"（累计 {len(self.picked_faces)} 面）"
+               if len(self.picked_faces) > 1 else ""))
 
     def _toggle_rubber_select(self, checked: bool) -> None:
         """橡皮框/圆/多边形选择：启用时拦截左键拖动，禁用时恢复相机。"""
@@ -5942,6 +5949,7 @@ class PphViewer(QMainWindow):
             groups_info=groups,
             regions_meta=getattr(self, "_regions_meta", {}) or {},
             last_pick=getattr(self.view3d, "last_pick", None),
+            picked_faces=list(getattr(self.view3d, "picked_faces", []) or []),
         )
 
     def _commit_nav_ctx(self, key: str, ctx: dict) -> None:

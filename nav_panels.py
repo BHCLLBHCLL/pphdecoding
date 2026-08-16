@@ -3116,18 +3116,26 @@ class RegisterRegionBody(_Body):
             ET.SubElement(r, "name").text = name
             ET.SubElement(r, "discontinuous_flag").text = "false"
             ET.SubElement(r, "connection_type").text = "default"
-            # 若 Draw 窗口有面拾取，写入 sface_num（对齐 box 的 open 区域）
+            # P5-3：多面引用——累计拾取的面全部写入 sface_num（每个 face 一个
+            # <num>），无累计时回退单次 last_pick
+            face_ids: list = []
+            for key in (self._ctx.get("picked_faces") or []):
+                f = key[1] if isinstance(key, (tuple, list)) else key
+                if isinstance(f, int) and f >= 0 and f not in face_ids:
+                    face_ids.append(f)
             pick = self._ctx.get("last_pick") or {}
-            face_id = pick.get("face")
+            one = pick.get("face")
+            if not face_ids and isinstance(one, int) and one >= 0:
+                face_ids = [one]
             sface = ET.SubElement(r, "sface_num")
-            if isinstance(face_id, int) and face_id >= 0:
+            for i, f in enumerate(face_ids):
                 num = ET.SubElement(sface, "num")
-                num.set("index", "0")
-                num.text = str(face_id)
+                num.set("index", str(i))
+                num.text = str(f)
             ET.SubElement(r, "face_region_type").text = "faces"
             ET.SubElement(r, "color_set").text = "false"
             self._ctx["xml_dirty"] = True
-            tip = (f" + sface={face_id}" if isinstance(face_id, int)
+            tip = (f" + sface={len(face_ids)} 面" if face_ids
                    else " (no pick — empty sface_num)")
         else:
             tip = ""
