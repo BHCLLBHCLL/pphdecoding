@@ -252,3 +252,78 @@ Kicker 启动的 scFLOWpre 常驻运行。三项全部获得实机证据：
    `meshinggroup1_part.mdl` 字节流出现，main.xml 的 `<regions>` 只是
    镜像），P5-3 GUI region 写端（只写 main.xml）对宿主不生效，需补
    MDL region 名表写端（新增待办）。
+
+---
+
+## 7. P5 后全面重分析（12 域完整度 × 深度清单，P6 规划输入）
+
+> 日期：2026-08-16（P5 收尾 + 工作区清理 + gui 后端复跑后）｜方法：
+> 独立代码巡检（40 顶层模块 / ~4.07 万行 / 80 测试文件、598 tests
+> 全绿口径）× 本文档 §1 口径逐域复核。与 §1 的差异均已标注。
+
+### 7.1 代码状态快照（巡检修正）
+
+| 项 | 值 | 修正说明 |
+|---|---|---|
+| 顶层 Python 模块 | **40 个**（~4.07 万行） | §0 旧记「~30」过期 |
+| 测试 | 80 个 test_*.py；run_all_tests **598 全绿** | §0 的 653 为 kernel 线会话 pytest 收集口径 |
+| >10KB 模块 | 26 个（nav_panels 14896 行最大） | — |
+| automation/ | 8 模块（pipeline_plan 1115 行最大） | — |
+| NYI 灰显 | **7 项**（2 产品边界 + 5 暂缓） | — |
+
+### 7.2 12 域完整度 × 深度清单（P5 后）
+
+| 域 | 完整度 | 深度 | P5 后变化 / 巡检修正 |
+|---|---|---|---|
+| PPH 解析与写端 | 95% | 深 | 无变化（字节级闭环） |
+| 工程文件管理 | 95% | 深 | sctsnapshot 字节级重序列化（27,539 B 恒等）+ 宿主 OpenProject 验收 ok |
+| Select/View/3D | 88% | 中–深 | 无变化 |
+| CAD/XT 几何导入 | 80% | 深 | 无变化（二进制 XT + ABI 签名级） |
+| Octree 八叉树 | 72% | 中 | 无变化 |
+| BAM 分析模型 | 70% | 中 | 无变化 |
+| 宿主自动化 COM/VBS | **70%** | 中 | 62→70（Wrapping e2e 360/360 + in-proc 桥 RVA 实证 + gui 后端框架发现修复 `68891e1`）；仍欠：Kicker 实例内 `context_ready=1 → handle>0` 完整闭合（环境态，见 §7.4） |
+| 条件体系（~180 Cond*） | **60%** | **浅** | 55→60（P5-3 多 face 引用）；**巡检修正**：165 类型已注册可见，但带字段 schema 仅 6 类型（源自 3 样本工程）——「≥60 可编辑」是目录+粗桩综合口径，字段级深度远低于表面 |
+| 几何编辑 Create/Modify | **55%** | 底层深、GUI 中 | 45→55（P5-1：create 6 原语 + transform 4 + boolean/delete_faces 全接线）；`pipeline_plan.py` L855–901 的 VBS TODO 草稿仍残留（实体 API 未录制） |
+| 自研网格生成 | **55%** | 中 | 45→55（P5-4：2:1 平衡/pairing/质量报告/面区域映射四能力全有，box 实测 `{'@PartSurface_Part': 1536}`）；欠规模化对拍与黄金文件 |
+| Wrapping/Disc/Overset | **55%** | 中 | 40→55（端到端实机跑通 + 产物宿主重开 err=0，P5 首次） |
+| Solver/FPH 链路 | 10% | 读侧深 | 无变化（合理延后；fph/fldstats/ifld 读侧全解析） |
+
+### 7.3 哑铃结构的 P5 后形态：三类「表面 ≠ 权威」错配
+
+1. **条件域**：目录可见（165）≠ 字段可编辑（6）——registry 广度与
+   schema 深度之间断裂；
+2. **region 域**：GUI 写 main.xml 镜像 ≠ 宿主认 MDL 权威——
+   `write_mdl(surface_regions=...)` API 层已生产级且 BAM 路径已接线
+   （`native_bam.write_bam_mdl` L853），**仅 Register Region GUI 流
+   （nav_panels L3115）未调用**——缺口比 §6.2 记录的更窄，纯接线层；
+3. **网格域**：质量基础设施（quality.py 4 类度量 + 直方图）≠ 验证
+   信用（无与宿主 mesher 的量化对拍、黄金文件仅 box 族）。
+
+下端（格式 + Parasolid 内核）保持签名级无变化；**P6 的最大杠杆
+从「接线底层」转向「打通权威闭环 + 字段级扩面」**。
+
+### 7.4 gui 后端复跑补充证据（2026-08-16，`68891e1`）
+
+修复两个真实缺陷后（主框架类名 `Afx:00007FF683D10000:0` 匹配 +
+隐藏窗口 visible_only=False 兜底），框架可发现、SW_RESTORE 可恢复
+前台；但**闲置 Kicker 实例拒绝打开菜单**——物理点击/合成点击/
+消息级 WM_LBUTTONDOWN/Alt+F/UIA DoDefaultAction 五路全部无效，
+`WindowFromPoint` 证实命中 'Menu' 工具条、无隐藏模态、UI 线程响应
+（SendMessageTimeout ok）。窗口还会在脚本间隙被外部回藏。结论：
+非代码缺陷，是 Kicker 实例长驻闲置态的交互限制——完整管线闭合
+需新鲜启动的宿主窗口（manual 后端随时可用）。
+
+---
+
+## 8. P6 改进计划（按杠杆排序）
+
+| # | 项 | 内容 | 验收锚点 | 杠杆判断 |
+|---|---|---|---|---|
+| P6-1 | **条件字段级扩面** | 165 注册类型 → ≥60 类型带字段 schema：样本工程字段提取管线（tools/extract_cond_types + html_cond_extract 交叉）+ 真实录制反推；GenericCondBody 从「样本驱动」升「schema+帮助元数据」双驱动 | ≥60 类型字段表单可编辑 + XML round-trip 测试 | **最高 ROI**：断裂点明确（6→60），基础设施全就绪 |
+| P6-2 | **Register Region → MDL 权威接线** | nav_panels L3115 注册流调用 `write_mdl(surface_regions=...)` 回写 MDL 名表（BAM 路径已有同型调用可抄）；宿主验收 | 改写后宿主 `QueryFaceRegionByName` 非 Nothing | 小而关键：直接闭合 §6.2 负面发现 |
+| P6-3 | **网格量化对拍 + 黄金文件扩容** | 与宿主 mesher 同几何产物对拍（单元数/非正交度分布）；黄金文件从 box 族扩 2–3 个真实几何 | 对拍报告 + 不变量回归 | 把「有基础设施」变成「有验证信用」 |
+| P6-4 | **几何 VBS 草稿清理** | pipeline_plan L855–901 TODO 占位：录制锁定实体 API 或删除（原生路径已是正路） | 草稿清零或锁定 | 消除「表面接线、深层 TODO」残留 |
+| P6-5 | **宿主交互环境收敛**（环境依赖，随时插入） | 新鲜 Kicker 启动宿主 + gui 后端一键复跑完整管线（框架发现已修）；或调查 Kicker 启动参数 | `context_ready=1 → set_handle>0` 实测日志 | 闭合宿主自动化最后 30% 的关键步 |
+| P6-6 | cellular-guise 子进程实验（低优先） | PK_SESSION_start 选项在会话启动前设 cellular guise（避开 rc=900），实测 lattice/frame getter | getter rc=0 实测记录 | 边缘家族，不阻塞主线 |
+
+**Solver/FPH 维持合理延后**（读侧已深，算侧为产品边界）。
