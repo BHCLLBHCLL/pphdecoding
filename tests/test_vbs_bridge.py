@@ -63,28 +63,17 @@ class TestVbsBridge(unittest.TestCase):
         self.assertEqual(result["backend"], "manual")
         self.assertIn("Execute VBScript", result["hint"])
 
-    def test_execute_cli(self, monkeypatch=None):
-        import subprocess
-
-        calls = {}
-
-        def fake_run(cmd, **kwargs):
-            calls["cmd"] = cmd
-            return type("P", (), {"returncode": 0, "stdout": "ok",
-                                  "stderr": ""})()
-
-        orig = subprocess.run
-        subprocess.run = fake_run
-        try:
-            with tempfile.TemporaryDirectory() as td:
-                p = write_vbs_file(["scFLOWpre.Quit"], Path(td) / "run.vbs")
-                bridge = VbsBridge()
-                bridge._exe_cache = Path("scFLOWpre.exe")
-                result = bridge.execute(p, backend="cli")
-        finally:
-            subprocess.run = orig
+    def test_execute_cli_verified_absent(self):
+        # 2026-08-17 实机确认 scFLOWpre 无 -vbs 开关，cli 后端返回显式
+        # unsupported 且绝不拉起宿主（不再静默 subprocess.run）。
+        with tempfile.TemporaryDirectory() as td:
+            p = write_vbs_file(["scFLOWpre.Quit"], Path(td) / "run.vbs")
+            bridge = VbsBridge()
+            bridge._exe_cache = Path("scFLOWpre.exe")
+            result = bridge.execute(p, backend="cli")
         self.assertEqual(result["backend"], "cli")
-        self.assertEqual(calls["cmd"][-1], str(p))
+        self.assertTrue(result["verified_absent"])
+        self.assertFalse(result["ok"])
 
     def test_execute_gui_hooks(self):
         import sys

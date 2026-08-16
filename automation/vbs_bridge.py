@@ -8,7 +8,10 @@ history.vbs）。本模块提供：
 - ``VbsBridge``：定位 scFLOWpre、构造启动命令，并提供三种执行后端：
 
   - ``manual``：写出脚本并提示人工执行（最可靠，零侵入）；
-  - ``cli``：按可配置参数直接带脚本启动（默认 ``-vbs``，待实机确认参数名）；
+  - ``cli``：**实测不存在，弃用**——2026-08-17 实机确认 scFLOWpre_Bx64net.exe
+    没有 ``-vbs`` 命令行开关：两种形式（``-vbs <path>`` 与 ``-vbs=<path>``）
+    均正常启动 GUI 且**忽略脚本**（标记脚本 90s/60s 无输出），选择 cli 后端
+    返回显式 unsupported；
   - ``gui``：pywinauto 驱动菜单 File → Execute VBScript（对话框布局可注入 hook）。
 """
 
@@ -108,12 +111,14 @@ class VbsBridge:
         if not vbs_path.is_file():
             raise FileNotFoundError(vbs_path)
         if backend == "cli":
-            cmd = self.launch_command(vbs_path, script_args)
-            proc = subprocess.run(cmd, capture_output=True, text=True,
-                                  timeout=self.timeout, check=False)
-            return {"backend": "cli", "command": cmd,
-                    "returncode": proc.returncode,
-                    "stdout": proc.stdout, "stderr": proc.stderr}
+            # 2026-08-17 实机确认：scFLOWpre 无 -vbs 命令行开关——两种形式
+            # （-vbs <path> / -vbs=<path>）均正常启动 GUI 并忽略脚本（标记
+            # 脚本 90s/60s 无输出，进程被终止）。继续静默尝试只会白白拉起 GUI。
+            return {"backend": "cli", "ok": False,
+                    "verified_absent": True,
+                    "error": "scFLOWpre -vbs CLI 参数实测不存在，cli 后端不可用；"
+                             "请用 com（ExecuteVBSWithFile）或 gui/manual"
+                             "（File → Execute VBScript）后端"}
         if backend == "gui":
             return self._execute_gui(vbs_path, hooks=gui_hooks or {})
         return {"backend": "manual", "script": str(vbs_path),
