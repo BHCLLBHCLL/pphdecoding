@@ -1184,6 +1184,36 @@ cellular / lattice / frame 家族只能靠「命名约定 + 反汇编 + 经验�
 > 遗留：Kicker 实例内完整管线（context_ready=1 → handle>0）需宿主
 > 主框架可见后经 gui/manual 后端复跑；cellular-guise 会话引导见 P5-2。
 
+### 17.4 改进计划（P6，2026-08-16 立）
+
+> 输入：[docs/REANALYSIS_2026-08-17.md](docs/REANALYSIS_2026-08-17.md)
+> §7/§8（P5 后 12 域完整度 × 深度重分析 + 三类「表面 ≠ 权威」错配）。
+> 按杠杆排序：
+>
+> **执行状态（2026-08-17 起）：P6-1 条件字段级扩面已交付**——新增
+> `condition_help_schema.py`（三源字段 schema：样本 + `condition_tree.json`
+> XML 键 + HTML 帮助页显示名规范化键），`condition_registry_cached` 接入
+> `apply_help_schema`，带字段 schema 类型 **10 → 25**（+15 类型 +370 字段），
+> 样本精确字段不覆盖；新增 `tests/test_condition_help_schema.py`（10 项，
+> 条件相关 53 测试全绿）。**未达「≥60」**：权威 XML 键仅样本（10）+ 求解
+> 设置树（9）可支撑；HTML 帮助页只有显示名（无 XML 键），自动关键词匹配
+> 误匹配率高已弃用；突破 60 需 P6-5 真实录制或扩充样本工程。
+
+1. **P6-1 条件字段级扩面**（最高 ROI）：~~165 注册类型 → ≥60 类型带
+   字段 schema~~ → **已交付 10 → 25 类型**（见上），余量挂 P6-5 真实录制；
+2. **P6-2 Register Region → MDL 权威接线**：GUI 注册流补调
+   `write_mdl(surface_regions=...)`（BAM 路径已有同型调用），
+   闭合宿主 `QueryFaceRegionByName` 不认 main.xml 的负面发现；
+3. **P6-3 网格量化对拍 + 黄金文件扩容**（2–3 个真实几何）；
+4. **P6-4 几何 VBS 草稿清理**（pipeline_plan TODO 占位）；
+5. **P6-5 宿主交互环境收敛**（环境依赖，随时插入）：gui 后端框架
+   发现已修（`68891e1`：Afx:hex:0 类名 + 隐藏窗口枚举），待新鲜
+   Kicker 宿主窗口复跑 `context_ready=1 → set_handle>0`；
+6. **P6-6 cellular-guise 子进程实验**（低优先）。
+
+Solver/FPH 维持合理延后。
+
+---
 ---
 
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

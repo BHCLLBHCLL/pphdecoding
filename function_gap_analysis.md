@@ -82,6 +82,16 @@ Solver/FPH 链路         ████░░░░░░░░░░░░░░
 > 注册表权威在 MDL 成员而非 main.xml，P5-3 GUI region 写端需补 MDL
 > region 名表写端才宿主生效（新增待办）；Kicker 实例内管线验证的 gui
 > 配方已通到 Execute 步，结果证据如实记为待补。
+>
+> **2026-08-17 P6-1 条件字段级扩面**（新增 `condition_help_schema.py`，
+> 三源字段 schema：样本 + `condition_tree.json`（XML 键）+ HTML 帮助页
+> （显示名规范化键）；`condition_registry_cached` 接入 `apply_help_schema`）：
+> 带字段 schema 类型 **10 → 25**（+15 类型，+370 字段注入），样本精确字段
+> 不覆盖；新增 `tests/test_condition_help_schema.py`（10 项，53 条件测试全绿）。
+> **未达 REANALYSIS §8 的「≥60」目标**——权威 XML 键仅来自样本（10）与
+> 求解设置树（9，去重后 +15）；HTML 帮助页只有显示名（无 XML 键），自动
+> 关键词匹配误匹配率高（探索性评估弃用）。突破 60 需**真实录制**
+> （宿主内逐个 Cond* 对话框录制，属 P6-5 宿主交互收敛）或扩充样本工程。
 ## 1. 总体判断
 
 项目呈**「底层强、上层弱」的哑铃结构**：
@@ -120,7 +130,7 @@ Solver/FPH 链路         ████░░░░░░░░░░░░░░
 
 | 功能域 | 现状 | 差距 |
 |---|---|---|
-| 条件体系 | 16 分类页中 analysis_type/basic_setting/analysis_control（~1000 行）/output 有**完整 XML 读写**；5 个 Cond*（CondBoundaryFlowIO/WallStress/WallThermal/Symmetry/CondInitial）有粗桩 XML 编辑器 | **~180 个 Cond* 仅覆盖 5 个粗桩 + 17 个 bc_filters 可见**；~160 个类型不可见；其余 12 个为 session 存根（弹窗「在 scFLOWpre 中完成」）；Detailed Settings 全是桩；region 仅写单 face 引用 |
+| 条件体系 | 16 分类页中 analysis_type/basic_setting/analysis_control（~1000 行）/output 有**完整 XML 读写**；**25 个 Cond* 类型带字段 schema**（P6-1：样本 10 + 帮助元数据 15，经通用表单可编辑）；165 类型目录全量可见可新建 | 字段 schema **精确（XML 键）仅 10 样本类型**；15 帮助类型字段为显示名规范化键（表单可编辑，round-trip 校验非精确）；其余 ~140 类型仅 name+regions 空字段表单；突破 60 需真实录制（P6-5）或更多样本工程 |
 | 几何编辑 | Modify Parts 容差类（TOLERANCE/TINYFACE/RIDGE 角度）真写 xenv | Create/Modify Parts 的实体操作是 **TODO 占位 VBS 草稿**（`pipeline_plan.py` L855–892：CreateCuboid/Cylinder/Sphere/Rectangle 与布尔/变换均 TODO）；底层能力（boolean/transform/create，生产级）与 GUI **未接线** |
 | 自研网格 | voxmesh（hex-dominant：octree→inside hex+切割带凸包）、polymesh（clipped Voronoi+Lloyd+近壁层+VoroCrust 式特征保形）双 MVP，写端 .oct/.gph 生产级 | 无 2:1 平衡/pairing、**无面区域映射**（输出 GPH 无区域名）、无质量度量统计；polymesh 无真 power diagram/角点专用 seed；性能未优化（box 凸包路径 ~40s） |
 | Wrapping/Disc/Overset | Wrapping 录制锁定（WRAP_OCT_PARAM_PAIRS 35 对 + WRAP_PARAM_PAIRS 44 对，2026-08-14） | Wrapping **未实机执行验证**；Disc/Overset 仅存 hint stub（8 个导航桩） |

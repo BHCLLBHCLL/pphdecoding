@@ -14178,6 +14178,13 @@ def condition_registry_cached():
         catalog = schemas_dir / "cond_types.json"
         if catalog.is_file():
             reg.merge_catalog(catalog)
+        # P6-1：帮助元数据（HTML 帮助页 + 求解设置树）补全字段 schema，
+        # 使目录类型从「仅 name+regions」升级为「带字段表单」。
+        try:
+            from condition_help_schema import apply_help_schema
+            apply_help_schema(reg)
+        except Exception:  # noqa: BLE001
+            pass
         reg = reg if reg.types else None
         _COND_REGISTRY_CACHE = reg or False
         return reg

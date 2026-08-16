@@ -40,7 +40,7 @@ def main() -> int:
             for part in ln.replace("(", " ").replace(")", " ").split():
                 for key in ("skipped", "failures", "errors"):
                     if part.startswith(key + "="):
-                        stats[key] += int(part.split("=")[1])
+                        stats[key] += int(part.split("=")[1].rstrip(","))
         if r.returncode == 0:
             print(f"[ ok ] {m} ({ran or '?'})")
         elif r.returncode == 5:
