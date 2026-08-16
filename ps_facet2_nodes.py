@@ -911,6 +911,64 @@ class _PsSession:
             raise RuntimeError(f"PK_BODY_create_solid_block failed: {rc}")
         return int(body.value)
 
+    # -- create solid cyl / sphere（P0-3：Cylinder/Sphere 建体）----------
+    def create_solid_cyl(self, radius: float, height: float,
+                         bottom=(0.0, 0.0, 0.0), direction=(0.0, 0.0, 1.0),
+                         ref_direction=None) -> int:
+        """PK_BODY_create_solid_cyl(radius, height, basis_set, &body)。
+
+        ``bottom`` 为底面圆心，``direction`` 为轴向（单位化后传入）；
+        basis_set.location = 底面圆心（V35 语义，本内核实测一致）。
+        传 _AXIS2（9 doubles, location 在前）兼容内核按 PK_VECTOR_t 读取
+        的情形（pskernel_user_guide §4 参数检查已关）。
+        """
+        pk = self.pk
+        n = np.asarray(direction, dtype=np.float64)
+        nn = float(np.linalg.norm(n))
+        if nn < 1e-12:
+            raise ValueError("direction must be non-zero")
+        n = n / nn
+        if ref_direction is None:
+            seed = np.array([1.0, 0.0, 0.0])
+            if abs(float(n @ seed)) > 0.9:
+                seed = np.array([0.0, 1.0, 0.0])
+            ref = np.cross(n, np.cross(seed, n))
+            ref = ref / float(np.linalg.norm(ref))
+        else:
+            ref = np.asarray(ref_direction, dtype=np.float64)
+            ref = ref / float(np.linalg.norm(ref))
+        ax = _AXIS2()
+        ax.location[:] = (float(bottom[0]), float(bottom[1]), float(bottom[2]))
+        ax.axis[:] = n
+        ax.ref_direction[:] = ref
+        body = c_int(0)
+        pk.PK_BODY_create_solid_cyl.restype = c_int
+        pk.PK_BODY_create_solid_cyl.argtypes = [
+            c_double, c_double, POINTER(_AXIS2), POINTER(c_int)]
+        rc = pk.PK_BODY_create_solid_cyl(
+            float(radius), float(height), byref(ax), byref(body))
+        if rc != 0 or not body.value:
+            raise RuntimeError(f"PK_BODY_create_solid_cyl failed: {rc}")
+        return int(body.value)
+
+    def create_solid_sphere(self, radius: float,
+                            centre=(0.0, 0.0, 0.0)) -> int:
+        """PK_BODY_create_solid_sphere(radius, centre, &body)。"""
+        pk = self.pk
+        ax = _AXIS2()
+        ax.location[:] = (float(centre[0]), float(centre[1]), float(centre[2]))
+        ax.axis[:] = (0.0, 0.0, 1.0)
+        ax.ref_direction[:] = (1.0, 0.0, 0.0)
+        body = c_int(0)
+        pk.PK_BODY_create_solid_sphere.restype = c_int
+        pk.PK_BODY_create_solid_sphere.argtypes = [
+            c_double, POINTER(_AXIS2), POINTER(c_int)]
+        rc = pk.PK_BODY_create_solid_sphere(
+            float(radius), byref(ax), byref(body))
+        if rc != 0 or not body.value:
+            raise RuntimeError(f"PK_BODY_create_solid_sphere failed: {rc}")
+        return int(body.value)
+
     # -- transform（编辑：平移 / 旋转 / 等比缩放 / 镜像）-----------------
     def _apply_transf_tag(self, body: int, tag: int) -> None:
         """把已创建的变换 tag 应用到 body（PK_BODY_transform_2）。"""

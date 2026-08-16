@@ -211,7 +211,7 @@ def _box_poly(bmin: np.ndarray, bmax: np.ndarray) -> _Poly:
     ], dtype=float)
     faces = [
         [0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1],
-        [2, 3, 7, 6], [1, 5, 6, 2], [0, 2, 6, 4],
+        [2, 3, 7, 6], [1, 5, 7, 3], [0, 2, 6, 4],
     ]
     return _Poly(list(c), faces)
 
@@ -467,12 +467,51 @@ def _generate_seeds(points: np.ndarray, tris: np.ndarray,
             n_sharp, interior)
 
 
+def _poly_volume_centroid(poly: _Poly) -> Optional[np.ndarray]:
+    """散度定理体积质心（有向四面体分解，闭合凸多面体精确）。
+
+    四面体 (0,a,b,c)：``V_i = det/6``，``∫x dV_i = det·(a+b+c)/24``；
+    面环先按凸包内点（顶点平均）定向为外向，保证有符号体积为正。
+    退化（|V| 过小）返回 None。
+    """
+    verts = np.asarray(poly.verts)
+    if len(verts) < 4:
+        return None
+    inner = verts.mean(axis=0)
+    total = 0.0
+    moment = np.zeros(3)
+    for face in poly.faces:
+        pts = verts[np.asarray(face, dtype=np.int64)]
+        if len(pts) < 3:
+            continue
+        # Newell 法向定向（外向）
+        n = np.zeros(3)
+        for i in range(len(pts)):
+            a, b = pts[i], pts[(i + 1) % len(pts)]
+            n[0] += (a[1] - b[1]) * (a[2] + b[2])
+            n[1] += (a[2] - b[2]) * (a[0] + b[0])
+            n[2] += (a[0] - b[0]) * (a[1] + b[1])
+        if float(np.dot(n, pts.mean(axis=0) - inner)) < 0:
+            pts = pts[::-1]
+        a0 = pts[0]
+        for i in range(1, len(pts) - 1):
+            b, c = pts[i], pts[i + 1]
+            det = float(np.dot(a0, np.cross(b, c)))
+            total += det
+            moment += det * (a0 + b + c)
+    vol = total / 6.0
+    if abs(vol) < 1e-14:
+        return None
+    return moment / (24.0 * vol)
+
+
 def _lloyd_relax(P: np.ndarray, free_mask: np.ndarray, index: _TriIndex,
                  root_box: np.ndarray, params: PolyMeshParams) -> np.ndarray:
-    """Lloyd 平滑：自由 seed 迭代移至其有界 Voronoi 胞元质心（阻尼）。
+    """Lloyd 平滑：自由 seed 迭代移至其有界 Voronoi 胞元体积质心（阻尼）。
 
     边界相关 seed（表面/镜像对/尖边球）全程冻结，保证贴体与保角；
-    目标位置出域时放弃本次移动。
+    质心用散度定理精确计算（P2-4，替代旧版顶点平均）；目标位置出域
+    时放弃本次移动。
     """
     if params.lloyd_iterations <= 0 or not bool(free_mask.any()):
         return P
@@ -488,7 +527,9 @@ def _lloyd_relax(P: np.ndarray, free_mask: np.ndarray, index: _TriIndex,
                                         neigh_ptrs, root_box)
             if poly is None:
                 continue
-            centroid = np.asarray(poly.verts).mean(axis=0)
+            centroid = _poly_volume_centroid(poly)
+            if centroid is None:
+                continue
             cand = P[k] + damping * (centroid - P[k])
             if index.point_inside(cand):
                 P[k] = cand

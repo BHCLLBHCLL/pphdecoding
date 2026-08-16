@@ -271,6 +271,69 @@ def lzms_decompress(compressed: bytes,
     return _wimlib_decompress(compressed, uncompressed_size)
 
 
+def _cabinet_compress(plain: bytes) -> bytes:
+    """Windows Compression API（``cabinet.dll``）压缩 LZMS 流。
+
+    输出即完整 MS-LZMS 块（流首 ``0xC0E5510A`` + 24 字节头 + 数据），
+    与宿主写入的 ``ZIPBODYBYTES`` / ``ZIPOCTREE`` 负载同构，可被
+    :func:`lzms_decompress` / 宿主直接解压。
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    cab = ctypes.WinDLL("cabinet.dll")
+    CreateCompressor = cab.CreateCompressor
+    CreateCompressor.argtypes = [
+        wintypes.DWORD, wintypes.LPVOID, ctypes.POINTER(wintypes.LPVOID)]
+    CreateCompressor.restype = wintypes.BOOL
+    Compress = cab.Compress
+    Compress.argtypes = [
+        wintypes.LPVOID, wintypes.LPCVOID, ctypes.c_size_t,
+        wintypes.LPVOID, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
+    Compress.restype = wintypes.BOOL
+    CloseCompressor = cab.CloseCompressor
+    CloseCompressor.argtypes = [wintypes.LPVOID]
+    CloseCompressor.restype = wintypes.BOOL
+
+    handle = wintypes.LPVOID()
+    if not CreateCompressor(COMPRESSION_ALGORITHM_LZMS, None,
+                            ctypes.byref(handle)):
+        raise OSError(ctypes.GetLastError(), "CreateCompressor(LZMS) 失败")
+    try:
+        needed = ctypes.c_size_t(0)
+        ok = Compress(handle, plain, len(plain), None, 0,
+                      ctypes.byref(needed))
+        err = ctypes.GetLastError()
+        if not ok and err not in (0, 122):
+            raise OSError(err, "Compress(LZMS) 查询尺寸失败")
+        cap = max(needed.value, len(plain) + 4096)
+        buf = ctypes.create_string_buffer(cap)
+        got = ctypes.c_size_t(0)
+        if not Compress(handle, plain, len(plain), buf, cap,
+                        ctypes.byref(got)):
+            raise OSError(ctypes.GetLastError(), "Compress(LZMS) 失败")
+        return buf.raw[:got.value]
+    finally:
+        CloseCompressor(handle)
+
+
+def lzms_compress(data: bytes) -> bytes:
+    """压缩 LZMS 流（仅 Windows ``cabinet.dll``；无跨平台开源压缩端）。
+
+    与 :func:`lzms_decompress` 互逆：``lzms_decompress(lzms_compress(x))
+    == x``。压缩字节不必与宿主原始压缩位逐字节相同（压缩级别/实现可
+    不同），只要解压明文一致即可被宿主接受。
+    """
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.WinDLL("cabinet.dll")
+            return _cabinet_compress(bytes(data))
+        except OSError:
+            pass
+    raise OSError("LZMS 压缩写端仅支持 Windows cabinet.dll")
+
+
 @dataclass
 class OctreeMdlBody:
     """``ZIPOCTREE`` / ``OCTREEMDLBODY``：八叉树关联的 CAD 面片体。
@@ -516,6 +579,7 @@ class SnapRecord:
     value: object = None          # 标量/字符串/数组（叶子）
     children: list["SnapRecord"] = field(default_factory=list)
     skipped: int = 0              # 负载中无法对齐跳过的字节数
+    override: Optional[bytes] = None  # 写端覆写负载（serialize 优先使用）
 
     def find_all(self, tag: str) -> Iterator["SnapRecord"]:
         if self.tag == tag:
@@ -566,6 +630,10 @@ class SnapRecord:
         容器递归时为父记录 payload 切片）。已解码叶子值经
         :func:`_encode_scalar` 重编码；容器递归子记录并保留子记录间与
         尾部未对齐填充；未解码值回退到 ``src`` 原始字节。
+
+        写端：``override`` 非空时叶子负载强制取该字节（长度应与
+        ``length`` 一致，否则父容器填充错位——见
+        :meth:`SctSnapshot.update_octree_region` 的等长约束）。
         """
         tagb = self.tag.encode("ascii")[:16].ljust(16, b" ")
         if self.children:
@@ -582,11 +650,31 @@ class SnapRecord:
             payload = bytes(body)
         else:
             payload = None
-            if self.value is not None and not isinstance(self.value, bytes):
+            if self.override is not None:
+                payload = self.override
+            elif self.value is not None and not isinstance(self.value, bytes):
                 payload = _encode_scalar(self.tag, self.value)
             if payload is None:
                 payload = src[self.offset + 20:self.offset + 20 + self.length]
         return tagb + struct.pack("<I", len(payload)) + payload
+
+
+def _serialize_records(records: list[SnapRecord], src: bytes) -> bytes:
+    """把一段缓冲上的记录序列重新序列化（保留记录间与尾部填充）。
+
+    与 :meth:`SctSnapshot.serialize` 的顶层逻辑相同，但作用于解压后
+    的 ``ZIPOCTREE`` / ``ZIPFACETINGRULES`` 明文记录流（写回链路）。
+    """
+    out = bytearray()
+    pos = 0
+    for r in records:
+        if r.offset > pos:
+            out += src[pos:r.offset]
+        out += r.serialize(src)
+        pos = r.offset + 20 + r.length
+    if pos < len(src):
+        out += src[pos:]
+    return bytes(out)
 
 
 def _decode_scalar(tag: str, payload: bytes):
@@ -725,6 +813,91 @@ def _parse_region(data: bytes, start: int, end: int, depth: int,
         records.append(rec)
         pos = pos + 20 + ln
     return records, pos, skipped
+
+
+def _oct_children_from_refinement(
+        refinement: np.ndarray) -> list[Optional[list[int]]]:
+    """由 ``*.oct`` 前序位图栈式重建父子表。
+
+    ``children[i]`` = 节点 i 的 8 个孩子前序下标（存储槽序
+    ``0..7 = x+2y+4z``）；叶子为 ``None``。前序流中内部节点之后
+    紧跟其 8 个孩子的子树，栈式消解即可无损重建。
+    """
+    n = int(refinement.shape[0])
+    children: list[Optional[list[int]]] = [None] * n
+    stack: list[list[int]] = []
+    if n and refinement[0]:
+        children[0] = [-1] * 8
+        stack.append([0, 0])
+    for pos in range(1, n):
+        parent, slot = stack[-1]
+        children[parent][slot] = pos
+        stack[-1][1] = slot + 1
+        if stack[-1][1] == 8:
+            stack.pop()
+        if refinement[pos]:
+            children[pos] = [-1] * 8
+            stack.append([pos, 0])
+    return children
+
+
+def _oct_postorder_indices(
+        children: list[Optional[list[int]]]) -> list[int]:
+    """满八叉树的后序下标序列（子槽序 0..7，节点最后）。
+
+    迭代实现（百万级节点无需递归），与 DLL ``0x89d60`` 写端的
+    DFS 发出顺序一致。
+    """
+    n = len(children)
+    post: list[int] = []
+    if n == 0:
+        return post
+    st: list[list[int]] = [[0, 0]]
+    while st:
+        node, nxt = st[-1]
+        ch = children[node]
+        if ch is None or nxt == 8:
+            post.append(node)
+            st.pop()
+        else:
+            st[-1][1] = nxt + 1
+            st.append([ch[nxt], 0])
+    return post
+
+
+def encode_octree_region_postorder(
+        refinement: np.ndarray, flags_oct: np.ndarray,
+        pad_to: Optional[int] = None) -> np.ndarray:
+    """``*.oct`` 前序区域标志 → ``OCTREEREGION`` 后序字节流（写端）。
+
+    DLL ``0x89d60`` 读端的逆：**后序 DFS**（子槽序 ``0..7``、
+    节点最后）每节点写 1 字节 ``flags_oct[node]``。与
+    :meth:`SctSnapshot.octree_region_as_oct_order` 严格互逆：
+    ``encode(ref, as_oct_order(ref)) == 文件原始后序字节``。
+
+    参数：
+      - ``refinement``：``*.oct`` / ``OCTREEBODY`` 的 ``U1[n]`` 位图
+      - ``flags_oct``：与前序位图同下标的 ``u8[n]`` 区域标志
+      - ``pad_to``：输出缓冲长度。宿主 ``BYTEARRAY`` 长于 ``n`` 时
+        传原长度，尾部补零（写回等长约束）。
+    """
+    refinement = np.asarray(refinement, dtype=np.uint8)
+    flags_oct = np.asarray(flags_oct, dtype=np.uint8)
+    n = int(refinement.shape[0])
+    if flags_oct.shape[0] != n:
+        raise ValueError(
+            f"flags_oct 长度 {flags_oct.shape[0]} != refinement 长度 {n}")
+    children = _oct_children_from_refinement(refinement)
+    post = _oct_postorder_indices(children)
+    out = flags_oct[np.asarray(post, dtype=np.int64)]
+    if pad_to is not None:
+        if pad_to < n:
+            raise ValueError(
+                f"pad_to={pad_to} < n_octants={n}（缓冲不足）")
+        if pad_to > n:
+            out = np.concatenate(
+                [out, np.zeros(pad_to - n, dtype=np.uint8)])
+    return out
 
 
 @dataclass
@@ -947,35 +1120,108 @@ class SctSnapshot:
         reg = self.octree_region(n_octants=n)
         if reg is None:
             return None
-        children: list[Optional[list[int]]] = [None] * n
-        stack: list[list[int]] = []
-        if refinement[0]:
-            children[0] = [-1] * 8
-            stack.append([0, 0])
-        for pos in range(1, n):
-            parent, slot = stack[-1]
-            children[parent][slot] = pos
-            stack[-1][1] = slot + 1
-            if stack[-1][1] == 8:
-                stack.pop()
-            if refinement[pos]:
-                children[pos] = [-1] * 8
-                stack.append([pos, 0])
-        post: list[int] = []
-
-        def dfs(i: int) -> None:
-            ch = children[i]
-            if ch is not None:
-                for p in range(8):
-                    dfs(ch[p])
-            post.append(i)
-
-        dfs(0)
+        children = _oct_children_from_refinement(refinement)
+        post = _oct_postorder_indices(children)
         out = np.empty(n, dtype=np.uint8)
         flags = reg["flags"]
         for k, idx in enumerate(post):
             out[idx] = flags[k]
         return out
+
+    def octree_refinement(self) -> Optional[np.ndarray]:
+        """从 ``OCTREEBODY`` 的 CRDL-FLD 提取 ``U1[n]`` 前序位图。
+
+        即 ``*.oct`` 文件 ``LS_OctOctantRefinement`` 节的内容，
+        与 ``*.oct`` 字节级一致（写回链路的 refinement 来源）。
+        """
+        raw = self.octree_crdlfld_bytes()
+        if raw is None:
+            return None
+        import os
+        import tempfile
+        from crdlfld import CrdlFldFile, iter_data_blocks
+        fd, path = tempfile.mkstemp(suffix=".oct")
+        try:
+            with os.fdopen(fd, "wb") as tf:
+                tf.write(raw)
+            with CrdlFldFile.load(path) as f:
+                sec = f.get_section("LS_OctOctantRefinement")
+                if sec is None:
+                    return None
+                for b in iter_data_blocks(f.data, sec):
+                    return np.asarray(b.as_u1(f.data),
+                                      dtype=np.uint8).copy()
+                return None
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+    def update_octree_region(self, flags_oct: np.ndarray,
+                             refinement: Optional[np.ndarray] = None) -> bool:
+        """把 ``*.oct`` 前序区域标志写入 ``ZIPOCTREE`` 的 OCTREEREGION。
+
+        P3-2 写回链路（DLL 写端的本地等价实现）：
+
+        1. ``encode_octree_region_postorder``：前序 → 后序字节
+        2. 覆写解压记录树中 ``OCTREEREGION → QUEUEBODY → BYTEARRAY``
+           的负载（等长约束：尾部零填充保持 ``BYTEARRAY`` 长度不变，
+           避免父容器偏移错位）
+        3. 记录重序列化 + ``lzms_compress`` 重压缩 ``ZIPOCTREE``
+
+        成功返回 ``True``；调用方随后 :meth:`serialize` 得到新快照
+        字节（顶层 ``ZIPOCTREE`` 记录长度自动重算）。
+        """
+        zip_rec = next((r for r in self.find_all("ZIPOCTREE")
+                        if isinstance(r.value, ZipBlob)), None)
+        if zip_rec is None:
+            return False
+        if refinement is None:
+            refinement = self.octree_refinement()
+        if refinement is None:
+            raise ValueError("快照无 OCTREEBODY refinement，需显式传入")
+
+        blob: ZipBlob = zip_rec.value
+        plain = blob.decompress()
+        records, _, _ = _parse_region(plain, 0, len(plain), 0, 24)
+
+        def walk_find(recs: list[SnapRecord]) -> Optional[SnapRecord]:
+            for r in recs:
+                if r.tag == "OCTREEREGION":
+                    for qb in r.find_all("QUEUEBODY"):
+                        for c in qb.children:
+                            if (c.tag == "BYTEARRAY"
+                                    and isinstance(c.value, bytes)):
+                                return c
+                found = walk_find(r.children)
+                if found is not None:
+                    return found
+            return None
+
+        target = walk_find(records)
+        if target is None:
+            return False
+        post = encode_octree_region_postorder(
+            refinement, flags_oct, pad_to=len(target.value))
+        if len(post) != len(target.value):
+            raise ValueError(
+                f"后序缓冲 {len(post)} != BYTEARRAY {len(target.value)}"
+                "（等长约束破坏）")
+        target.override = post.tobytes()
+
+        new_plain = _serialize_records(records, plain)
+        new_raw = lzms_compress(new_plain)
+        blob.raw = new_raw
+        if (len(new_raw) >= 28
+                and struct.unpack("<I", new_raw[:4])[0] == ZIP_MAGIC):
+            blob.codec_id = struct.unpack("<H", new_raw[6:8])[0]
+            blob.uncompressed_size = struct.unpack(
+                "<Q", new_raw[8:16])[0]
+            blob.compressed_size = struct.unpack(
+                "<I", new_raw[24:28])[0]
+            blob.payload = new_raw[28:]
+        return True
 
     def octree_restrict_regions(self) -> list[dict]:
         """``BSGSEX → OCTREEPARAM → OCTREERESTR → OCTREERESTRRGN`` 区域清单。

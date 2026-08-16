@@ -98,7 +98,9 @@ def extract_text_schema(xml_data: bytes,
                 "indexed": fdesc["indexed"],
                 "children": fdesc["children"],
                 "samples": [],
+                "count": 0,
             })
+            target["count"] = int(target.get("count", 0)) + 1
             if target["kind"] == fdesc["kind"]:
                 _append_sample(target, fdesc["sample"])
 
@@ -184,7 +186,10 @@ def merge_schemas(schemas: Iterable[dict]) -> dict:
                     "indexed": bool(fdesc.get("indexed")),
                     "children": int(fdesc.get("children", 0)),
                     "samples": [],
+                    "count": 0,
                 })
+                tf["count"] = int(tf.get("count", 0)) + int(
+                    fdesc.get("count", 0))
                 for s in fdesc.get("samples", []):
                     _append_sample(tf, s)
         for sec_name, keys in schema.get("xenv", {}).get("sections", {}).items():

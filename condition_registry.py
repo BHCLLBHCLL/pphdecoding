@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -17,6 +18,10 @@ from pph_parser import PphArchive
 from schema_extract import (condition_fields, extract_archive_schema,
                             merge_schemas)
 
+# 枚举判定：字符串样本须为 token 形态（无空格），避免把自由文本当枚举
+_TOKEN_RE = re.compile(r"^[A-Za-z_][\w.:/\-+]*$")
+_ENUM_MAX_VALUES = 8
+
 
 @dataclass
 class ConditionField:
@@ -25,6 +30,7 @@ class ConditionField:
     indexed: bool = False
     children: int = 0
     samples: list[str] = field(default_factory=list)
+    count: int = 0  # 在该类型全部实例中出现的次数（0=旧数据未知）
 
     def to_dict(self) -> dict:
         return {
@@ -32,6 +38,7 @@ class ConditionField:
             "indexed": self.indexed,
             "children": self.children,
             "samples": list(self.samples),
+            "count": self.count,
         }
 
     @classmethod
@@ -42,7 +49,30 @@ class ConditionField:
             indexed=bool(data.get("indexed")),
             children=int(data.get("children", 0)),
             samples=list(data.get("samples", [])),
+            count=int(data.get("count", 0)),
         )
+
+    @property
+    def enum_values(self) -> list[str]:
+        """样本集形态良好时视为枚举候选（供下拉框），否则空表。
+
+        规则：非空、去重后 ≤8 个、int/bool 全收、string 须全部为
+        token 形态；float/empty/composite 不做枚举。
+        """
+        vals: list[str] = []
+        for s in self.samples:
+            if s and s not in vals:
+                vals.append(s)
+        if not vals or len(vals) > _ENUM_MAX_VALUES:
+            return []
+        if self.kind in ("float", "empty", "composite"):
+            return []
+        if self.kind == "string":
+            if self.name in ("name", "type"):
+                return []
+            if not all(_TOKEN_RE.match(v) for v in vals):
+                return []
+        return vals
 
 
 @dataclass
@@ -51,6 +81,32 @@ class ConditionType:
     count: int = 0
     regions: list[str] = field(default_factory=list)
     fields: dict[str, ConditionField] = field(default_factory=dict)
+
+    def field_meta(self, skip: tuple[str, ...] = ("type", "name")) -> list[dict]:
+        """按首次出现顺序返回字段元数据（通用表单生成输入）。
+
+        每项 ``{"name", "kind", "indexed", "children", "required",
+        "enum": [...], "default"}``；``required=None`` 表示出现计数
+        未知（旧 schema JSON），按可选渲染。
+        """
+        out: list[dict] = []
+        for fname, f in self.fields.items():
+            if fname in skip or fname == "regions" or fname.startswith(
+                    "regions."):
+                continue
+            required = (True if f.count and self.count
+                        and f.count >= self.count else
+                        (False if f.count else None))
+            out.append({
+                "name": fname,
+                "kind": f.kind,
+                "indexed": f.indexed,
+                "children": f.children,
+                "required": required,
+                "enum": f.enum_values,
+                "default": (f.samples[0] if f.samples else ""),
+            })
+        return out
 
     def to_dict(self) -> dict:
         return {
@@ -112,6 +168,7 @@ class ConditionRegistry:
                         children=int(fdesc.get("children", 0)),
                     ),
                 )
+                f.count += int(fdesc.get("count", 0))
                 for s in fdesc.get("samples", []):
                     if s and s not in f.samples:
                         f.samples.append(s)
@@ -152,14 +209,15 @@ class ConditionRegistry:
         return reg
 
     def validate_condition(self, cond) -> dict:
-        """校验单个 ``<condition>`` 元素：报告未知字段与类型不匹配。"""
+        """校验单个 ``<condition>`` 元素：未知字段 / 类型不匹配 / 缺失必填。"""
         tname = cond.findtext("type", "")
         known = self.types.get(tname)
         issues: list[str] = []
         if known is None:
             issues.append(f"unknown condition type: {tname}")
             return {"type": tname, "issues": issues}
-        for fname, fdesc in condition_fields(cond).items():
+        present = condition_fields(cond)
+        for fname, fdesc in present.items():
             if fname in ("type", "name", "regions"):
                 continue
             kf = known.fields.get(fname)
@@ -171,6 +229,15 @@ class ConditionRegistry:
                 issues.append(
                     f"field type mismatch: {fname} "
                     f"expected={kf.kind} actual={fdesc['kind']}")
+        # 缺失必填（仅当字段出现计数已知时判定）
+        for fname, kf in known.fields.items():
+            if fname in ("type", "name", "regions") or fname.startswith(
+                    "regions."):
+                continue
+            if fname in present or not kf.count:
+                continue
+            if kf.count >= known.count:
+                issues.append(f"missing required field: {fname}")
         return {"type": tname, "issues": issues}
 
 

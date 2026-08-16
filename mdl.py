@@ -571,3 +571,201 @@ def detect_matching_faces(model: MdlModel) -> list[dict]:
                     out.append({"group1": fi, "group2": fj,
                                 "direction": "Reverse"})
     return out
+
+
+# ── P3-3：面面积 / 三角化 / 面片穿越相交检测（Select 菜单本地实现） ──────
+
+def face_areas(model: MdlModel) -> np.ndarray:
+    """每面面积（Newell 向量模 / 2），``(n_faces,)``。"""
+    out = np.zeros(model.n_faces, dtype=float)
+    if model.n_faces == 0 or model.xyz.size == 0:
+        return out
+    off = model.face_offsets
+    xyz = model.xyz
+    conn = model.conn
+    for fid in range(model.n_faces):
+        pts = xyz[conn[off[fid]:off[fid + 1]]]
+        if len(pts) < 3:
+            continue
+        n = np.cross(pts, np.roll(pts, -1, axis=0)).sum(axis=0)
+        out[fid] = float(np.linalg.norm(n)) / 2.0
+    return out
+
+
+def triangulate_faces(model: MdlModel,
+                      face_ids=None) -> tuple[np.ndarray, np.ndarray]:
+    """多边形面扇形三角化 → ``(tri_verts (m,3) int64, face_of_tri (m,))``。"""
+    ids = (np.arange(model.n_faces) if face_ids is None
+           else np.asarray(face_ids, dtype=np.int64))
+    ids = ids[(ids >= 0) & (ids < model.n_faces)]
+    tri_list: list = []
+    face_list: list = []
+    off = model.face_offsets
+    conn = model.conn
+    for fid in ids:
+        nodes = conn[off[fid]:off[fid + 1]]
+        for k in range(1, len(nodes) - 1):
+            tri_list.append((nodes[0], nodes[k], nodes[k + 1]))
+            face_list.append(int(fid))
+    if not tri_list:
+        return (np.empty((0, 3), dtype=np.int64),
+                np.empty(0, dtype=np.int64))
+    return (np.asarray(tri_list, dtype=np.int64),
+            np.asarray(face_list, dtype=np.int64))
+
+
+def _seg_tri_intersect(p0, p1, tri, eps: float = 1e-12) -> bool:
+    """Möller–Trumbore 线段-三角形相交（含端点，``[0,1]`` 参数区间）。"""
+    d = p1 - p0
+    e1 = tri[1] - tri[0]
+    e2 = tri[2] - tri[0]
+    h = np.cross(d, e2)
+    a = float(np.dot(e1, h))
+    if abs(a) < eps:
+        return False            # 线段与三角形平面平行
+    f = 1.0 / a
+    s = p0 - tri[0]
+    u = f * float(np.dot(s, h))
+    if u < -1e-9 or u > 1.0 + 1e-9:
+        return False
+    q = np.cross(s, e1)
+    v = f * float(np.dot(d, q))
+    if v < -1e-9 or u + v > 1.0 + 1e-9:
+        return False
+    t = f * float(np.dot(e2, q))
+    return -1e-9 <= t <= 1.0 + 1e-9
+
+
+def _tri_tri_crossing(ta, tb) -> bool:
+    """三角形对是否互相穿越（各 3 条边 vs 对方三角形的 seg-tri）。
+
+    只检测**非共面穿越**：共面重叠 / 贴边不报（那属于拓扑连接或
+    装配贴合面，由顶点邻近过滤负责排除）。
+    """
+    for k in range(3):
+        if _seg_tri_intersect(ta[k], ta[(k + 1) % 3], tb):
+            return True
+        if _seg_tri_intersect(tb[k], tb[(k + 1) % 3], ta):
+            return True
+    return False
+
+
+def _aabb_cross_pairs(tris_a: np.ndarray, tris_b: np.ndarray,
+                      cap: int = 400_000) -> list[tuple[int, int]]:
+    """两组三角形的 AABB 相交候选对（sweep and prune，按 x 轴）。"""
+    def lo_hi(tris):
+        lo = tris.min(axis=1)
+        hi = tris.max(axis=1)
+        return lo, hi
+
+    lo_a, hi_a = lo_hi(tris_a)
+    lo_b, hi_b = lo_hi(tris_b)
+    order = np.argsort(np.concatenate([lo_a[:, 0], lo_b[:, 0]]),
+                       kind="stable")
+    na = len(tris_a)
+    which = np.concatenate([np.zeros(na, dtype=np.int8),
+                            np.ones(len(tris_b), dtype=np.int8)])
+    lo = np.vstack([lo_a, lo_b])
+    hi = np.vstack([hi_a, hi_b])
+    pairs: list[tuple[int, int]] = []
+    n = na + len(tris_b)
+    for ii in range(n):
+        i = int(order[ii])
+        wi = which[i]
+        x_hi = hi[i, 0]
+        for jj in range(ii + 1, n):
+            j = int(order[jj])
+            if lo[j, 0] > x_hi:
+                break
+            if which[j] == wi:
+                continue
+            # i/j 是合并数组下标 → 还原各集合局部下标
+            if wi == 0:                 # i ∈ A, j ∈ B
+                a, b = i, j - na
+            else:                       # i ∈ B, j ∈ A
+                a, b = j, i - na
+            if (lo[a, 1] <= hi[na + b, 1] and lo[na + b, 1] <= hi[a, 1]
+                    and lo[a, 2] <= hi[na + b, 2]
+                    and lo[na + b, 2] <= hi[a, 2]):
+                pairs.append((a, b))
+                if len(pairs) >= cap:
+                    return pairs
+    return pairs
+
+
+def surface_intersections(model_a: MdlModel,
+                          model_b: Optional["MdlModel"] = None, *,
+                          vertex_tol: float = 0.0,
+                          max_pairs: int = 400_000,
+                          max_hits: int = 200) -> list[dict]:
+    """三角形级穿越相交检测（Check Intersection 菜单本地实现）。
+
+    - ``model_b=None``：检测 ``model_a`` **内部**不同闭体（csid）面片的
+      穿越；两个闭体的共享界面（csid 同含两侧）自动排除。
+    - ``model_b`` 给定：检测两个 MDL 之间的面片穿越。
+
+    顶点距离 ``< vertex_tol`` 的三角形对视为拓扑连接/装配贴合，跳过。
+    返回命中列表（最多 ``max_hits`` 条）：
+    ``[{"face_a", "face_b", "body_a", "body_b", "point"}]``。
+    """
+    if model_b is None:
+        b1, b2 = model_a.csid
+        bodies = sorted(set(np.unique(b1[b1 > 0]).tolist()
+                            + np.unique(b2[b2 > 0]).tolist()))
+        hits: list[dict] = []
+        for i in range(len(bodies)):
+            for j in range(i + 1, len(bodies)):
+                ba, bb = bodies[i], bodies[j]
+                in_a = (b1 == ba) | (b2 == ba)
+                in_b = (b1 == bb) | (b2 == bb)
+                shared = in_a & in_b      # 界面共享面：不算穿越
+                fa = np.flatnonzero(in_a & ~shared)
+                fb = np.flatnonzero(in_b & ~shared)
+                part_hits = _intersect_face_sets(
+                    model_a, fa, model_a, fb, vertex_tol,
+                    max_pairs, max_hits - len(hits))
+                for h in part_hits:
+                    h["body_a"], h["body_b"] = ba, bb
+                hits += part_hits
+                if len(hits) >= max_hits:
+                    return hits
+        return hits
+    hits = _intersect_face_sets(model_a, None, model_b, None,
+                                vertex_tol, max_pairs, max_hits)
+    b1a, b2a = model_a.csid
+    b1b, b2b = model_b.csid
+    for h in hits:
+        fa_id, fb_id = h["face_a"], h["face_b"]
+        h["body_a"] = int(b2a[fa_id]) if fa_id < len(b2a) else None
+        h["body_b"] = int(b2b[fb_id]) if fb_id < len(b2b) else None
+    return hits
+
+
+def _intersect_face_sets(ma: MdlModel, fa, mb: MdlModel, fb,
+                         vertex_tol: float, max_pairs: int,
+                         max_hits: int) -> list[dict]:
+    ta, fmap_a = triangulate_faces(ma, fa)
+    tb, fmap_b = triangulate_faces(mb, fb)
+    if len(ta) == 0 or len(tb) == 0:
+        return []
+    tri_a_pts = ma.xyz[ta.reshape(-1)].reshape(-1, 3, 3)
+    tri_b_pts = mb.xyz[tb.reshape(-1)].reshape(-1, 3, 3)
+    pairs = _aabb_cross_pairs(tri_a_pts, tri_b_pts, cap=max_pairs)
+    tol2 = vertex_tol * vertex_tol
+    hits: list[dict] = []
+    for ia, ib in pairs:
+        # 顶点邻近过滤（拓扑连接/装配贴合）：三角形对存在任一
+        # 顶点对几何重合（距离² < tol²）→ 视为共享拓扑点，跳过
+        if tol2 > 0.0:
+            d2 = ((tri_a_pts[ia][:, None, :] - tri_b_pts[ib][None]) ** 2)
+            if float(d2.sum(-1).min()) < tol2:
+                continue
+        if _tri_tri_crossing(tri_a_pts[ia], tri_b_pts[ib]):
+            hits.append({
+                "face_a": int(fmap_a[ia]),
+                "face_b": int(fmap_b[ib]),
+                "point": (tri_a_pts[ia][0].tolist()),
+            })
+            if len(hits) >= max_hits:
+                break
+    return hits

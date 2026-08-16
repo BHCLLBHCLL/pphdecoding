@@ -465,10 +465,67 @@ def create_boundary(points: np.ndarray, faces: list) -> tuple:
     return faces, (b1, b2), n_closed, n_sheets, n_open
 
 
-def detect_multifold(points: np.ndarray, faces: list) -> tuple:
-    """``CreateMultiEntityInfo``：多重边（>2 面共享）与多重面（顶点集重复）。"""
+def _proximity_remap(points: np.ndarray, tol: float) -> np.ndarray:
+    """距离 < tol 的顶点并为一组（cKDTree + union-find）→ 代表 id 映射。
+
+    仅返回映射，不修改几何；代表 = 组内最小顶点 id（保证确定性）。
+    """
+    n = len(points)
+    if tol <= 0 or n < 2:
+        return np.arange(n, dtype=np.int64)
+    from scipy.spatial import cKDTree
+    parent = list(range(n))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for i, j in cKDTree(points).query_pairs(float(tol)):
+        ri, rj = find(i), find(j)
+        if ri != rj:
+            parent[max(ri, rj)] = min(ri, rj)
+    roots = [find(v) for v in range(n)]
+    return np.asarray(roots, dtype=np.int64)
+
+
+def detect_multifold(points: np.ndarray, faces: list,
+                     tol_edge: float = 0.0,
+                     tol_face: float = 0.0) -> tuple:
+    """``CreateMultiEntityInfo``：多重边（>2 面共享）与多重面（顶点集重复）。
+
+    容差合并（P3-1）：``tol_edge`` / ``tol_face`` > 0 时先把间距小于容差
+    的顶点并为同一代表（只影响分组键，不改几何），缝隙面片间微偏的
+    重合边/重复面也能识别——对齐向导 1/N 容差语义
+    （``tol = 包围盒对角线 / N``，N 即 ``tol_multifold_*`` 分母）。
+    返回 ``(mf_edges: dict[key, list[face_id]], n_mf_faces)``。
+    """
     em = _edge_faces(faces)
-    mf_edges = {k: [f for f, _d in v] for k, v in em.items() if len(v) > 2}
+    mf_edges: dict = {k: [f for f, _d in v] for k, v in em.items()
+                      if len(v) > 2}
+
+    # 容差模式：代表键分组，补上精确拓扑抓不到的"几何重合"实例
+    if tol_edge > 0 or tol_face > 0:
+        remap_e = _proximity_remap(points, tol_edge)
+        remap_f = _proximity_remap(points, tol_face)
+        if tol_edge > 0:
+            groups: dict = defaultdict(set)
+            for fid, face in enumerate(faces):
+                ids = [int(remap_e[v]) for v in face]
+                for a, b in zip(ids, ids[1:] + ids[:1]):
+                    if a != b:
+                        groups[(min(a, b), max(a, b))].add(fid)
+            for key, fids in groups.items():
+                if len(fids) > 2 and key not in mf_edges:
+                    mf_edges[key] = sorted(fids)
+        if tol_face > 0:
+            # 多重面 = 总面数 − 代表键（容差内顶点集）去重后的组数；
+            # tol_face→0 时退化为精确口径（每对重复面计 1）
+            keys = {frozenset(int(remap_f[v]) for v in face)
+                    for face in faces}
+            return mf_edges, len(faces) - len(keys)
+
     seen: dict = {}
     mf_faces = 0
     for f in faces:
@@ -662,11 +719,14 @@ def detect_ridges(points: np.ndarray, faces: list,
 
 
 def check_errors(points: np.ndarray, faces: list,
-                 tiny_tol: float) -> tuple:
+                 tiny_tol: float, tol_edge: float = 0.0,
+                 tol_face: float = 0.0) -> tuple:
     """``CheckMDLErrors``：非法形状报告（level/count/type/cause）。"""
     em = _edge_faces(faces)
     n_open = sum(1 for v in em.values() if len(v) == 1)
-    mf_edges, mf_faces = detect_multifold(points, faces)
+    mf_edges, mf_faces = detect_multifold(points, faces,
+                                          tol_edge=tol_edge,
+                                          tol_face=tol_face)
     n_tiny = 0
     if tiny_tol > 0:
         n_tiny = sum(1 for f in faces if _face_size(points, f) < tiny_tol)
@@ -729,8 +789,12 @@ def build_analysis_model(points, faces,
     report.n_sheet_components = n_sheets
     report.n_open_edges = n_open
 
-    # 3. CreateMultiEntityInfo：多重边/面识别（报告用；重复面在 Repair 去除）
-    mf_edges, mf_faces = detect_multifold(points, faces)
+    # 3. CreateMultiEntityInfo：多重边/面识别（容差合并；重复面在 Repair 去除）
+    tol_edge = diag / max(params.tol_multifold_edge, 1e-12)
+    tol_face = diag / max(params.tol_multifold_face, 1e-12)
+    mf_edges, mf_faces = detect_multifold(points, faces,
+                                          tol_edge=tol_edge,
+                                          tol_face=tol_face)
     report.n_multifold_edges = len(mf_edges)
     report.n_multifold_faces = mf_faces
 
@@ -762,9 +826,10 @@ def build_analysis_model(points, faces,
     report.n_sheet_components = n_sheets
     report.n_open_edges = n_open
 
-    # 9. CheckMDLErrors
+    # 9. CheckMDLErrors（容差口径与步骤 3 一致）
     rows, _n_open2, _n_closed2 = check_errors(
-        points, faces, params.remove_tiny_tol)
+        points, faces, params.remove_tiny_tol,
+        tol_edge=tol_edge, tol_face=tol_face)
     report.rows = rows
     report.buildable = n_closed >= 1 and not any(
         r["level"] >= 4 for r in rows)

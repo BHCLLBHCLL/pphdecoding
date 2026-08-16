@@ -8,7 +8,10 @@
 
 from __future__ import annotations
 
+import functools
 import math
+import os
+from pathlib import Path
 from typing import Callable, Optional
 from xml.etree import ElementTree as ET
 
@@ -27,6 +30,32 @@ from PyQt5.QtWidgets import (
 )
 
 import pphxml
+
+
+def patch_message_box_offscreen() -> None:
+    """offscreen 平台下把 QMessageBox 静态弹窗替换为日志输出。
+
+    Windows anaconda PyQt5 实测：``QT_QPA_PLATFORM=offscreen`` 时
+    ``QMessageBox.information`` 等静态方法的模态 exec 会触发 Qt 原生
+    访问冲突（0xC0000005，整个进程死亡）——这就是全量回归中
+    ``test_register_region`` 崩溃的根因。无头/测试环境改为打印日志并
+    返回"确认"结果；桌面平台不受影响。
+    """
+    if os.environ.get("QT_QPA_PLATFORM") != "offscreen":
+        return
+
+    def _quiet(name: str, ret, *args, **kwargs):
+        title = args[1] if len(args) > 1 else ""
+        text = args[2] if len(args) > 2 else ""
+        print(f"[QMessageBox.{name}] {title}: {text}", flush=True)
+        return ret
+
+    for name in ("information", "warning", "critical", "question"):
+        ret = QMessageBox.Yes if name == "question" else QMessageBox.Ok
+        setattr(QMessageBox, name, functools.partial(_quiet, name, ret))
+
+
+patch_message_box_offscreen()
 
 # Navigation key → 是否弹出对话框
 DIALOG_KEYS = frozenset({
@@ -10318,14 +10347,43 @@ class ConditionsBody(_Body):
             "basic_param/base_temp in main.xml.")
 
     def _stub_new_condition(self, page: str, kind: str) -> None:
-        sess = self._ctx.setdefault("session", {}).setdefault(
-            "conditions", {})
-        created = sess.setdefault("created", [])
-        created.append({"page": page, "kind": kind})
-        QMessageBox.information(
-            self, "New condition",
-            f"'{kind}' on [{page}] recorded in session.\n"
-            "Full creation UI runs in scFLOWpre.")
+        # P1-3：schema 里有该类型 → 打开通用表单并写 main.xml；
+        # 否则维持旧的“仅记录 session”桩。
+        ctype = None
+        reg = condition_registry_cached()
+        if reg is not None:
+            ctype = reg.get(kind)
+        if ctype is None:
+            sess = self._ctx.setdefault("session", {}).setdefault(
+                "conditions", {})
+            created = sess.setdefault("created", [])
+            created.append({"page": page, "kind": kind})
+            QMessageBox.information(
+                self, "New condition",
+                f"'{kind}' on [{page}] recorded in session.\n"
+                "No schema for this condition type; "
+                "full creation UI runs in scFLOWpre.")
+            return
+        dlg = GenericCondBody(kind, ctype, self._ctx, self)
+        if dlg.exec_() != QDialog.Accepted:
+            return
+        data = dlg.result_cond()
+        if write_condition_to_xml(self._ctx, ctype, data):
+            sess = self._ctx.setdefault("session", {}).setdefault(
+                "conditions", {})
+            sess.setdefault("created", []).append({
+                "page": page, "kind": kind, "name": data["name"],
+                "written": True,
+            })
+            self._fill_condition_lists()
+            QMessageBox.information(
+                self, "New condition",
+                f"Condition '{data['name']}' ({kind}) written to main.xml.\n"
+                "Save project 后随 .pph 持久化。")
+        else:
+            QMessageBox.warning(
+                self, "New condition",
+                "当前工程未加载 main.xml，无法写入（先打开 PPH 项目）。")
 
     def _show_existing(self, page: str) -> None:
         key = self._current_key() or ""
@@ -13732,6 +13790,270 @@ class OptionNavBody(_Body):
             "show_mesher_item": self.chk_show_mesher.isChecked(),
         }
         return True
+
+
+# ---------------------------------------------------------------------------
+# P1-2/P1-3: schema 驱动的通用 Cond* 条件表单（GenericCondBody）
+# ---------------------------------------------------------------------------
+_COND_REGISTRY_CACHE: Optional[object] = None
+
+
+def condition_registry_cached():
+    """从 ``schemas/*.json`` 构建并缓存 ConditionRegistry（无则 None）。"""
+    global _COND_REGISTRY_CACHE
+    if _COND_REGISTRY_CACHE is not None:
+        return _COND_REGISTRY_CACHE or None
+    try:
+        from condition_registry import ConditionRegistry
+        from schema_extract import load_schema_json
+        schemas_dir = Path(__file__).resolve().parent / "schemas"
+        items = []
+        for p in sorted(schemas_dir.glob("*.json")):
+            try:
+                items.append((load_schema_json(p), p.stem))
+            except Exception:  # noqa: BLE001
+                continue
+        reg = ConditionRegistry.from_schemas(items) if items else None
+        _COND_REGISTRY_CACHE = reg or False
+        return reg
+    except Exception:  # noqa: BLE001
+        _COND_REGISTRY_CACHE = False
+        return None
+
+
+def _region_names_for_cond(ctx: dict) -> list[str]:
+    """当前可选区域名（face/special_face/numerical + 零件名兜底）。"""
+    names: list[str] = []
+    xml = ctx.get("xml")
+    if xml is not None:
+        regs = xml.section("regions")
+        if regs is not None:
+            for cat in ("face", "special_face", "numerical", "special",
+                        "volume"):
+                node = regs.find(cat)
+                if node is None:
+                    continue
+                for r in node.findall("region"):
+                    n = r.findtext("name") or ""
+                    if n:
+                        names.append(n)
+    if not names:
+        names = sorted((ctx.get("groups_info") or {}))
+    return names
+
+
+class GenericCondBody(QDialog):
+    """schema 驱动的通用 Cond* 条件表单（新建）。
+
+    字段来自 ConditionRegistry（schemas/*.json 语料合并）：类型推断
+    （int/float/bool/string/enum）、必填标记（字段出现计数 = 类型实例数）
+    与样本默认值。OK 后通过 :func:`write_condition_to_xml` 落 main.xml。
+    """
+
+    def __init__(self, cond_type: str, ctype, ctx: dict, parent=None):
+        super().__init__(parent)
+        self.cond_type = cond_type
+        self.ctype = ctype
+        self._widgets: dict[str, object] = {}   # path → widget
+        self._meta: list[dict] = ctype.field_meta()
+        self.setWindowTitle(f"New Condition — {cond_type}")
+        self.setMinimumSize(520, 420)
+
+        outer = QVBoxLayout(self)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        body = QWidget()
+        v = QVBoxLayout(body)
+        v.setContentsMargins(8, 8, 8, 8)
+
+        form0 = QFormLayout()
+        self.ed_name = QLineEdit()
+        self.ed_name.setPlaceholderText("Condition name (required)")
+        form0.addRow("Name *", self.ed_name)
+        lab_t = QLabel(cond_type)
+        lab_t.setStyleSheet("color:#555;")
+        form0.addRow("Type", lab_t)
+        v.addLayout(form0)
+
+        # 区域多选
+        gb_reg = QGroupBox("Regions")
+        lv = QVBoxLayout(gb_reg)
+        self.lst_regions = QListWidget()
+        self.lst_regions.setSelectionMode(QListWidget.MultiSelection)
+        for n in _region_names_for_cond(ctx):
+            self.lst_regions.addItem(n)
+        if self.lst_regions.count():
+            self.lst_regions.item(0).setSelected(True)
+        lv.addWidget(self.lst_regions)
+        v.addWidget(gb_reg)
+
+        # 字段：按 "." 路径分组进嵌套 GroupBox
+        gb_root = QGroupBox("Fields")
+        fv = QVBoxLayout(gb_root)
+        inner = self._build_group(self._meta, "")
+        fv.addWidget(inner)
+        v.addWidget(gb_root, 1)
+
+        tip = _note("* required. 空的可选字段不会写入 XML；样本值仅为默认建议。")
+        scroll.setWidget(body)
+        outer.addWidget(scroll, 1)
+        outer.addWidget(tip)
+
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self._on_ok)
+        bb.rejected.connect(self.reject)
+        outer.addWidget(bb)
+
+    # -- 表单构建 ---------------------------------------------------------
+    def _build_group(self, meta: list[dict], prefix: str) -> QWidget:
+        """递归构建一组字段的容器（直接叶子进 FormLayout）。"""
+        form = QFormLayout()
+        subs: list[tuple[str, list[dict]]] = []
+        for m in meta:
+            name = m["name"]
+            # 去掉父前缀（含分隔点）得到本级段名
+            seg = name[len(prefix) + 1:] if prefix and name.startswith(
+                prefix + ".") else name
+            if "." in seg:
+                parent_seg = seg.split(".", 1)[0]
+                sub_prefix = (prefix + "." + parent_seg) if prefix \
+                    else parent_seg
+                for sp, lst in subs:
+                    if sp == sub_prefix:
+                        lst.append(m)
+                        break
+                else:
+                    subs.append((sub_prefix, [m]))
+                continue
+            form.addRow(self._field_label(m), self._field_widget(m))
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.addLayout(form)
+        for sub_prefix, lst in subs:
+            gb = QGroupBox(sub_prefix.rsplit(".", 1)[-1])
+            gl = QVBoxLayout(gb)
+            gl.addWidget(self._build_group(lst, sub_prefix))
+            lay.addWidget(gb)
+        lay.addStretch(1)
+        return w
+
+    @staticmethod
+    def _field_label(m: dict) -> str:
+        return m["name"].rsplit(".", 1)[-1] + (" *" if m["required"] else "")
+
+    def _field_widget(self, m: dict):
+        kind, enum, default = m["kind"], m.get("enum") or [], m["default"]
+        if enum:
+            w = QComboBox()
+            w.setEditable(True)
+            w.addItems(enum)
+            w.setCurrentText(default or enum[0])
+        elif kind == "bool":
+            w = _bool_combo()
+            if default:
+                _set_combo_data(w, default)
+        else:
+            w = QLineEdit(default)
+            if kind in ("int", "float"):
+                w.setPlaceholderText(kind)
+        self._widgets[m["name"]] = w
+        return w
+
+    # -- 取值 / 校验 -------------------------------------------------------
+    def _value(self, path: str, m: dict) -> str:
+        w = self._widgets.get(path)
+        if isinstance(w, QComboBox):
+            return w.currentText().strip()
+        return w.text().strip() if w is not None else ""
+
+    def _validate(self) -> list[str]:
+        errs: list[str] = []
+        if not self.ed_name.text().strip():
+            errs.append("Name is required.")
+        for m in self._meta:
+            val = self._value(m["name"], m)
+            # empty（语料中空元素形态）/ composite（结构节点）无文本值，
+            # 不做"必填非空"检查
+            if (m["required"] and not val
+                    and m["kind"] not in ("empty", "composite")):
+                errs.append(f"Required field empty: {m['name']}")
+            elif val and m["kind"] == "int":
+                try:
+                    int(val)
+                except ValueError:
+                    errs.append(f"Not an integer: {m['name']} = {val!r}")
+            elif val and m["kind"] == "float":
+                try:
+                    float(val)
+                except ValueError:
+                    errs.append(f"Not a float: {m['name']} = {val!r}")
+        return errs
+
+    def _on_ok(self) -> None:
+        errs = self._validate()
+        if errs:
+            QMessageBox.warning(self, "New Condition", "\n".join(errs[:8]))
+            return
+        self.accept()
+
+    def result_cond(self) -> dict:
+        regions = [i.text() for i in self.lst_regions.selectedItems()]
+        fields = {}
+        for m in self._meta:
+            val = self._value(m["name"], m)
+            if val:
+                fields[m["name"]] = val
+        return {
+            "type": self.cond_type,
+            "name": self.ed_name.text().strip(),
+            "regions": regions,
+            "fields": fields,
+        }
+
+
+def write_condition_to_xml(ctx: dict, ctype, data: dict) -> bool:
+    """把 GenericCondBody 结果写进 ctx['xml'] 的 ``<conditions>``。
+
+    返回是否写入成功（无 xml 时 False）。字段按 schema 首现顺序重建，
+    复合父节点按 "." 路径展开；区域子标签取 schema 中 regions.<tag>
+    的首个形态（如 region/face）。
+    """
+    xml = ctx.get("xml")
+    if xml is None:
+        return False
+    cond_root = xml.section("conditions")
+    if cond_root is None:
+        cond_root = ET.SubElement(xml.root, "conditions")
+    el = ET.SubElement(cond_root, "condition")
+    ET.SubElement(el, "type").text = data["type"]
+    ET.SubElement(el, "name").text = data["name"]
+
+    if data.get("regions"):
+        regs = ET.SubElement(el, "regions")
+        tag = "region"
+        for fname in ctype.fields:
+            if fname.startswith("regions."):
+                tag = fname.rsplit(".", 1)[-1]
+                break
+        for r in data["regions"]:
+            ET.SubElement(regs, tag).text = r
+
+    def _ensure(parent: ET.Element, seg: str) -> ET.Element:
+        node = parent.find(seg)
+        if node is None:
+            node = ET.SubElement(parent, seg)
+        return node
+
+    for path, value in data.get("fields", {}).items():
+        segs = path.split(".")
+        node = el
+        for seg in segs[:-1]:
+            node = _ensure(node, seg)
+        ET.SubElement(node, segs[-1]).text = value
+
+    ctx["xml_dirty"] = True
+    return True
 
 
 BODY_CLASSES: dict[str, type] = {

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """NativeBridge 加载器测试（未编译回退 + 已编译实机）。"""
 
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -67,8 +68,11 @@ class TestNativeBridgeFallback(unittest.TestCase):
             native_bridge._INITIALIZED_LIB = None
 
 
-@unittest.skipUnless(native_bridge.is_compiled(),
-                     "native/out/scflow_bridge.dll 未编译")
+@unittest.skipUnless(
+    native_bridge.is_compiled()
+    and os.environ.get("SCF_RUN_BRIDGE_TESTS") == "1",
+    "需要 bridge 已编译且 SCF_RUN_BRIDGE_TESTS=1（实机调用加载厂商 "
+    "DLL，与 Qt offscreen 同进程会访问冲突，不默认混入全量回归）")
 class TestNativeBridgeReal(unittest.TestCase):
     def test_status(self):
         st = native_bridge.status()

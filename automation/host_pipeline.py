@@ -115,6 +115,10 @@ def build_pipeline_vbs(result_path: str | Path,
     result_path = Path(result_path).resolve()
     lines = [
         "' pphdecoding NativeBridge host pipeline",
+        "' !! 仅限在 scFLOWpre 宿主内执行（File → Execute VBScript）。",
+        "' !! 不要用 wscript/cscript 运行：下面的 CreateObject 兜底会触发",
+        "' !! LocalServer 激活拉起裸 exe（绕过 Kicker 的许可注入）并崩溃",
+        "' !! （SetupSCTpreLib RaiseException 0xE0000000，见 DEV_SUMMARY §6）。",
         "On Error Resume Next",
         "Set App_ = GetApplication()",
         'If App_ Is Nothing Then Set App_ = CreateObject("scFLOWpre_Bx64net.Application.2025")',
@@ -324,8 +328,17 @@ def _run_gui(vbs_path: Path, timeout: float, menu: dict) -> dict:
     if pids:
         app = Application(backend="win32").connect(process=pids[0])
     else:
-        app = Application(backend="win32").start(str(exe))
-        started_by_us = True
+        # 安全约束（DEV_SUMMARY §6.4）：绝不能直接 start 裸 exe——
+        # scFLOWpre 必须经 Kicker 启动（许可/产品键注入），裸 exe 会在
+        # SetupSCTpreLib 抛 0xE0000000 并弹模态错误框。要求用户先经
+        # Kicker 启动宿主，再使用 gui 后端。
+        return {
+            "backend": "gui", "ok": False,
+            "error": "scFLOWpre 未运行：请先经 Kicker 正常启动 scFLOWpre，"
+                     "再选择 gui 后端（直接拉起裸 exe 会因缺少 Kicker 注入"
+                     "的许可状态而崩溃，见 DEV_SUMMARY §6.1/§6.4）",
+            "script": str(vbs_path),
+        }
 
     _dismiss_warning_dialogs(app)
     try:

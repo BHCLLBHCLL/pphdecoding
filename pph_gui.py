@@ -4085,10 +4085,13 @@ class PphViewer(QMainWindow):
         m.addSeparator()
         add_act(m, "Spread Selected Face to Selected Edge",
                 key="sel_spread")
-        add_act(m, "Select by Element Number…", key="sel_by_elem")
+        add_act(m, "Select by Element Number…",
+                self._select_by_element_number, key="sel_by_elem",
+                tip="输入 MDL 面编号列表（支持区间）过滤显示")
         add_act(m, "Select Elements by List File…", key="sel_by_list")
         add_act(m, "Select Faces That Have the Same Area",
-                key="sel_same_area")
+                self._select_same_area, key="sel_same_area",
+                tip="以 Mouse Pick 拾取的面为参考，选中同面积的全部面")
         m.addSeparator()
         add_act(m, "Select All Parts", self._select_all_parts,
                 key="sel_all_parts")
@@ -4114,7 +4117,9 @@ class PphViewer(QMainWindow):
         m.addSeparator()
         add_act(m, "Element Quality Check…", self._element_quality_check,
                 key="sel_quality")
-        add_act(m, "Check Intersection", key="sel_intersect")
+        add_act(m, "Check Intersection", self._check_intersection,
+                key="sel_intersect",
+                tip="MDL 面片穿越相交检测（体间 + 跨组，本地算法）")
 
         # ── View ──────────────────────────────────────────────────
         m = mb.addMenu("View(&V)")
@@ -4841,11 +4846,249 @@ class PphViewer(QMainWindow):
         self.log("View — Region Registration Check")
 
     def _element_quality_check(self) -> None:
+        """Element Quality Check：本地质量统计（P2-3 quality.py）。"""
+        import quality
+
+        paths: list[tuple[str, str]] = []
+        for g, info in (self._groups_info or {}).items():
+            p = (info.get("paths") or {}).get("gph")
+            if p:
+                paths.append((g, str(p)))
+        if not paths:
+            p, _f = QFileDialog.getOpenFileName(
+                self, "Select GPH volume mesh", "", "GPH mesh (*.gph)")
+            if p:
+                paths.append((Path(p).stem, p))
+            else:
+                self.log("Element Quality Check — no GPH mesh", "WARN")
+                return
+
+        reports: list[tuple[str, "quality.QualityReport"]] = []
+        for g, p in paths:
+            try:
+                reports.append((f"{g} ({Path(p).name})",
+                                quality.from_gph(p)))
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"quality {p}: {exc}", "WARN")
+        if not reports:
+            QMessageBox.warning(
+                self, "Element Quality Check",
+                "无法从 GPH 解析网格（LS_Links 缺失或损坏）")
+            return
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Element Quality Check")
+        dlg.resize(760, 700)
+        lay = QVBoxLayout(dlg)
+        text = QPlainTextEdit(dlg)
+        text.setReadOnly(True)
+        text.setMinimumHeight(260)
+        lay.addWidget(text)
+
+        # 跨组聚合直方图（非正交度 / 偏斜度）
+        for metric in ("non_orthogonality", "skewness"):
+            agg: dict[str, int] = {}
+            for _label, rep in reports:
+                for lbl, cnt in rep.histogram(metric):
+                    agg[lbl] = agg.get(lbl, 0) + cnt
+            if not agg:
+                continue
+            chart = BarChart(dlg)
+            n = max(1, len(agg) - 1)
+            items = [(lbl, float(cnt),
+                      (0.2 + 0.7 * i / n, 0.75 - 0.55 * i / n, 0.25))
+                     for i, (lbl, cnt) in enumerate(agg.items())]
+            chart.set_data(items, unit=" faces")
+            lay.addWidget(chart)
+
+        body = "\n\n".join(
+            rep.format_report(f"[{label}]") for label, rep in reports)
+        text.setPlainText(body)
+        btn = QPushButton("Close", dlg)
+        btn.clicked.connect(dlg.accept)
+        lay.addWidget(btn)
+        dlg.exec_()
+        s = reports[0][1].summary()
+        self.log(f"Check — Element Quality Check: {len(reports)} mesh(es), "
+                 f"max non-orthogonality {s['non_orthogonality']['max']:.1f}°")
+
+    # ── P3-3：Select 菜单本地实现 ───────────────────────────────
+
+    @staticmethod
+    def _parse_element_numbers(text: str) -> list[int]:
+        """解析编号列表：逗号/空格/换行分隔，支持区间（如 ``10-20``）。"""
+        ids: list[int] = []
+        for tok in text.replace(",", " ").split():
+            if "-" in tok[1:]:
+                lo, _, hi = tok.partition("-")
+                try:
+                    a, b = int(lo), int(hi)
+                except ValueError:
+                    continue
+                if b >= a and b - a < 1_000_000:
+                    ids.extend(range(a, b + 1))
+            else:
+                try:
+                    ids.append(int(tok))
+                except ValueError:
+                    continue
+        return ids
+
+    def _current_mdl_model(self) -> tuple[Optional[str], Optional[object]]:
+        """当前组的 MDL part 模型：``(group, MdlModel)``。"""
+        g = self.view3d.group_box.currentText()
+        info = (self._groups_info or {}).get(g) or {}
+        model = info.get("part")
+        if model is None:
+            path = (info.get("paths") or {}).get("part")
+            if path:
+                try:
+                    import mdl
+                    model = self.view3d._cached(
+                        ("mdl", path), lambda: mdl.parse_mdl(path))
+                except Exception:  # noqa: BLE001
+                    model = None
+        return (g if model is not None else None), model
+
+    def _select_by_element_number(self) -> None:
+        """Select by Element Number：输入 MDL 面编号列表 → faces 过滤。"""
+        text, ok = QInputDialog.getMultiLineText(
+            self, "Select by Element Number",
+            "输入面编号（逗号/空格/换行分隔，支持区间 如 12-18）：",
+            "1, 5, 10-20")
+        if not ok or not text.strip():
+            return
+        ids = self._parse_element_numbers(text)
+        if not ids:
+            QMessageBox.warning(self, "Select by Element Number",
+                                "未能解析出任何编号。")
+            return
+        g, model = self._current_mdl_model()
+        n = model.n_faces if model is not None else 0
+        if n == 0:
+            QMessageBox.warning(
+                self, "Select by Element Number",
+                f"组 {g or '(?)'} 无 MDL 几何。请先生成/载入 MDL。")
+            return
+        valid = sorted({i for i in ids if 0 <= i < n})
+        dropped = len(set(ids)) - len(valid)
+        if not valid:
+            QMessageBox.warning(
+                self, "Select by Element Number",
+                f"编号全部越界（有效范围 0..{n - 1}）。")
+            return
+        self.show_page("draw")
+        self.view3d.set_model_filter({"kind": "faces", "values": valid})
+        self.log(f"Select by Element Number [{g}] — {len(valid)} faces"
+                 + (f"，忽略 {dropped} 个越界编号" if dropped else ""))
+
+    def _select_same_area(self) -> None:
+        """Select Faces That Have the Same Area：以拾取面为参考选同面积面。"""
+        pick = getattr(self.view3d, "last_pick", None)
+        if not pick or pick.get("mode") != "face":
+            QMessageBox.information(
+                self, "Same Area",
+                "请先启用 Mouse Pick (Face) 拾取一个参考面。")
+            return
+        fid = int(pick.get("face"))
+        path = pick.get("path")
+        if not path:
+            QMessageBox.warning(self, "Same Area", "拾取面缺少 MDL 路径。")
+            return
+        try:
+            import mdl
+            model = self.view3d._cached(
+                ("mdl", path), lambda: mdl.parse_mdl(path))
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Same Area", f"MDL 解析失败：{exc}")
+            return
+        if not (0 <= fid < model.n_faces):
+            QMessageBox.warning(self, "Same Area",
+                                f"面 #{fid} 越界（n={model.n_faces}）。")
+            return
+        areas = mdl.face_areas(model)
+        target = float(areas[fid])
+        scale = float(np.linalg.norm(
+            model.xyz.max(axis=0) - model.xyz.min(axis=0))) ** 2
+        tol = max(1e-4 * target, 1e-12 * scale)
+        hits = np.flatnonzero(np.abs(areas - target) <= tol)
+        values = sorted(int(v) for v in hits)
+        self.show_page("draw")
+        self.view3d.set_model_filter({"kind": "faces", "values": values})
+        self.log(f"Select Same Area [{pick.get('group', '?')}] — "
+                 f"face #{fid} area={target:.6g}，命中 {len(values)} 面")
+
+    def _check_intersection(self) -> None:
+        """Check Intersection：MDL 面片穿越相交检测（本地，P3-3）。"""
+        import mdl
+
+        models: dict[str, object] = {}
+        for g, info in (self._groups_info or {}).items():
+            model = info.get("part")
+            if model is not None:
+                models[g] = model
+        if not models:
+            QMessageBox.warning(
+                self, "Check Intersection",
+                "无 MDL 几何（需要 *_part.mdl）。")
+            return
+        diag = 0.0
+        for m in models.values():
+            diag = max(diag, float(np.linalg.norm(
+                m.xyz.max(axis=0) - m.xyz.min(axis=0))))
+        vertex_tol = 1e-6 * diag
+
+        lines: list[str] = []
+        total = 0
+        first_hit = None
+        for g, m in models.items():
+            try:
+                hits = mdl.surface_intersections(m, vertex_tol=vertex_tol)
+            except Exception as exc:  # noqa: BLE001
+                lines.append(f"[{g}] 检测失败：{exc}")
+                continue
+            total += len(hits)
+            if hits:
+                h0 = hits[0]
+                lines.append(
+                    f"[{g}] 体间穿越 {len(hits)} 处（首例 body "
+                    f"{h0['body_a']}×{h0['body_b']}，faces "
+                    f"#{h0['face_a']}/#{h0['face_b']} @ "
+                    f"({h0['point'][0]:.3g}, {h0['point'][1]:.3g}, "
+                    f"{h0['point'][2]:.3g})）")
+                if first_hit is None:
+                    first_hit = (g, h0)
+            else:
+                lines.append(f"[{g}] 无体间穿越")
+        groups = sorted(models)
+        for i in range(len(groups)):
+            for j in range(i + 1, len(groups)):
+                ga, gb = groups[i], groups[j]
+                try:
+                    hits = mdl.surface_intersections(
+                        models[ga], models[gb], vertex_tol=vertex_tol)
+                except Exception as exc:  # noqa: BLE001
+                    lines.append(f"[{ga} × {gb}] 检测失败：{exc}")
+                    continue
+                total += len(hits)
+                if hits:
+                    h0 = hits[0]
+                    lines.append(
+                        f"[{ga} × {gb}] 跨组穿越 {len(hits)} 处（首例 "
+                        f"faces #{h0['face_a']}/#{h0['face_b']}）")
+                    if first_hit is None:
+                        first_hit = (ga, h0)
+                else:
+                    lines.append(f"[{ga} × {gb}] 无跨组穿越")
+
+        verdict = ("发现 %d 处面片穿越（可能几何干涉）" % total
+                   if total else "未发现面片穿越（几何无干涉）")
         QMessageBox.information(
-            self, "Element Quality Check",
-            "Full quality metrics need scFLOWpre.\n"
-            "Basic Element Types dialog is available under View.")
-        self.log("View — Element Quality Check (stub)")
+            self, "Check Intersection",
+            verdict + "\n\n" + "\n".join(lines)
+            + "\n\n（共面贴合/拓扑连接按容差 "
+              f"{vertex_tol:.3g} 排除；仅检测非共面穿越）")
+        self.log(f"Check Intersection — {verdict}")
 
     def _fit_to_selection(self) -> None:
         self.show_page("draw")
@@ -5782,6 +6025,10 @@ class PphViewer(QMainWindow):
                 self._run_scflow_pipeline(ctx)
             if key == "import_part":
                 self._run_import_cad(ctx)
+            if key == "create_parts":
+                self._run_native_create_parts(ctx)
+            if key == "modify_parts":
+                self._run_native_modify_parts(ctx)
 
     def _tessellate_xt_members(self) -> None:
         """打开工程时剖分已归档的 ``.x_t`` 成员（对齐 cab_gui）。"""
@@ -5879,6 +6126,149 @@ class PphViewer(QMainWindow):
             "Triangles": f"{n_tris:,}",
             "Points": f"{n_pts:,}",
         })
+
+    # -- P0-4: CreateParts / ModifyParts 原生执行（pskernel 直调）---------
+
+    def _unit_from_ctx(self, ctx: dict) -> str:
+        xenv = ctx.get("xenv")
+        if xenv is None:
+            return "m"
+        return (xenv.get("UNIT", "MODEL_LENGTH_UNIT", "m") or "m").strip()
+
+    def _archive_xt_member(self, name: str, xt: bytes) -> None:
+        """把 body 的 x_t 写入工程成员（对齐 _run_import_cad 归档路径）。"""
+        member = f"{name}.x_t"
+        try:
+            self.member_bytes[member] = xt
+            if self.tmp_dir:
+                out = os.path.join(self.tmp_dir, member)
+                os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+                Path(out).write_bytes(xt)
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"geometry_ops：写工程成员 {member} 失败: {exc}", "WARN")
+
+    def _drop_xt_member(self, name: str) -> None:
+        member = f"{name}.x_t"
+        self.member_bytes.pop(member, None)
+        if self.tmp_dir:
+            try:
+                p = Path(self.tmp_dir) / member
+                if p.exists():
+                    p.unlink()
+            except OSError:
+                pass
+
+    def _run_native_create_parts(self, ctx: dict) -> None:
+        """Create Parts → pskernel 原生建体 + 剖分显示 + 写回工程成员。"""
+        draft = (ctx.get("session") or {}).get("create_parts") or {}
+        if not draft:
+            return
+        try:
+            import geometry_ops
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"geometry_ops 导入失败: {exc}", "WARN")
+            return
+        if not geometry_ops.available():
+            self.log(
+                "Create Parts：pskernel 不可用，仅保存参数 + VBS 宿主草稿",
+                "WARN")
+            QMessageBox.information(
+                self, "Create Parts",
+                "未找到 Cradle pskernel.dll，仅保存参数与 VBS 草稿。\n"
+                r"请设置 CRADLE_PROGRAMS 指向 …\CradleCFD*\Programs_x64")
+            return
+        try:
+            res = geometry_ops.execute_create_parts(
+                draft, self._unit_from_ctx(ctx))
+        except NotImplementedError as exc:
+            self.log(f"Create Parts：{exc}", "INFO")
+            QMessageBox.information(
+                self, "Create Parts",
+                f"{exc}\n已保留 VBS 宿主草稿（{draft.get('shape')}）。")
+            return
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"Create Parts 原生执行失败: {exc}", "ERROR")
+            QMessageBox.critical(self, "Create Parts", str(exc))
+            return
+        tess = res["tess"]
+        self.view3d.set_cad_meshes([tess], append=True)
+        self._archive_xt_member(res["name"], res["xt"])
+        self.show_page("draw")
+        vol = geometry_ops.mesh_volume_m3(tess.points, tess.triangles)
+        self.log(
+            f"Create Parts OK — {res['name']} (tag {res['tag']}); "
+            f"{len(tess.points)} pts / {len(tess.triangles)} tris / "
+            f"vol {vol:.6g} m³; 已写回 {res['name']}.x_t")
+        self.property_panel.set_properties({
+            "Created Part": res["name"],
+            "Shape": str(draft.get("shape")),
+            "Tag": str(res["tag"]),
+            "Volume [m³]": f"{vol:.6g}",
+        })
+
+    def _run_native_modify_parts(self, ctx: dict) -> None:
+        """Modify Parts → pskernel 原生布尔/变换（MVP）+ 刷新显示。"""
+        draft = (ctx.get("session") or {}).get("modify_parts") or {}
+        if not draft or not draft.get("op"):
+            return
+        try:
+            import geometry_ops
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"geometry_ops 导入失败: {exc}", "WARN")
+            return
+        if not geometry_ops.available():
+            self.log(
+                "Modify Parts：pskernel 不可用，仅保存参数 + VBS 宿主草稿",
+                "WARN")
+            return
+        tag_by_name: dict = {}
+        for m in self.view3d._cad_meshes:
+            if getattr(m, "tag", 0):
+                tag_by_name[m.name] = int(m.tag)
+        try:
+            res = geometry_ops.execute_modify_parts(
+                draft, tag_by_name, self._unit_from_ctx(ctx))
+        except NotImplementedError as exc:
+            self.log(f"Modify Parts：{exc}", "INFO")
+            QMessageBox.information(
+                self, "Modify Parts",
+                f"{exc}\n已保留 VBS 宿主草稿。")
+            return
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"Modify Parts 原生执行失败: {exc}", "ERROR")
+            QMessageBox.critical(self, "Modify Parts", str(exc))
+            return
+        # 刷新 CAD 显示：移除 consumed，追加 boolean 结果
+        removed = set(res.get("removed") or [])
+        if removed:
+            self.view3d._cad_meshes = [
+                m for m in self.view3d._cad_meshes
+                if m.name not in removed]
+            for n in removed:
+                self._drop_xt_member(n)
+        for add in res.get("added") or []:
+            self.view3d._cad_meshes.append(add["tess"])
+            self._archive_xt_member(add["name"], add["xt"])
+        if self.view3d._started:
+            self.view3d.render()
+        for n in (res.get("changed") or []):
+            for m in self.view3d._cad_meshes:
+                if m.name == n:
+                    try:
+                        fresh = geometry_ops.tessellate_body(int(m.tag), n)
+                        if fresh is not None:
+                            m.points = fresh.points
+                            m.triangles = fresh.triangles
+                    except Exception:  # noqa: BLE001
+                        pass
+        msg = (f"Modify Parts OK — [{res['op']}] "
+               + (f"changed: {', '.join(res['changed'])}" if res["changed"] else "")
+               + (f"; removed: {', '.join(res['removed'])}" if res["removed"] else "")
+               + (f"; added: {len(res['added'])} body" if res["added"] else ""))
+        for note in res.get("notes") or []:
+            msg += f"\n{note}"
+        self.log(msg)
+        self.show_page("draw")
 
     def _run_scflow_pipeline(self, ctx: dict) -> None:
         """Execute 开关打开时：用 scFLOWpre API 构建 Model/Octree/Mesh。"""
