@@ -362,3 +362,25 @@ GUI 壳层完成度高（112/123 菜单项接线），但部分「接线」背�
 或 session 存根，深度不及表面；差距排序与 P0–P3 改进计划以
 DEV_PLAN §17 为准（P0 = 实机验证收尾 + 几何编辑接线；P1 = 条件表单
 schema-driven 系统化；P2 = 网格质量基础设施；P3 = 深度对齐与长尾）。
+
+**P0–P3 执行结果（2026-08-16 收尾）：计划全部落地，全量回归
+549 项测试全绿**（`run_all_tests.py` 逐模块子进程隔离；0 失败 /
+0 崩溃 / 3 skipped，实机桥用例 `SCF_RUN_BRIDGE_TESTS=1` 门控）。
+上述哑铃结构已明显收敛：
+
+- **条件体系**（原差距 #1）：~180 个 Cond\* 类型经
+  condition_registry 元数据推断 + GenericCondBody 通用表单全覆盖，
+  XML 写回闭环（含 empty/composite 必填形态）；
+- **几何编辑**（原差距 #3）：Create/Modify Parts 原生模式落地
+  （geometry_ops.py：block / boolean / transform / face_delete
+  写回 PPH），TODO 草稿清零；
+- **网格质量**（原差距 #2/#7 的质量侧）：voxmesh 2:1 平衡 + pairing +
+  面区域映射、polymesh 体积质心 Lloyd、quality.py 非正交度/偏斜度
+  统计；
+- **NYI 菜单**：11 → 8（Select by Element Number / Same Area /
+  Check Intersection 已本地实现）。
+
+剩余长尾：Disc / Overset 录制锁定、样例集黄金文件对比、
+余 8 个 NYI 菜单、in-proc COM 桥原生桌面门控实测。
+逐项交付证据表见 [function_gap_analysis.md](function_gap_analysis.md)
+§4。

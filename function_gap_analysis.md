@@ -1,4 +1,4 @@
-# pphdecoding vs scFLOWpre 功能差距全面分析
+﻿# pphdecoding vs scFLOWpre 功能差距全面分析
 
 > 日期：2026-08-16 ｜ 仓库：`pphdecoding` ｜ 对照：Cradle CFD 2025.2 scFLOWpre
 >
@@ -122,6 +122,26 @@ Solver/FPH 链路         ████░░░░░░░░░░░░░░
 ---
 
 ## 4. 改进计划
+
+> **执行状态（2026-08-16 收尾）：P0–P3 已全部落地，全量回归
+> 549 项测试全绿**（[run_all_tests.py](run_all_tests.py)，逐模块
+> 子进程隔离；0 失败 / 0 崩溃 / 3 skipped——实机桥用例
+> `SCF_RUN_BRIDGE_TESTS=1` 门控）。逐项交付见下表。
+
+| 项 | 状态 | 交付与回归证据 |
+|---|---|---|
+| P0 宿主自动化收尾 + 几何编辑接线 | 完成 | host_pipeline 两处隐患修复；geometry_ops.py 原生 create/modify（create_solid_block / boolean_bodies / transform_body / face_delete 写回 PPH）；test_geometry_ops 24 / test_host_pipeline 11 / test_ps_edit 7 |
+| P0 edit_ops / Wrapping 验收 | 完成 | test_edit_ops 15 / test_wrapping 6 / test_vbs_acceptance 3；NativeBridge 实机用例环境变量门控（Qt offscreen 与厂商 DLL 同进程混载会 0xC0000005） |
+| P1 条件表单系统化 | 完成 | condition_registry 元数据推断 + GenericCondBody schema-driven 通用表单 + XML 写回闭环（empty/composite 必填特殊处理）；test_generic_cond_form 10 / test_conditions 16 / test_conditions_schema 3 / test_history_vbs 4 |
+| P2 网格质量基础设施 | 完成 | voxmesh 2:1 平衡 + pairing + 面区域映射；polymesh 体积质心 Lloyd；quality.py 非正交度/偏斜度统计；test_voxmesh* 25 / test_polymesh 16 / test_quality 10 |
+| P3-1 native_bam 精度 | 完成 | 容差合并 / Influence / 微小面等；test_native_bam 21 |
+| P3-2 OCTREEREGION 写端 + 重序列化 | 完成 | encode_octree_region_postorder 后序写端 + sctsnapshot 记录级重序列化 + LZMS 压缩写端；test_snapshot_reserialize 14 |
+| P3-3 NYI 菜单本地实现 | 完成 3/11 | Select by Element Number / Select Faces That Have the Same Area / Check Intersection（贴合面穿越误报已修）；余 8 项仍灰显 |
+| P3-4 测试补充 + 全量回归 | 完成 | run_all_tests.py：73 模块 549 tests 全绿；修复 QMessageBox offscreen 原生崩溃、box 样本错配等回归暴露缺陷 |
+
+剩余长尾（未列入本轮计划验收）：Disc / Overset 录制锁定、
+样例集黄金文件对比（3–5 个真实项目 pph）、余 8 个 NYI 菜单、
+in-proc COM 桥在原生桌面的门控实测。
 
 ### P0 — 实机验证收尾 + 几何编辑接线（最高性价比）
 

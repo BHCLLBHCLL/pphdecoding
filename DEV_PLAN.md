@@ -1117,6 +1117,14 @@ cellular / lattice / frame 家族只能靠「命名约定 + 反汇编 + 经验�
 
 ### 17.2 改进计划（P0–P3）
 
+> **执行状态（2026-08-16 收尾）：P0-P3 全部执行完毕。**
+> 全量回归（[run_all_tests.py](run_all_tests.py)，逐模块子进程隔离）：
+> 73 模块、549 tests、0 失败 / 0 崩溃 / 3 skipped（实机桥用例
+> SCF_RUN_BRIDGE_TESTS=1 门控）。逐项交付与证据表见
+> [function_gap_analysis.md §4](function_gap_analysis.md)。
+> 剩余长尾：Disc / Overset 录制锁定、样例集黄金文件对比、
+> 余 8 个 NYI 菜单、in-proc COM 桥原生桌面门控实测。
+
 **P0 — 实机验证收尾 + 几何编辑接线（最高性价比）**
 
 1. 原生桌面按 DEV_SUMMARY §6.3 清单闭合 in-proc COM 桥首测
