@@ -380,7 +380,27 @@ schema-driven 系统化；P2 = 网格质量基础设施；P3 = 深度对齐与�
 - **NYI 菜单**：11 → 8（Select by Element Number / Same Area /
   Check Intersection 已本地实现）。
 
-剩余长尾：Disc / Overset 录制锁定、样例集黄金文件对比、
-余 8 个 NYI 菜单、in-proc COM 桥原生桌面门控实测。
+**P4 执行结果（2026-08-16 收尾）：全量回归 594 项测试全绿**
+（0 失败 / 0 崩溃 / 3 skipped）。
+
+- **P4-0/1 条件体系深化**：condition_tree（scflow_main.xml ↔ 条件树
+  读写绑定）+ 条件类型目录（二进制扫描 165 Cond\* 实名 + 184 帮助页
+  元数据交叉核对合入 condition_registry）+ 通用条件表单目录对话框，
+  可见可编辑条件 5/180 → ≥60/180；
+- **P4-2 材料五库**（material_lib.py）：scFLOWpre.prp /
+  standard·thermal_property / prp_struct / heattransfer 预设 /
+  solar·SolarNEDO 站点 / reaction 组分只读解析 + 材料选择器兜底
+  （项目缺 prp 时回退安装库）+ 换热预设 / NEDO 站点选择器；
+- **P4-3 自动化生态**：Disc/Overset SetPartsControl COM 实测锁定
+  （box_com_diag4.log 全 err=0）、COM ProgID 注册表探测
+  （probe_com_progpids：scFLOWpre/STpre/scConverter S/D 已注册）、
+  SCTpreCLIHelper 实测结论落档 batch_bridge；
+- **P4-4 边际收尾**：NYI 8 → 7（Select by List File 接线；余 7 项
+  逐项评估 2 产品边界 + 5 暂缓，docs/NYI_INVENTORY.md 附注）、
+  黄金文件集扩至 5 个宿主真实生成 pph（box/box_disc/box_overset/
+  laptop/box2，box_com_diag5.log 为生成证据）。
+
+剩余长尾：in-proc COM 桥原生桌面门控实测、SCTpreCLI 全链 dry-run
+（需 SC/Tetra 工程样本）、5 项暂缓 NYI（patch 链路/mesher 深水区）。
 逐项交付证据表见 [function_gap_analysis.md](function_gap_analysis.md)
 §4。

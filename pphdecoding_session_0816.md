@@ -195,7 +195,59 @@ for ia, ib in pairs:
 | [nav_panels.py](file:///d:/training/cgns/pphdecoding/nav_panels.py) | 新增 patch_message_box_offscreen()（offscreen 下 QMessageBox 静态弹窗改日志） |
 | [function_gap_analysis.md](file:///d:/training/cgns/pphdecoding/function_gap_analysis.md) / [DEV_PLAN.md](file:///d:/training/cgns/pphdecoding/DEV_PLAN.md) / [DEV_SUMMARY.md](file:///d:/training/cgns/pphdecoding/DEV_SUMMARY.md) | P0~P3 完成状态收尾 |
 
-## 10. 原会话经验教训（原 §6，存档）
+## 10. P4 执行（续跑二：P4-2 收尾 + P4-3 + P4-4）
+
+### 10.1 P4-2 材料五库收尾
+
+- [material_lib.py](file:///d:/training/cgns/pphdecoding/material_lib.py)
+  `parse_reaction_species` 组分解析修复：实测格式为
+  `<component no="1"> C,1 </component>`（元素,个数 逗号分隔），
+  原按 "C 1, H 4" 空格对解析必空；16/16 tests 全绿
+  （anaconda python + offscreen，GUI 4 项含）。
+
+### 10.2 P4-3 自动化生态
+
+- **Disc/Overset 录制锁定**：box_com_diag4.vbs/.log — COM 宿主内
+  `SetPartsControl "Discontinuous"/"Overset"` True/False 四种调用
+  全部 err=0；结论回填 [automation/pipeline_plan.py](file:///d:/training/cgns/pphdecoding/automation/pipeline_plan.py)。
+- **COM ProgID 注册表探测**：windtool VBS 注释背书的厂商 ProgID
+  （STtools.vbs:4 / STpre_STsolver.vbs:7-8）落
+  [scflowpre_probe.py](file:///d:/training/cgns/pphdecoding/scflowpre_probe.py)
+  `COM_PROGIDS` + `probe_com_progpids()`（HKCR 只读；实测 scFLOWpre/
+  STpre/scConverter S/D 已注册，STsolver/scPOST 未装）；接入 `probe()`
+  与 `host_pipeline.locate_scflowpre()`（related_progpids 字段）。
+- **SCTpreCLIHelper 实测结论落档**：子命令清单 + 校验顺序
+  （先存在后扩展名；.pph not supported，CLI 面向 SC/Tetra 工程）写入
+  [automation/batch_bridge.py](file:///d:/training/cgns/pphdecoding/automation/batch_bridge.py)
+  模块头；全链 dry-run 需 SC/Tetra 工程样本（用户决策：跳过实测只落码）。
+
+### 10.3 P4-4 边际收尾
+
+- **NYI 8 → 7**：Select Elements by List File… 接线
+  （[pph_gui.py](file:///d:/training/cgns/pphdecoding/pph_gui.py)
+  `_select_by_list_file`，复用 `_parse_element_numbers`）；其余 7 项
+  逐项评估落 [tools/scan_nyi_menus.py](file:///d:/training/cgns/pphdecoding/tools/scan_nyi_menus.py)
+  `EVALUATIONS`（2 产品边界 + 5 暂缓，依据 Pre_eng 帮助页），
+  docs/NYI_INVENTORY.md 自动生成附注。
+- **黄金文件集 5 真实项目**：box / box2 / laptop 之外，经 COM 宿主
+  SaveProject 新生成 tests/box_disc.pph（main.xml 落
+  `<Discontinuous>true`）与 tests/box_overset.pph（登记
+  `*_mapped.bdf`/`*_RotorInfo`）；证据 box_com_diag5.vbs/.log；
+  [tests/test_samples.py](file:///d:/training/cgns/pphdecoding/tests/test_samples.py)
+  自动纳入并更新黄金集文档。
+
+### 10.4 P4 终轮回归
+
+```
+Ran 594 tests in 351.918s
+OK (skipped=3)
+```
+
+（P3 末 549 → 594：+45 项新增测试；skipped 3 = 实机桥门控。
+回归日志 regression_p4.log；注意 sandbox 下须 `python -B` 防
+site-packages pyc 写入被拦。）
+
+## 11. 原会话经验教训（原 §6，存档）
 
 - **顶点邻近过滤要在"候选对"粒度判定**，全局最近邻索引在顶点重复出现的面片网格里必然漏判。
 - **Qt offscreen + 厂商 COM/DLL 同进程混载**会随机 0xC0000005；实机桥测试必须环境变量门控、且全量回归用**逐模块子进程隔离**。

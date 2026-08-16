@@ -1,4 +1,4 @@
-﻿# pphdecoding vs scFLOWpre 功能差距全面分析
+# pphdecoding vs scFLOWpre 功能差距全面分析
 
 > 日期：2026-08-16 ｜ 仓库：`pphdecoding` ｜ 对照：Cradle CFD 2025.2 scFLOWpre
 >
@@ -202,3 +202,137 @@ AutomationBridge（COM/VBS），自研引擎长期并行——P0-3 完成后，�
 | .oct/.gph/.mdl 写端 | N/A（格式层） | 全生产级 | 与 box/laptop 钉死 | 生产级 |
 | 宿主 COM/VBS | 主链路 err=0；Wrapping/edit_ops/in-proc 桥未实测 | — | 三份日志 | 半自动 |
 | 条件表单 | 5/180 粗桩 + 16 页分类参数 | main.xml 部分 | — | 最大差距 |
+
+---
+
+## 6. 2026-08-16 全面复盘（对照 scFLOWpre 2025.2 完整安装面）
+
+> 方法：双 agent 并行盘点——① scFLOWpre 安装目录
+> （`C:\Program Files\Cradle\CradleCFD2025.2\Programs_x64`）功能面；
+> ② 本仓 39 模块 / ~52.6k 行 / 549 测试的完整度与深度。关键数字均经
+> 人工复核。
+
+### 6.1 对照基准修正
+
+- **可执行名**：安装目录并无 `scFLOWpre_Bx64net.exe`；scFLOWpre 的
+  实际二进制是 **`SCTpre_Bx64net.exe`**（及 `_D`/`_S` 精度变体），
+  `STpre_*.exe` 是 scSTREAM（结构网格）前处理器。`MonitorServices\
+  WindowsProcess\Commands\StartPre.py` 证实 `.pph` 即其参数/历史文件。
+- **Schemas\ 目录 101 组 sch_\*.s_t 是 Parasolid 内核 schema**
+  （Body/Face/Loop/Edge 实体模型，跨 PS 版本读写用），**不是条件
+  schema**——条件参数的权威结构在下面 6.2 的资产里。
+- **SCTpre.prp / .prp_struct 是材料物性库**（流体 ~120 种气体 +
+  结构金属杨氏模量/泊松比/热膨胀），不是程序资源。
+
+### 6.2 新发现的"权威元数据资产"（快速缩小差距的杠杆）
+
+| 资产 | 位置 | 规模（实测） | 对本仓的意义 |
+|---|---|---|---|
+| **求解设置条件树定义** | `MonitorServices\Optimization\definition\scflow_main.xml` | 232KB；**876 个 condition 键、349 变量、331 实值、230 单位、10 大类、英日双语显示名**；结构 = category(BASIC_SETTING/SOURCE_CONDITION/…) → target(section) → variable(key/value/unit) | **完整求解设置树的权威 schema**。本仓 main.xml 双向解析已具备，缺的是设置 UI 深度——用它可直接生成全部分类/参数页（含显示名与单位），25+ 物理复选框后的"详细设置"桩可逐页落地 |
+| **条件帮助文档库** | `HTML_STpre_Eng\`（`_Jpn` 镜像） | **184 个 HTML 条件说明页**：流动/湍流(Ke/LES/MARS)/传热(h/Marangoni/接触热阻/热路径)/辐射(角系数/镜像)/太阳辐射(SOLAR/NEDO/太阳能板)/湿度(8 页)/粒子+DEM/运动体+熔化(11 页)/多孔/风扇 HVAC(Anemo/轴流/鼓风机)/建筑风 IW×9+热舒适 JOS×4+WBGT/化学反应/激光/3D 打印送粉/Peltier | 条件类型的**字段级元数据源**（参数名/物理含义/取值/方向限制，如 Anemostat 按 Round×Cooling 给 1/4 vs 3/4 流量分配）。注意：STpre 属 scSTREAM 血统，与 SCTpre 条件同源但需**逐条件与 PPH 提取的 ~180 Cond\* schema 核对适用性**，不可整批假定 |
+| **材料/数据五库** | `SCTpre.prp`（流体）、`SCTpre.prp_struct`（结构）、`heattransfer_ENG.xml`（对流换热系数表，按朝向/室内外/风速）、`SolarNEDO11.xml`（日本 11 版太阳辐射气象库，MONSOLA/METPV）、`reaction_ENG.xml`（CHEMKIN 式物种 + NASA 多项式） | 流体 ~120 条 + 结构金属 13+ + 换热系数 4 类 + 气象站点全国级 + 物种库 | PartMaterialBody 目前只有 prp 只读 parse（`pphxml.parse_prp`）。五库接入 = 材料选择器 + 换热系数预设 + 太阳辐射地理数据，都是**纯 XML/文本解析，无算法风险** |
+| **厂商自有 Python 编排** | `MonitorServices\Blade\commands\`（create_pph.py 等 6 个）、`WindowsProcess\`（StartPre.py） | 嵌入式 Python 3.12 + `Standard.get_user_interface()` 宿主 API | 证实厂商自己就用 Python 在宿主内编排 pph 生成（Blade/Fan 向导、作业启动）；本仓 automation/ 的路线与其同构，可对照其 Settings.xml/commands 结构校准 host_pipeline |
+| **VBS/COM 自动化生态** | `windtool\*.vbs`（COM ProgID `scConverter_Sx64net.Application.2025`）、JS 求解器脚本（SCRIPT_\*.html 文档化 user_readline 等 API）、`SCTpreCLI_Bx64net.bat`（MPI 批处理 CLI） | — | COM ProgID 实名 + CLI 入口参数可直接充实 automation/host_pipeline 与 batch_bridge 的宿主侧对接（此前仅靠录制日志推断） |
+
+### 6.3 scFLOWpre 完整功能面 × 本仓现状（12 域）
+
+| # | 领域 | scFLOWpre 功能面（安装证据） | 本仓现状 | 完整度 | 深度 |
+|---|---|---|---|---|---|
+| 1 | 流动 | 不可压/可压/低马赫/VOF 自由面/静水压/旋转系/轴对称 | main.xml 双向 + 5 个流动类 Cond 粗桩 + GenericCondBody | 40% | 表单层 |
+| 2 | 传热 | 对流/导热/接触热阻/热路径 .hpt/Marangoni/换热系数库 | 2 个热 Cond 粗桩；prp 只读 | 20% | 表单层 |
+| 3 | 辐射+太阳 | 角系数分组/粒子辐射/镜像对称/NEDO 气象/太阳能板/地面反射 | Analysis 复选框 + session 存根 | 10% | 存根 |
+| 4 | 湿空气/传质 | 湿度 8 类条件/固体含湿/潜热/扩散 | 复选框存根 | 5% | 存根 |
+| 5 | 多相/粒子 | VOF/粒子(Marker/Mass/Spray/Reac)/DEM 自动时步 | 复选框存根 | 5% | 存根 |
+| 6 | 运动体/耦合 | 6-DOF/熔化凝固 Fusion×5/Adams/Marc/Abaqus/FMU/GT-SUITE | OversetMeshBody 存根；edit_ops 部分动作 | 10% | 存根 |
+| 7 | 化学 | CHEMKIN 物种库/反应方程/lcpv·lwsr 模型 | 复选框存根 | 5% | 存根 |
+| 8 | 多孔/阻力 | 多孔×8 条件/植物阻力/穿孔板 | 复选框存根 | 5% | 存根 |
+| 9 | 风扇/HVAC/建筑 | 轴流/鼓风机/空调/Anemostat/IW×9/JOS×4/WBGT/WindTool | 1 个 Fan Cond 类型名可见 | 5% | 存根 |
+| 10 | 电子热 | epm QFP/SOP 封装/Peltier×3/ELcirkit/HeatPathView | 无 | 0% | — |
+| 11 | 几何/网格 | Parasolid 内核/Datakit CAD/cutcell/多块/简化/wrapping | **XT 双向生产级 + PS 直调 + 自研 voxmesh/polymesh + native_bam 12 步** | 70% | 内核级 |
+| 12 | 求解控制/输出/脚本 | Dt 4 模式/矩阵求解器/输出格式/JS 用户脚本/单位转换 ini | main.xml 承载；UI 仅复选框；units.py 独立 | 25% | IO 级 |
+
+**汇总判断（P0–P3 后）**：
+- 哑铃结构收敛但未消除：IO/几何内核层 80–95%，**条件+物理设置层
+  5–40%（12 域中 8 域仍是复选框/存根）**，求解层合理延后；
+- 与上一版分析的本质不同：**条件体系差距现在有了权威元数据源**
+  （6.2 前两行），从"逐个手写表单"变成"解析资产 → 自动生成"，
+  边际成本数量级下降；
+- 几何/网格/IO 优势保持：Parasolid 直调与 .oct/.gph/.mdl/.pph
+  生产级写端仍是自研替代的立足点。
+
+## 7. 新一轮改进计划 P4 ——「资产驱动，快速缩小条件差距」
+
+> 原则：优先吃透 6.2 权威资产（解析成本 O(1)，收益覆盖全条件面），
+> 算法型差距（网格深度）继续并行不抢资源。每项交付均以测试 +
+> 样例 round-trip 锁定。
+
+### P4-0 求解设置树全自动生成（最高 ROI，先做）
+
+1. `condition_tree.py`：解析 `scflow_main.xml` → `condition_tree.json`
+   （category → section → variable：key/类型/单位/英日显示名/默认值）；
+2. AnalysisModelWizard 的"详细设置"页改为 **condition_tree 驱动自动
+   渲染**（复用 GenericCondBody 的 schema→widget 引擎）；
+3. 覆盖 10 大类（Basic Setting 时间步 4 模式/流入流出/Source/求解
+   控制/输出等），写回 main.xml 闭环测试；
+4. 验收：box/laptop 两样例全树读→改→写 round-trip 字段级一致。
+
+### P4-1 条件类型元数据合并（消灭最大差距的主攻）
+
+1. `html_cond_extract.py`：批量解析 184 个 HTML 帮助页 → 字段元数据
+   （参数名/含义/取值范围/单位/方向约束）；
+2. 与 PPH 提取的 ~180 Cond\* schema **逐条件交叉核对**（同源同名才
+   合并；STpre 血统差异标记 `lineage: scSTREAM` 并人工抽检）；
+3. 合入 condition_registry：可见可编辑条件类型 5/180 → **≥60/180**
+   （首批：流动边界 15 + 壁面热 8 + 辐射 6 + 太阳 5 + 湿度 8 +
+    粒子/DEM 6 + 多孔 5 + 风扇/HVAC 7）；
+4. GenericCondBody 增强为"schema + 帮助元数据"双驱动（默认值、
+   单位、范围校验、帮助悬停）。
+
+### P4-2 材料与数据五库接入（纯解析，快速可交付）
+
+1. `parse_prp` 扩展 prp_struct/heattransfer/SolarNEDO/reaction 四库
+   （全部只读）；
+2. PartMaterialBody 加材料选择器（流体库 ~120 条 + 结构金属）；
+3. 壁面热条件表单挂换热系数预设表；太阳辐射条件挂 NEDO 站点选择。
+
+### P4-3 自动化生态对接充实 ✅（2026-08-16 完成）
+
+1. host_pipeline/batch_bridge 对接 `SCTpreCLI_Bx64net.bat` 实测
+   （MPI 批处理入口）— **结论落档**：SCTpreCLIHelper 子命令清单
+   （confirm-arg/preproc-cmd/mpirun-*/exe-cmdline/all-cmdline + cmb-\*
+   族）与校验顺序（先存在后扩展名；`.pph` 不受支持，CLI 面向 SC/Tetra
+   工程）写入 batch_bridge 模块头；实际执行需 SC/Tetra 工程文件，
+   暂无样本故未跑通全链；
+2. windtool VBS 的 COM ProgID（实测为 `scConverter_Sx64net.Application
+   .2025` 等，STtools.vbs:4 / STpre_STsolver.vbs:7-8 注释背书）纳入
+   注册表探测 — `scflowpre_probe.COM_PROGIDS` +
+   `probe_com_progpids()`（HKCR 只读，实测 scFLOWpre/STpre/
+   scConverter S/D 四项已注册），接入 `probe()` 与
+   `host_pipeline.locate_scflowpre()`；
+3. Disc / Overset 录制锁定补完 — **COM 实测锁定**（box_com_diag4.log）：
+   `SetPartsControl "Discontinuous"/"Overset"` True/False 四种调用
+   宿主内全部 err=0。
+
+### P4-4 边际收尾 ✅（2026-08-16 完成）
+
+1. 余 8 个 NYI 菜单逐项评估（docs/NYI_INVENTORY.md 自动生成附注）：
+   - **接线**：Select Elements by List File…（复用 Select by Element
+     Number 解析器，`_select_by_list_file`）；
+   - **产品边界**（2）：Create Actran Files…（仅 scFLOW2Actran
+     Acoustic Session）、Restore Closed Volume Data…（仅 patch 导入
+     + Store and Open）；
+   - **暂缓**（5）：Define Facet Part / Non-Facet Part / 2D Sub-mesh
+     Unit / Fix Marked Element Shape / Spread Face to Edge
+     （patch 链路缺失或 mesher 深水区，理由见清单）；
+2. 黄金文件对比集扩到 **5 个真实项目 pph**：box（基线）/
+   box_disc（Discontinuous=True，COM 宿主 SaveProject 生成，main.xml
+   落 `<Discontinuous>true`）/ box_overset（Overset=True，工程登记
+   `*_mapped.bdf`/`*_RotorInfo`）/ laptop（稳态热+风扇，
+   CondMoving/Fix/Source）/ box2（近重复备份）；生成证据
+   box_com_diag5.log，全部自动纳入 test_samples 不变量回归。
+
+### 依赖关系与顺序
+
+P4-0 → P4-1（共用 schema→widget 引擎）→ P4-2（独立可并行）→
+P4-3/P4-4（随时插入）。P4-0/1 完成后条件+设置层完整度预计
+**15% → 55%+**，12 域中 8 个存根域至少达到"表单层可用"。
