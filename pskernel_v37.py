@@ -272,21 +272,40 @@ def report_supplement(supp: dict) -> str:
 #   （o_t_version/guise 门禁——cellular 家族函数需 PK_SESSION_start 的
 #   cellular guise，默认会话被拒）。签名形态与 ask 家族约定一致，待
 #   cellular-guise 会话下复核。
+# 经验调用验证结论（P5-2 深挖，2026-08-17 更新）：
+# * PK_SESSION_ask_cellular_guise：rc=0，guise=27110(0x69E6)。
+# * PK_SESSION_set_cellular_guise(1)：rc=900 —— 会话启动后不可切换
+#   （guise 在 PK_SESSION_start 阶段锁定，reserved 字段语义待反汇编）。
+# * PK_FACE_ask_type 的 5022 根因已定位（反汇编 0x259d50）：
+#   函数内部先过「实体类别检查」call 0xa489b0（r8d=0x138c=PK_CLASS_face，
+#   edx=14，r9d=1）——同一张经典 face（PK_ENTITY_ask_class 实测 =5004）
+#   过不了该关卡，而同函数的 PK_FACE_ask_surf 对同 tag rc=0。结论：
+#   cellular 家族的 FACE/REGION = cellular-guise 下由 PK_BODY_create_implicit
+#   /lattice 生成的**cellular 实体**（与经典 B-rep face 不同类），经典体上
+#   调用恒 5022；经验验证需先逆向 create_implicit 的选项结构体建 cellular
+#   几何（即 89 med 项的字段级钉死工作）。
 V37_VERIFIED = {
     "PK_SESSION_ask_cellular_guise": {
         "signature": "PK_ERROR_code_t PK_SESSION_ask_cellular_guise("
                      "PK_LOGICAL_t *guise)",
         "rc": 0, "note": "默认会话实测 rc=0，guise=27110(0x69E6)",
     },
+    "PK_SESSION_set_cellular_guise": {
+        "signature": "PK_ERROR_code_t PK_SESSION_set_cellular_guise("
+                     "PK_LOGICAL_t cellular_guise)",
+        "rc": 900, "note": "会话启动后切换被拒（rc=900）；guise 在 session start 锁定",
+    },
     "PK_FACE_ask_type": {
         "signature": "PK_ERROR_code_t PK_FACE_ask_type("
                      "PK_FACE_t face, PK_FACE_type_t *type)",
-        "rc": 5022, "note": "ask 家族签名；5022=guise 门禁（cellular 会话待复核）",
+        "rc": 5022, "note": "5022 根因=实体类别关卡（反汇编 0x259d50+0xa489b0）："
+                           "需 cellular-guise 的 cellular face，经典 B-rep face "
+                           "（class 5004）恒被拒；同 tag 的 PK_FACE_ask_surf rc=0",
     },
     "PK_REGION_ask_type": {
         "signature": "PK_ERROR_code_t PK_REGION_ask_type("
                      "PK_REGION_t region, PK_REGION_type_t *type)",
-        "rc": 5022, "note": "同上",
+        "rc": 5022, "note": "同上（cellular region 关卡）",
     },
     "PK_REGION_ask_lattices": {
         "signature": "PK_ERROR_code_t PK_REGION_ask_lattices("
