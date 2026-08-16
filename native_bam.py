@@ -163,6 +163,8 @@ class BamReport:
     n_open_edges: int = 0
     n_ridge_edges: int = 0
     repair_stats: dict = field(default_factory=dict)
+    influence_enable: bool = False
+    influence_targets: list[str] = field(default_factory=list)
     buildable: bool = False
 
     def summary_lines(self) -> list[str]:
@@ -179,6 +181,8 @@ class BamReport:
         if self.repair_stats:
             lines.append("修复: " + ", ".join(
                 f"{k}={v}" for k, v in self.repair_stats.items()))
+        if self.influence_enable:
+            lines.append("Influence: " + ", ".join(self.influence_targets))
         lines.append(f"可 Build: {'是' if self.buildable else '否'}")
         return lines
 
@@ -799,7 +803,9 @@ def build_analysis_model(points, faces,
     report.n_multifold_faces = mf_faces
 
     # 4-5. Facet 精度 / Influence：原生面片不再重剖分，参数随报告透传
-    #    （influence targets 的几何效应在宿主内核；原生仅记录）
+    #    （influence targets 的几何效应在宿主内核；原生仅记录配置）
+    report.influence_enable = params.influence_enable
+    report.influence_targets = list(params.influence_targets)
 
     # 6. FindAFFaceMatching + SetFaceMatched（仅 AF faceter 路径）
     if params.use_facetter and params.apply_face_matching:
