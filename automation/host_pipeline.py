@@ -623,14 +623,32 @@ def _run_gui(vbs_path: Path, timeout: float, menu: dict) -> dict:
         try:
             cand = Application(backend="win32").connect(process=pid,
                                                         timeout=10)
-            for w in cand.windows():
+            # Kicker 常驻实例的主框架可能隐藏（MainWindowHandle=0），且
+            # 2025.2 实测主框架类名为 "Afx:00007FF683D10000:0"（标题
+            # 'scFLOWpre'），并非 AfxMDIFrame 前缀。先按可见枚举，没有再
+            # 放宽到不可见窗口——恢复可见由 _click_menu_item_real 的
+            # AttachThreadInput + SW_RESTORE 负责。
+            def _is_frame(w) -> bool:
                 try:
-                    if w.class_name().startswith("AfxMDIFrame"):
+                    cls = w.class_name()
+                    if cls.startswith("AfxMDIFrame"):
+                        return True
+                    return (cls.startswith("Afx:")
+                            and (w.window_text() or "") == "scFLOWpre")
+                except Exception:  # noqa: BLE001
+                    return False
+
+            for w in cand.windows():
+                if _is_frame(w):
+                    app = cand
+                    frame = w
+                    break
+            if frame is None:
+                for w in cand.windows(visible_only=False):
+                    if _is_frame(w):
                         app = cand
                         frame = w
                         break
-                except Exception:  # noqa: BLE001
-                    continue
             if frame is not None:
                 break
         except Exception:  # noqa: BLE001
