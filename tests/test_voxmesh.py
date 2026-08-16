@@ -180,6 +180,69 @@ class TestGphVolumeWriter(unittest.TestCase):
                          len(faces) - 1)
 
 
+def _face_neighbor_depth_diffs(root_min: np.ndarray,
+                                leaves) -> list[int]:
+    """独立校验器：返回所有面邻叶子对（细侧深度 - 粗侧深度）的差值。
+
+    对每个叶子按其深度量化到整格坐标，逐层向上查祖先格的 ±1 面移
+    邻居；仅在叶子贴住祖先该侧面时才构成面邻（避开与平衡实现共用
+    代码，避免"用被测代码验证自身"）。
+    """
+    by_depth: dict[int, dict[tuple, int]] = {}
+    coords: list[tuple[tuple, int]] = []
+    for i, (mn, mx, d) in enumerate(leaves):
+        cell = float(mx[0] - mn[0])
+        c = tuple(np.rint((np.asarray(mn) - np.asarray(root_min))
+                          / cell).astype(np.int64))
+        di = int(d)
+        coords.append((c, di))
+        by_depth.setdefault(di, {})[c] = i
+    diffs: list[int] = []
+    for (_mn, _mx, _d), (c, d) in zip(leaves, coords):
+        for cd in range(d):
+            shift = d - cd
+            mask = (1 << shift) - 1
+            base = tuple(int(v) >> shift for v in c)
+            for axis in range(3):
+                if (c[axis] & mask) == 0:        # 贴祖先 - 侧面
+                    nb = list(base)
+                    nb[axis] -= 1
+                    if tuple(nb) in by_depth.get(cd, {}):
+                        diffs.append(d - cd)
+                if (c[axis] & mask) == mask:     # 贴祖先 + 侧面
+                    nb = list(base)
+                    nb[axis] += 1
+                    if tuple(nb) in by_depth.get(cd, {}):
+                        diffs.append(d - cd)
+    return diffs
+
+
+class TestVoxMesh2to1Balance(unittest.TestCase):
+    def test_balanced_tree_respects_2to1(self):
+        points, tris = _unit_box_surface()
+        params = voxmesh.VoxelMeshParams(
+            initial_depth=2, max_depth=5, max_cells=1_000_000,
+            balance_2to1=True)
+        root_min, _root_max, _ref, leaves = voxmesh.build_octree(
+            points, tris, params)
+        self.assertGreater(len(leaves), 500)     # 表面细化确实发生
+        jumps = [d for d in _face_neighbor_depth_diffs(root_min, leaves)
+                 if d > 1]
+        self.assertEqual(jumps, [],
+                         f"2:1 平衡被违反 {len(jumps)} 处")
+
+    def test_unbalanced_tree_has_depth_jumps(self):
+        points, tris = _unit_box_surface()
+        params = voxmesh.VoxelMeshParams(
+            initial_depth=2, max_depth=5, max_cells=1_000_000,
+            balance_2to1=False)
+        root_min, _root_max, _ref, leaves = voxmesh.build_octree(
+            points, tris, params)
+        diffs = _face_neighbor_depth_diffs(root_min, leaves)
+        self.assertTrue(any(d >= 2 for d in diffs),
+                        "关闭平衡后应存在深度差 ≥ 2 的面邻对")
+
+
 class TestGuiWiring(unittest.TestCase):
     def test_execute_menu_and_dialog_wired(self):
         src = (ROOT / "pph_gui.py").read_text(encoding="utf-8")
