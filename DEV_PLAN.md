@@ -1210,6 +1210,11 @@ cellular / lattice / frame 家族只能靠「命名约定 + 反汇编 + 经验�
 > P6-2 新增 `mdl.add_surface_region`（Register Region → MDL 权威名表回写，
 > 闭合 main.xml `<regions>` 仅镜像的负面发现，roundtrip 测试锁定）。GUI
 > 归档 flush 接线 + 宿主验收待补（宿主 headless）。
+>
+> **Wrapping/Disc/Overset 补全（2026-08-17）已交付**：清除 nav_panels
+> 「占位/待录制锁定/录制未锁定」等陈旧标注（Wrapping 360 步已实机跑通、
+> Disc/Overset COM 实测锁定）；`wrapping_actions` 未知 op 由伪造 TODO
+> 注释改为显式 ValueError（`test_pipeline_plan` 新增用例）。
 
 1. **P6-1 条件字段级扩面**（最高 ROI）：~~165 注册类型 → ≥60 类型带
    字段 schema~~ → **已交付 10 → 25 类型**（见上），余量挂 P6-5 真实录制；

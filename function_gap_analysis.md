@@ -124,6 +124,11 @@ Solver/FPH 链路         ████░░░░░░░░░░░░░░
 > P6-2 新增 `mdl.add_surface_region` 回写 MDL 权威名表（闭合 main.xml
 > `<regions>` 仅镜像的负面发现，`test_native_bam` 新增 2 项 roundtrip）。
 > GUI 归档 flush 接线 + 宿主 `QueryFaceRegionByName` 验收待补（宿主 headless）。
+>
+> **2026-08-17 Wrapping/Disc/Overset 补全**：清除 nav_panels 「占位/
+> 待录制锁定/录制未锁定」陈旧标注（Wrapping 360 步已实机跑通，Disc/
+> Overset COM 实测锁定）；`wrapping_actions` 未知 op 由伪造 TODO 注释
+> 改为显式 ValueError。
 ## 1. 总体判断
 
 项目呈**「底层强、上层弱」的哑铃结构**：

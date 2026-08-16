@@ -346,6 +346,11 @@ class TestWrappingAndCreateVbs(unittest.TestCase):
         self.assertIn("Octree_.UpdateGroups", joined)
         self.assertNotIn("TODO", joined)
 
+    def test_wrapping_actions_unknown_op_raises(self):
+        from automation.pipeline_plan import wrapping_actions
+        with self.assertRaises(ValueError):
+            wrapping_actions("nope", "proj.pph")
+
     def test_create_parts_begin_solid_edit(self):
         from automation.pipeline_plan import create_parts_actions
         acts = create_parts_actions(

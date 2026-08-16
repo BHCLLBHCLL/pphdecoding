@@ -807,8 +807,8 @@ _WRAP_OP_COMMENTS: dict[str, str] = {
     "cancel_wrap": "Cancel Wrapping",
     "exec_wrap": "Execute Wrapping — NativeBridge ExecuteWrapping",
     "retry_wrap": "Retry Wrapping",
-    "wrap_octree": "Wrapping Octree Parameter — SetWrapOctParam (录制补全)",
-    "wrap_param": "Wrapping Parameter — SetWrapParam (录制补全)",
+    "wrap_octree": "Wrapping Octree Parameter — SetWrapOctParam (录制锁定)",
+    "wrap_param": "Wrapping Parameter — SetWrapParam (录制锁定)",
     "specify_disc": 'Conditions_.SetPartsControl "Discontinuous", True',
     "overset_mesh": 'Conditions_.SetPartsControl "Overset", True',
 }
@@ -817,7 +817,6 @@ _WRAP_OP_COMMENTS: dict[str, str] = {
 def wrapping_actions(op: str, project_path: str | Path) -> list[str]:
     """生成 Wrapping/Disc/Overset 宿主脚本（wrapping 序列已录制锁定）。"""
     path = Path(project_path).as_posix()
-    comment = _WRAP_OP_COMMENTS.get(op, op)
     actions = [
         "Set App_ = GetApplication()",
         'If App_ Is Nothing Then Set App_ = '
@@ -859,7 +858,9 @@ def wrapping_actions(op: str, project_path: str | Path) -> list[str]:
         actions.append("Doc_.CreateWrappingGroup")
         actions.extend(_wrapping_param_actions(0))
     else:
-        actions.append(f"' TODO: {comment}")
+        raise ValueError(
+            f"unknown wrapping op {op!r}; valid: "
+            + ", ".join(sorted(_WRAP_OP_COMMENTS)))
     actions.append(f'Doc_.SaveProject "{path}"')
     return actions
 

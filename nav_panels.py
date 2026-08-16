@@ -339,7 +339,7 @@ class _PartsControlFollowupBody(_Body):
         v.setContentsMargins(12, 12, 12, 8)
         v.addWidget(_note(self._hint))
         self.chk_write_vbs = QCheckBox(
-            "写出 scFLOWpre VBS 草稿（PartsControl / Wrapping 占位）")
+            "写出 scFLOWpre VBS（PartsControl / Wrapping，已录制锁定）")
         self.chk_write_vbs.setChecked(True)
         v.addWidget(self.chk_write_vbs)
         v.addStretch(1)
@@ -377,7 +377,7 @@ class WrappingOctreeParamBody(_PartsControlFollowupBody):
     _vbs_op = "wrap_octree"
     _hint = (
         "[Condition] – [Wrapping Octree Parameter]\n"
-        "OK 写出 Wrapping=True + OctParam 占位 VBS（API 待录制锁定）。")
+        "OK 写出 Wrapping=True + OctParam VBS（已录制锁定）。")
 
 
 class WrappingParamBody(_PartsControlFollowupBody):
@@ -385,7 +385,7 @@ class WrappingParamBody(_PartsControlFollowupBody):
     _vbs_op = "wrap_param"
     _hint = (
         "[Condition] – [Wrapping Parameter]\n"
-        "OK 写出 Wrapping 参数占位 VBS。")
+        "OK 写出 Wrapping 参数 VBS（已录制锁定）。")
 
 
 class BeginWrappingBody(_PartsControlFollowupBody):
@@ -393,7 +393,7 @@ class BeginWrappingBody(_PartsControlFollowupBody):
     _vbs_op = "begin_wrap"
     _hint = (
         "[Execute] – [Begin Wrapping]\n"
-        "OK 写出 NativeBridge/SCTprime 占位 VBS。")
+        "OK 写出 Begin Wrapping VBS（360 步已录制锁定并实机跑通）。")
 
 
 class CancelWrappingBody(_PartsControlFollowupBody):
@@ -407,7 +407,7 @@ class ExecuteWrappingBody(_PartsControlFollowupBody):
     _vbs_op = "exec_wrap"
     _hint = (
         "[Execute] – [Execute Wrapping]\n"
-        "OK 写出 ExecuteWrapping 占位 VBS（录制未锁定）。")
+        "OK 写出 Execute Wrapping VBS（已录制锁定）。")
 
 
 class RetryWrappingBody(_PartsControlFollowupBody):
