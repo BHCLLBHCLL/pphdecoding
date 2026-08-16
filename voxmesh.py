@@ -1114,6 +1114,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         ap.error(f"unsupported input: {inp}")
         return 2
     print(result.stats())
+    # P5-4：质量度量统计接入 quality.py（from_voxel 装配缓存优先）
+    try:
+        import quality
+        rep = quality.from_voxel(result)
+        print()
+        print(rep.format_report("Mesh quality"))
+    except Exception as e:  # noqa: BLE001 —— 质量报告失败不阻断网格输出
+        print(f"[quality report unavailable: {e}]")
     print(f"oct -> {oct_p}")
     print(f"gph -> {gph_p}")
     return 0
