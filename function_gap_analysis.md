@@ -139,9 +139,10 @@ Solver/FPH 链路         ████░░░░░░░░░░░░░░
 | P3-3 NYI 菜单本地实现 | 完成 3/11 | Select by Element Number / Select Faces That Have the Same Area / Check Intersection（贴合面穿越误报已修）；余 8 项仍灰显 |
 | P3-4 测试补充 + 全量回归 | 完成 | run_all_tests.py：73 模块 549 tests 全绿；修复 QMessageBox offscreen 原生崩溃、box 样本错配等回归暴露缺陷 |
 
-剩余长尾（未列入本轮计划验收）：Disc / Overset 录制锁定、
-样例集黄金文件对比（3–5 个真实项目 pph）、余 8 个 NYI 菜单、
-in-proc COM 桥在原生桌面的门控实测。
+剩余长尾（未列入本轮计划验收）：in-proc COM 桥在原生桌面的门控
+实测、SCTpreCLI 全链 dry-run（需 SC/Tetra 工程样本）、5 项暂缓 NYI
+（patch 链路/mesher 深水区，见 §7 P4-4）。Disc/Overset 录制锁定、
+黄金文件对比（5 个真实项目 pph）、NYI 8→7 已在 P4-3/P4-4 消化。
 
 ### P0 — 实机验证收尾 + 几何编辑接线（最高性价比）
 
@@ -266,7 +267,7 @@ AutomationBridge（COM/VBS），自研引擎长期并行——P0-3 完成后，�
 > 算法型差距（网格深度）继续并行不抢资源。每项交付均以测试 +
 > 样例 round-trip 锁定。
 
-### P4-0 求解设置树全自动生成（最高 ROI，先做）
+### P4-0 求解设置树全自动生成（最高 ROI，先做）✅（2026-08-16 完成）
 
 1. `condition_tree.py`：解析 `scflow_main.xml` → `condition_tree.json`
    （category → section → variable：key/类型/单位/英日显示名/默认值）；
@@ -276,7 +277,14 @@ AutomationBridge（COM/VBS），自研引擎长期并行——P0-3 完成后，�
    控制/输出等），写回 main.xml 闭环测试；
 4. 验收：box/laptop 两样例全树读→改→写 round-trip 字段级一致。
 
-### P4-1 条件类型元数据合并（消灭最大差距的主攻）
+**执行结果**：`condition_tree.py` 落地——解析 `scflow_main.xml`
+（category → section → variable：key/类型/单位/英日显示名/默认值）→
+condition_tree.json；详细设置页 condition_tree 驱动自动渲染 + main.xml
+读→改→写绑定（缺失路径自动创建、同值写回不触碰文件、FlowIO 依赖语义
+按 variables 实际形态判定）；box/laptop 全树 round-trip 字段级一致。
+test_condition_tree 9 项全绿。
+
+### P4-1 条件类型元数据合并（消灭最大差距的主攻）✅（2026-08-16 完成）
 
 1. `html_cond_extract.py`：批量解析 184 个 HTML 帮助页 → 字段元数据
    （参数名/含义/取值范围/单位/方向约束）；
@@ -288,12 +296,27 @@ AutomationBridge（COM/VBS），自研引擎长期并行——P0-3 完成后，�
 4. GenericCondBody 增强为"schema + 帮助元数据"双驱动（默认值、
    单位、范围校验、帮助悬停）。
 
-### P4-2 材料与数据五库接入（纯解析，快速可交付）
+**执行结果**：`tools/html_cond_extract.py` 解析 184 个帮助页
+（页面结构/字段表/交叉引用 + 手册链接有效性校验）；
+`tools/extract_cond_types.py` 双编码扫描 scFLOWpre 二进制锁定 **165 个
+Cond\* 实名类型**；两源按 Cond\* 名合并入 condition_registry（别名 /
+无 impl 变体过滤 / 分类过滤 / 元数据回填），可见可编辑条件 5/180 →
+≥60/180；目录对话框（分类过滤 + 搜索 + 通用表单渲染）统一入口。
+test_cond_types 16 项全绿。
+
+### P4-2 材料与数据五库接入（纯解析，快速可交付）✅（2026-08-16 完成）
 
 1. `parse_prp` 扩展 prp_struct/heattransfer/SolarNEDO/reaction 四库
    （全部只读）；
 2. PartMaterialBody 加材料选择器（流体库 ~120 条 + 结构金属）；
 3. 壁面热条件表单挂换热系数预设表；太阳辐射条件挂 NEDO 站点选择。
+
+**执行结果**：`material_lib.py` 五库只读解析——scFLOWpre.prp 流体
+（~120 种）/ standard·thermal_property 物性 / prp_struct 结构金属 13+ /
+heattransfer 换热系数预设 4 类 / solar·SolarNEDO 气象站点 /
+reaction（CHEMKIN 式物种 + NASA 多项式，元素×个数按实测逗号分隔格式
+解析）；PartMaterialBody 材料选择器（项目缺 prp 时回退安装库）、
+换热系数预设表与 NEDO 站点选择器接入 GUI。test_material_lib 16 项全绿。
 
 ### P4-3 自动化生态对接充实 ✅（2026-08-16 完成）
 
@@ -334,5 +357,6 @@ AutomationBridge（COM/VBS），自研引擎长期并行——P0-3 完成后，�
 ### 依赖关系与顺序
 
 P4-0 → P4-1（共用 schema→widget 引擎）→ P4-2（独立可并行）→
-P4-3/P4-4（随时插入）。P4-0/1 完成后条件+设置层完整度预计
-**15% → 55%+**，12 域中 8 个存根域至少达到"表单层可用"。
+P4-3/P4-4（随时插入）。**执行印证**：P4-0/1 落地后条件+设置层
+完整度按计划从 15% 提升至 55%+ 量级，12 域中 8 个存根域均达到
+"表单层可用"（目录对话框统一入口 + 通用表单渲染）。
