@@ -352,6 +352,17 @@ class TestWrappingAndCreateVbs(unittest.TestCase):
             {"shape": "Cuboid", "name": "Box1"}, "proj.pph")
         self.assertIn("MeshingGroup_.BeginSolidEdit", "\n".join(acts))
 
+    def test_create_modify_parts_no_todo(self):
+        # P6-4：实体 VBS 草稿清理——实体操作走原生 geometry_ops，不再
+        # 伪造 CreateCuboid/boolean TODO 占位。
+        from automation.pipeline_plan import (create_parts_actions,
+                                              modify_parts_actions)
+        for acts in (create_parts_actions({"shape": "Cuboid", "name": "Box1"},
+                                          "proj.pph"),
+                     modify_parts_actions({"op_label": "boolean"},
+                                          "proj.pph")):
+            self.assertNotIn("TODO", "\n".join(acts))
+
     def test_write_nav_vbs_file(self):
         from automation.pipeline_plan import write_nav_vbs
         with tempfile.TemporaryDirectory() as td:

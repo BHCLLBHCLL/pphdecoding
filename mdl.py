@@ -484,6 +484,36 @@ def write_mdl(filepath,
     return path
 
 
+def add_surface_region(mdl_path, name, *, index=None, output=None) -> Path:
+    """向 MDL 的 ``LS_MdlSurfaceRegions`` 名表追加一条面区域名（Register
+    Region → MDL 权威接线，P6-2）。
+
+    闭合 REANALYSIS §6.2 负面发现：宿主 face region 注册表权威在 MDL 名表
+    （``@PartSurface_Part`` 仅在 ``*_part.mdl`` 字节流出现），main.xml
+    ``<regions>`` 只是镜像。Register Region 后调用本函数把新 region 名追加
+    进 ``*_part.mdl`` 名表，使宿主 ``QueryFaceRegionByName`` 可命中。
+    ``index`` 省略时取现有最大 index+1（首个为 0）。
+
+    实现为 ``parse_mdl → write_mdl`` 全量重序列化（保留点/面/闭体/体区域/
+    面区域，原生布局已由 test_native_bam round-trip 锁定）；宿主生成的非
+    原生 MDL 会被归一化为原生布局（已知限制，宿主验收待补）。
+    """
+    m = parse_mdl(str(mdl_path))
+    regions = [(r.name, r.index) for r in m.surface_regions]
+    if index is None:
+        index = max((r.index for r in m.surface_regions), default=-1) + 1
+    regions.append((name, int(index)))
+    faces = [m.face_nodes(i) for i in range(m.n_faces)]
+    return write_mdl(
+        output or Path(mdl_path),
+        m.xyz, faces,
+        csid=m.csid, frid=m.frid,
+        edge_state=m.edge_state, node_state=m.node_state,
+        surface_regions=regions,
+        closed_volumes=m.closed_volumes,
+        volume_regions=m.volume_regions)
+
+
 def detect_tiny_faces(model: MdlModel, width_tol: float) -> list[dict]:
     """按“面最大边长 < 容差”识别 tiny face（宽度指标取最大边）。
 

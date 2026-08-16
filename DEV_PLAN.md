@@ -1203,18 +1203,28 @@ cellular / lattice / frame 家族只能靠「命名约定 + 反汇编 + 经验�
 > 量化对拍（`6a8624e`）+ Octree 后序写端 roundtrip（`8ea7ec7`）+ BAM
 > Influence 透传（`dd7ba88`）+ 宿主 `host_status()` 诊断口（Kicker_Bx64.exe
 > 定位 + 常驻实例 headless 实测）。
+>
+> **P6-2 / P6-4 几何编辑补全（2026-08-17）已交付**：P6-4 清除
+> `create_parts_actions`/`modify_parts_actions` 的实体 VBS TODO 占位
+> （实体操作走原生 `geometry_ops`，不再伪造 CreateCuboid/boolean 草稿）；
+> P6-2 新增 `mdl.add_surface_region`（Register Region → MDL 权威名表回写，
+> 闭合 main.xml `<regions>` 仅镜像的负面发现，roundtrip 测试锁定）。GUI
+> 归档 flush 接线 + 宿主验收待补（宿主 headless）。
 
 1. **P6-1 条件字段级扩面**（最高 ROI）：~~165 注册类型 → ≥60 类型带
    字段 schema~~ → **已交付 10 → 25 类型**（见上），余量挂 P6-5 真实录制；
-2. **P6-2 Register Region → MDL 权威接线**：GUI 注册流补调
-   `write_mdl(surface_regions=...)`（BAM 路径已有同型调用），
-   闭合宿主 `QueryFaceRegionByName` 不认 main.xml 的负面发现；
+2. **P6-2 Register Region → MDL 权威接线**：~~GUI 注册流补调~~
+   → **已交付 `mdl.add_surface_region`**（parse→write 重序列化追加
+   region 名，roundtrip 锁定）；GUI 归档 flush 接线 + 宿主
+   `QueryFaceRegionByName` 验收待补（宿主 headless）；
 3. **P6-3 网格量化对拍 + 黄金文件扩容**：~~2–3 个真实几何~~ →
    **已交付**（tests/box + examples/tr03 两真实几何质量基线 +
    自研 mesher 同指标对拍，`test_mesh_quality_benchmark.py` 10 项）；
 3b. **Octree 八叉树补全**：OCTREEREGION 后序写端补 roundtrip 验证
    （`test_oct_region_write.py` 3 项，互逆 + 写回重读一致）；
-4. **P6-4 几何 VBS 草稿清理**（pipeline_plan TODO 占位）；
+4. **P6-4 几何 VBS 草稿清理**：~~pipeline_plan TODO 占位~~ → **已交付**
+   （`create_parts_actions`/`modify_parts_actions` 移除伪造 TODO，实体
+   操作明确走原生 `geometry_ops`；新增 no-TODO 回归测试）；
 5. **P6-5 宿主交互环境收敛**（环境依赖，随时插入）：gui 后端框架
    发现已修（`68891e1`：Afx:hex:0 类名 + 隐藏窗口枚举）；新增
    `host_status()` 诊断口（`--status`，实测定位 Kicker_Bx64.exe 启动器

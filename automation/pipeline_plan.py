@@ -865,7 +865,12 @@ def wrapping_actions(op: str, project_path: str | Path) -> list[str]:
 
 
 def create_parts_actions(draft: dict, project_path: str | Path) -> list[str]:
-    """Create Parts 参数 → BeginSolidEdit + 形状注释（实体 API 待录制锁定）。"""
+    """Create Parts → BeginSolidEdit + 原生几何标记（实体 VBS API 未录制）。
+
+    实体操作（Cuboid/Cylinder/Sphere/Rectangle）由 ``geometry_ops`` 原生
+    Parasolid 直调（``execute_create_parts``）执行，不在 VBS 录制锁定范围；
+    本函数只保留已锁定的 BeginSolidEdit 上下文，不伪造实体 VBS 调用。
+    """
     path = Path(project_path).as_posix()
     shape = draft.get("shape", "?")
     name = draft.get("name", "Part")
@@ -877,16 +882,18 @@ def create_parts_actions(draft: dict, project_path: str | Path) -> list[str]:
         f'Doc_.OpenProject "{path}", False',
         "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
         "MeshingGroup_.BeginSolidEdit",
-        f"' Create {shape} name={name} params={draft!r}"[:180],
-        "' TODO: MeshingGroup_ CreateCuboid/Cylinder/Sphere/Rectangle",
-        # EndSolidEdit 未在 v1–v4 录制锁定，仅注释
-        "' MeshingGroup_.EndSolidEdit  # unlock after recording",
+        f"' Create {shape} name={name} → 实体操作走原生 geometry_ops"
+        "（实体 VBS API 未录制）"[:180],
         f'Doc_.SaveProject "{path}"',
     ]
 
 
 def modify_parts_actions(draft: dict, project_path: str | Path) -> list[str]:
-    """Modify Parts 操作 → BeginSolidEdit + 操作注释。"""
+    """Modify Parts → BeginSolidEdit + 原生几何标记（实体 VBS API 未录制）。
+
+    布尔/变换/删面等操作由 ``geometry_ops.execute_modify_parts`` 原生执行，
+    不在 VBS 录制锁定范围；本函数只保留 BeginSolidEdit 上下文。
+    """
     path = Path(project_path).as_posix()
     op = draft.get("op_label") or draft.get("op") or "?"
     return [
@@ -897,9 +904,7 @@ def modify_parts_actions(draft: dict, project_path: str | Path) -> list[str]:
         f'Doc_.OpenProject "{path}", False',
         "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
         "MeshingGroup_.BeginSolidEdit",
-        f"' Modify op={op} parts={draft.get('parts')!r}"[:180],
-        "' TODO: solid boolean / transform (录制补全)",
-        "' MeshingGroup_.EndSolidEdit  # unlock after recording",
+        f"' Modify op={op} → 原生 geometry_ops（实体 VBS API 未录制）"[:180],
         f'Doc_.SaveProject "{path}"',
     ]
 

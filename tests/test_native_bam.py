@@ -286,6 +286,33 @@ class TestWriteBamMdl(unittest.TestCase):
         self.assertEqual(m.volume_regions, ["FluidRegion", "SolidRegion"])
         self.assertEqual(m.n_closed_volumes, 2)
 
+    def test_add_surface_region_appends_to_name_table(self):
+        """P6-2：Register Region → MDL 权威名表回写（追加 region 名）。"""
+        pts, quads = _unit_box()
+        res = native_bam.build_analysis_model(pts, quads)
+        with tempfile.TemporaryDirectory() as td:
+            p = native_bam.write_bam_mdl(res, Path(td) / "part.mdl")
+            self.assertEqual([(r.name, r.index)
+                              for r in mdl.parse_mdl(str(p)).surface_regions],
+                             [("@PartSurface_Part", 0)])
+            mdl.add_surface_region(p, "inlet")
+            m = mdl.parse_mdl(str(p))
+        self.assertEqual([(r.name, r.index) for r in m.surface_regions],
+                         [("@PartSurface_Part", 0), ("inlet", 1)])
+        # 几何数组未被破坏（点数/面数保持）
+        self.assertEqual(m.n_vertices, 8)
+        self.assertEqual(m.n_faces, 6)
+
+    def test_add_surface_region_explicit_index(self):
+        pts, quads = _unit_box()
+        res = native_bam.build_analysis_model(pts, quads)
+        with tempfile.TemporaryDirectory() as td:
+            p = native_bam.write_bam_mdl(res, Path(td) / "part.mdl")
+            mdl.add_surface_region(p, "rotation1", index=2)
+            m = mdl.parse_mdl(str(p))
+        self.assertEqual([(r.name, r.index) for r in m.surface_regions],
+                         [("@PartSurface_Part", 0), ("rotation1", 2)])
+
 
 class TestParamsFromSession(unittest.TestCase):
     def test_session_mapping(self):

@@ -117,6 +117,13 @@ Solver/FPH 链路         ████░░░░░░░░░░░░░░
 > Kicker_Bx64.exe 启动器 + 常驻实例 headless（svchost 拉起、窗口隐藏、
 > `gui_ready=False`）。gui 后端错误提示改为明确指向 Kicker_Bx64.exe。
 > （`test_host_pipeline` 16 项）
+>
+> **2026-08-17 几何编辑 Create/Modify 补全（P6-2/P6-4）**：P6-4 清除
+> `create_parts_actions`/`modify_parts_actions` 的实体 VBS TODO 占位
+> （实体操作走原生 `geometry_ops`，不再伪造 CreateCuboid/boolean 草稿）；
+> P6-2 新增 `mdl.add_surface_region` 回写 MDL 权威名表（闭合 main.xml
+> `<regions>` 仅镜像的负面发现，`test_native_bam` 新增 2 项 roundtrip）。
+> GUI 归档 flush 接线 + 宿主 `QueryFaceRegionByName` 验收待补（宿主 headless）。
 ## 1. 总体判断
 
 项目呈**「底层强、上层弱」的哑铃结构**：
