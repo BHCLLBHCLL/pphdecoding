@@ -1,0 +1,19 @@
+open_err=0
+context_ready=False
+context_ready_raw=0
+last_exception_code=0
+bridge_status:
+scFLOWpreCmd_Bx64net.dll = loaded, symbols=0
+scFLOWpreAPI_Bx64.dll = loaded, symbols=1
+scFLOWpreDB_Bx64.dll = loaded, symbols=0
+scFLOWpreGUI_Bx64net.dll = loaded, symbols=0
+SCTpreCore_Dx64.dll = loaded, symbols=0
+SCTpreLib_Dx64.dll = loaded, symbols=0
+SCTpreSolver_Dx64.dll = loaded, symbols=0
+SCTprime_Bx64.dll = loaded, symbols=1
+ParasolidGW_Bx64.dll = loaded, symbols=0
+ImportGeometry_Bx64.dll = loaded, symbols=0
+ZipLibrary.dll = loaded, symbols=1
+programs_dir = C:\Program Files\Cradle\CradleCFD2025.2\Programs_x64
+
+set_handle=0|last_error=-100
