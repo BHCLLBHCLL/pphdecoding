@@ -123,17 +123,23 @@ def build_pipeline_vbs(result_path: str | Path,
         "Set App_ = GetApplication()",
         'If App_ Is Nothing Then Set App_ = CreateObject("scFLOWpre_Bx64net.Application.2025")',
         "Set Doc_ = App_.GetDocument",
+        'Set fso = CreateObject("Scripting.FileSystemObject")',
+        f'Set out = fso.CreateTextFile("{result_path}", True)',
     ]
     if project_path is not None:
         lines.append(f'Doc_.OpenProject "{Path(project_path)}", False')
+        lines.append('out.WriteLine "open_err=" & CStr(Err.Number)')
+        lines.append("Err.Clear")
     lines += [
-        'Set fso = CreateObject("Scripting.FileSystemObject")',
-        f'Set out = fso.CreateTextFile("{result_path}", True)',
         'Set Pipe = CreateObject("pphdecoding.ScflowPipeline")',
         "If Pipe Is Nothing Then",
         '    out.WriteLine "error=create_failed"',
         "Else",
         "    out.WriteLine \"context_ready=\" & CStr(Pipe.ContextReady)",
+        '    out.WriteLine "context_ready_raw=" & CStr(Pipe.ContextReadyRaw)',
+        '    out.WriteLine "last_exception_code=" & CStr(Pipe.LastExceptionCode)',
+        '    out.WriteLine "bridge_status:"',
+        "    out.WriteLine Pipe.Status",
         f'    hSet = Pipe.CreateShapeGroupSet("{set_name}")',
         '    out.WriteLine "set_handle=" & CStr(hSet) & "|last_error=" & CStr(Pipe.LastError())',
         "    If hSet > 0 Then",
@@ -171,9 +177,17 @@ def parse_result(result_path: str | Path) -> dict:
         return {"ok": False, **data, "path": str(path)}
     set_handle = int(data.get("set_handle", "0") or 0)
     group_handle = int(data.get("group_handle", "0") or 0)
+    raw_ready = data.get("context_ready_raw", "").strip()
+    context_ready_raw: Optional[int] = None
+    if raw_ready.lstrip("-").isdigit():
+        context_ready_raw = int(raw_ready)
+    last_exc = data.get("last_exception_code", "").strip()
     return {
         "ok": set_handle > 0 and group_handle > 0,
         "context_ready": data.get("context_ready", "").lower() == "true",
+        "context_ready_raw": context_ready_raw,
+        "last_exception_code": int(last_exc) if last_exc.lstrip("-").isdigit()
+        else None,
         "set_handle": set_handle,
         "group_handle": group_handle,
         "mdl": data.get("mdl", "").lower() == "true",
@@ -193,6 +207,59 @@ def _find_scflow_process():
         capture_output=True, text=True, timeout=15, check=False).stdout
     pids = [int(x) for x in out.split() if x.strip().isdigit()]
     return pids
+
+
+def _post_menu_command(frame, top_label: str, item_label: str) -> bool:
+    """按菜单文本定位命令 ID 并向主框架 PostMessage WM_COMMAND。
+
+    对隐藏/最小化窗口同样有效（不需要前台与可见性），返回是否成功。
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    user32.GetMenu.restype = wintypes.HMENU
+    user32.GetMenu.argtypes = [wintypes.HWND]
+    user32.GetSubMenu.restype = wintypes.HMENU
+    user32.GetSubMenu.argtypes = [wintypes.HMENU, ctypes.c_int]
+    user32.GetMenuItemCount.restype = ctypes.c_int
+    user32.GetMenuItemCount.argtypes = [wintypes.HMENU]
+    user32.GetMenuItemID.restype = wintypes.UINT
+    user32.GetMenuItemID.argtypes = [wintypes.HMENU, ctypes.c_int]
+    user32.GetMenuStringW.restype = ctypes.c_int
+    user32.GetMenuStringW.argtypes = [wintypes.HMENU, wintypes.UINT,
+                                      wintypes.LPWSTR, ctypes.c_int,
+                                      wintypes.UINT]
+    user32.PostMessageW.restype = wintypes.BOOL
+    user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT,
+                                    wintypes.WPARAM, wintypes.LPARAM]
+
+    hmenu = user32.GetMenu(frame.handle)
+    if not hmenu:
+        return False
+    top_count = user32.GetMenuItemCount(hmenu)
+    target_sub = None
+    for i in range(top_count):
+        buf = ctypes.create_unicode_buffer(256)
+        if user32.GetMenuStringW(hmenu, i, buf, 256, 0x400) > 0:
+            text = buf.value.replace("&", "")
+            if text.lower() == top_label.lower():
+                target_sub = user32.GetSubMenu(hmenu, i)
+                break
+    if not target_sub:
+        return False
+    n = user32.GetMenuItemCount(target_sub)
+    for i in range(n):
+        buf = ctypes.create_unicode_buffer(256)
+        if user32.GetMenuStringW(target_sub, i, buf, 256, 0x400) > 0:
+            text = buf.value.replace("&", "").replace("...", "")
+            if text.lower() == item_label.replace("...", "").lower():
+                cmd = user32.GetMenuItemID(target_sub, i)
+                if cmd and cmd != 0xFFFFFFFF:
+                    return bool(user32.PostMessageW(frame.handle, 0x111,
+                                                   cmd, 0))
+                return False
+    return False
 
 
 def _dismiss_warning_dialogs(app) -> None:
@@ -324,6 +391,12 @@ def _run_com_vbs(vbs_path: Path, timeout: float) -> dict:
 
 
 def _run_gui(vbs_path: Path, timeout: float, menu: dict) -> dict:
+    """GUI 后端：File → Execute VBScript 在宿主进程内执行脚本。
+
+    多实例并存时（Kicker 实例 + COM LocalServer 瞬态实例）必须选带
+    ``AfxMDIFrame`` 主框架的实例；对话框按"菜单点击后新出现的可见
+    #32770"识别，Edit 填路径，Open/OK 按钮多重回退。
+    """
     from pywinauto import Application
 
     exe = scflowpre_probe.find_program("scFLOWpre_Bx64net.exe")
@@ -332,9 +405,7 @@ def _run_gui(vbs_path: Path, timeout: float, menu: dict) -> dict:
                 "error": "scFLOWpre not installed"}
     pids = _find_scflow_process()
     started_by_us = False
-    if pids:
-        app = Application(backend="win32").connect(process=pids[0])
-    else:
+    if not pids:
         # 安全约束（DEV_SUMMARY §6.4）：绝不能直接 start 裸 exe——
         # scFLOWpre 必须经 Kicker 启动（许可/产品键注入），裸 exe 会在
         # SetupSCTpreLib 抛 0xE0000000 并弹模态错误框。要求用户先经
@@ -347,38 +418,107 @@ def _run_gui(vbs_path: Path, timeout: float, menu: dict) -> dict:
             "script": str(vbs_path),
         }
 
-    _dismiss_warning_dialogs(app)
-    try:
-        win = app.window(title_re=menu.get("main_title_re",
-                                           ".*scFLOWpre.*|.*SCFLOW.*"))
-        win.wait("visible", timeout=20)
-    except Exception as exc:  # noqa: BLE001
+    app = None
+    frame = None
+    for pid in pids:
+        try:
+            cand = Application(backend="win32").connect(process=pid,
+                                                        timeout=10)
+            for w in cand.windows():
+                try:
+                    if w.class_name().startswith("AfxMDIFrame"):
+                        app = cand
+                        frame = w
+                        break
+                except Exception:  # noqa: BLE001
+                    continue
+            if frame is not None:
+                break
+        except Exception:  # noqa: BLE001
+            continue
+    if app is None or frame is None:
         return {"backend": "gui", "ok": False,
-                "error": f"main window not found: {exc}",
-                "started_by_us": started_by_us}
+                "error": "scFLOWpre 已运行但没有可自动化的 MDI 主框架"
+                         "（Kicker 实例未就绪？）",
+                "script": str(vbs_path)}
+
+    _dismiss_warning_dialogs(app)
+    # 快照菜单点击前已有的对话框句柄，用于识别之后新弹出的脚本选择框
+    try:
+        before = {w.handle for w in app.windows()
+                  if w.class_name() == "#32770"}
+    except Exception:  # noqa: BLE001
+        before = set()
 
     file_menu = menu.get("file", "File")
-    execute_item = menu.get("execute_vbs", "Execute VBScript")
-    try:
-        win.menu_select(f"{file_menu}->{execute_item}")
-    except Exception as exc:  # noqa: BLE001
-        return {"backend": "gui", "ok": False,
-                "error": f"menu failed: {exc}",
-                "started_by_us": started_by_us}
+    execute_item = menu.get("execute_vbs", "Execute VBScript...")
+    # 菜单点击优先走 WM_COMMAND：宿主主框架常被最小化/隐藏，且后台进程
+    # 无法 SetForegroundWindow（Win32 前台锁），menu_select 的可见性检查
+    # 会失败。WM_COMMAND 对隐藏窗口同样生效。
+    if not _post_menu_command(frame, file_menu, execute_item):
+        try:
+            frame.menu_select(f"{file_menu}->{execute_item}")
+        except Exception as exc:  # noqa: BLE001
+            return {"backend": "gui", "ok": False,
+                    "error": f"menu failed: {exc}",
+                    "started_by_us": started_by_us}
 
-    try:
-        dlg = app.window(title_re=menu.get("dlg_title_re", ".*VBS.*"))
-        dlg.wait("visible", timeout=20)
-        edit = dlg.child_window(class_name="Edit")
-        edit.set_edit_text(str(vbs_path))
-        ok = dlg.child_window(title=menu.get("ok_button", "OK"))
-        ok.click()
-    except Exception as exc:  # noqa: BLE001
+    dlg = None
+    deadline = time.time() + 20
+    while time.time() < deadline and dlg is None:
+        try:
+            for w in app.windows():
+                if w.class_name() != "#32770" or w.handle in before:
+                    continue
+                try:
+                    if not (w.is_visible() and w.is_enabled()):
+                        continue
+                    r = w.rectangle()
+                    if (r.right - r.left) > 150:
+                        dlg = w
+                        break
+                except Exception:  # noqa: BLE001
+                    continue
+        except Exception:  # noqa: BLE001
+            pass
+        if dlg is None:
+            time.sleep(0.5)
+    if dlg is None:
         return {"backend": "gui", "ok": False,
-                "error": f"dialog failed: {exc}",
-                "started_by_us": started_by_us}
+                "error": "Execute VBScript 对话框未出现",
+                "started_by_us": started_by_us, "script": str(vbs_path)}
+
+    # 对话框交互全部走原生 Win32 消息（前台无关）：Edit 设 WM_SETTEXT，
+    # 确认按钮按 IDOK 兜底 BM_CLICK。
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    user32.GetDlgItem.restype = wintypes.HWND
+    user32.GetDlgItem.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.SendMessageW.restype = wintypes.LPARAM
+    user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT,
+                                    wintypes.WPARAM, wintypes.LPARAM]
+
+    edit = user32.GetDlgItem(dlg.handle, 0x480)   # 文件对话框文件名 Edit
+    if not edit:
+        return {"backend": "gui", "ok": False,
+                "error": "对话框文件名 Edit 控件未找到",
+                "started_by_us": started_by_us, "script": str(vbs_path)}
+    user32.SendMessageW(edit, 0x000C, 0, str(vbs_path))   # WM_SETTEXT
+    time.sleep(0.3)
+    clicked = False
+    for btn_id in (1, 0x1):   # IDOK（FileDialog 中为 Open/OK 按钮）
+        btn = user32.GetDlgItem(dlg.handle, btn_id)
+        if btn:
+            user32.SendMessageW(btn, 0x00F5, 0, 0)        # BM_CLICK
+            clicked = True
+            break
+    if not clicked:
+        return {"backend": "gui", "ok": False,
+                "error": "对话框确认按钮未找到",
+                "started_by_us": started_by_us, "script": str(vbs_path)}
     return {"backend": "gui", "ok": True, "submitted": str(vbs_path),
-            "started_by_us": started_by_us}
+            "started_by_us": started_by_us, "pid": frame.process_id}
 
 
 def run_pipeline(set_name: str = "Probe",

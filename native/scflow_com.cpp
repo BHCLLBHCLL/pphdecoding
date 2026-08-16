@@ -33,6 +33,9 @@ enum ScfPipelineDispId {
     kDispReleaseHandle = 5,
     kDispLastError = 6,
     kDispLastErrorMessage = 7,
+    kDispStatus = 8,             // scf_status 摘要（定位 VBS 执行进程）
+    kDispContextReadyRaw = 9,    // -1=探针读故障 / 0=无上下文 / 1=就绪
+    kDispLastExceptionCode = 10, // 最近 SEH 捕获的异常码
 };
 
 static bool wcs_eq(const wchar_t* a, const wchar_t* b) {
@@ -47,6 +50,9 @@ static DISPID lookup_disp_id(const wchar_t* name) {
     if (wcs_eq(name, L"ReleaseHandle")) return kDispReleaseHandle;
     if (wcs_eq(name, L"LastError")) return kDispLastError;
     if (wcs_eq(name, L"LastErrorMessage")) return kDispLastErrorMessage;
+    if (wcs_eq(name, L"Status")) return kDispStatus;
+    if (wcs_eq(name, L"ContextReadyRaw")) return kDispContextReadyRaw;
+    if (wcs_eq(name, L"LastExceptionCode")) return kDispLastExceptionCode;
     return DISPID_UNKNOWN;
 }
 
@@ -187,6 +193,33 @@ class ScfPipelineCom : public IDispatch {
                     std::wstring msg = error_message_for(last_error_);
                     V_VT(result) = VT_BSTR;
                     V_BSTR(result) = SysAllocString(msg.c_str());
+                }
+                return S_OK;
+            }
+            case kDispContextReadyRaw: {
+                EnsureInitialized();
+                int ready = scf_pipeline_context_ready();
+                last_error_ = SCF_ERR_OK;
+                if (result != nullptr) {
+                    V_VT(result) = VT_I4;
+                    V_I4(result) = ready;
+                }
+                return S_OK;
+            }
+            case kDispStatus: {
+                EnsureInitialized();
+                wchar_t buf[8192] = {};
+                int n = scf_status(buf, 8192);
+                if (result != nullptr) {
+                    V_VT(result) = VT_BSTR;
+                    V_BSTR(result) = SysAllocStringLen(buf, n > 0 ? n : 0);
+                }
+                return S_OK;
+            }
+            case kDispLastExceptionCode: {
+                if (result != nullptr) {
+                    V_VT(result) = VT_I4;
+                    V_I4(result) = scf_last_exception_code();
                 }
                 return S_OK;
             }

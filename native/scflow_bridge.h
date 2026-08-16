@@ -69,10 +69,14 @@ SCF_API int scf_call_zip_expand(const wchar_t* zip_path,
 #define SCF_ERR_NULL_OBJECT       (-103)
 
 /*
- * Returns 1 when the SCTprime host context (document manager at
- * [ctx+0xF8]) is present, 0 when not, -1 when SCTprime is not loaded.
+ * Returns 1 when the SCTprime host context object ([0xD212B8+8]) is
+ * present, 0 when not, -1 when SCTprime is not loaded (or the guarded
+ * read faulted).
  */
 SCF_API int scf_pipeline_context_ready(void);
+
+/* 最近一次 SEH 保护的管线调用的异常码（0 = 无异常）。 */
+SCF_API int scf_last_exception_code(void);
 
 /*
  * Calls SCTprime::CreateShapeGroupSet(name) and writes the 16-byte

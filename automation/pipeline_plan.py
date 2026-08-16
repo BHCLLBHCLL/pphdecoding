@@ -111,10 +111,16 @@ WRAP_PARAM_PAIRS: list[tuple[str, str]] = [
 
 
 def _array_assign_actions(pairs: list[tuple[str, str]],
-                          var: str = "ArrayParam1_") -> list[str]:
-    """键值对 → ``Dim/Redim ArrayParam1_(n)`` + 逐项字符串赋值。"""
+                          var: str = "ArrayParam1_",
+                          declare: bool = True) -> list[str]:
+    """键值对 → ``Dim/Redim ArrayParam1_(n)`` + 逐项字符串赋值。
+
+    ``declare=False`` 用于同一脚本内多次拼接数组参数段：VBScript 不允许
+    重复 ``Dim`` 同名变量（编译期 "Name redefined"，整段脚本不执行），
+    后续段只 ``Redim``。
+    """
     n = len(pairs) * 2 - 1
-    actions = [f"Dim {var}()", f"Redim {var}({n})"]
+    actions = ([f"Dim {var}()"] if declare else []) + [f"Redim {var}({n})"]
     for i, (key, val) in enumerate(pairs):
         esc = str(val).replace('"', '""')
         actions.append(f'{var}({i * 2}) = "{key}"')
@@ -122,7 +128,8 @@ def _array_assign_actions(pairs: list[tuple[str, str]],
     return actions
 
 
-def _wrapping_param_actions(marked_face: int = 0) -> list[str]:
+def _wrapping_param_actions(marked_face: int = 0,
+                           declare: bool = True) -> list[str]:
     """WrappingParam：Method/OutsideType/OutsideRegions/InsideGroups/SetParams。"""
     pairs = [list(p) for p in WRAP_PARAM_PAIRS]
     for p in pairs:
@@ -145,7 +152,7 @@ def _wrapping_param_actions(marked_face: int = 0) -> list[str]:
         "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
         "Set WrappingParam_ = WrappingGroup_.GetWrappingParam",
         "WrappingParam_.SetInsideGroups ArrayParam1_",
-        *_array_assign_actions(pairs),
+        *_array_assign_actions(pairs, declare=declare),
         "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
         "Set WrappingParam_ = WrappingGroup_.GetWrappingParam",
         "WrappingParam_.SetParams ArrayParam1_",
@@ -153,7 +160,7 @@ def _wrapping_param_actions(marked_face: int = 0) -> list[str]:
     return actions
 
 
-def _wrapping_oct_param_actions() -> list[str]:
+def _wrapping_oct_param_actions(declare: bool = True) -> list[str]:
     """WrappingGroup 八叉树参数（录制顺序：SetOctType→Initialize→SetParams）。"""
     actions = [
         "Param1_ = 3",
@@ -181,7 +188,7 @@ def _wrapping_oct_param_actions() -> list[str]:
         "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
         "Set OctParam_ = WrappingGroup_.GetOctParam",
         "OctParam_.SetMinSize Param1_",
-        *_array_assign_actions(WRAP_OCT_PARAM_PAIRS),
+        *_array_assign_actions(WRAP_OCT_PARAM_PAIRS, declare=declare),
         "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
         "Set OctParam_ = WrappingGroup_.GetOctParam",
         "OctParam_.SetParams ArrayParam1_",
@@ -211,8 +218,8 @@ def _wrapping_body_actions() -> list[str]:
         "Param1_ = False",
         'Set FaceRegion_ = Doc_.QueryFaceRegionByName("@PartSurface_Part")',
         "FaceRegion_.SetIsContactAngleSet Param1_",
-        *_wrapping_oct_param_actions(),
-        *_wrapping_param_actions(0),
+        *_wrapping_oct_param_actions(declare=True),
+        *_wrapping_param_actions(0, declare=False),
         'Param1_ = "Rearrange on the tree window"',
         "Doc_.BeginTransaction Param1_",
         'Param1_ = "Part"',
@@ -235,7 +242,7 @@ def _wrapping_body_actions() -> list[str]:
         "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
         "Set Octree_ = WrappingGroup_.GetOctree",
         "Octree_.UpdateGroups",
-        *_wrapping_param_actions(1),
+        *_wrapping_param_actions(1, declare=False),
         "Set WrappingGroup_ = Doc_.QueryWrappingGroupByIndex(1)",
         "Set Octree_ = WrappingGroup_.GetOctree",
         "Octree_.UpdateGroups",

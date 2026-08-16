@@ -83,9 +83,17 @@ struct PipelineApi {
 
 PipelineApi g_pipeline_api;
 
-// SCTprime 5225.20302.20251223 private globals (module base + RVA).
+// SCTprime private global (module base + RVA). 0xD212B8 was derived for
+// 5225.20302.20251223 and re-verified on the installed 6025.20101.20251128:
+//   - CreateShapeGroupSet does `lea rcx,[rip+G]; call get_[G+8]` (0x981880),
+//     i.e. the host context object lives at [G+8] in BOTH builds;
+//   - live-process ReadProcessMemory shows [G+8] non-null in Kicker-launched
+//     instances (and null in a COM-LocalServer transient instance, which is
+//     expected: that path lacks the Kicker product-key setup);
+//   - the OLD [ctx+0xF8] document slot no longer matches the new build
+//     (CreateShapeGroupSet now reads [ctx+0x4C8] for its group registry),
+//     so context_ready is defined as [G+8] != null only.
 const unsigned __int64 kSctGlobalRva = 0xD212B8ull;
-const unsigned __int64 kCtxDocOffset = 0xF8ull;
 const int kInterfaceObjSize = 16;
 
 int g_last_exception_code = 0;
@@ -157,13 +165,7 @@ int pipeline_context_ready_raw() {
         const unsigned char* global =
             reinterpret_cast<const unsigned char*>(sct) + kSctGlobalRva;
         const void* ctx = *reinterpret_cast<void* const*>(global + 8);
-        if (ctx == nullptr) {
-            return 0;
-        }
-        const void* doc =
-            *reinterpret_cast<void* const*>(
-                reinterpret_cast<const unsigned char*>(ctx) + kCtxDocOffset);
-        return doc != nullptr ? 1 : 0;
+        return ctx != nullptr ? 1 : 0;
     } __except (seh_filter(
         GetExceptionInformation()->ExceptionRecord->ExceptionCode,
         GetExceptionInformation())) {
@@ -288,6 +290,10 @@ SCF_API int scf_call_zip_expand(const wchar_t* zip_path,
 
 SCF_API int scf_pipeline_context_ready(void) {
     return pipeline_context_ready_raw();
+}
+
+SCF_API int scf_last_exception_code(void) {
+    return g_last_exception_code;
 }
 
 SCF_API int scf_pipeline_create_shape_group_set(const wchar_t* name,
