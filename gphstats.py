@@ -755,7 +755,8 @@ def write_gph_volume(filepath,
     neigh_u4 = _np.asarray(neigh, dtype=">i4").reshape(-1)
     if owner.size != n_faces or neigh_u4.size != n_faces:
         raise ValueError("owner/neigh length must equal faces length")
-    neigh_u4 = _np.where(neigh_u4 < 0, 0xFFFFFFFF, neigh_u4).astype(">u4")
+    neigh_u4 = _np.where(neigh_u4 < 0, _np.uint32(0xFFFFFFFF),
+                         neigh_u4.astype(_np.int64)).astype(">u4")
 
     out = bytearray()
     out += _i32(8) + crdlfld.MAGIC + _i32(8) + _i32(4) + _i32(4)

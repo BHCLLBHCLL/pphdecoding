@@ -92,6 +92,14 @@ Solver/FPH 链路         ████░░░░░░░░░░░░░░
 > 求解设置树（9，去重后 +15）；HTML 帮助页只有显示名（无 XML 键），自动
 > 关键词匹配误匹配率高（探索性评估弃用）。突破 60 需**真实录制**
 > （宿主内逐个 Cond* 对话框录制，属 P6-5 宿主交互收敛）或扩充样本工程。
+>
+> **2026-08-17 P6-3 网格量化对拍 + 黄金文件扩容**：新增
+> `tests/test_mesh_quality_benchmark.py`（10 项）——对宿主黄金产物
+> （tests/box/meshinggroup1.gph 944 cells + examples/tr03.gph 63k cells）
+> 做质量指标基线断言（非正交度/偏斜度/负体积），并对自研 voxmesh/polymesh
+> 做同指标对拍（纯 hex 非正交度≈0、切割路径 ≤ 宿主 box 25.8°）；修复
+> gphstats.py numpy 2.x `astype(">u4")` 溢出（0xFFFFFFFF Python int 转
+> C long），网格/GPH 全测试恢复全绿（62 passed）。
 ## 1. 总体判断
 
 项目呈**「底层强、上层弱」的哑铃结构**：
