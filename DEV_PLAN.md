@@ -1157,6 +1157,28 @@ cellular / lattice / frame 家族只能靠「命名约定 + 反汇编 + 经验�
 3. Disc/Overset 录制锁定、11 个 NYI 菜单逐项消灭；
 4. 样例集扩充（3–5 个真实项目 pph）黄金文件对比。
 
+### 17.3 改进计划（P5，2026-08-17）
+
+> **执行状态（2026-08-17）：P5-1 → P5-5 已按计划执行完毕。**
+> 完整计划与逐项结果见 [docs/REANALYSIS_2026-08-17.md](docs/REANALYSIS_2026-08-17.md)
+> §3/§6；function_gap_analysis.md §0 图表已按 P5 落地刷新。要点：
+>
+> - P5-1 几何编辑接线：cone/torus/rectangle-sheet 三原语走原生 ABI
+>   （`a5df2ce` `f9eb6ba`）；
+> - P5-2 V37 字段级钉死：cellular 家族 5022 根因钉死（需 cellular-guise
+>   实体 + 会话启动前设置 guise，启动后 rc=900），如实记 blocked
+>   （`92220ac`）；
+> - P5-3 条件体系：region 多 face 引用累积注册 + 回退（`f835bbe`）；
+> - P5-4 网格可用性：voxmesh CLI 质量报告、2:1 平衡独立校验测试、
+>   面区域映射实测（`391c270` `fca4ebf`）；
+> - P5-5 宿主验证：**Wrapping 360/360 步实机 err=0 端到端跑通**、
+>   in-proc COM 桥 + RVA 0xD212B8 实机验证（安装版 6025.20101.20251128
+>   保留 G 布局、`[ctx+0xF8]` 槽失效改为 `[G+8]` 判据）、sctsnapshot
+>   重序列化产物宿主验收 ok；修复 VBScript 重复 `Dim ArrayParam1_`
+>   编译期缺陷（`22e2bb2` `c64de13` `3487808`）。
+> 遗留：Kicker 实例内完整管线（context_ready=1 → handle>0）需宿主
+> 主框架可见后经 gui/manual 后端复跑；cellular-guise 会话引导见 P5-2。
+
 ---
 
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

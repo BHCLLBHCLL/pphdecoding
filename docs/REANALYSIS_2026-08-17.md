@@ -171,3 +171,55 @@
 逆向成果为输入的一次独立复核**：完整度百分比沿用其口径（已引用），新增的是
 「深度」维度与「已证底层未接线」的结构性判断，以及据此排序的 P5 计划。
 计划执行后的状态回填请同步 function_gap_analysis.md §0 图表与 DEV_PLAN §17。
+
+---
+
+## 6. P5 执行结果（2026-08-16/17，按计划逐项落地）
+
+| 项 | 结果 | 提交 |
+|---|---|---|
+| P5-1 Create 四原语接线 | cone/torus/rectangle-sheet 内核封装 + geometry_ops GUI 接线 + 测试全绿 | `a5df2ce` `f9eb6ba` |
+| P5-2 89 med → high | 5022 根因钉死：cellular 家族需 cellular-guise 实体（PK_BODY_create_implicit/lattice），`PK_SESSION_set_cellular_guise(1)` 会话启动后 rc=900 锁定；如实记为 blocked，未伪造验证 | `92220ac` |
+| P5-3 region 多 face | picked_faces 累积注册 + sface_num 多面写回 + 回退 last_pick | `f835bbe` |
+| P5-4 网格可用性 | 质量报告接入 voxmesh CLI（`391c270`）；2:1 平衡独立校验器测试（平衡/非平衡双路径，`fca4ebf`）；面区域映射 box 实测 `{'@PartSurface_Part': 1536}` | `391c270` `fca4ebf` |
+| P5-5 宿主验证 | 见下 | `22e2bb2` `c64de13` `3487808` |
+
+### 6.1 P5-5 宿主验证实测结果（原标注“环境阻塞”，实测已解除）
+
+环境实测：本机 CradleCFD2025.2 已安装（MSC Licensing 27500@localhost 可达），
+Kicker 启动的 scFLOWpre 常驻运行。三项全部获得实机证据：
+
+1. **Wrapping 端到端（首次跑通）**：录制锁定序列 360 步经
+   `ExecuteVBSWithFile` 在 scFLOWpre 进程内执行，**360/360 步 err=0**，
+   `SaveProject` 产出 `p5_wrapping_e2e_out.pph`（含 `wrappinggroup2.mdl` +
+   `wrappinggroup2.oct`，oct 为 101 KB 有效 CRDL-FLD），宿主重开该产物
+   err=0。执行日志 `p5_wrapping_e2e.log` / 脚本 `p5_wrapping_e2e.vbs`。
+   途中修复一个真实缺陷：`_array_assign_actions` 三段拼接导致 VBScript
+   重复 `Dim ArrayParam1_()`（编译期 Name redefined，整段脚本不执行，
+   表现为 ExecuteVBSWithFile 返回 False 且无任何输出）；原录制脚本只有
+   一处 Dim。现按 `declare=False` 只在首段声明。
+2. **in-proc COM 桥 + RVA 0xD212B8 实机验证**：
+   - COM `Dispatch` 走 LocalServer32 会拉起**瞬态新实例**（PID 实测出现
+     又退出，Kicker 双实例 21240/22468 从未加载本仓 DLL）；
+     `ExecuteVBSWithFile` 在瞬态实例内为**真 in-proc**（tasklist /m
+     scflow_bridge.dll 实测挂在 scFLOWpre 进程上），11 个厂商模块全加载、
+     符号解析成功（`host_pipeline_result.txt`）。
+   - 安装版 SCTprime = **6025.20101.20251128**（原 RVA 推导自
+     5225.20302.20251223，已是旧补丁）。capstone 反汇编 + 导出符号实测：
+     `CreateShapeGroupSet` 仍是 `lea rcx,[rip+G]; call [G+8]-getter`，
+     **G=0xd212b8 在新版保留**；但旧版 `[ctx+0xF8]` 文档槽已不匹配
+     （新版函数走 `[ctx+0x4C8]` 组注册表）。ReadProcessMemory 实测两个
+     Kicker 实例 `[G+8]` 均非空（瞬态 COM 实例为空——缺 Kicker 产品键
+     注入的跛脚路径，DEV_SUMMARY §6 已预警）。桥已改为
+     `context_ready = [G+8] != null`（SEH 保护），新增 Status /
+     ContextReadyRaw / LastExceptionCode 诊断口。
+   - 待补项（如实记录）：在 Kicker 实例内（File → Execute VBScript）跑
+     通 `context_ready=1 → set_handle>0` 的完整管线需宿主主框架可见；
+     当前两实例窗口隐藏且后台进程受 Win32 前台锁，WM_COMMAND 已可发命令
+     但文件对话框未弹出。`automation/host_pipeline.py` gui 后端已重写
+     （MDI 框架实例选择 + WM_COMMAND + 原生 Win32 对话框填充），待宿主
+     窗口可见时一键复跑；manual 后端随时可用。
+3. **sctsnapshot 字节级重序列化 + scFLOWpre 实机验收**：parse→serialize
+   字节恒等（box 27,539 B）已有 23 项回归测试；本轮新增实机验收：
+   重序列化后经 `pphwriter.clone_pph` 回写 PPH（9 成员，deflate 后
+   751 KB），宿主 `OpenProject` 验收 **ok=True**。
