@@ -151,16 +151,24 @@ int pipeline_context_ready_raw() {
     if (sct == nullptr || g_pipeline_api.create_set == nullptr) {
         return -1;
     }
-    const unsigned char* global =
-        reinterpret_cast<const unsigned char*>(sct) + kSctGlobalRva;
-    const void* ctx = *reinterpret_cast<void* const*>(global + 8);
-    if (ctx == nullptr) {
-        return 0;
+    // SEH 保护：RVA 0xD212B8 是反汇编锁定的私有全局，若宿主版本布局
+    // 变化导致该地址不可读，绝不能让 in-proc 崩溃拖垮 scFLOWpre 进程。
+    __try {
+        const unsigned char* global =
+            reinterpret_cast<const unsigned char*>(sct) + kSctGlobalRva;
+        const void* ctx = *reinterpret_cast<void* const*>(global + 8);
+        if (ctx == nullptr) {
+            return 0;
+        }
+        const void* doc =
+            *reinterpret_cast<void* const*>(
+                reinterpret_cast<const unsigned char*>(ctx) + kCtxDocOffset);
+        return doc != nullptr ? 1 : 0;
+    } __except (seh_filter(
+        GetExceptionInformation()->ExceptionRecord->ExceptionCode,
+        GetExceptionInformation())) {
+        return -1;
     }
-    const void* doc =
-        *reinterpret_cast<void* const*>(reinterpret_cast<const unsigned char*>(ctx) +
-                                        kCtxDocOffset);
-    return doc != nullptr ? 1 : 0;
 }
 
 
