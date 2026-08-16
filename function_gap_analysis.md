@@ -128,8 +128,8 @@ Solver/FPH 链路         ████░░░░░░░░░░░░░░
 | 1 | **条件体系** | 5/180 类型有粗桩 UI | scFLOWpre 核心日常工作流；参数仅存 session、region 单 face 引用，真实项目条件设置基本不可用 |
 | 2 | **网格生成算法深度** | MVP 级 | 无质量保证机制（2:1 平衡、平滑度量、区域映射），与 scFLOW pre 网格器是数量级差距；但格式写端已生产级 |
 | 3 | **几何编辑闭环** | TODO 草稿 | Create/Modify 无实体执行；**投入产出比最好**——ps_facet2_nodes 底层已生产级，只欠 GUI/管线接线 |
-| 4 | **外部 COM 全自动化** | 结构性阻塞 | LocalServer32 注册表直指裸 exe（绕过 Kicker 必崩）；in-proc 桥未实测；当前仅半自动（Kicker 启动 + 宿主内执行 VBS） |
-| 5 | **Wrapping/Disc/Overset** | 录制≠验证 | Wrapping 锁定但未实机执行；Disc/Overset 无实质实现 |
+| 4 | **外部 COM 全自动化** | 结构性阻塞→部分解通 | LocalServer32 注册表直指裸 exe（~~绕过 Kicker 必崩~~ → 2026-08-17 本机许可下瞬态实例实测可跑命令类脚本，Kicker 上下文仍只在宿主内菜单路径）；in-proc 桥已实机验证（RVA 0xD212B8 布局保留，`[ctx+0xF8]` 槽失效改 `[G+8]` 判据）；环境事实见 DEV_SUMMARY §6.3 前置块 |
+| 5 | **Wrapping/Disc/Overset** | 录制≠验证 → Wrapping 已验证 | ~~Wrapping 锁定但未实机执行~~；**Wrapping 已端到端跑通**（360/360 步 err=0 + 产物宿主重开 err=0，P5-5）；Disc/Overset 无实质实现 |
 | 6 | **native_bam 精度** | 几何近似 | 容差合并/Influence/微小面保留规则与宿主内核不等价 |
 | 7 | **边缘 NYI + 质量基础设施** | 11 菜单灰显 | Select 高级项 5 个、Edit 3 个、Ridge 2 个、File 1 个；网格质量统计（非正交度/偏斜度）缺失 |
 

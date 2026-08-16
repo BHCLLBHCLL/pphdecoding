@@ -311,28 +311,61 @@ GUI 运行：`python pph_gui.py [项目.pph]`；依赖缺失时
 
 ### 6.3 原生桌面验证清单（按序执行）
 
-1. 经 **Kicker** 正常启动宿主（不要直接启动裸 exe）；
+> **★ 前置环境事实（2026-08-17 实测，重大反转）**：原计划标注
+> "环境阻塞（需 Kicker/许可宿主，沙箱外）"，实测**本机即具备全部条件**，
+> 后续宿主验证无需再向沙箱外找环境：
+>
+> - **安装**：`C:\Program Files\Cradle\CradleCFD2025.2`（另有 CradleCFD2023）；
+>   SCTprime_Bx64.dll = **6025.20101.20251128**（注意：RVA 0xD212B8 的推导基
+>   5225.20302.20251223 是旧补丁，但布局实测保留，见下）。
+> - **许可**：MSC Licensing（Beryllium）本机安装，`27500@localhost` 可达
+>   （`Test-NetConnection localhost -Port 27500` → True）。
+> - **宿主**：Kicker 启动的 scFLOWpre 常驻（21240/22468 两实例）；Kicker
+>   注入的实例 SCTprime 全局上下文非空，COM 拉起的瞬态实例为空（跛脚路径，
+>   §6.2 预警属实）。
+>
+> 三条已验证路径（P5-5 证据提交 `3487808`，日志 `p5_wrapping_e2e.log` /
+> `host_pipeline_result.txt`）：
+>
+> | 路径 | 适用 | 实测结论（2026-08-17） |
+> |---|---|---|
+> | COM `Dispatch` → LocalServer32 瞬态实例 + `ExecuteVBSWithFile` | Open/Save/条件/网格命令类脚本；VBS 在其中为**真 in-proc**（11 个厂商模块全加载，tasklist /m 实测） | Wrapping 360/360 步 err=0、产物宿主重开 err=0；sctsnapshot 重序列化 PPH `OpenProject` ok。**不适用** SCTprime 管线（context 全局为空，pipeline gate 拒入） |
+> | 宿主内 File → Execute VBScript（`host_pipeline.py` gui/manual 后端） | SCTprime 管线（CreateShapeGroupSet…）——唯一 Kicker 上下文完整路径 | gui 后端已重写（MDI 框架实例选择 + WM_COMMAND 菜单 + 原生 Win32 对话框填充）；宿主主框架窗口需可见（隐藏窗口受 Win32 前台锁）；manual 后端随时可用 |
+> | ReadProcessMemory 只读探针（同用户会话即可） | 私有全局布局核验，不动宿主 UI | 两 Kicker 实例 `[0xd212b8+8]` 均非空；新版函数走 `[ctx+0x4C8]`，旧 `[ctx+0xF8]` 文档槽失效 |
+
+1. 经 **Kicker** 正常启动宿主（不要直接启动裸 exe）——**本机已满足**
+   （两实例常驻）；
 2. `python -m automation.host_pipeline --register` +
    `--write-vbs host_pipeline.vbs --project <pph>`，宿主内
    File → Execute VBScript 执行 → 验证结果文件
    `context_ready=True`、`set_handle / group_handle > 0`、`mdl=True`
-   （此步完全不碰 COM 激活）；
+   （此步完全不碰 COM 激活）。**状态：脚本/后端/COM 注册均已就绪并实测，
+   仅差"宿主主框架窗口可见"这一操作条件——窗口隐藏时 gui 后端会被
+   前台锁挡在文件对话框之外，manual 后端（人工点菜单）随时可用**；
 3. 外部脚本试 `GetObject(, "scFLOWpre_Bx64net.Application.2025")`
-   **ROT 附加**（前提：宿主把 Application 注册进 ROT，需实机确认）；
-4. 再试 `CreateObject`：若类工厂注册为 MULTIPLEUSE 且已有实例在跑，
-   激活会直接附加到运行中进程——对比激活前后
-   `Get-Process scFLOWpre_Bx64net` 的 PID 数即可判断是"附加"还是
-   "拉新进程崩溃"；
-5. 若 3、4 均不可行，放弃外部 COM 驱动：求证 `vbs_bridge.py` 中
-   `-vbs` CLI 参数是否真实存在（代码标注"待实机确认"），或停在
-   "Kicker 启动 + GUI 菜单后端"的半自动方案。
+   **ROT 附加**。**实测：失败（宿主未注册 ROT，GetActiveObject 抛
+   MK_E_UNAVAILABLE），此路不通**；
+4. 再试 `CreateObject`。**实测："拉新进程"成立**——COM 激活拉起瞬态新
+   实例（PID 出现又退出，Kicker 双实例从不加载本仓 DLL）。与本 §6.1/6.2
+   的"裸 exe 必崩 0xE0000000"不同，本机瞬态实例**正常工作**（OpenProject/
+   SaveProject/ExecuteVBS 均 err=0），推测机器级 27500 许可已生效；沙箱/
+   无许可环境的结论仍以 §6.1/§6.2 为准；
+5. 若 3、4 均不可行，放弃外部 COM 驱动：`vbs_bridge.py` 的 `-vbs` CLI
+   参数**仍待实机确认**；当前已落在 "COM 瞬态实例（命令类脚本）+ GUI/手动
+   菜单（SCTprime 管线）"的实测组合上。
 
 ### 6.4 代码层待修隐患（原生实测前建议处理）
 
-- ⚠️ `host_pipeline.py:116`：VBS 内的 `CreateObject` 兜底若被
+> **状态（2026-08-17，P5-5 已修）**：以下两条均已落地——
+> VBS 内 `CreateObject` 兜底保留"仅限宿主内执行"注释且管道 VBS 自带
+> open_err/context_ready_raw/bridge_status 诊断日志；`_run_gui` 已改为
+> **要求先有 Kicker 实例在跑**（并选带 `AfxMDIFrame` 主框架的实例，
+> 菜单走 WM_COMMAND、对话框走原生 Win32 消息，全程不拉裸 exe）。
+
+- ✅ `host_pipeline.py:116`：VBS 内的 `CreateObject` 兜底若被
   wscript/cscript 在**宿主外**执行，会触发 LocalServer 激活 → 原生上
   同样崩。建议加注释"仅限宿主内执行"，或删掉兜底让错误显式暴露；
-- ⚠️ `host_pipeline.py:_run_gui`（约 236 行）：无进程时直接
+- ✅ `host_pipeline.py:_run_gui`（约 236 行）：无进程时直接
   `Application.start(exe)` 拉起裸 exe，同样绕过 Kicker。gui 后端应
   改为"要求先经 Kicker 启动实例在跑"，否则复现同样崩溃。
 
@@ -350,8 +383,9 @@ GUI 运行：`python pph_gui.py [项目.pph]`；依赖缺失时
   （真写 main.xml）；
 - **中间层（55–70%）**：BAM（API 模式录制锁定 + 实测 err=0；原生 12/12
   步对齐但缺容差合并/Influence）、Octree（参数链路实测达标）、宿主自动化
-  （主链路三份日志 err=0；in-proc COM 桥未实测、外部 COM 被 LocalServer
-  结构性阻塞）；
+  （主链路三份日志 err=0；P5-5 后 in-proc COM 桥已实机验证——RVA 0xD212B8
+  布局在安装版 6025.20101.20251128 保留、`[ctx+0xF8]` 槽失效改为 `[G+8]`
+  判据；外部 COM 的 LocalServer 瞬态实例实测可跑命令类脚本，见 §6.3）；
 - **差距层（10–30%）**：条件体系（**~180 个 Cond\* 仅 5 个粗桩**，最大
   差距）、自研网格（voxmesh/polymesh 双 MVP，无 2:1 平衡/质量度量/区域
   映射）、几何编辑（Create/Modify 为 TODO 草稿，**底层算子已生产级只欠

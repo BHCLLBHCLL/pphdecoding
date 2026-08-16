@@ -11,6 +11,14 @@ Backends:
 - ``com``: ``Application.ExecuteVBSWithFile`` / ``ExecuteVBS`` via win32com
   (must ``_FlagAsMethod`` — late binding otherwise exposes them as bool props);
 - ``gui``: best-effort pywinauto automation of File -> Execute VBScript.
+
+宿主验证环境事实（2026-08-17 实测，规范记录见 DEV_SUMMARY §6.3 前置块）：
+本机 CradleCFD2025.2 已安装、许可 27500@localhost 可达、Kicker 实例常驻。
+COM ``Dispatch`` 会经 LocalServer32 拉起**瞬态新实例**（非 Kicker 注入，
+SCTprime 全局上下文为空 → ``ContextReady`` 为 0，pipeline 调用返回
+SCF_ERR_CONTEXT_NOT_READY）；命令类脚本（Open/Save/条件/网格）在该瞬态
+实例内为真 in-proc 且实测可用。SCTprime 管线（CreateShapeGroupSet 等）
+必须走 Kicker 实例：宿主内 File → Execute VBScript（gui/manual 后端）。
 """
 
 from __future__ import annotations

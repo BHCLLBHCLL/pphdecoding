@@ -104,9 +104,9 @@
 | 1 | 几何编辑 Create/Modify Parts 未接线 | GUI 4 个 Create 原语 + 布尔/变换 = VBS TODO 占位；底层 ABI 生产级 | **最高杠杆**：内核侧 0 成本，纯 GUI/桥接线 |
 | 2 | 条件体系深度 | ≥60/180 可见可编辑，但仅表单层；XML 读写只覆盖 16 分类页中 3 页 | 量大面广，逐批推进 |
 | 3 | 自研网格面区域映射 + 2:1 平衡 | 输出 GPH 无区域名；voxmesh 无配对/平衡 | 影响网格可用性验收 |
-| 4 | Wrapping 实机执行验证 | 录制锁定但未跑通端到端 | 需要 Kicker 宿主（环境阻塞） |
+| 4 | Wrapping 实机执行验证 | 录制锁定但未跑通端到端 | ~~需要 Kicker 宿主（环境阻塞）~~ **已解除并跑通**（360/360 步 err=0，§6.1） |
 | 5 | V37 新增 89 med 签名的字段级钉死 | 形态正确、字段未逐字段钉死 | cellular-guise 会话可解锁 |
-| 6 | in-proc COM 桥实机验证 | RVA 0xD212B8 版本风险未验证 | 需要带许可证宿主 |
+| 6 | in-proc COM 桥实机验证 | RVA 0xD212B8 版本风险未验证 | ~~需要带许可证宿主~~ **已解除并验证**（安装版布局实测，§6.1） |
 
 ---
 
@@ -148,9 +148,13 @@
 
 ### P5-5 宿主验证类（环境依赖，随时插入）
 
-1. Wrapping 端到端实机执行（需 Kicker 宿主，沙箱外）；
-2. in-proc COM（ScflowPipeline）实机验证 RVA 0xD212B8 假设；
-3. sctsnapshot 记录流字节级重序列化 + **scFLOWpre** 实机验收
+> **环境事实（2026-08-17）**：本机 CradleCFD2025.2 已安装、许可
+> 27500@localhost 可达、Kicker 双实例常驻——三项全部在实机完成，
+> 详细路径与结论见 §6.1 与 DEV_SUMMARY §6.3 前置块。
+
+1. Wrapping 端到端实机执行（~~需 Kicker 宿主，沙箱外~~ **已跑通**）；
+2. in-proc COM（ScflowPipeline）实机验证 RVA 0xD212B8 假设（**已验证**）；
+3. sctsnapshot 记录流字节级重序列化 + **scFLOWpre** 实机验收（**已验收**）
    （DEV_SUMMARY §13 遗留；内部组件名 SCTprime/SCTpreCore）。
 
 ---
@@ -185,6 +189,9 @@
 | P5-5 宿主验证 | 见下 | `22e2bb2` `c64de13` `3487808` |
 
 ### 6.1 P5-5 宿主验证实测结果（原标注“环境阻塞”，实测已解除）
+
+> 环境事实的**规范位置**见 DEV_SUMMARY §6.3「前置环境事实」块（安装路径 /
+> SCTprime 版本 / 许可可达性 / 三条已验证路径对照表），后续宿主验证先看那里。
 
 环境实测：本机 CradleCFD2025.2 已安装（MSC Licensing 27500@localhost 可达），
 Kicker 启动的 scFLOWpre 常驻运行。三项全部获得实机证据：
