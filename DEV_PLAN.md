@@ -1207,6 +1207,8 @@ cellular / lattice / frame 家族只能靠「命名约定 + 反汇编 + 经验�
 3. **P6-3 网格量化对拍 + 黄金文件扩容**：~~2–3 个真实几何~~ →
    **已交付**（tests/box + examples/tr03 两真实几何质量基线 +
    自研 mesher 同指标对拍，`test_mesh_quality_benchmark.py` 10 项）；
+3b. **Octree 八叉树补全**：OCTREEREGION 后序写端补 roundtrip 验证
+   （`test_oct_region_write.py` 3 项，互逆 + 写回重读一致）；
 4. **P6-4 几何 VBS 草稿清理**（pipeline_plan TODO 占位）；
 5. **P6-5 宿主交互环境收敛**（环境依赖，随时插入）：gui 后端框架
    发现已修（`68891e1`：Afx:hex:0 类名 + 隐藏窗口枚举），待新鲜

@@ -100,6 +100,11 @@ Solver/FPH 链路         ████░░░░░░░░░░░░░░
 > 做同指标对拍（纯 hex 非正交度≈0、切割路径 ≤ 宿主 box 25.8°）；修复
 > gphstats.py numpy 2.x `astype(">u4")` 溢出（0xFFFFFFFF Python int 转
 > C long），网格/GPH 全测试恢复全绿（62 passed）。
+>
+> **2026-08-17 Octree 八叉树补全**：OCTREEREGION 后序写端此前已实现
+> （P3-2）但无测试锁定；新增 `tests/test_oct_region_write.py`（3 项）
+> 验证「前序→后序→前序」互逆 + 「写回 ZIPOCTREE→重读」一致，Octree 域
+> 表面接线补上验证信用。
 ## 1. 总体判断
 
 项目呈**「底层强、上层弱」的哑铃结构**：
@@ -131,7 +136,7 @@ Solver/FPH 链路         ████░░░░░░░░░░░░░░
 | 功能域 | 现状 | 缺口 |
 |---|---|---|
 | BAM 分析模型 | 双轨：API 模式 100 行 BAM Wizard VBS（`pipeline_plan.BAM_WIZARD_ACTIONS`）已录制锁定并实机 err=0；原生 `native_bam.py` 对齐 Wizard 12/12 步（闭体识别/多重边/面匹配/微小面/Repair/CheckErrors/ridge），写端生产级 | 原生缺：多重实体**容差合并**（仅精确拓扑识别）、Influence 几何效应（仅记录 targets）、AF faceter 等价路径（不重剖分）、微小面坍缩为几何近似 |
-| Octree | API 参数链路（DeleteOctree+Initialize+SetOctType+SetMeshNum+SetMinSize）实测边长 0.001/单元约 1000 达标；本地 refine/merge 并行可用；区域 Size 按 main.xml 零件展开 | OCTREEREGION 后序**写端缺**（归 sctsnapshot）；voxmesh 八叉树无 2:1 平衡/pairing |
+| Octree | API 参数链路（DeleteOctree+Initialize+SetOctType+SetMeshNum+SetMinSize）实测边长 0.001/单元约 1000 达标；本地 refine/merge 并行可用；区域 Size 按 main.xml 零件展开 | OCTREEREGION 后序写端 roundtrip 锁定（test_oct_region_write.py）；voxmesh 2:1 平衡/pairing 已补齐 |
 | 宿主自动化 | `pipeline_plan.LOCKED_COMMANDS` 主链路（open_project/begin_solid_edit/parts_control/build_analysis_model/generate_octree/generate_mesh/save_project）三份日志（box_com_diag1–3）err=0；Wrapping 录制锁定（79 参数对） | in-proc COM 桥（ScflowPipeline）**从未实机验证**（版本相关 RVA 0xD212B8 风险）；外部 COM 被 LocalServer 裸 exe 崩溃结构性阻塞（绕过 Kicker 必崩 0xE0000000）；edit_ops 全部 Ridge/Octant 操作未实测；batch_bridge 仅 dry-run |
 
 ### 2.3 差距层（MVP 或桩，10–30%）
