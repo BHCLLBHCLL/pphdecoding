@@ -289,3 +289,19 @@ def set_parts_control_flags(xml: pphxml.MainXml, *,
             el = ET.SubElement(pc, tag)
         el.text = "true" if val else "false"
     return pc
+
+
+def read_parts_control_flags(xml: pphxml.MainXml) -> dict[str, bool]:
+    """读取 ``conditions/parts_control`` 三开关（缺省 False）。"""
+    cond = xml.section("conditions")
+    pc = None if cond is None else cond.find("parts_control")
+    def _flag(tag: str) -> bool:
+        if pc is None:
+            return False
+        el = pc.find(tag)
+        return (el is not None and (el.text or "").strip().lower() == "true")
+    return {
+        "discontinuous": _flag("Discontinuous"),
+        "overset": _flag("overset"),
+        "wrapping": _flag("Wrapping"),
+    }
