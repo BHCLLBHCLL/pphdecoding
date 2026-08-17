@@ -27,6 +27,7 @@ import voxmesh  # noqa: E402
 
 # 宿主黄金产物（真实生成，非手工构造）
 BOX_GOLDEN_GPH = ROOT / "tests" / "box" / "meshinggroup1.gph"
+DISC_PPH = ROOT / "tests" / "box_disc.pph"
 # 第三个真实几何（宿主产物，位于仓库外 examples 目录；存在才纳入对拍）
 TR03_GOLDEN_GPH = ROOT.parent / "examples" / "tr03.gph"
 
@@ -121,6 +122,62 @@ class TestSelfMeshVsGolden(unittest.TestCase):
         self.assertEqual(s["negative_volume_cells"], 0)
         self.assertLess(s["non_orthogonality"]["max"], 70.0)
         self.assertLess(s["skewness"]["max"], 0.8)
+
+    def test_l_shape_voxmesh_no_negative_volume(self):
+        """第二份自研几何（L 形，非单位立方体）。"""
+        pts_a = np.array(
+            [[x, y, z] for x in (0.0, 1.0) for y in (0.0, 1.0)
+             for z in (0.0, 1.0)], dtype=float)
+        pts_b = pts_a + np.array([1.0, 0.0, 0.0])
+        faces = [
+            [0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1],
+            [2, 3, 7, 6], [1, 5, 7, 3], [0, 2, 6, 4],
+        ]
+        pts = np.vstack([pts_a, pts_b])
+        faces2 = [[i + 8 for i in f] for f in faces]
+        points, tris = voxmesh.surface_from_mesh(pts, faces + faces2)
+        res = voxmesh.build_mesh(
+            points, tris,
+            voxmesh.VoxelMeshParams(initial_depth=2, max_depth=3,
+                                    max_cells=80_000))
+        s = quality.from_voxel(res).summary()
+        self.assertEqual(s["negative_volume_cells"], 0)
+        self.assertGreater(res.stats()["n_cells"], 50)
+
+
+@unittest.skipUnless(DISC_PPH.is_file(), "box_disc.pph not present")
+class TestDiscGoldenQuality(unittest.TestCase):
+    """第二份宿主黄金：box_disc.pph 内 GPH（与 box 哈希不同）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        import zipfile
+        import tempfile
+        cls._td = tempfile.TemporaryDirectory()
+        gph = Path(cls._td.name) / "disc.gph"
+        with zipfile.ZipFile(DISC_PPH) as z:
+            gph.write_bytes(z.read("meshinggroup1.gph"))
+        cls.rep = quality.from_gph(gph)
+        cls.s = cls.rep.summary()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._td.cleanup()
+
+    def test_no_negative_volume(self):
+        self.assertEqual(self.s["negative_volume_cells"], 0)
+
+    def test_non_orthogonality_bounded(self):
+        self.assertLess(self.s["non_orthogonality"]["max"], 45.0)
+        self.assertEqual(self.s["non_orthogonality_over_70"], 0)
+
+    def test_differs_from_box_golden(self):
+        import hashlib
+        import zipfile
+        box = hashlib.sha256(BOX_GOLDEN_GPH.read_bytes()).digest()
+        with zipfile.ZipFile(DISC_PPH) as z:
+            disc = hashlib.sha256(z.read("meshinggroup1.gph")).digest()
+        self.assertNotEqual(box, disc)
 
 
 @unittest.skipUnless(TR03_GOLDEN_GPH.is_file(),
