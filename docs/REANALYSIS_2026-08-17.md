@@ -327,3 +327,57 @@ Kicker 启动的 scFLOWpre 常驻运行。三项全部获得实机证据：
 | P6-6 | cellular-guise 子进程实验（低优先） | PK_SESSION_start 选项在会话启动前设 cellular guise（避开 rc=900），实测 lattice/frame getter | getter rc=0 实测记录 | 边缘家族，不阻塞主线 |
 
 **Solver/FPH 维持合理延后**（读侧已深，算侧为产品边界）。
+
+---
+
+## 9. P6 执行结果与 12 域刷新（2026-08-17）
+
+> P6-1..P6-4 + 收尾项（Octree 写端验证 / BAM Influence / 宿主诊断口 /
+> Wrapping 清理）全部落地，每项独立提交并推送。本节为 §7.2 清单的
+> 刷新版；P6-5 环境态部分完成（诊断口就绪，完整管线仍待宿主窗口可见）。
+
+### 9.1 P6 执行摘要（交付 × 回归 × 提交）
+
+| 项 | 交付 | 回归 | 提交 |
+|---|---|---|---|
+| P6-1 条件字段级扩面 | `condition_help_schema.py` 三源合并：样本 10 类（精确 XML 键，**不覆盖**保持 round-trip 精确）+ HTML 帮助页 184 页（显示名 sanitize 为 snake_case 键）+ 求解设置树 `condition_tree.json`（XML 键）注入；带字段 schema 类型 **10 → ≥25** | 条件相关 53 tests 全绿 | `619c899` |
+| P6-3 网格量化对拍 | quality benchmark vs 宿主 box 黄金（纯 hex `max_depth=2` + 切割路径非正交度不劣于宿主断言）+ gphstats numpy2 大小端 U4 写端溢出修复 | 网格/GPH 62 passed 1 skipped | `6a8624e` |
+| Octree 写端验证 | OCTREEREGION 后序写端 roundtrip（前序→后序编码 + ZIPOCTREE BYTEARRAY 等长约束 + `serialize(original_data=)` 语义钉死） | 19 tests 全绿 | `8ea7ec7` |
+| BAM Influence | `BamParams.influence_enable/targets` 透传 `BamReport` + `summary_lines`（几何效应仍在宿主内核，配置如实记录） | 22 tests 全绿 | `dd7ba88` |
+| P6-5 宿主诊断口 | `host_pipeline.host_status()`：安装/Kicker 启动器/在跑实例/主框架可见性/`gui_ready` 一屏诊断 + `--status` CLI；gui 后端错误提示明确指向 `Kicker_Bx64.exe` | 16 tests 全绿 | `70535ae` |
+| P6-2 + P6-4 几何 | P6-2：`mdl.add_surface_region` 名表回写（Register Region → MDL 权威接线 API 层）；P6-4：Create/Modify Parts VBS TODO 草稿清零，实体操作明示走原生 `geometry_ops` | 几何编辑 24 tests 全绿 | `91ac5ec` |
+| Wrapping 清理 | 「占位/待录制锁定」陈旧标注清除、未知 op 由静默 TODO 改显式 `ValueError` + 测试 | 6 tests 全绿 | `ab83e35` |
+
+**P6-1 诚实记录**：≥25 类型（样本 10 + HTML/树注入）未达「≥60 类型」
+目标——HTML 帮助页只有显示名（无 XML 键），自动关键词匹配误匹配率高
+已弃用；突破 60 需 P6-5 真实录制反推或更多样本工程（权威 XML 键源）。
+
+### 9.2 12 域完整度 × 深度清单（P6 后，vs scFLOWpre 2025.2）
+
+| 域 | 完整度 | 深度 | P6 后变化 |
+|---|---|---|---|
+| PPH 解析与写端 | 95% | 深 | 无变化（字节级闭环） |
+| 工程文件管理 | 95% | 深 | 无变化（sctsnapshot 重序列化 + 宿主验收 ok） |
+| Select/View/3D | 88% | 中–深 | 无变化 |
+| CAD/XT 几何导入 | 80% | 深 | 无变化（二进制 XT + ABI 签名级） |
+| Octree 八叉树 | **75%** | 中 | 72→75：OCTREEREGION 后序写端 roundtrip 验证（19 tests） |
+| BAM 分析模型 | **73%** | 中 | 70→73：Influence 参数透传 BamReport（22 tests）；几何效应仍在宿主内核 |
+| 宿主自动化 COM/VBS | **72%** | 中 | 70→72：`host_status()` 诊断口（16 tests）；Kicker 实例内 `context_ready=1 → handle>0` 完整管线仍待宿主窗口可见 |
+| 条件体系（~180 Cond*） | **65%** | 浅–中 | 60→65：字段 schema 10→≥25（53 tests）；≥60 类型目标未达（见 9.1 诚实记录） |
+| 自研网格生成 | **63%** | 中 | 55→63：量化对拍 vs 宿主黄金 + numpy2 写端修复（62 passed/1 skipped）；黄金文件仍 box 族 |
+| 几何编辑 Create/Modify | **62%** | 底层深、GUI 中 | 55→62：MDL 名表写端 API + VBS 草稿清零（24 tests）；GUI 归档 flush 接线 + 宿主 `QueryFaceRegionByName` 验收待补 |
+| Wrapping/Disc/Overset | **58%** | 中 | 55→58：占位清理 + 显式报错（6 tests）；质量清理，无新能力增量 |
+| Solver/FPH 链路 | 10% | 读侧深 | 无变化（合理延后；fph/fldstats/ifld 读侧全解析） |
+
+### 9.3 剩余缺口（P7 输入，按杠杆排序）
+
+1. **条件字段 schema 25→60+**：需 P6-5 真实录制反推或更多样本工程
+   （权威 XML 键源）；GenericCondBody 双驱动引擎已就绪，纯数据源问题；
+2. **Register Region GUI 归档 flush 接线**：`mdl.add_surface_region`
+   API 已就绪（P6-2），纯 GUI 接线 + 宿主 `QueryFaceRegionByName`
+   非 Nothing 验收；
+3. **Kicker 实例内完整管线**（`context_ready=1 → set_handle>0`）：
+   需前台可见宿主窗口；`python -m automation.host_pipeline --status`
+   可一键判断就绪态（gui_ready）；
+4. **网格黄金文件扩容**：box 族 → 2–3 个真实几何，对拍报告常态化；
+5. **cellular-guise 会话锁定根因验证**（rc=900，P6-6 未动，低优先）。
