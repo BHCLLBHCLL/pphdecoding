@@ -121,6 +121,23 @@ class PphArchive:
     def by_role(self, role: str) -> list[PphMember]:
         return [m for m in self.members if m.role == role]
 
+    def surface_mdl_members(self) -> list[PphMember]:
+        """显示用面片：优先 ``*_part.mdl``，否则 ``*_ridge.mdl``。
+
+        官方 Org 教程 PPH 常见布局是 ridge + GPH、没有 part；自研网格 /
+        Register Region / Select 不能因此判空。
+        """
+        parts = self.by_role(ROLE_MDL_PART)
+        if parts:
+            return parts
+        return self.by_role(ROLE_MDL_RIDGE)
+
+
+def group_surface_path(info: Optional[dict]) -> Optional[str]:
+    """网格组显示面路径：``part`` 优先，否则 ``ridge``。"""
+    paths = (info or {}).get("paths") or {}
+    return paths.get("part") or paths.get("ridge")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 摘要报告

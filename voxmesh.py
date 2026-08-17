@@ -1075,9 +1075,9 @@ def build_from_stl(stl_path: str | Path, out_prefix: str | Path,
 def _extract_mdl_from_pph(pph_path: str | Path) -> Path:
     import pph_parser
     arch = pph_parser.PphArchive.open(str(pph_path))
-    members = arch.by_role(pph_parser.ROLE_MDL_PART)
+    members = arch.surface_mdl_members()
     if not members:
-        raise ValueError(f"{pph_path}: no MDL part member")
+        raise ValueError(f"{pph_path}: no MDL part/ridge member")
     tmp = Path(tempfile.mkdtemp(prefix="voxmesh_"))
     p = tmp / members[0].name.replace("\\", "_").replace("/", "_")
     p.write_bytes(arch.read_member(members[0].name))

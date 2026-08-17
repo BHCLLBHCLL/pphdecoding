@@ -244,6 +244,11 @@ def _member_group(name: str) -> str:
     return ""
 
 
+def _group_surface_path(info: Optional[dict]) -> Optional[str]:
+    """网格组显示面：part 优先，否则 ridge（官方 Org PPH 常见无 part）。"""
+    return pph_parser.group_surface_path(info)
+
+
 def _fmt_size(n: int) -> str:
     for unit in ("B", "KiB", "MiB", "GiB"):
         if n < 1024 or unit == "GiB":
@@ -1866,8 +1871,17 @@ class DashboardTab(QWidget):
             elif m.name.lower().endswith(".oct") and octv is None:
                 import oct
                 octv = oct.parse_oct(p)
-            elif m.name.lower().endswith("_part.mdl") and part is None:
+        for m in viewer.arch.surface_mdl_members():
+            p = viewer.bin_paths.get(m.name)
+            if p is None:
+                continue
+            if os.path.getsize(p) > 64 * 1024 * 1024:
+                continue
+            try:
                 part = mdl.parse_mdl(p, load_arrays=False)
+            except Exception:  # noqa: BLE001
+                part = None
+            break
         if gph is not None:
             links = gph["links"] or {}
             self._cards["gph"].setText(
@@ -4957,7 +4971,7 @@ class PphViewer(QMainWindow):
         info = (self._groups_info or {}).get(g) or {}
         model = info.get("part")
         if model is None:
-            path = (info.get("paths") or {}).get("part")
+            path = _group_surface_path(info)
             if path:
                 try:
                     import mdl
@@ -5498,13 +5512,12 @@ class PphViewer(QMainWindow):
             return
         part_path = None
         for _g, info in (self._groups_info or {}).items():
-            part_path = ((info.get("paths") or {}).get("part")
-                         or info.get("part"))
+            part_path = _group_surface_path(info)
             if part_path:
                 break
         if not part_path:
             QMessageBox.information(
-                self, "Voxel Mesh", "未找到 MDL part 面片（先 Prepare Parts）。")
+                self, "Voxel Mesh", "未找到 MDL part/ridge 面片（先 Prepare Parts）。")
             return
         params = _voxel_params_dialog(self)
         if params is None:
@@ -5556,14 +5569,13 @@ class PphViewer(QMainWindow):
             return
         part_path = None
         for _g, info in (self._groups_info or {}).items():
-            part_path = ((info.get("paths") or {}).get("part")
-                         or info.get("part"))
+            part_path = _group_surface_path(info)
             if part_path:
                 break
         if not part_path:
             QMessageBox.information(
                 self, "Polyhedral Mesh",
-                "未找到 MDL part 面片（先 Prepare Parts）。")
+                "未找到 MDL part/ridge 面片（先 Prepare Parts）。")
             return
         params = _poly_params_dialog(self)
         if params is None:
@@ -5755,14 +5767,20 @@ class PphViewer(QMainWindow):
             if low.endswith("_part.mdl"):
                 mdl_name = name
                 break
-            if mdl_name is None and low.endswith(".mdl") and "ridge" not in low:
-                mdl_name = name
+        if mdl_name is None:
+            for name in list(self.bin_paths) + list(self.member_bytes):
+                low = name.lower()
+                if low.endswith("_ridge.mdl") or (
+                        low.endswith(".mdl") and "wrap" not in low):
+                    mdl_name = name
+                    break
         if mdl_name is None and self.arch:
-            pm = self.arch.by_role(pph_parser.ROLE_MDL_PART)
+            pm = self.arch.surface_mdl_members()
             if pm:
                 mdl_name = pm[0].name
         if not mdl_name:
-            self.log("Register Region: no MDL part to flush name table", "WARN")
+            self.log("Register Region: no MDL part/ridge to flush name table",
+                     "WARN")
             return
         data = self._member_raw(mdl_name)
         if not data:
@@ -6530,8 +6548,7 @@ class PphViewer(QMainWindow):
 
         part_path = None
         for _g, info in (self._groups_info or {}).items():
-            part_path = ((info.get("paths") or {}).get("part")
-                         or info.get("part"))
+            part_path = _group_surface_path(info)
             if part_path:
                 break
         try:
@@ -6543,7 +6560,7 @@ class PphViewer(QMainWindow):
         if surface is None:
             QMessageBox.information(
                 self, "Execute（原生模式）",
-                "未找到 MDL part 或 Import CAD 剖分。\n"
+                "未找到 MDL part/ridge 或 Import CAD 剖分。\n"
                 "请先 File → Import 导入 XT，或打开含 MDL 的工程。")
             return
         if not self.tmp_dir:
@@ -6761,8 +6778,7 @@ class PphViewer(QMainWindow):
 
         part_path = None
         for _g, info in (self._groups_info or {}).items():
-            part_path = ((info.get("paths") or {}).get("part")
-                         or info.get("part"))
+            part_path = _group_surface_path(info)
             if part_path:
                 break
         try:
@@ -6773,7 +6789,7 @@ class PphViewer(QMainWindow):
         if surface is None:
             QMessageBox.information(
                 self, "BAM（原生模式）",
-                "未找到 MDL part 或 Import CAD 剖分。")
+                "未找到 MDL part/ridge 或 Import CAD 剖分。")
             return
         if not self.tmp_dir:
             self.tmp_dir = tempfile.mkdtemp(prefix="pph_gui_")
@@ -7034,13 +7050,16 @@ class PphViewer(QMainWindow):
 
         self.status_panel.clear()
         for g, info in groups.items():
-            part_path = info["paths"].get("part")
+            part_path = info["paths"].get("part") or info["paths"].get("ridge")
             if part_path:
                 try:
                     model = mdl.parse_mdl(part_path, load_arrays=True)
                 except Exception:  # noqa: BLE001
                     model = None
                 info["part"] = model
+                if "part" not in info["paths"]:
+                    # 仅有 ridge 时让默认「几何 MDL」层也能显示
+                    info["paths"]["part"] = part_path
                 self.model_models[g] = {"part": model, "part_path": part_path}
             oct_path = info["paths"].get("oct")
             if oct_path:
