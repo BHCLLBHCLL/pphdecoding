@@ -103,9 +103,6 @@ EVALUATIONS: dict[str, str] = {
         "**产品边界**：仅 patch 导入 + Store and Open 再导入场景可用。",
     "Fix Marked Element Shape":
         "**暂缓**：选中单元形状修改（网格编辑），需单元级编辑器。",
-    "Spread Selected Face to Selected Edge":
-        "**暂缓**：仅 MDL 导入时有效；需边约束的面扩散算法"
-        "（可基于 polymesh 邻接后续实现）。",
 }
 
 

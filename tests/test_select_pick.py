@@ -33,8 +33,24 @@ class TestSelectPickMode(unittest.TestCase):
             "Deselect All Edges", "Deselect All Vertices",
             "Deselect All Elements",
             "Rubber Circle (Select)", "Rubber Polygon (Select)",
+            "Spread Selected Face to Selected Edge",
         ):
             self.assertNotIn(label, items, label)
+
+    def test_remaining_nyi_keeps_product_boundary_items(self):
+        from tools.scan_nyi_menus import _extract_nyi_from_source
+        src = (ROOT / "pph_gui.py").read_text(encoding="utf-8")
+        items = {label for _, label in _extract_nyi_from_source(src)}
+        for label in (
+            "Create Actran Files…",
+            "Define Facet Part…",
+            "Create Non-Facet/Closed Volume Part…",
+            "Create 2D Sub-mesh Meshing Unit…",
+            "Restore Closed Volume Data…",
+            "Fix Marked Element Shape",
+        ):
+            self.assertIn(label, items, label)
+        self.assertEqual(len(items), 6)
 
 
 if __name__ == "__main__":

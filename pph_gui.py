@@ -2282,6 +2282,7 @@ class View3DTab(QWidget):
         self._rubber_style: Optional[object] = None
         self._rubber_center_cache: dict = {}
         self.last_pick: Optional[dict] = None
+        self.last_edge_pick: Optional[dict] = None
         self.picked_faces: list = []   # P5-3：面拾取累计（注册区域多面引用）
         self._picked_status = ""
         self._cache: dict[tuple, object] = {}
@@ -3174,6 +3175,7 @@ class View3DTab(QWidget):
     def clear_visibility(self) -> None:
         self._mdl_filter = None
         self.last_pick = None
+        self.last_edge_pick = None
         self._hidden.clear()
         self._group_hidden.clear()
         self._layer_hidden.clear()
@@ -3289,6 +3291,7 @@ class View3DTab(QWidget):
             self.last_pick = {
                 "mode": "edge", "face": cell, "body": body_id,
                 "frid": frid, "edge": edge, "edge_mid": edge_mid, **meta}
+            self.last_edge_pick = dict(self.last_pick)
             if self.display_mode.currentText() != "线框":
                 self.display_mode.setCurrentText("线框")
             self.set_model_filter({"kind": "edge", "value": cell})
@@ -4093,7 +4096,9 @@ class PphViewer(QMainWindow):
                 tip="Rubber-polygon: click vertices, right-click to finish")
         m.addSeparator()
         add_act(m, "Spread Selected Face to Selected Edge",
-                key="sel_spread")
+                self._spread_face_to_edge, key="sel_spread",
+                tip="从已拾取面沿 MDL 邻接扩散，不跨越 Mouse Pick (Edge) "
+                    "选定的约束边")
         add_act(m, "Select by Element Number…",
                 self._select_by_element_number, key="sel_by_elem",
                 tip="输入 MDL 面编号列表（支持区间）过滤显示")
@@ -5073,6 +5078,55 @@ class PphViewer(QMainWindow):
         self.view3d.set_model_filter({"kind": "faces", "values": values})
         self.log(f"Select Same Area [{pick.get('group', '?')}] — "
                  f"face #{fid} area={target:.6g}，命中 {len(values)} 面")
+
+    def _spread_face_to_edge(self) -> None:
+        """Spread Selected Face to Selected Edge：对偶邻接扩散，不跨越拾取边。"""
+        import mdl
+
+        view = self.view3d
+        edge_pick = getattr(view, "last_edge_pick", None)
+        last = getattr(view, "last_pick", None) or {}
+        if not edge_pick and last.get("mode") == "edge" and last.get("edge"):
+            edge_pick = last
+        if not edge_pick or not edge_pick.get("edge"):
+            QMessageBox.information(
+                self, "Spread Face to Edge",
+                "请先启用 Mouse Pick (Edge) 拾取一条约束边。")
+            return
+        path = edge_pick.get("path")
+        seeds: list[int] = []
+        for pth, fid in (getattr(view, "picked_faces", None) or []):
+            if path and pth != path:
+                continue
+            seeds.append(int(fid))
+        if not seeds and last.get("mode") == "face" and last.get("face") is not None:
+            if not path or last.get("path") == path:
+                seeds.append(int(last["face"]))
+        if not seeds and edge_pick.get("face") is not None:
+            seeds.append(int(edge_pick["face"]))
+        if not seeds:
+            QMessageBox.information(
+                self, "Spread Face to Edge",
+                "请先启用 Mouse Pick (Face) 拾取种子面，再拾取约束边。")
+            return
+        if not path:
+            QMessageBox.warning(self, "Spread Face to Edge",
+                                "拾取边缺少 MDL 路径。")
+            return
+        try:
+            model = view._cached(("mdl", path), lambda: mdl.parse_mdl(path))
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Spread Face to Edge",
+                                f"MDL 解析失败：{exc}")
+            return
+        edge = tuple(edge_pick["edge"][:2])
+        values = mdl.spread_faces_to_selected_edge(model, seeds, [edge])
+        self.show_page("draw")
+        view.set_model_filter({"kind": "faces", "values": values})
+        view.picked_faces = [(path, f) for f in values]
+        self.log(
+            f"Spread Face to Edge [{edge_pick.get('group', '?')}] — "
+            f"seeds {seeds} stop {edge} → {len(values)} faces")
 
     def _check_intersection(self) -> None:
         """Check Intersection：MDL 面片穿越相交检测（本地，P3-3）。"""

@@ -537,11 +537,8 @@ def detect_tiny_faces(model: MdlModel, width_tol: float) -> list[dict]:
     return out
 
 
-def detect_multifold_edges(model: MdlModel) -> dict[tuple[int, int], list[int]]:
-    """识别被 >2 个面共享的边（multi-fold edges）。
-
-    返回 ``{(v0,v1): [face_id, ...]}``，键按顶点序号升序。
-    """
+def edge_face_map(model: MdlModel) -> dict[tuple[int, int], list[int]]:
+    """全部网格边 → 入射面列表。键为升序顶点对 ``(v0, v1)``。"""
     from collections import defaultdict
 
     if model.n_faces == 0 or model.xyz.size == 0:
@@ -557,7 +554,53 @@ def detect_multifold_edges(model: MdlModel) -> dict[tuple[int, int], list[int]]:
             b = int(nodes[(k + 1) % n])
             key = (min(a, b), max(a, b))
             edge_faces[key].append(fid)
-    return {k: v for k, v in edge_faces.items() if len(v) > 2}
+    return dict(edge_faces)
+
+
+def detect_multifold_edges(model: MdlModel) -> dict[tuple[int, int], list[int]]:
+    """识别被 >2 个面共享的边（multi-fold edges）。
+
+    返回 ``{(v0,v1): [face_id, ...]}``，键按顶点序号升序。
+    """
+    return {k: v for k, v in edge_face_map(model).items() if len(v) > 2}
+
+
+def spread_faces_to_selected_edge(
+    model: MdlModel,
+    seed_faces,
+    stop_edges=None,
+) -> list[int]:
+    """从种子面沿对偶邻接扩散，不跨越 ``stop_edges``。
+
+    Select → Spread Selected Face to Selected Edge：约束边为顶点对
+    ``(v0, v1)``（顺序无关）。无约束时扩散到种子所在连通片的全部面。
+    返回升序面 id 列表。
+    """
+    n = model.n_faces
+    seeds = sorted({int(f) for f in (seed_faces or ()) if 0 <= int(f) < n})
+    if not seeds:
+        return []
+    stop = {
+        (min(int(a), int(b)), max(int(a), int(b)))
+        for a, b in (stop_edges or ())
+    }
+    adj: list[set[int]] = [set() for _ in range(n)]
+    for edge, faces in edge_face_map(model).items():
+        if edge in stop:
+            continue
+        for i, a in enumerate(faces):
+            for b in faces[i + 1:]:
+                adj[a].add(b)
+                adj[b].add(a)
+    seen: set[int] = set()
+    stack = list(seeds)
+    while stack:
+        fid = stack.pop()
+        if fid in seen:
+            continue
+        seen.add(fid)
+        stack.extend(adj[fid] - seen)
+    return sorted(seen)
 
 
 def detect_matching_faces(model: MdlModel) -> list[dict]:
