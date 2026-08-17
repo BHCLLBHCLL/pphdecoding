@@ -3135,6 +3135,9 @@ class RegisterRegionBody(_Body):
             ET.SubElement(r, "face_region_type").text = "faces"
             ET.SubElement(r, "color_set").text = "false"
             self._ctx["xml_dirty"] = True
+            pending = (self._ctx.setdefault("session", {})
+                       .setdefault("mdl_regions_pending", []))
+            pending.append({"name": name, "face_ids": list(face_ids)})
             tip = (f" + sface={len(face_ids)} 面" if face_ids
                    else " (no pick — empty sface_num)")
         else:

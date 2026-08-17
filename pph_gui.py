@@ -48,6 +48,7 @@ import pph_parser
 import pph_vtk
 import pphwriter
 import pphxml
+import project_persist
 
 # scFLOWpre / STpre Draw Window 视图键（Pre_eng Keyboard）：
 #   X → YZ（+X）, Y → XZ（+Y）, Z → XY（+Z）；Shift+X/Y/Z 为对侧
@@ -3729,6 +3730,7 @@ class PphViewer(QMainWindow):
         self.archive_path: Optional[str] = None
         self.member_bytes: dict[str, bytes] = {}
         self.bin_paths: dict[str, str] = {}
+        self._dirty_members: set[str] = set()
         self.tmp_dir: Optional[str] = None
         self.snap = None
         self._xenv: Optional[pphxml.XenvSettings] = None
@@ -5667,74 +5669,58 @@ class PphViewer(QMainWindow):
 
     @staticmethod
     def _empty_project_members() -> dict[str, bytes]:
-        """最小可解析空工程：main.xml / xenv / prp / js。"""
-        now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-        xml = f"""<?xml version="1.0" encoding="utf-8"?>
-<scFLOWpre>
-  <version>5225.20302.20251223</version>
-  <date>{now}</date>
-  <project>
-    <name>Untitled</name>
-    <showmode>1</showmode>
-  </project>
-  <parts>
-    <meshinggroup>
-      <phase>0</phase>
-      <analysis_model_flag>false</analysis_model_flag>
-      <sgs_name>MeshingGroup_1</sgs_name>
-      <meshonly>false</meshonly>
-      <mesh_visible>true</mesh_visible>
-      <visible>true</visible>
-      <mesh_state>0</mesh_state>
-      <org_name/>
-    </meshinggroup>
-  </parts>
-  <regions/>
-  <conditions>
-    <analysis_type>
-      <Flow>true</Flow>
-    </analysis_type>
-    <basic_param>
-      <steady>true</steady>
-      <end_cycle>100</end_cycle>
-    </basic_param>
-  </conditions>
-</scFLOWpre>
-"""
-        xenv = pphxml.XenvSettings()
-        for sec, key, val in (
-            ("TYPE", "PROJECT_TYPE", "scflow"),
-            ("MESH", "MESHER", "0"),
-            ("MESH", "SURF_MESHER", "0"),
-            ("FACET", "MDL_METHOD", "1"),
-            ("FACET", "USE_FACETTER", "true"),
-            ("FACET", "PROJECT_SOLIDS", "true"),
-            ("FACET", "PROJECT_SHEETS", "true"),
-            ("FACET", "FACET_ACCURACY_SPECIFY_TYPE", "0"),
-            ("FACET", "USE_ABSOLUTE_VALUE", "false"),
-            ("FACET", "SIMPLE_CHORD_TOLERANCE", "1"),
-            ("FACET", "SIMPLE_MAX_ANGLE", "10"),
-            ("FACET", "SIMPLE_MAX_WIDTH", "5"),
-            ("FACET", "SOLID_BASE_MINIMUM_ANGLE", "10"),
-            ("FACET", "SOLID_BASE_LENGTH_FACTOR", "0.05"),
-            ("FACET", "SOLID_BASE_TINY_FACE_WIDTH_RATIO", "0.05"),
-        ):
-            pphxml.set_xenv_value(xenv, sec, key, val)
-        prp = (
-            '<?xml version="1.0" encoding="utf-8"?>\n'
-            '<prp version="1" date="">\n'
-            "</prp>\n"
-        )
-        js = (
-            "//@FormattedScript\n"
-            "function usr_input(nlines)\n{\n\n}\n"
-        )
-        return {
-            "main.xml": xml.encode("utf-8"),
-            "main.xenv": pphxml.serialize_xenv(xenv),
-            "main.prp": prp.encode("utf-8"),
-            "main.js": js.encode("utf-8"),
-        }
+        """最小可解析空工程：main.xml / xenv / prp / js（含 movinggroup 槽）。"""
+        return project_persist.empty_project_members()
+
+    def _set_member(self, name: str, data: bytes) -> None:
+        """写入工作副本并标记 dirty（Save As 会把新/脏成员追加进 ZIP）。"""
+        self.member_bytes[name] = data
+        self._dirty_members.add(name)
+        if self.tmp_dir:
+            out = os.path.join(self.tmp_dir, name)
+            parent = os.path.dirname(out)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            Path(out).write_bytes(data)
+            self.bin_paths[name] = out
+
+    def _serialize_main_xml_to_members(self) -> None:
+        if self._main_xml is None:
+            return
+        text = pphxml.serialize_main_xml(self._main_xml.root)
+        if not text.lstrip().startswith("<?xml"):
+            text = '<?xml version="1.0" encoding="utf-8"?>\n' + text
+        self._set_member("main.xml", text.encode("utf-8"))
+        self.editor_tab.set_buffer_text("main.xml", text)
+
+    def _flush_mdl_surface_regions(self, pending: list) -> None:
+        """Register Region → MDL ``LS_MdlSurfaceRegions`` 名表写回。"""
+        mdl_name = None
+        for name in list(self.bin_paths) + list(self.member_bytes):
+            low = name.lower()
+            if low.endswith("_part.mdl"):
+                mdl_name = name
+                break
+            if mdl_name is None and low.endswith(".mdl") and "ridge" not in low:
+                mdl_name = name
+        if mdl_name is None and self.arch:
+            pm = self.arch.by_role(pph_parser.ROLE_MDL_PART)
+            if pm:
+                mdl_name = pm[0].name
+        if not mdl_name:
+            self.log("Register Region: no MDL part to flush name table", "WARN")
+            return
+        data = self._member_raw(mdl_name)
+        if not data:
+            self.log(f"Register Region: cannot read {mdl_name}", "WARN")
+            return
+        for rec in pending:
+            rname = rec.get("name") if isinstance(rec, dict) else rec
+            if rname:
+                data = project_persist.append_surface_region_bytes(
+                    data, str(rname))
+        self._set_member(mdl_name, data)
+        self.log(f"Register Region: flushed {len(pending)} name(s) → {mdl_name}")
 
     def new_empty_project(self) -> None:
         """初始化空 PPH 工程（对齐 File → New Project）。"""
@@ -5753,6 +5739,7 @@ class PphViewer(QMainWindow):
         self._untitled = True
         self.member_bytes = dict(members)
         self.bin_paths = {}
+        self._dirty_members = set()
         self._groups_info = {}
         self._regions_meta = {}
         self._prepare_parts_mode = True
@@ -5796,12 +5783,15 @@ class PphViewer(QMainWindow):
                      pph_parser.ROLE_OCT, pph_parser.ROLE_MDL_PART,
                      pph_parser.ROLE_MDL_RIDGE)
         self.member_bytes = {}
+        self._dirty_members = set()
         self.tmp_dir = tempfile.mkdtemp(prefix="pph_gui_")
         self.bin_paths = {}
         for m in self.arch.members:
             data = self.arch.read_member(m.name)
             # 文本常驻内存供编辑；大二进制只落盘，避免重复占 RAM / 误当文本解码
             if m.name.lower().endswith(text_ext):
+                self.member_bytes[m.name] = data
+            elif m.name.lower().endswith((".x_t", ".xmt_txt")):
                 self.member_bytes[m.name] = data
             if m.role in bin_roles:
                 p = os.path.join(self.tmp_dir, m.name)
@@ -5972,20 +5962,22 @@ class PphViewer(QMainWindow):
         msgs = []
         if ctx.get("xenv_dirty") and self._xenv is not None:
             data = pphxml.serialize_xenv(self._xenv)
-            self.member_bytes["main.xenv"] = data
+            self._set_member("main.xenv", data)
             self.editor_tab.set_buffer_text(
                 "main.xenv", data.decode("utf-8-sig"))
             ctx["xenv_dirty"] = False
             msgs.append("main.xenv")
         if ctx.get("xml_dirty") and self._main_xml is not None:
-            text = pphxml.serialize_main_xml(self._main_xml.root)
-            if not text.lstrip().startswith("<?xml"):
-                text = '<?xml version="1.0" encoding="utf-8"?>\n' + text
-            data = text.encode("utf-8")
-            self.member_bytes["main.xml"] = data
-            self.editor_tab.set_buffer_text("main.xml", text)
+            self._serialize_main_xml_to_members()
             ctx["xml_dirty"] = False
             msgs.append("main.xml")
+        pending = (ctx.get("session") or {}).pop("mdl_regions_pending", None)
+        if pending:
+            try:
+                self._flush_mdl_surface_regions(pending)
+                msgs.append("MDL surface regions")
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"[{key}] MDL region flush failed: {exc}", "WARN")
         pc = (ctx.get("session") or {}).get("parts_control") or {}
         if key == "parts_control" or pc.get("nav_dirty"):
             self.navigation.set_parts_control(pc)
@@ -6060,30 +6052,39 @@ class PphViewer(QMainWindow):
                         self._run_scflow_pipeline(c)
                 ab.clicked.connect(_apply)
         self.log(f"Dialog — {dlg.windowTitle()}")
-        if dlg.exec_() == QDialog.Accepted:
+        accepted = dlg.exec_() == QDialog.Accepted
+        should_commit = (
+            accepted
+            or ctx.get("xml_dirty")
+            or ctx.get("xenv_dirty")
+            or bool((ctx.get("session") or {}).get("mdl_regions_pending"))
+        )
+        if should_commit:
             commit_key = (
                 "build_am" if key == "build_am_detailed" else key)
             self._commit_nav_ctx(commit_key, ctx)
-            if key == "build_am_detailed":
-                sess = ctx.setdefault("session", {}).setdefault(
-                    "build_am", {})
-                if sess.get("build_requested") or sess.get(
-                        "create_facet_requested"):
-                    self.log(
-                        "Analysis Model Wizard — parameters saved; "
-                        "build/facet flagged for scFLOWpre")
-                    if sess.get("build_requested"):
-                        self._prepare_parts_mode = False
-                        self._update_menus_for_mode()
-                    self._run_bam_pipeline(ctx)
-            if key == "execute":
-                self._run_scflow_pipeline(ctx)
-            if key == "import_part":
-                self._run_import_cad(ctx)
-            if key == "create_parts":
-                self._run_native_create_parts(ctx)
-            if key == "modify_parts":
-                self._run_native_modify_parts(ctx)
+        if not accepted:
+            return
+        if key == "build_am_detailed":
+            sess = ctx.setdefault("session", {}).setdefault(
+                "build_am", {})
+            if sess.get("build_requested") or sess.get(
+                    "create_facet_requested"):
+                self.log(
+                    "Analysis Model Wizard — parameters saved; "
+                    "build/facet flagged for scFLOWpre")
+                if sess.get("build_requested"):
+                    self._prepare_parts_mode = False
+                    self._update_menus_for_mode()
+                self._run_bam_pipeline(ctx)
+        if key == "execute":
+            self._run_scflow_pipeline(ctx)
+        if key == "import_part":
+            self._run_import_cad(ctx)
+        if key == "create_parts":
+            self._run_native_create_parts(ctx)
+        if key == "modify_parts":
+            self._run_native_modify_parts(ctx)
 
     def _tessellate_xt_members(self) -> None:
         """打开工程时剖分已归档的 ``.x_t`` 成员（对齐 cab_gui）。"""
@@ -6123,12 +6124,15 @@ class PphViewer(QMainWindow):
         suf = os.path.splitext(path)[1].lower()
         if suf not in (".x_t", ".xmt_txt"):
             self.log(
-                f"Import：暂仅支持 Parasolid .x_t/.xmt_txt（当前 {suf}）",
+                f"Import：暂仅支持 Parasolid .x_t/.xmt_txt 本仓剖分"
+                f"（当前 {suf}）。其它格式请用宿主 OpenCadFile。",
                 "WARN")
             QMessageBox.information(
                 self, "Import",
                 "当前仅实现 Parasolid XT（*.x_t / *.xmt_txt）的 "
-                "pskernel 剖分预览。")
+                "pskernel 剖分预览与工程登记。\n"
+                "STEP / CATIA 等请在 scFLOWpre 中 File → Import，"
+                "或等宿主 OpenCadFile 路径（Wave B）。")
             return
         try:
             import cad_import
@@ -6155,19 +6159,34 @@ class PphViewer(QMainWindow):
                 self, "Import",
                 "未剖分出任何几何（PK_PART_receive / facet_2 空结果）。")
             return
-        # 归档原始 .x_t，便于 Save As 后仍可再剖分
+        # 归档原始 .x_t + 登记 main.xml part + 由剖分生成 *_part.mdl
         try:
             raw = Path(path).read_bytes()
             base = os.path.basename(path)
             member = base if base.lower().endswith(".x_t") else f"{base}.x_t"
-            self.member_bytes[member] = raw
-            if self.tmp_dir:
-                out = os.path.join(self.tmp_dir, member)
-                os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
-                Path(out).write_bytes(raw)
+            self._set_member(member, raw)
         except Exception as exc:  # noqa: BLE001
             self.log(f"Import：写入工程成员失败: {exc}", "WARN")
+            member = os.path.basename(path)
+        part_name = (bodies[0].name or Path(path).stem or "Part").strip() or "Part"
+        if self._main_xml is not None:
+            project_persist.add_xml_part(self._main_xml, part_name)
+            self._serialize_main_xml_to_members()
+        surface = project_persist.cad_meshes_to_surface(
+            [getattr(b, "tess", b) for b in bodies])
+        if surface is not None:
+            pts, tris = surface
+            region = project_persist.default_part_surface_region(part_name)
+            try:
+                mdl_bytes = project_persist.mdl_bytes_from_tess(
+                    pts, tris, surface_regions=[(region, 0)])
+                self._set_member(
+                    project_persist.DEFAULT_MDL_MEMBER, mdl_bytes)
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"Import：写出 MDL 失败: {exc}", "WARN")
         self.view3d.set_cad_meshes(bodies, append=True)
+        self._populate_tree()
+        self._build_model_tree()
         self.show_page("draw")
         n_tris = sum(len(b.tess.triangles) for b in bodies)
         n_pts = sum(len(b.tess.points) for b in bodies)
@@ -6192,19 +6211,12 @@ class PphViewer(QMainWindow):
 
     def _archive_xt_member(self, name: str, xt: bytes) -> None:
         """把 body 的 x_t 写入工程成员（对齐 _run_import_cad 归档路径）。"""
-        member = f"{name}.x_t"
-        try:
-            self.member_bytes[member] = xt
-            if self.tmp_dir:
-                out = os.path.join(self.tmp_dir, member)
-                os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
-                Path(out).write_bytes(xt)
-        except Exception as exc:  # noqa: BLE001
-            self.log(f"geometry_ops：写工程成员 {member} 失败: {exc}", "WARN")
+        self._set_member(f"{name}.x_t", xt)
 
     def _drop_xt_member(self, name: str) -> None:
         member = f"{name}.x_t"
         self.member_bytes.pop(member, None)
+        self._dirty_members.discard(member)
         if self.tmp_dir:
             try:
                 p = Path(self.tmp_dir) / member
@@ -6376,28 +6388,8 @@ class PphViewer(QMainWindow):
 
     def _cad_surface_points_tris(self):
         """Import 剖分预览 → (points, tris)；无 CAD 则 None。"""
-        import numpy as np
         meshes = getattr(self.view3d, "_cad_meshes", None) or []
-        if not meshes:
-            return None
-        pts_list: list = []
-        tris_list: list = []
-        base = 0
-        for tess in meshes:
-            pts = getattr(tess, "points", None)
-            tris = getattr(tess, "triangles", None)
-            if pts is None or tris is None:
-                continue
-            pts = np.asarray(pts, dtype=float).reshape(-1, 3)
-            tris = np.asarray(tris, dtype=np.int64).reshape(-1, 3)
-            if pts.size == 0 or tris.size == 0:
-                continue
-            pts_list.append(pts)
-            tris_list.append(tris + base)
-            base += len(pts)
-        if not pts_list:
-            return None
-        return np.vstack(pts_list), np.vstack(tris_list)
+        return project_persist.cad_meshes_to_surface(meshes)
 
     def _native_surface(self, part_path: Optional[str] = None):
         """原生 Execute 表面：优先 MDL，其次 Import CAD 剖分。"""
@@ -6623,6 +6615,10 @@ class PphViewer(QMainWindow):
                 "请确认已勾选 Generate Octree / Generate Mesh，"
                 "并查看 Message 窗口是否有生成失败日志。")
             return
+        persist = project_persist.collect_save_overrides(
+            self.arch, self.member_bytes, dirty=self._dirty_members)
+        for k, v in persist.items():
+            overrides.setdefault(k, v)
         dst = Path(self.archive_path).with_suffix(".native.pph")
         try:
             pphwriter.clone_pph(self.archive_path, dst, overrides)
@@ -6814,7 +6810,9 @@ class PphViewer(QMainWindow):
             self, "另存为 PPH", "", "PPH 文件 (*.pph)")
         if not path:
             return
-        overrides = self.editor_tab.overrides()
+        overrides = project_persist.collect_save_overrides(
+            self.arch, self.member_bytes, self.editor_tab.overrides(),
+            dirty=self._dirty_members)
         try:
             pphwriter.rewrite_pph(self.archive_path, path, overrides)
         except Exception as exc:  # noqa: BLE001
@@ -7134,6 +7132,26 @@ class PphViewer(QMainWindow):
                 g = _member_group(m.name)
                 root = group_roots.setdefault(
                     g or m.name, QTreeWidgetItem([g or m.name, "网格组", ""]))
+                if root.icon(0).isNull():
+                    root.setIcon(0, AppIcons.get("group", 16))
+                root.addChild(item)
+        listed = {m.name for m in self.arch.members}
+        for name, data in self.member_bytes.items():
+            if name in listed:
+                continue
+            role, desc = pph_parser.classify_member(name)
+            item = QTreeWidgetItem([name, desc + " (new)", f"{len(data):,}"])
+            item.setData(0, Qt.UserRole, name)
+            item.setIcon(0, AppIcons.get(role_icon.get(role, "generic"), 16))
+            if role in (pph_parser.ROLE_PROJECT_XML, pph_parser.ROLE_SCRIPT,
+                        pph_parser.ROLE_PRP, pph_parser.ROLE_XENV):
+                text_root.addChild(item)
+            elif role == pph_parser.ROLE_SNAPSHOT:
+                snap_root.addChild(item)
+            else:
+                g = _member_group(name)
+                root = group_roots.setdefault(
+                    g or name, QTreeWidgetItem([g or name, "网格组", ""]))
                 if root.icon(0).isNull():
                     root.setIcon(0, AppIcons.get("group", 16))
                 root.addChild(item)
