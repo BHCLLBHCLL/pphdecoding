@@ -89,15 +89,27 @@ class TestApplyHelpSchema(unittest.TestCase):
         cls.stats = apply_help_schema(cls.reg)
 
     def test_injects_fields(self):
-        # P7-1 后 CondBoundaryRadiation/CondOutputLFileHeatTransfer 升级为
-        # 样本权威键（深扫），help 注入跳过 → 15 → 13
-        self.assertGreaterEqual(self.stats["types_with_new_fields"], 13)
-        self.assertGreater(self.stats["total_fields_injected"], 100)
+        # tree/sibling 扩面后 help 注入面可能缩小；仍应写入一批可选字段
+        self.assertGreaterEqual(self.stats["types_with_new_fields"], 8)
+        self.assertGreater(self.stats["total_fields_injected"], 50)
 
     def test_expands_coverage(self):
         after = {n for n, t in self.reg.types.items() if t.fields}
-        self.assertGreaterEqual(len(after), 25)
+        self.assertGreaterEqual(len(after), 60)
         self.assertGreater(len(after), len(self.before))
+
+    def test_sibling_output_keys_come_from_samples(self):
+        donors = [
+            t for n, t in self.reg.types.items()
+            if t.category == "output" and t.count > 0]
+        self.assertTrue(donors)
+        union = set()
+        for d in donors:
+            union.update(d.fields)
+        t = self.reg.get("CondOutputCSV")
+        self.assertIsNotNone(t)
+        self.assertTrue(t.fields)
+        self.assertTrue(set(t.fields) <= union)
 
     def test_does_not_overwrite_sample_types(self):
         # 样本已背书的精确字段不被帮助字段覆盖

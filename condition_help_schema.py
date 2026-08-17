@@ -113,7 +113,18 @@ def html_field_schema() -> dict[str, dict[str, dict]]:
     return out
 
 
-# ── 来源 B：求解设置树（XML 键 + 显示名） ──────────────────────────────
+# 求解设置树 category.dn → cond_types.json category（精确 XML 键按类扩面）
+TREE_CAT_TO_COND_CAT: dict[str, tuple[str, ...]] = {
+    "SOURCE_CONDITION": ("source",),
+    "INITIAL_CONDITION": ("initial",),
+    "INFLOW_OUTFLOW_CONDITION": (
+        "bc_flow", "bc_thermal", "bc_sym", "bc_periodic"),
+    "WALL_STRESS": ("bc_wall",),
+    "FAN_PROPELLER_MODEL": ("moving",),
+    "INITIAL_SHAPE_MODIFY_CONDITION": ("initial",),
+    "MOVING_CONDITION": ("moving",),
+    "POROUS_MEDIA_CONDITION": ("porous",),
+}
 
 def _section_cond_types(section: dict) -> list[str]:
     """section → Cond* 类型（display_variants 里 type=Cond*）。"""
@@ -129,40 +140,79 @@ def _section_cond_types(section: dict) -> list[str]:
 def tree_field_schema() -> dict[str, dict[str, dict]]:
     """``{Cond*: {字段键: field_desc}}``，来自 scflow_main.xml 求解设置树。
 
-    字段键优先取 ``variable.dn``（distinguished name，如 VELX）——它在
-    main.xml 里即 XML 键；缺失时用 ``variable.name`` 或 display 规范化。
+    字段键用 ``variable.name``（XML 路径，``/`` → ``.``），这是厂商树里的
+    权威 XML 键。除 display_variants 上的 Cond* 外，按
+    ``TREE_CAT_TO_COND_CAT`` 把同一 section 的键扩到目录同类。
     """
     ct = load_json("condition_tree.json") or {}
+    catalog = (load_json("cond_types.json") or {}).get("types", {})
     out: dict[str, dict[str, dict]] = {}
-    sections = [s for c in ct.get("categories", [])
-                for s in c.get("sections", [])]
-    for sec in sections:
-        if sec.get("xml_name") != "condition":
-            continue
-        types = _section_cond_types(sec)
-        if not types:
-            continue
-        fields: dict[str, dict] = {}
-        for v in sec.get("variables", []):
-            key = v.get("dn") or v.get("name")
-            if not key or key in ("value_Value",):
-                # value_Value 是通用值容器，重复出现，改用 display 区分
-                key = sanitize_key(v.get("display") or "")
-            else:
-                key = sanitize_key(key)
-            if not key or key in fields:
+    for cat in ct.get("categories", []):
+        extra_cats = TREE_CAT_TO_COND_CAT.get(cat.get("dn") or "", ())
+        extra_types = [
+            n for n, meta in catalog.items()
+            if meta.get("category") in extra_cats]
+        for sec in cat.get("sections", []):
+            if sec.get("xml_name") != "condition":
                 continue
-            kind = "int" if v.get("integer_key") else (
-                "float" if v.get("value_key") else "string")
-            fields[key] = {
-                "kind": kind,
-                "samples": [],
-                "display": v.get("display") or key,
-                "source": "tree",
-            }
-        for t in types:
-            out.setdefault(t, {}).update(fields)
+            types = list(_section_cond_types(sec)) + extra_types
+            if not types:
+                continue
+            fields: dict[str, dict] = {}
+            for v in sec.get("variables", []):
+                key = (v.get("name") or "").replace("/", ".")
+                if not key or key in ("value_Value",):
+                    key = sanitize_key(v.get("display") or "")
+                if not key or key in fields:
+                    continue
+                kind = "int" if v.get("integer_key") else (
+                    "float" if v.get("value_key") else "string")
+                fields[key] = {
+                    "kind": kind,
+                    "samples": [],
+                    "display": v.get("display") or key,
+                    "source": "tree",
+                }
+            for tname in types:
+                if not str(tname).startswith("Cond"):
+                    continue
+                slot = out.setdefault(tname, {})
+                for k, d in fields.items():
+                    slot.setdefault(k, d)
     return out
+
+
+def inject_sibling_sample_fields(reg) -> int:
+    """把同目录样本类型的精确 XML 键复制到尚无字段的兄弟类型。
+
+    键来自真实 PPH 样本（非 HTML 猜测）；``count=0`` 故不做必填判定。
+    """
+    from collections import defaultdict
+
+    from condition_registry import ConditionField
+
+    donors: dict[str, list] = defaultdict(list)
+    for t in reg.types.values():
+        if t.category and t.count > 0 and t.fields:
+            donors[t.category].append(t)
+    added = 0
+    for t in reg.types.values():
+        if t.fields or not t.category:
+            continue
+        union: dict = {}
+        for d in donors.get(t.category, []):
+            for k, f in d.fields.items():
+                if k == "name":
+                    continue
+                union.setdefault(k, f)
+        if not union:
+            continue
+        for k, f in union.items():
+            t.fields[k] = ConditionField(
+                name=k, kind=f.kind, indexed=f.indexed,
+                children=f.children, samples=[], count=0)
+        added += 1
+    return added
 
 
 # ── 注入 ──────────────────────────────────────────────────────────────
@@ -172,26 +222,21 @@ def apply_help_schema(reg, html: Optional[dict] = None,
     """把帮助元数据字段注入注册表，返回统计。
 
     只注入**尚无字段**的类型（样本已背书的精确字段不覆盖）。
+    Wave C：求解设置树 XML 键按目录扩面 + 同目录样本键复制。
     """
     from condition_registry import ConditionField
 
     html = html_field_schema() if html is None else html
     tree = tree_field_schema() if tree is None else tree
-    merged: dict[str, dict[str, dict]] = {}
-    for src in (tree, html):
-        for tname, fields in src.items():
-            m = merged.setdefault(tname, {})
-            for k, d in fields.items():
-                m.setdefault(k, d)
 
     added = 0
     total_fields = 0
-    for tname, fields in merged.items():
+
+    def _inject(tname: str, fields: dict) -> None:
+        nonlocal added, total_fields
         t = reg.types.get(tname)
-        if t is None:
-            continue
-        if t.fields:
-            continue  # 样本类型不覆盖
+        if t is None or t.fields:
+            return
         for key, desc in fields.items():
             t.fields[key] = ConditionField(
                 name=key,
@@ -199,8 +244,24 @@ def apply_help_schema(reg, html: Optional[dict] = None,
                 indexed=False,
                 children=0,
                 samples=list(desc.get("samples", [])),
-                count=0,  # required=None：帮助字段不做必填判定
+                count=0,
             )
             total_fields += 1
         added += 1
-    return {"types_with_new_fields": added, "total_fields_injected": total_fields}
+
+    for tname, fields in tree.items():
+        _inject(tname, fields)
+    sibling = inject_sibling_sample_fields(reg)
+    html_added = 0
+    for tname, fields in html.items():
+        t = reg.types.get(tname)
+        if t is None or t.fields:
+            continue
+        _inject(tname, fields)
+        html_added += 1
+    return {
+        "types_with_new_fields": added,
+        "total_fields_injected": total_fields,
+        "sibling_types": sibling,
+        "html_types": html_added,
+    }

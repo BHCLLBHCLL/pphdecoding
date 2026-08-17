@@ -82,6 +82,19 @@ def _catalog_cond_types() -> set[str]:
     return {t for t in data.get("types", {}) if t.startswith("Cond")}
 
 
+def _catalog_aliases() -> dict[str, str]:
+    """样本短名 → 目录 Cond*（如 Electric → CondBoundaryElectric）。"""
+    p = Path(__file__).resolve().parent / "schemas" / "cond_types.json"
+    if not p.is_file():
+        return {}
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    raw = data.get("aliases") or {}
+    return {str(k): str(v) for k, v in raw.items() if v}
+
+
 def _iter_condition_entities(mx) -> list[tuple[ET.Element, str]]:
     """提取条件实体：直接子级 + 嵌套深扫（P7-1 扩源）。
 
@@ -91,7 +104,11 @@ def _iter_condition_entities(mx) -> list[tuple[ET.Element, str]]:
     （info_sted/sted_info、multiphase_cond/multiphase_materials）。
     """
     known = _catalog_cond_types()
-    return mx.all_conditions(known_types=known)
+    aliases = _catalog_aliases()
+    out: list[tuple[ET.Element, str]] = []
+    for el, tname in mx.all_conditions(known_types=known | set(aliases)):
+        out.append((el, aliases.get(tname, tname)))
+    return out
 
 
 def extract_text_schema(xml_data: bytes,
