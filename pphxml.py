@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 _INDEXED_TAG = re.compile(r"<(/?)([A-Za-z_][\w.]*)\[(\d+)\](>|/>)")
+_DIGIT_TAG = re.compile(r"<(/?)(\d[\w.]*)(>|/>)")
 
 
 def sanitize_scflow_xml(text: str) -> str:
@@ -31,16 +32,24 @@ def sanitize_scflow_xml(text: str) -> str:
     ``<SECTITEM[0]>`` → ``<SECTITEM__IDX0>``；调用方可用
     ``restore_index(tag)`` 取回 ``(原名, 索引)``。闭合部分（``>`` 或 ``/>``）
     随标签整体替换，避免向元素文本注入多余 ``>``。
+
+    电池等条件会写出以数字开头的标签（``<1D_spatial_div_...>``），
+    标准 XML 不允许，这里改写为 ``<_D1D_spatial_div_...>``。
     """
-    return _INDEXED_TAG.sub(r"<\g<1>\g<2>__IDX\g<3>\g<4>", text)
+    text = _INDEXED_TAG.sub(r"<\g<1>\g<2>__IDX\g<3>\g<4>", text)
+    return _DIGIT_TAG.sub(r"<\1_D\2\3", text)
 
 
 def restore_index(tag: str) -> tuple[str, Optional[int]]:
     """把净化后的标签名还原为 ``(原名, 索引或 None)``。"""
     m = re.match(r"^(.*?)__IDX(\d+)$", tag)
     if m:
-        return m.group(1), int(m.group(2))
-    return tag, None
+        name, idx = m.group(1), int(m.group(2))
+    else:
+        name, idx = tag, None
+    if name.startswith("_D") and len(name) > 2 and name[2].isdigit():
+        name = name[2:]
+    return name, idx
 
 
 _IDX_SAFE_TAG = re.compile(r"^([A-Za-z_][\w.]*)__IDX(\d+)$")
@@ -53,8 +62,10 @@ def serialize_main_xml(root: ET.Element) -> str:
     支撑修改后的 main.xml 写回 .pph（见 pphwriter.py）。
     """
     text = ET.tostring(root, encoding="unicode")
-    return re.sub(r"<(/?)([A-Za-z_][\w.]*)__IDX(\d+)(/?)([^>]*>)",
+    text = re.sub(r"<(/?)([A-Za-z_][\w.]*)__IDX(\d+)(/?)([^>]*>)",
                   r"<\1\2[\3]\4\5", text)
+    text = re.sub(r"<(/?)_D(\d[\w.]*)(/?)([^>]*>)", r"<\1\2\3\4", text)
+    return text
 
 
 # 快照 VWU 标签 → xenv 单位键（量纲感知）。unit_type 码实测恒为 1（SI）；

@@ -231,7 +231,8 @@ def merge_schemas(schemas: Iterable[dict]) -> dict:
                 tf["count"] = int(tf.get("count", 0)) + int(
                     fdesc.get("count", 0))
                 for s in fdesc.get("samples", []):
-                    _append_sample(tf, s)
+                    if not s or _kind_of(s) == tf.get("kind"):
+                        _append_sample(tf, s)
         for sec_name, keys in schema.get("xenv", {}).get("sections", {}).items():
             tsec = out["xenv"]["sections"].setdefault(sec_name, {})
             for kname, kentry in keys.items():
@@ -246,6 +247,60 @@ def merge_schemas(schemas: Iterable[dict]) -> dict:
                 te["count"] += eentry.get("count", 0)
                 for pk, pv in eentry.get("props", {}).items():
                     te["props"].setdefault(pk, pv)
+    return out
+
+
+def extend_merged_schema(base: dict, extra: dict) -> dict:
+    """把 extra 的 Cond* 类型/字段并入已有 merged.json。
+
+    已有字段的 ``kind`` 不覆盖（本仓样本优先）；只追加缺失类型与缺失键。
+    extra 可以是 :func:`merge_schemas` 结果或单项目 :func:`extract_archive_schema`。
+    """
+    extra_m = extra
+    if "project" in extra and "projects" not in extra:
+        extra_m = merge_schemas([extra])
+    out = json.loads(json.dumps(base))
+    projects = out.setdefault("projects", [])
+    for name in extra_m.get("projects") or []:
+        if name and name not in projects:
+            projects.append(name)
+    bcond = out.setdefault("conditions", {"count": 0, "types": {}})
+    econd = extra_m.get("conditions") or {}
+    bcond["count"] = int(bcond.get("count", 0)) + int(econd.get("count", 0))
+    btypes = bcond.setdefault("types", {})
+    for tname, tentry in (econd.get("types") or {}).items():
+        target = btypes.setdefault(tname, {
+            "count": 0,
+            "regions": [],
+            "fields": {},
+        })
+        target["count"] = int(target.get("count", 0)) + int(
+            tentry.get("count", 0))
+        for r in tentry.get("regions") or []:
+            if r not in target["regions"]:
+                target["regions"].append(r)
+        tfields = target.setdefault("fields", {})
+        for fname, fdesc in (tentry.get("fields") or {}).items():
+            if fname in tfields:
+                tf = tfields[fname]
+                tf["count"] = int(tf.get("count", 0)) + int(
+                    fdesc.get("count", 0))
+                if tf.get("kind") == fdesc.get("kind"):
+                    for s in fdesc.get("samples") or []:
+                        if not s or _kind_of(s) == tf.get("kind"):
+                            _append_sample(tf, s)
+                continue
+            samples = [
+                s for s in (fdesc.get("samples") or [])
+                if not s or _kind_of(s) == fdesc.get("kind", "string")
+            ][:5]
+            tfields[fname] = {
+                "kind": fdesc.get("kind", "string"),
+                "indexed": bool(fdesc.get("indexed")),
+                "children": int(fdesc.get("children", 0)),
+                "samples": samples,
+                "count": int(fdesc.get("count", 0)),
+            }
     return out
 
 
