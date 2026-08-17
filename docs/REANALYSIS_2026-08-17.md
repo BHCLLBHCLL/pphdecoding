@@ -253,6 +253,38 @@ Kicker 启动的 scFLOWpre 常驻运行。三项全部获得实机证据：
    镜像），P5-3 GUI region 写端（只写 main.xml）对宿主不生效，需补
    MDL region 名表写端（新增待办）。
 
+### 6.3 MDL region 名表写端 + 注册表权威定位实测（2026-08-17 续）
+
+MDL 名表写端已实现（`mdl.add_surface_region`，parse→write 全量重序列化，
+round-trip 测试锁定）。本轮做**全成员逐一改名/追加的宿主实测矩阵**
+（box.pph → clone_pph 单成员改写 → 宿主 `OpenProject` +
+`QueryFaceRegionByName`）：
+
+| 改写位置 | 宿主结果 |
+|---|---|
+| main.xml `<regions>` 增 region（完整克隆结构） | 打开 ok，新名不注册 |
+| main.xml SECTITEM 增 NAME | 打开 ok，新名不注册 |
+| part MDL 名表增名（index 0/1） | 打开 ok，新名不注册 |
+| ridge MDL 名表原地改名 | 打开 ok，旧名仍在、新名不注册 |
+| GPH `LS_SurfaceRegions` 原地改名 | 打开 ok（**无重建**），旧名仍在、新名不注册 |
+| snapshot `ZIPOCTREE→FACEGROUPSW` 原地改名（P3-2 重压缩链路） | 打开 ok，旧名仍在、新名不注册 |
+| GPH `LS_SurfaceRegions` **追加记录**（空/1 面/2400 面 × count 同/不同步） | **宿主无界重建**：瞬态实例持续 60–90% CPU，>5 分钟不完成（非模态等待） |
+| GPH 无关字节翻转（Application 名） | 打开 ok（对照） |
+
+结论（如实记录，**修正 §7.3 的「宿主认 MDL 权威」判断**）：
+
+1. **GPH region 表追加在宿主侧是禁区**——任何追加（哪怕空区域）触发
+   无界重建；`gphstats.append_surface_region` 仅作格式级写端并标注
+   host-hostile。原地改名宿主安全（`gphstats.rename_surface_region`，
+   实机验证打开 ok）。
+2. **宿主 region 注册表的权威写端仍未在文件层定位**：所有含名成员的
+   改名/追加均不改变 `QueryFaceRegionByName` 结果（旧名持续解析），
+   P6-2「MDL 权威接线」仅保证文件自洽，宿主生效性未证实（疑为宿主侧
+   缓存或另有未定位来源；后续待办：对比宿主 Save 前后文件差异）。
+3. 本轮交付：`gphstats.rename_surface_region` + `append_surface_region`；
+   `_iter_surface_region_blocks` 重写为结构直扫（旧 4 字节步进解析器误吞
+   追加记录的 type-1 描述符），gph 系 30 项测试全绿。
+
 ---
 
 ## 7. P5 后全面重分析（12 域完整度 × 深度清单，P6 规划输入）
@@ -320,7 +352,7 @@ Kicker 启动的 scFLOWpre 常驻运行。三项全部获得实机证据：
 | # | 项 | 内容 | 验收锚点 | 杠杆判断 |
 |---|---|---|---|---|
 | P6-1 | **条件字段级扩面** | 165 注册类型 → ≥60 类型带字段 schema：样本工程字段提取管线（tools/extract_cond_types + html_cond_extract 交叉）+ 真实录制反推；GenericCondBody 从「样本驱动」升「schema+帮助元数据」双驱动 | ≥60 类型字段表单可编辑 + XML round-trip 测试 | **最高 ROI**：断裂点明确（6→60），基础设施全就绪 |
-| P6-2 | **Register Region → MDL 权威接线** | nav_panels L3115 注册流调用 `write_mdl(surface_regions=...)` 回写 MDL 名表（BAM 路径已有同型调用可抄）；宿主验收 | 改写后宿主 `QueryFaceRegionByName` 非 Nothing | 小而关键：直接闭合 §6.2 负面发现 |
+| P6-2 | **Register Region → MDL 权威接线** | nav_panels L3115 注册流调用 `write_mdl(surface_regions=...)` 回写 MDL 名表（BAM 路径已有同型调用可抄）；宿主验收 | 改写后宿主 `QueryFaceRegionByName` 非 Nothing | 小而关键：~~直接闭合 §6.2 负面发现~~ → **§6.3 实测矩阵显示 MDL 名表写端不足以宿主生效**（全成员改名/追加均不改变宿主解析），验收锚点暂不可达；先做「宿主 Save 前后文件差异」定位权威写回路径 |
 | P6-3 | **网格量化对拍 + 黄金文件扩容** | 与宿主 mesher 同几何产物对拍（单元数/非正交度分布）；黄金文件从 box 族扩 2–3 个真实几何 | 对拍报告 + 不变量回归 | 把「有基础设施」变成「有验证信用」 |
 | P6-4 | **几何 VBS 草稿清理** | pipeline_plan L855–901 TODO 占位：录制锁定实体 API 或删除（原生路径已是正路） | 草稿清零或锁定 | 消除「表面接线、深层 TODO」残留 |
 | P6-5 | **宿主交互环境收敛**（环境依赖，随时插入） | 新鲜 Kicker 启动宿主 + gui 后端一键复跑完整管线（框架发现已修）；或调查 Kicker 启动参数 | `context_ready=1 → set_handle>0` 实测日志 | 闭合宿主自动化最后 30% 的关键步 |

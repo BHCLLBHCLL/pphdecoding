@@ -236,30 +236,49 @@ def nodes_vertex_count(data) -> tuple[Optional[int], str]:
 
 
 def _iter_surface_region_blocks(data):
-    """LS_SurfaceRegions → 迭代 ``(name, face_ids_i32_be_offset, n_faces)``。"""
+    """LS_SurfaceRegions → 迭代 ``(name, face_ids_i32_be_offset, n_faces)``。
+
+    2026-08-17 重写为结构直扫：旧实现走 :func:`crdlfld.iter_data_blocks`
+    （4 字节步进回退），追加记录的 ``desc(1,255,1)``（type=1 非 4/8）会被
+    误吞成伪块、错过其后的名称块。新实现按名称块 ``[12][255] + 255B 可打印
+    + 尾部 255`` 模式定位，再沿后随描述符链取面数组，兼容原文件与
+    :func:`append_surface_region` 产物。
+    """
     section = _find_section(data, "LS_SurfaceRegions")
     if section is None:
         return
-    blocks = [(b.offset, b.byte_count)
-              for b in crdlfld.iter_data_blocks(data, section)]
-    i = 0
-    while i + 2 < len(blocks):
-        p_n, bc_n = blocks[i]
-        p_i, bc_i = blocks[i + 1]
-        p_w, bc_w = blocks[i + 2]
-        name_raw = bytes(data[p_n:p_n + bc_n])
-        if not all(b == 0 or 32 <= b < 127 for b in name_raw):
-            i += 1
+    body = data[section.records_start:section.end]
+    base = section.records_start
+    pos = 0
+    n_body = len(body)
+    import struct as _struct
+    while pos + 275 <= n_body:
+        if body[pos:pos + 4] != b"\x00\x00\x00\x0c" \
+                or body[pos + 4:pos + 8] != b"\x00\x00\x00\xff":
+            pos += 1
             continue
-        name = name_raw.decode("ascii", errors="replace").strip("\x00").rstrip()
+        raw = body[pos + 8:pos + 8 + 255]
+        if not all(b == 0 or 32 <= b < 127 for b in raw):
+            pos += 1
+            continue
+        name = raw.decode("ascii", errors="replace").rstrip()
         if not name:
-            i += 1
+            pos += 1
             continue
-        if bc_i > 0 and bc_i == bc_w and bc_i % 4 == 0:
-            yield name, p_i, bc_i // 4
-            i += 3
-        else:
-            i += 1
+        # 名称块后：desc(4,1,1) desc(4,n,4) desc(4,n,1) block(ids 4n)
+        p = pos + 8 + 255 + 4
+        if p + 56 > n_body:
+            break
+        d3 = p + 32
+        if body[d3:d3 + 4] != b"\x00\x00\x00\x0c":
+            pos += 1
+            continue
+        n = _struct.unpack(">i", body[d3 + 8:d3 + 12])[0]
+        if n < 0 or p + 56 + 4 * n > n_body:
+            pos += 1
+            continue
+        yield name, base + p + 56, n
+        pos += 1
 
 
 def surface_regions_summary(data) -> list[tuple[str, int]]:
@@ -274,6 +293,79 @@ def surface_region_face_ids(data) -> dict[str, np.ndarray]:
         out[name] = np.frombuffer(
             data, dtype=">i4", count=n, offset=off).astype(np.int64, copy=True)
     return out
+
+
+def rename_surface_region(data: bytes, old_name: str,
+                         new_name: str) -> bytes:
+    """LS_SurfaceRegions 名表原地改名（255B 名称块等长替换）。
+
+    2026-08-17 实机验证矩阵（box.pph + 宿主 OpenProject/QueryFaceRegionByName）：
+
+    - **原地改名宿主安全**：GPH 改名后宿主 `OpenProject` 正常（open=0，
+      不触发重建，与追加记录不同）；
+    - 但宿主 `QueryFaceRegionByName` 仍解析旧名——宿主 face region 注册表
+      的权威来源尚未在文件层定位（main.xml regions/SECTITEM、part/ridge
+      MDL 名表、GPH 名表、snapshot FACEGROUPSW 逐一改名实测均不改变宿主
+      解析结果），本函数保证字节级名表自洽（本仓 parser 可见新名）。
+
+    ``new_name`` 超 255 字节截断；替换在 LS_SurfaceRegions 节内进行。
+    """
+    section = _find_section(data, "LS_SurfaceRegions")
+    if section is None:
+        return data
+    body = data[section.records_start:section.end]
+    needle = old_name.encode("ascii", errors="replace")[:255].ljust(255, b" ")
+    replacement = (new_name.encode("ascii", errors="replace")[:255]
+                   .ljust(255, b" "))
+    if needle not in body:
+        return data
+    new_body = body.replace(needle, replacement, 1)
+    return data[:section.records_start] + new_body + data[section.end:]
+
+
+def append_surface_region(data: bytes, name: str,
+                          face_ids: Optional[np.ndarray] = None) -> bytes:
+    """LS_SurfaceRegions 追加一条面区域记录（格式级写端）。
+
+    **宿主警告（2026-08-17 实机验证）**：追加记录（无论是否带面、count
+    是否同步）都会使宿主 `OpenProject` 进入**无界重建**（瞬态实例持续
+    60–90% CPU，>5 分钟不完成），因此本函数只保证格式自洽，产物**不建议
+    直接交给宿主**——宿主 region 注册表的权威写端仍待定位（见
+    REANALYSIS §6.2 负面发现）。原地改名请用 :func:`rename_surface_region`。
+
+    记录模板取自已解析节内的任一现有区域记录（保序复制其完整字节），
+    ``face_ids`` 省略时复制该模板的面数组；名称等长约束在 255B 块内
+    自动满足。
+    """
+    section = _find_section(data, "LS_SurfaceRegions")
+    if section is None:
+        return data
+    body = data[section.records_start:section.end]
+    names = surface_regions_summary(data)
+    if not names:
+        return data
+    # 模板：最后一个现有区域名块开始（desc(1,255,1) 前 24B）到节尾
+    last_name = names[-1][0]
+    pos = body.rfind(last_name.encode("ascii")[:255])
+    if pos < 24:
+        return data
+    template = body[pos - 24:]
+    # 名称 255B 块替换（新名在块内等长）
+    old_block = last_name.encode("ascii", errors="replace")[:255].ljust(
+        255, b" ")
+    new_block = name.encode("ascii", errors="replace")[:255].ljust(255, b" ")
+    if old_block not in template:
+        return data
+    rec = template.replace(old_block, new_block, 1)
+    # count 描述符（第 4 个 desc 的 dim0，节体 +56）
+    count_off = 56
+    import struct
+    if count_off + 4 > len(body):
+        return data
+    count = struct.unpack(">i", body[count_off:count_off + 4])[0]
+    new_body = (body[:count_off] + struct.pack(">i", count + 1)
+                + body[count_off + 4:] + rec)
+    return data[:section.records_start] + new_body + data[section.end:]
 
 
 def string_list(data, section_name: str) -> list[str]:
