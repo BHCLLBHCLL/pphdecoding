@@ -363,7 +363,7 @@ Kicker 启动的 scFLOWpre 常驻运行。三项全部获得实机证据：
 | Octree 八叉树 | **75%** | 中 | 72→75：OCTREEREGION 后序写端 roundtrip 验证（19 tests） |
 | BAM 分析模型 | **73%** | 中 | 70→73：Influence 参数透传 BamReport（22 tests）；几何效应仍在宿主内核 |
 | 宿主自动化 COM/VBS | **72%** | 中 | 70→72：`host_status()` 诊断口（16 tests）；Kicker 实例内 `context_ready=1 → handle>0` 完整管线仍待宿主窗口可见 |
-| 条件体系（~180 Cond*） | **65%** | 浅–中 | 60→65：字段 schema 10→≥25（53 tests）；≥60 类型目标未达（见 9.1 诚实记录） |
+| 条件体系（~180 Cond*） | **68%** | 浅–中 | 65→68（P7-1 样本深扫：25→33 类型，见 9.4）；60→65 为 P6-1（10→≥25） |
 | 自研网格生成 | **63%** | 中 | 55→63：量化对拍 vs 宿主黄金 + numpy2 写端修复（62 passed/1 skipped）；黄金文件仍 box 族 |
 | 几何编辑 Create/Modify | **62%** | 底层深、GUI 中 | 55→62：MDL 名表写端 API + VBS 草稿清零（24 tests）；GUI 归档 flush 接线 + 宿主 `QueryFaceRegionByName` 验收待补 |
 | Wrapping/Disc/Overset | **58%** | 中 | 55→58：占位清理 + 显式报错（6 tests）；质量清理，无新能力增量 |
@@ -371,8 +371,9 @@ Kicker 启动的 scFLOWpre 常驻运行。三项全部获得实机证据：
 
 ### 9.3 剩余缺口（P7 输入，按杠杆排序）
 
-1. **条件字段 schema 25→60+**：需 P6-5 真实录制反推或更多样本工程
-   （权威 XML 键源）；GenericCondBody 双驱动引擎已就绪，纯数据源问题；
+1. ~~**条件字段 schema 25→60+**：需更多样本工程~~ **P7-1 已部分交付**
+   （25→33，吃透现有样本的嵌套条件面，见 9.4）；进一步突破仍需
+   P7-3 真实录制反推或新样本工程；
 2. **Register Region GUI 归档 flush 接线**：`mdl.add_surface_region`
    API 已就绪（P6-2），纯 GUI 接线 + 宿主 `QueryFaceRegionByName`
    非 Nothing 验收；
@@ -381,3 +382,27 @@ Kicker 启动的 scFLOWpre 常驻运行。三项全部获得实机证据：
    可一键判断就绪态（gui_ready）；
 4. **网格黄金文件扩容**：box 族 → 2–3 个真实几何，对拍报告常态化；
 5. **cellular-guise 会话锁定根因验证**（rc=900，P6-6 未动，低优先）。
+
+### 9.4 P7-1 条件 schema 扩源（2026-08-17 交付）
+
+**根因**：`pphxml.conditions()` 只读 `<conditions>` 直接子级——样本中
+嵌套在 `output_param/`、`particle_dem/`、`radiation/`、`info_sted/`、
+`multiphase_cond/` 子树内的条件全部漏提（P6-1「需更多样本工程」结论的
+一半缺口其实就在现有样本里）。
+
+**交付**：
+- `MainXml.all_conditions(known_types)` 深扫三类形态（嵌套 `condition`
+  元素 / 条件形容器 `<type>CondXxx</type>` / 空 type 按父容器推断），
+  `cond_types.json` 目录交叉核对（165 实名类型）防值槽假阳性；
+- `schema_extract` 接入深扫；`schemas/merged.json` 以 6 样本重建
+  （box/box2/box_disc/box_overset/laptop/p5_wrapping），类型 10→20；
+- 注册表带字段类型 **25→33**：净新 8（CondParticleBoundaryDEM 100 字段、
+  CondParticleSymmBoundaryDEM、CondParticleSymmHeatBoundaryDEM、
+  CondOutputLFileYplus/Passage/ElectricCurrent、CondStedInfo 21、
+  CondMultiphaseMaterial）+ 权威升级 2（CondBoundaryRadiation 4→32、
+  CondOutputLFileHeatTransfer 5→22，html 显示名键 → 样本 XML 键）；
+- `tests/test_condition_deep_scan.py` 13 项（三类形态命中、假阳性排除、
+  33 覆盖、样本键优先）；条件域回归 59 tests 全绿。
+
+**诚实边界**：Symm*DEM 在样本中是裸默认条件（仅 type/name/regions 无
+参数面），入注册表但表单元数据为空——如实反映样本，不虚构字段。

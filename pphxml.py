@@ -214,6 +214,66 @@ class MainXml:
             return []
         return cond.findall("condition")
 
+    def all_conditions(
+            self, known_types: Optional[set[str]] = None
+    ) -> list[tuple[ET.Element, str]]:
+        """深度扫描 ``<conditions>`` 子树全部条件实体（P7-1 扩源）。
+
+        覆盖三类形态（直接子级 ``condition`` 之外的嵌套条件在
+        ``conditions()`` 中被遗漏，实测 laptop/box 样本漏 8+ 类型）：
+
+        1. 任意深度的 ``<condition>`` 元素（type 非空直接用；
+           type 为空时按**父容器标签**推断 ``Cond<CamelCase(tag)>``，
+           仅当推断名在 ``known_types`` 目录中才收录——防误报）；
+        2. 带 ``<type>CondXxx</type>`` 直接子元素的**条件形容器**
+           （如 ``particle_dem/symmetrical_particle_boundary``，标签非
+           ``condition``；仅当 type 名在 ``known_types`` 目录中才收录，
+           过滤掉 ``<velocity_x><type>VELX`` 一类值槽假阳性）。
+
+        返回 ``[(元素, 类型名)]``；``known_types`` 缺省时仅收录带
+        非空 type 的 ``condition`` 元素（无目录交叉核对能力）。
+        """
+        cond_root = self.root.find("conditions")
+        if cond_root is None:
+            return []
+        known = known_types or set()
+
+        def _infer_from_tag(tag: str) -> Optional[str]:
+            """`sted_info` → `CondStedInfo`（复数 s 回退单数）。"""
+            if not known:
+                return None
+            camel = "".join(p.capitalize() for p in tag.split("_"))
+            for cand in (f"Cond{camel}", f"Cond{camel[:-1]}"):
+                if cand in known:
+                    return cand
+            return None
+
+        out: list[tuple[ET.Element, str]] = []
+        for el in cond_root.iter():
+            tname = (el.findtext("type") or "").strip()
+            if el.tag == "condition":
+                if tname:
+                    out.append((el, tname))
+                    continue
+                parent = self._parent_of(el)
+                if parent is not None:
+                    inferred = _infer_from_tag(parent.tag)
+                    if inferred:
+                        out.append((el, inferred))
+                continue
+            # 条件形容器：type 子元素必须是目录中的 Cond* 名
+            if tname.startswith("Cond") and tname in known:
+                out.append((el, tname))
+        return out
+
+    def _parent_of(self, target: ET.Element) -> Optional[ET.Element]:
+        cond_root = self.root.find("conditions")
+        for parent in cond_root.iter():
+            for child in parent:
+                if child is target:
+                    return parent
+        return None
+
     @staticmethod
     def condition_summary(cond: ET.Element) -> dict:
         out = {"type": cond.findtext("type", ""), "name": cond.findtext("name", "")}

@@ -70,6 +70,30 @@ def _append_sample(field: dict, sample: str, limit: int = 5) -> None:
         del samples[limit:]
 
 
+def _catalog_cond_types() -> set[str]:
+    """`schemas/cond_types.json` 的 Cond* 类型名集合（目录交叉核对用）。"""
+    p = Path(__file__).resolve().parent / "schemas" / "cond_types.json"
+    if not p.is_file():
+        return set()
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    return {t for t in data.get("types", {}) if t.startswith("Cond")}
+
+
+def _iter_condition_entities(mx) -> list[tuple[ET.Element, str]]:
+    """提取条件实体：直接子级 + 嵌套深扫（P7-1 扩源）。
+
+    深扫规则见 :meth:`pphxml.MainXml.all_conditions`——嵌套 ``condition``
+    元素（output_param/lfile_* 等）、条件形容器（particle_dem/
+    symmetrical_particle_boundary 等）与空 type 的目录可推断条件
+    （info_sted/sted_info、multiphase_cond/multiphase_materials）。
+    """
+    known = _catalog_cond_types()
+    return mx.all_conditions(known_types=known)
+
+
 def extract_text_schema(xml_data: bytes,
                         xenv_data: bytes,
                         prp_data: bytes) -> dict:
@@ -79,9 +103,8 @@ def extract_text_schema(xml_data: bytes,
     prp = pphxml.parse_prp(prp_data)
 
     cond_types: dict[str, dict] = {}
-    for cond in mx.conditions():
+    for cond, tname in _iter_condition_entities(mx):
         summary = mx.condition_summary(cond)
-        tname = summary.get("type") or "<unknown>"
         entry = cond_types.setdefault(tname, {
             "count": 0,
             "regions": [],

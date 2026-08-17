@@ -1239,6 +1239,44 @@ cellular / lattice / frame 家族只能靠「命名约定 + 反汇编 + 经验�
 
 Solver/FPH 维持合理延后。
 
+### 17.5 改进计划（P7，2026-08-17 立；P7-1 已交付）
+
+> 输入：REANALYSIS §9.3（P6 后剩余缺口，按杠杆排序）。
+
+> **执行状态（2026-08-17）：P7-1 条件 schema 扩源已交付**——根因是
+> `pphxml.conditions()` 只读 `<conditions>` 直接子级，样本嵌套条件
+> （`output_param/lfile_*/condition`、`particle_dem/boundary/condition`、
+> `radiation/radiation_face/condition`）、条件形容器
+> （`particle_dem/symmetrical_particle_*`，标签非 `condition` 但带
+> `<type>CondXxx</type>` 子元素）与空 type 目录可推断条件
+> （`info_sted/sted_info`、`multiphase_cond/multiphase_materials`）
+> 全部被漏。新增 `MainXml.all_conditions(known_types)` 深扫（cond_types.json
+> 目录交叉核对防误报：值槽 `<velocity_x><type>VELX` 与非目录 Cond 名全
+> 排除；空 type 按父容器标签推断 `Cond<CamelCase>` 且仅目录命中收录），
+> `schema_extract` 接入后重建 `schemas/merged.json`（6 样本合并）：
+> 类型 10 → 20，注册表带字段类型 **25 → 33**（补全 10：净新 8
+> `CondParticleBoundaryDEM`(100 字段)/`CondParticleSymmBoundaryDEM`/
+> `CondParticleSymmHeatBoundaryDEM`/`CondOutputLFileYplus`/
+> `CondOutputLFilePassage`/`CondOutputLFileElectricCurrent`/
+> `CondStedInfo`(21)/`CondMultiphaseMaterial` + 权威升级 2
+> `CondBoundaryRadiation`(4→32 样本键)/`CondOutputLFileHeatTransfer`
+> (5→22 样本键)，help 注入 15→13 因样本优先跳过 2 项)。
+> 新增 `tests/test_condition_deep_scan.py` 13 项（三类形态命中 +
+> 假阳性排除 + 注册表 33 覆盖）。
+
+1. **P7-1 条件 schema 扩源**（已交付，见上）：样本深扫把「更多样本
+   工程」需求转化为「吃透现有样本」——嵌套条件面首次全量入注册表；
+2. **P7-2 Register Region GUI 归档 flush 接线**：`mdl.add_surface_region`
+   API 已就绪（P6-2），补 nav_panels GUI 调用 + 宿主
+   `QueryFaceRegionByName` 非 Nothing 验收；
+3. **P7-3 宿主管线闭环**（环境依赖）：`host_pipeline --status` 判 gui_ready
+   → 前台 Kicker 实例内 `context_ready=1 → set_handle>0`；
+4. **P7-4 网格黄金文件扩容**（box 族 → 2–3 真实几何，对拍常态化）；
+5. **P7-5 cellular-guise 根因验证**（低优先，rc=900 锁定）。
+
+---
+
+
 ---
 ---
 

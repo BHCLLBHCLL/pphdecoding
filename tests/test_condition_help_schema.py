@@ -89,7 +89,9 @@ class TestApplyHelpSchema(unittest.TestCase):
         cls.stats = apply_help_schema(cls.reg)
 
     def test_injects_fields(self):
-        self.assertGreaterEqual(self.stats["types_with_new_fields"], 15)
+        # P7-1 后 CondBoundaryRadiation/CondOutputLFileHeatTransfer 升级为
+        # 样本权威键（深扫），help 注入跳过 → 15 → 13
+        self.assertGreaterEqual(self.stats["types_with_new_fields"], 13)
         self.assertGreater(self.stats["total_fields_injected"], 100)
 
     def test_expands_coverage(self):
@@ -105,9 +107,10 @@ class TestApplyHelpSchema(unittest.TestCase):
             self.assertTrue(t.fields)
 
     def test_new_fields_optional(self):
-        # 帮助字段 count=0 → required=None（不做必填误判）
-        for tname in ("CondBoundaryRadiation", "CondFreeSurface",
-                      "CondAcceleration"):
+        # 帮助字段 count=0 → required=None（不做必填误判）。
+        # CondBoundaryRadiation 在 P7-1 后为样本类型（required 按
+        # count 语义计算），不再属于 help 注入面。
+        for tname in ("CondFreeSurface", "CondAcceleration"):
             t = self.reg.get(tname)
             if t is None:
                 continue

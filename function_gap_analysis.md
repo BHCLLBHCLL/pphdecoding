@@ -26,7 +26,7 @@
 | Octree 八叉树 | 75% | 中间层 |
 | BAM 分析模型 | 73% | 中间层 |
 | 宿主自动化 COM/VBS | 72% | 中间层 |
-| 条件体系（~180 Cond*） | **65%** | 中间层 |
+| 条件体系（~180 Cond*） | **68%** | 中间层 |
 | 自研网格生成 | 63% | 中间层 |
 | 几何编辑 Create/Modify | 62% | 中间层 |
 | Wrapping/Disc/Overset | 58% | 中间层 |
@@ -92,6 +92,14 @@ Solver/FPH 链路         ████░░░░░░░░░░░░░░
 > 窗口可见）、Wrapping/Disc/Overset 55→58（占位标注清理 + 未知 op 显式
 > ValueError，6 tests——质量清理，无新能力增量）。提交链：`619c899` →
 > `6a8624e` → `8ea7ec7` → `dd7ba88` → `70535ae` → `91ac5ec` → `ab83e35`。
+>
+> **2026-08-17 P7-1 条件 schema 扩源后刷新**：条件体系 65→68——
+> 根因修复 `conditions()` 只读直接子级，样本嵌套条件深扫
+> （`all_conditions` 目录交叉核对）+ 重建 merged.json，带字段 schema
+> 类型 **25 → 33**（净新 8：CondParticleBoundaryDEM 100 字段/Symm*DEM×2/
+> LFile Yplus·Passage·ElectricCurrent/StedInfo/MultiphaseMaterial + 权威
+> 升级 2：CondBoundaryRadiation 4→32、CondOutputLFileHeatTransfer 5→22
+> 样本键）；详见 DEV_PLAN §17.5 与 REANALYSIS §9.4。
 >
 > **2026-08-17「历史环境阻塞标注」回填验证**（细节见 REANALYSIS §6.2）：
 > test_native_bridge::real 本机 7/7 全绿；`-vbs` CLI 实测不存在（cli 后端
