@@ -319,6 +319,15 @@ class PartsControlBody(_Body):
             "enable_wrapping": self._enable_wrapping,
             "nav_dirty": True,
         }
+        xml = ctx.get("xml")
+        if xml is not None:
+            import project_persist
+            project_persist.set_parts_control_flags(
+                xml,
+                discontinuous=self.chk_disc.isChecked(),
+                overset=self.chk_overset.isChecked(),
+                wrapping=wrap_on)
+            ctx["xml_dirty"] = True
         return True
 
 

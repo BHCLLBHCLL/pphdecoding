@@ -811,10 +811,13 @@ _WRAP_OP_COMMENTS: dict[str, str] = {
     "wrap_param": "Wrapping Parameter — SetWrapParam (录制锁定)",
     "specify_disc": 'Conditions_.SetPartsControl "Discontinuous", True',
     "overset_mesh": 'Conditions_.SetPartsControl "Overset", True',
+    "open_cad_file": "Doc_.OpenCadFile",
+    "query_face_region": "Doc_.QueryFaceRegionByName",
 }
 
 
-def wrapping_actions(op: str, project_path: str | Path) -> list[str]:
+def wrapping_actions(op: str, project_path: str | Path,
+                     draft: Optional[dict] = None) -> list[str]:
     """生成 Wrapping/Disc/Overset 宿主脚本（wrapping 序列已录制锁定）。"""
     path = Path(project_path).as_posix()
     actions = [
@@ -830,6 +833,18 @@ def wrapping_actions(op: str, project_path: str | Path) -> list[str]:
             'Conditions_.SetPartsControl "Discontinuous", True')
     elif op == "overset_mesh":
         actions.append('Conditions_.SetPartsControl "Overset", True')
+    elif op == "open_cad_file":
+        cad = Path((draft or {}).get("path") or "").as_posix()
+        if not cad:
+            raise ValueError("open_cad_file requires draft['path']")
+        actions.append(f'Doc_.OpenCadFile "{cad}"')
+    elif op == "query_face_region":
+        rname = ((draft or {}).get("name")
+                 or "@PartSurface_Part")
+        actions.append(
+            f'Set FaceRegion_ = Doc_.QueryFaceRegionByName("{rname}")')
+        actions.append(
+            "' Wave B: FaceRegion_ Is Nothing → Register Region MDL 名表未生效")
     elif op == "begin_wrap":
         actions.append('Conditions_.SetPartsControl "Wrapping", True')
         actions.extend(_wrapping_body_actions())
@@ -920,7 +935,7 @@ def write_nav_vbs(op: str, project_path: str | Path,
     elif op in ("modify_parts",):
         actions = modify_parts_actions(draft or {}, project_path)
     else:
-        actions = wrapping_actions(op, project_path)
+        actions = wrapping_actions(op, project_path, draft=draft)
     return write_vbs_file(actions, output, title=f"pph_gui {op}")
 
 

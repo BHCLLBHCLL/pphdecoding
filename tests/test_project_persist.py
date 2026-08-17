@@ -194,3 +194,14 @@ def test_append_region_on_box_mdl():
 def test_default_part_surface_region():
     assert pp.default_part_surface_region("Part") == "@PartSurface_Part"
     assert pp.default_part_surface_region("@PartSurface_X") == "@PartSurface_X"
+
+
+def test_set_parts_control_flags():
+    xml = pphxml.parse_main_xml(pp.empty_project_members()["main.xml"])
+    pc = pp.set_parts_control_flags(
+        xml, discontinuous=True, overset=False, wrapping=True)
+    assert pc.findtext("Discontinuous") == "true"
+    assert pc.findtext("overset") == "false"
+    assert pc.findtext("Wrapping") == "true"
+    cond = xml.section("conditions").find("parts_control")
+    assert cond is pc

@@ -5721,6 +5721,18 @@ class PphViewer(QMainWindow):
                     data, str(rname))
         self._set_member(mdl_name, data)
         self.log(f"Register Region: flushed {len(pending)} name(s) → {mdl_name}")
+        first = pending[0].get("name") if isinstance(pending[0], dict) else pending[0]
+        if first and self.archive_path:
+            try:
+                from automation.pipeline_plan import write_nav_vbs
+                out = Path(self.archive_path).with_suffix(".queryface.vbs")
+                write_nav_vbs(
+                    "query_face_region", self.archive_path, out,
+                    draft={"name": str(first)})
+                self.log(f"Register Region: QueryFaceRegionByName VBS {out.name}")
+                self._try_host_vbs(out)
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"Register Region: QueryFace VBS failed: {exc}", "WARN")
 
     def new_empty_project(self) -> None:
         """初始化空 PPH 工程（对齐 File → New Project）。"""
@@ -6012,6 +6024,7 @@ class PphViewer(QMainWindow):
                     draft=pending.get("draft"))
                 msgs.append(f"VBS {out.name}")
                 self.log(f"[{key}] VBS 草稿: {out}")
+                self._try_host_vbs(out)
             except Exception as exc:  # noqa: BLE001
                 self.log(f"[{key}] VBS 写出失败: {exc}", "WARN")
 
@@ -6124,15 +6137,24 @@ class PphViewer(QMainWindow):
         suf = os.path.splitext(path)[1].lower()
         if suf not in (".x_t", ".xmt_txt"):
             self.log(
-                f"Import：暂仅支持 Parasolid .x_t/.xmt_txt 本仓剖分"
-                f"（当前 {suf}）。其它格式请用宿主 OpenCadFile。",
+                f"Import：{suf} 走宿主 OpenCadFile（本仓仅剖分 XT）",
                 "WARN")
+            if self.archive_path:
+                try:
+                    from automation.pipeline_plan import write_nav_vbs
+                    out = Path(self.archive_path).with_suffix(".opencad.vbs")
+                    write_nav_vbs(
+                        "open_cad_file", self.archive_path, out,
+                        draft={"path": path})
+                    self.log(f"OpenCadFile VBS: {out}")
+                    self._try_host_vbs(out)
+                except Exception as exc:  # noqa: BLE001
+                    self.log(f"OpenCadFile VBS 失败: {exc}", "ERROR")
             QMessageBox.information(
                 self, "Import",
-                "当前仅实现 Parasolid XT（*.x_t / *.xmt_txt）的 "
-                "pskernel 剖分预览与工程登记。\n"
-                "STEP / CATIA 等请在 scFLOWpre 中 File → Import，"
-                "或等宿主 OpenCadFile 路径（Wave B）。")
+                "STEP / CATIA 等格式由 scFLOWpre OpenCadFile 导入。\n"
+                "已写出 VBS；若 Kicker 前台可见将尝试自动执行，"
+                "否则请 File → Execute VBScript。")
             return
         try:
             import cad_import
@@ -6790,6 +6812,22 @@ class PphViewer(QMainWindow):
                 self.log(
                     f"请手动在 scFLOWpre 中 File → Execute VBScript 执行 "
                     f"{vbs}", "WARN")
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _try_host_vbs(self, vbs: Path) -> None:
+        """gui_ready 时后台执行 VBS；否则只留草稿（不拉起裸 scFLOWpre）。"""
+        def worker() -> None:
+            try:
+                from automation import host_pipeline
+                res = host_pipeline.run_vbs_if_ready(vbs)
+                if res.get("skipped"):
+                    self.log(
+                        f"宿主未就绪，VBS 已保留: {vbs.name} "
+                        f"({res.get('hint')})", "WARN")
+                else:
+                    self.log(f"宿主执行 {vbs.name}: {res}")
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"宿主执行失败 {vbs.name}: {exc}", "WARN")
         threading.Thread(target=worker, daemon=True).start()
 
     def reload(self) -> None:

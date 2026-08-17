@@ -563,6 +563,32 @@ def run_in_host(vbs_path: str | Path, *, backend: str = "manual",
     return _run_gui(vbs_path, timeout=timeout, menu=menu or {})
 
 
+def run_vbs_if_ready(vbs_path: str | Path, *, timeout: float = 180.0) -> dict:
+    """gui_ready 时用 gui 后端执行 VBS；否则跳过并返回诊断（不拉起裸 exe）。"""
+    st = host_status()
+    payload = {
+        "script": str(vbs_path),
+        "gui_ready": bool(st.get("gui_ready")),
+        "status": {k: st.get(k) for k in (
+            "installed", "kicker_launcher", "running_pids",
+            "any_visible", "gui_ready", "hint")},
+    }
+    if not st.get("gui_ready"):
+        payload.update({
+            "ok": False,
+            "skipped": True,
+            "attempted": False,
+            "hint": st.get("hint") or "host not gui_ready",
+        })
+        return payload
+    run = run_in_host(vbs_path, backend="gui", timeout=timeout)
+    payload.update(run)
+    payload["skipped"] = False
+    payload["attempted"] = True
+    payload.setdefault("ok", True)
+    return payload
+
+
 def locate_scflowpre() -> dict:
     """自动定位 scFLOWpre 安装目录与 COM ProgID（供 GUI 日志/校验）。
 
@@ -835,6 +861,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--status", action="store_true",
                     help="report host runtime status (instances + window "
                          "visibility + Kicker launcher)")
+    ap.add_argument("--run-if-ready", metavar="VBS",
+                    help="run VBS via gui backend only when host_status "
+                         "reports gui_ready")
     ap.add_argument("--write-vbs", metavar="OUT", help="write host VBS only")
     ap.add_argument("--run", action="store_true",
                     help="run the pipeline in the host")
@@ -852,6 +881,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         result = unregister_com()
     elif args.status:
         result = host_status()
+    elif args.run_if_ready:
+        result = run_vbs_if_ready(args.run_if_ready)
     elif args.write_vbs:
         out = Path(args.write_vbs)
         result_path = out.with_name(out.stem + "_result.txt")

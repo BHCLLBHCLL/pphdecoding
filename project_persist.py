@@ -266,3 +266,26 @@ def default_part_surface_region(part_name: str) -> str:
     if n.startswith("@PartSurface_"):
         return n
     return f"@PartSurface_{n}"
+
+
+def set_parts_control_flags(xml: pphxml.MainXml, *,
+                            discontinuous: bool = False,
+                            overset: bool = False,
+                            wrapping: bool = False) -> ET.Element:
+    """写入 ``conditions/parts_control``（对齐 box_disc：Discontinuous/overset/Wrapping）。"""
+    cond = xml.section("conditions")
+    if cond is None:
+        cond = ET.SubElement(xml.root, "conditions")
+    pc = cond.find("parts_control")
+    if pc is None:
+        pc = ET.SubElement(cond, "parts_control")
+    for tag, val in (
+        ("Discontinuous", discontinuous),
+        ("overset", overset),
+        ("Wrapping", wrapping),
+    ):
+        el = pc.find(tag)
+        if el is None:
+            el = ET.SubElement(pc, tag)
+        el.text = "true" if val else "false"
+    return pc

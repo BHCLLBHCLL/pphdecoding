@@ -91,6 +91,47 @@ class TestRegistration(unittest.TestCase):
         self.assertEqual(result["backend"], "manual")
         self.assertIn("Execute VBScript", result["hint"])
 
+    def test_run_vbs_if_ready_skips_without_gui(self):
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            fake = {
+                "gui_ready": False,
+                "hint": "no visible frame",
+                "installed": True,
+                "kicker_launcher": None,
+                "running_pids": [],
+                "any_visible": False,
+            }
+            with mock.patch.object(host_pipeline, "host_status",
+                                   return_value=fake):
+                result = host_pipeline.run_vbs_if_ready(vbs)
+        self.assertTrue(result["skipped"])
+        self.assertFalse(result["attempted"])
+        self.assertFalse(result["ok"])
+
+    def test_run_vbs_if_ready_calls_gui_when_ready(self):
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            fake = {
+                "gui_ready": True,
+                "hint": "ok",
+                "installed": True,
+                "kicker_launcher": "Kicker",
+                "running_pids": [1],
+                "any_visible": True,
+            }
+            with mock.patch.object(host_pipeline, "host_status",
+                                   return_value=fake):
+                with mock.patch.object(
+                        host_pipeline, "run_in_host",
+                        return_value={"backend": "gui", "ok": True}):
+                    result = host_pipeline.run_vbs_if_ready(vbs)
+        self.assertTrue(result["attempted"])
+        self.assertFalse(result["skipped"])
+        self.assertTrue(result["ok"])
+
     def test_run_in_host_com_backend(self):
         with tempfile.TemporaryDirectory() as td:
             vbs = Path(td) / "host.vbs"
