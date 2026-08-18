@@ -472,3 +472,226 @@ P4-0 → P4-1（共用 schema→widget 引擎）→ P4-2（独立可并行）→
 P4-3/P4-4（随时插入）。**执行印证**：P4-0/1 落地后条件+设置层
 完整度按计划从 15% 提升至 55%+ 量级，12 域中 8 个存根域均达到
 "表单层可用"（目录对话框统一入口 + 通用表单渲染）。
+
+---
+
+## 8. 前 11 域做到「产品 100%」的可行计划（P7）
+
+> 日期：2026-08-17 ｜ 输入：§0 表 + REANALYSIS §9.3 + NYI 清单（余 7）
+> ｜ **不含** 第 12 域 Solver/FPH（合理延后）。
+>
+> 对照 DEV_PLAN §0.4：本仓策略是 **格式层复刻 + 界面层逼近 + 宿主驱动
+> 官方内核 + 自研 mesher 兼容产物**，不以重写 SCTprime / CADthru /
+> Parasolid faceter 为目标。因此本节的「100%」是**产品完整度**，不是
+> 与 scFLOWpre 网格内核 bit-identical。
+
+### 8.1 「100%」验收口径（必须先钉死，否则永远达不到）
+
+| 口径 | 定义 | 用于本计划？ |
+|---|---|---|
+| **产品 100%** | 该域全部用户路径：**菜单可用或明确灰显+理由**；参数可编辑并写入 PPH；宿主能打开并执行；有回归测试 | **是** |
+| **内核 100%** | 自研算法与 scFLOWpre 细化/BAM/Wrapping/CADthru 数值等价 | **否**（不可行，见 DEV_PLAN §0.4） |
+
+每域「产品 100%」拆成四条硬门槛，缺一不算满：
+
+1. **UI**：该域菜单/向导可操作，或产品边界项灰显且 `docs/NYI_INVENTORY.md` 有理由；
+2. **Persist**：Save / Save As 后 ZIP 成员 + `main.xml`/`xenv`/`mdl` 与 UI 一致，宿主能重开；
+3. **Execute**：计算类操作有一条权威路径——**优先宿主 COM/VBS**，自研只保证兼容产物（宿主可开、质量不劣于约定阈值）；
+4. **Evidence**：pytest 黄金文件或宿主日志（`err=0` / `Query*` 非 Nothing）。
+
+下面百分比是「产品口径下还差什么」；括号内是该域若坚持内核等价则永远留白的部分。
+
+### 8.2 逐域：现状 → 产品 100% 定义 → 剩余工作
+
+#### 域 1 · PPH 解析与写端（95% → 100%）
+
+**100% 定义**：已知成员类型 round-trip；源 ZIP 没有的 override 键作为新成员追加；宿主重开不丢成员。
+
+| 剩余项 | 工作量 | 做法 | 验收 |
+|---|---|---|---|
+| `clone_pph` 追加新成员 | 已落地（代码在 `pphwriter.clone_pph`） | 补 pytest：空工程 Save 后出现 `meshinggroup1.oct/.gph`、导入的 `.x_t` | 宿主 OpenProject 不丢成员 |
+| `sctsnapshot` 重序列化 | 1–2 天 | 现有重序列化产物已有宿主验收；补 2–3 个多样本字节/结构对比，失败则保留「语义等价、字节不必 ident」并写进测试注释 | 宿主重开 ok |
+| wimlib / 罕见可选段 | **不做** | 生产路径是 ZIP+deflate；无样本不猜 | 文档标明非目标 |
+
+**内核留白**：无。这是本仓强项，满格成本最低。
+
+#### 域 2 · 工程文件管理（95% → 100%）
+
+**100% 定义**：New / Open / Save / Save As / Import CAD 产出**宿主可开**的 PPH；CAD 不仅预览，还要进 ZIP + `main.xml` parts。
+
+| 剩余项 | 工作量 | 做法 | 验收 |
+|---|---|---|---|
+| Save As 增加 ZIP 成员 | 与域 1 同源 | 复用 `clone_pph` 追加语义 | 空工程 Execute 后 Save，成员列表含 OCT/GPH |
+| CAD 登记（XT 预览 ≠ 工程零件） | 3–5 天 | 导入 `.x_t` 时：写入 ZIP 成员 + 更新 `main.xml` `<parts>` + 生成/更新 `*_part.mdl` 面片；STEP/CATIA **不**自研 Datakit，走宿主 `OpenCadFile` | 保存后 scFLOWpre 能看到零件；pytest 检查 zip namelist + xml parts |
+| Untitled 空工程模板 | 1 天 | 固化一份最小 `main.xml/xenv/js/prp/sctsnapshot` 模板，避免「无源 ZIP 可 clone」 | New → Import XT → Save → 宿主打开 |
+
+#### 域 3 · Select/View/3D（88% → 100%）
+
+**100% 定义**：本查看器**能实现**的选择/显示菜单全部接线；产品边界 2 项保持灰显（计入满分，不算缺口）。
+
+剩余 NYI（`docs/NYI_INVENTORY.md`，7 项）：
+
+| 项 | 处置 | 工作量 |
+|---|---|---|
+| Create Actran Files… / Restore Closed Volume Data… | **产品边界**，保持灰显 | 0 |
+| Spread Selected Face to Edge | **做**：基于 polymesh/MDL 邻接做面→边扩散（仅 MDL 导入场景） | 2–3 天 |
+| Define Facet Part / Non-Facet Part / 2D Sub-mesh / Fix Marked Element Shape | **明确不计 100% 缺口**：缺 patch 导入或 mesher 深水区；灰显 + 清单理由即满分 | 0 |
+
+List File / Part/Edge/Vertex pick / Fit/Hide/Only / Refinement Level / Parts List / Region Check 已接线，不重做。
+
+#### 域 4 · CAD/XT 几何导入（80% → 100%）
+
+**100% 定义**：XT 本仓 tessellation **且**登记为工程零件（见域 2）；其它 CAD 格式经宿主 `OpenCadFile`（Datakit/CADthru 是 Cradle 许可组件，不复刻）。
+
+| 剩余项 | 工作量 | 做法 | 验收 |
+|---|---|---|---|
+| XT → xml parts + mdl + zip | 3–5 天（与域 2 合并） | 导入路径统一走「预览 tessellation + 工程登记」 | Save 后宿主 Parts 树非空 |
+| STEP/CATIA/3dxml | 2 天接线 | GUI 已有过滤器；无 Datakit 时提示走宿主 File→Import；有宿主时 `Doc_.OpenCadFile` | 宿主日志 err=0；无宿主则明确错误，不静默空预览 |
+| 内核 faceter 等价 | **不做** | 二进制 XT 已深（parasolid.py + pskernel ABI）；CADthru 分面不复刻 | — |
+
+#### 域 5 · Octree 八叉树（75% → 100%）
+
+**100% 定义**：区域尺寸 UI ↔ `OCTREEREGION` 后序写端（已有）+ Refine/Merge Octants VBS（已有）+ **宿主 Execute 为权威细化**；自研 oct 只保证结构可被宿主读取。
+
+| 剩余项 | 工作量 | 做法 | 验收 |
+|---|---|---|---|
+| 曲率/接近度细化策略 | 不自研内核 | 参数写入 xenv/xml，Execute 勾选 API 走宿主 | 宿主重开参数在；细化结果以宿主 GPH/OCT 为准 |
+| 区域映射深度 | 2–3 天 | 核对 `sface_num` / Register Region 与 OCTREEREGION 索引一致性（P3-2 写端已有 roundtrip） | `tests/test_oct_region_write.py` 扩 1–2 个真实几何 |
+| 原生 oct 与宿主策略 bit 等 | **不做** | — | — |
+
+#### 域 6 · BAM 分析模型（73% → 100%）
+
+**100% 定义**：9 页向导参数可编辑并持久化；**Execute 走宿主 BAM Wizard VBS**（已锁定）；Influence 几何效应承认在宿主内核（配置已透传 `BamReport`）。
+
+| 剩余项 | 工作量 | 做法 | 验收 |
+|---|---|---|---|
+| 宿主 BAM 端到端 | 1–2 天（需前台宿主，与域 7 同波） | 对 box 跑 BAM Wizard 全步，Save，对比 `native_bam` 报告字段 | 宿主 err=0；PPH 可重开 |
+| AF faceter / tolerance merge 几何 | **不做自研等价** | native_bam 12/12 步保持「兼容报告」；几何以宿主为准 | 文档写明 |
+| Influence 几何 | 已配置透传 | 不补自研布尔 | BamReport 有 enable/targets 即可 |
+
+#### 域 7 · 宿主自动化 COM/VBS（72% → 100%）
+
+**100% 定义**：`host_status()` 显示 `gui_ready` 后，一条命令能走完 `context_ready=1 → set_handle>0 → Execute`；Wrapping 已 e2e；Octree/BAM/CAD/Disc/Overset 均可驱动。不要求远程作业推送（那是 Solver 域）。
+
+| 剩余项 | 工作量 | 做法 | 验收 |
+|---|---|---|---|
+| Kicker 前台管线闭合 | **环境 0.5 天 + 配方固化 1 天** | 新鲜启动 `Kicker_Bx64.exe`（勿用闲置双实例）；`--status` 等到 `gui_ready`；跑现有 gui 后端配方 | 日志 `set_handle>0` |
+| edit_ops Ridge/Octant 实机 | 1 天 | 宿主可见后补跑，现在代码已有 VBS | err=0 日志入库 |
+| batch_bridge | **保持 dry-run** | SCTpreCLI 面向 SC/Tetra 非 `.pph`，满分不依赖它 | 模块头已落档即可 |
+| 远程 push/pull | **划出本 11 域** | 属求解/集群，不是 scFLOWpre 查看器 100% | — |
+
+这是其它计算域「产品 100%」的**总闸门**：域 5/6/11 的 Execute 权威路径都卡在这里。
+
+#### 域 8 · 条件体系（65% → 100%）——最大真实缺口
+
+**100% 定义（务实）**：~180 类型**全部可见可编辑**（已有 GenericCondBody）；**常用 ≥60 类型带精确 XML 键**（round-trip 不丢字段）；其余 ~120 类型允许「名 + regions + 帮助文案键」，但 Save 不得破坏宿主已有 Cond* 节点。
+
+**不要**用 HTML 显示名自动猜 XML 键（P6-1 已弃用，误匹配率高）。
+
+| 剩余项 | 工作量 | 做法 | 验收 |
+|---|---|---|---|
+| 精确键 25 → ≥60 | **1–2 周，阻塞在录制** | ① 收集 5–8 个真实 PPH（流/壁/热/风扇/源项已有 laptop+box）；② 宿主内对缺口 Cond* **录制 VBS** 或 Save 后 diff `main.xml`；③ 只把**见到的 XML 键**写入 `schemas/conditions.yaml` | ≥60 类型 schema 来自真实键；`tests/test_condition_help_schema.py` 扩面；样本 round-trip |
+| 其余 ~120 | 持续 | 保持 generic + 不覆盖未知子节点（现有「样本精确键不覆盖」策略） | 打开任意 Cond* 不崩；Save 后宿主 Cond 数不变 |
+| 180/180 精确键 | **不作为 P7 关门条件** | 那是数月录制，ROI 低于宿主网格 | 记为 P8 数据积累 |
+
+没有新样本/录制，本域**无法**从 65 再涨到产品 100%。代码引擎已就绪，是数据源问题。
+
+#### 域 9 · 自研网格生成（63% → 100%）
+
+**100% 定义**：voxel/poly 对 box 类几何写出宿主可开的 GPH；质量指标不劣于现有黄金断言；**生产网格以宿主 Execute 为准**。棱柱层、power diagram、速度与宿主比 **不计入** 产品 100%。
+
+| 剩余项 | 工作量 | 做法 | 验收 |
+|---|---|---|---|
+| 空工程无 MDL 的 CAD 回退 | 已落地（`_cad_surface_points_tris` + clone 追加 OCT/GPH） | 补 GUI 回归说明 + 测试 | Untitled + box.x_t 不勾 API 不再报「未找到 MDL」 |
+| 黄金扩到 2–3 个真实几何 | 2–3 天 | REANALYSIS §9.3 已列；对拍报告入 CI | `test_mesh_quality_benchmark` 扩样 |
+| 2:1 / pairing / region map | 已有 | 不重做 | — |
+| 层网格 / 任意多面体等价 | **不做** | 用户要生产网格：勾选 scFLOWpre API | — |
+
+#### 域 10 · 几何编辑 Create/Modify（62% → 100%）
+
+**100% 定义**：Create/boolean/transform/face-delete **原生 `geometry_ops` 写回 PPH**（VBS 草稿已清零）；Register Region 改完后 **MDL 名表 + 归档 flush**；宿主 `QueryFaceRegionByName` 非 Nothing。
+
+| 剩余项 | 工作量 | 做法 | 验收 |
+|---|---|---|---|
+| GUI 归档 flush | **1–2 天，最高 ROI** | Register Region 确认时调用已有 `mdl.add_surface_region`，再 `clone_pph` 写回 mdl 成员 | 保存 → 宿主 QueryFaceRegionByName 非 Nothing |
+| 更多体素（球/圆柱已有，cone/torus/sheet 已有） | 按需 | 缺哪个补哪个，不预先铺全 Parasolid 图元 | 单元测试 + 宿主打开 |
+| 内核布尔 ≡ PK_BODY_boolean | **不要求** | 原生布尔用于查看器编辑；复杂 CAD 布尔走宿主 | — |
+
+#### 域 11 · Wrapping/Disc/Overset（58% → 100%）
+
+**100% 定义**：Wrapping **宿主 e2e 已 err=0**（360 步）→ GUI 参数与锁定 VBS 对齐即可满分；Disc/Overset 不仅 `SetPartsControl` 开关，还要能 **创建对应 meshing unit 并 Save**（box_disc / box_overset 黄金已有）。
+
+| 剩余项 | 工作量 | 做法 | 验收 |
+|---|---|---|---|
+| Wrapping GUI → 锁定序列 | 2–3 天 | `pipeline_plan` 已有 BeginWrapping…EndWrapping；接到 Execute/导航面板，禁止静默 TODO | 与 P5-5 相同 err=0 |
+| Disc/Overset 建 unit | 3–5 天 | COM 开关已锁 True/False；补「建组 + 映射 BDF/RotorInfo」录制（对照 box_overset 成员） | 新工程勾选后 Save，zip 含与黄金同类成员 |
+| 自研 wrapping 内核 | **不做** | SCTprime 不复刻 | — |
+
+### 8.3 波次顺序（按依赖，不按百分比从低到高）
+
+百分比低的域不一定先做：域 11 卡域 7，域 4/2 卡空工程，域 8 卡样本。
+
+```
+Wave A  写端闸门（不依赖宿主窗口）     约 1 周
+        域1 新成员追加测试固化
+        域2+4 XT 登记进 xml/mdl/zip + 空工程模板
+        域10 Register Region → mdl.add_surface_region + Save flush
+        域9  CAD tessellation 回退的回归测试
+        → 空工程「导入 XT → 原生 Execute → Save」闭环
+
+Wave B  宿主闸门（需前台 Kicker）       约 3–5 天（含等窗口）
+        域7  context_ready=1 → handle>0 日志入库
+        域6  BAM Wizard 宿主 e2e
+        域11 Wrapping GUI 对接已锁定序列；Disc/Overset 建 unit 录制
+        域10 QueryFaceRegionByName 验收
+        域4  OpenCadFile（STEP）在有许可时跑通
+        → 计算类全部改为「宿主权威、自研兼容」
+
+Wave C  条件扩面（可与 B 并行等样本）   约 1–2 周
+        域8  真实 PPH + 录制 → schema ≥60 精确键
+        禁止再做 HTML 键猜测
+
+Wave D  网格/八叉树产品收口            约 3–5 天
+        域5  真实几何 OCTREEREGION 回归
+        域9  黄金扩 2–3 几何；质量对拍保持「不劣于」而非「相等」
+
+Wave E  Select 收口                    约 2–3 天
+        域3  Spread Face to Edge；其余 NYI 维持灰显即满分
+```
+
+**不要并行乱序**：Wave A 未完成前不要宣称域 2/4/9/10 已满；Wave B 未出 `set_handle>0` 日志前不要宣称域 6/7/11 已满。
+
+### 8.4 工作量与「假装 100%」禁区
+
+| 波次 | 人天（1 人全职） | 预期产品完整度变化 |
+|---|---|---|
+| A | 5–7 | 域 1/2/4/10/9 的 persist 缺口闭合 → 这五域可标 95–100 |
+| B | 3–5（含环境） | 域 6/7/11 → 产品 100 |
+| C | 8–12 | 域 8 → 产品 100（≥60 精确键） |
+| D | 3–5 | 域 5/9 → 产品 100 |
+| E | 2–3 | 域 3 → 产品 100 |
+| **合计** | **约 4–6 周** | 前 11 域全部达到 §8.1 口径 |
+
+明确 **P7 不做**（做了也到不了内核 100%，且拖死产品 100%）：
+
+- 复刻 CADthru / Datakit / SCTprime wrapping / BAM Influence 几何内核
+- 自研棱柱层、power diagram、与宿主 cell-by-cell 网格相等
+- 180 个 Cond* 全部精确 XML 键（改为 ≥60 + generic 不破坏）
+- Solver/FPH 远程作业（第 12 域）
+- Actran、Closed Volume patch 产品边界菜单
+
+### 8.5 每域「可以打勾」的一句话验收
+
+1. PPH：空工程 Save 能**新增** OCT/GPH/x_t 成员，宿主打开不丢。
+2. 工程：Import XT → Save As → scFLOWpre 零件树非空。
+3. Select：Spread Face to Edge 可用；Actran/Closed Volume 灰显有据。
+4. CAD：XT 本仓登记；其它格式宿主 `OpenCadFile` 或明确失败。
+5. Octree：区域写端 roundtrip + 细化由宿主 Execute。
+6. BAM：向导参数进 PPH；网格由宿主 Wizard；Influence 只记录配置。
+7. COM：`--status` gui_ready 后一条管线 `set_handle>0`。
+8. 条件：≥60 精确键来自真实 XML；其余 generic 不破坏节点。
+9. 自研网格：box 类 GPH 宿主可开；生产路径勾选 API。
+10. 几何：Register Region Save 后宿主能 Query 到名字。
+11. Wrap/Disc/Overset：Wrapping 复现 360 步 err=0；Disc/Overset 工程成员与黄金同类。
+
+打满这 11 句，§0 表即可把前 11 域改成 100%（产品口径），并在表下加一行脚注：*内核算法等价不在本仓目标内*。
