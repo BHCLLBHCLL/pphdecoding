@@ -62,12 +62,27 @@ def open_buffer(path: str):
         f.close()
 
 
+def _buffer_fingerprint(data) -> tuple:
+    """缓冲区内容指纹（防 id 复用脏缓存）。
+
+    ``_sections_cache`` 以 ``id(data)`` 为键；调用方直接传 ``bytes``
+    （公开 API ``gph_cells``/``parse_mesh``）时没有 ``open_buffer``
+    的 finally 清理，buffer 被 GC 后新 buffer 复用同一 id 会命中
+    脏节表（实测：同进程先后解析两个 GPH，第二个返回 0 cells）。
+    ``scan_sections`` 是内容的纯函数——指纹不同必重扫；指纹相同
+    （同内容不同对象）时节表本就相同，命中无害。
+    """
+    return (len(data), bytes(data[:64]), bytes(data[-64:]))
+
+
 def _all_sections(data) -> list:
     key = id(data)
-    secs = _sections_cache.get(key)
-    if secs is None:
-        secs = crdlfld.scan_sections(data)
-        _sections_cache[key] = secs
+    fp = _buffer_fingerprint(data)
+    entry = _sections_cache.get(key)
+    if entry is not None and entry[1] == fp:
+        return entry[0]
+    secs = crdlfld.scan_sections(data)
+    _sections_cache[key] = (secs, fp)
     return secs
 
 
