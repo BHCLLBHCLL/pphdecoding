@@ -1288,4 +1288,36 @@ Solver/FPH 维持合理延后。
 ---
 ---
 
+
+### 17.6 执行记录（P8，2026-08-18：Octree 黄金三档 + 条件全量收割 + GPH 缓存修复）
+
+> 输入：P7 遗留三项（§17.5：Wave C ≥60 精确键、域 5 真实几何对拍、
+> 例程库深挖）+ 官方例程库 151 PPH 全量扫描。三项交付，全部带回归：
+
+1. **P8-1 GPH 读端脏缓存修复**（`gphstats.py`）：`_sections_cache`
+   以 `id(data)` 键控，公开 API `gph_cells(bytes)` / `parse_mesh(bytes)`
+   不经 `open_buffer` 的 finally 清理——buffer 被 GC 后新 buffer 复用
+   同一 id 即命中脏节表，实测同进程先后解析两个 GPH 时第二个返回
+   **0 cells**。修复：`_buffer_fingerprint`（长度 + 首尾 64 字节）
+   指纹守卫，指纹不同必重扫；同内容不同对象命中无害
+   （`scan_sections` 是内容纯函数）。回归
+   `tests/test_oct_examples.py::TestGphCacheFingerprint`（毒化注入 +
+   同内容 twin 两路径）；
+2. **P8-2 Octree 黄金三档扩容**（`tests/test_oct_examples.py`）：
+   interference（21k 活叶 + 28.5k cells，hex 97%）、tr03 Overset
+   （31.5k 活叶 + 63.9k cells，poly 92%）、laptop_simplified
+   （1.24M 活叶，满树不变量 + region 后序流一致性；349MB GPH 不整读，
+   只走 sctsnapshot 路径）。满八叉树不变量口径修正为
+   `0 ≤ bits.size − (1 + 8·internal) ≤ 7`：`np.unpackbits` 按 8 位
+   对齐产生的尾部零填充位不是真实叶子，旧口径漏除即误报缺子；
+3. **P8-3 条件收割全量化**（`tools/merge_official_schema.py --all`）：
+   全量扫描官方例程库 151 个 PPH（跳过损坏件打印 SKIP）重建
+   `schemas/merged.json`——样本背书类型 **56 → 67**，§17.5 Wave C
+   「≥60 精确键」门槛**无录制达成**（官方例程即权威 XML 键源），
+   字段总量 6065，注册表带字段类型 175。
+
+遗留不变：P7-2 宿主 QueryFaceRegionByName 权威名表反推、P7-3 前台
+Kicker 管线复跑（见 §17.5 执行状态追加）。
+
+---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

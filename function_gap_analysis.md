@@ -695,3 +695,23 @@ Wave E  Select 收口                    约 2–3 天
 11. Wrap/Disc/Overset：Wrapping 复现 360 步 err=0；Disc/Overset 工程成员与黄金同类。
 
 打满这 11 句，§0 表即可把前 11 域改成 100%（产品口径），并在表下加一行脚注：*内核算法等价不在本仓目标内*。
+
+### 8.6 执行状态追加（P8，2026-08-18）
+
+- **域 8 · Wave C 无录制达标**：官方例程库 **151 PPH 全量收割**
+  （`merge_official_schema --all`）重建 `schemas/merged.json` 后样本
+  背书类型 **56 → 67（≥60 门槛达成）**，字段总量 6065，注册表带字段
+  类型 175。§8.2「阻塞在录制」的判断被全量扫描路径取代——官方例程
+  即权威 XML 键源，无需宿主内逐类型录制；余下 ~108 generic 类型维持
+  「名 + regions + 不破坏宿主节点」策略；
+- **域 5 · Wave D 黄金扩容（部分）**：Octree 对拍从 box 族扩至三档
+  真实几何——interference（21k 活叶 / 28.5k cells，hex 97%）、
+  tr03（31.5k 活叶 / 63.9k cells，poly 92%）、laptop_simplified
+  （1.24M 活叶，满八叉树不变量 + region 后序流一致性；349MB GPH
+  不整读）。满树不变量口径修正：`0 ≤ bits.size − (1 + 8·internal) ≤ 7`
+  （`unpackbits` 尾部填充位，非真实叶子）；
+- **GPH 读端修复**：`gphstats._sections_cache` 以 `id(data)` 键控且
+  公开 API（`gph_cells(bytes)`）无清理路径，buffer GC 后 id 复用命中
+  脏节表（实测第二个 GPH 解析出 0 cells）。修复：内容指纹守卫
+  （长度 + 首尾 64 字节），指纹不同必重扫；毒化注入 + 同内容 twin
+  双路径回归（`tests/test_oct_examples.py::TestGphCacheFingerprint`）。
