@@ -1264,6 +1264,14 @@ Solver/FPH 维持合理延后。
 > 新增 `tests/test_condition_deep_scan.py` 13 项（三类形态命中 +
 > 假阳性排除 + 注册表 33 覆盖）。
 
+> **执行状态追加（2026-08-17 晚）：Wave A–E 全部落地**（10 提交，
+> 证据 REANALYSIS §9.5）——P7-2 GUI flush 已接线但宿主验收为负面
+> （QueryFaceRegionByName 7 场景全「新名不注册」，权威名表源在宿主
+> 内部未定位，转 P8 反推）；P7-3 部分推进（宿主实测矩阵 7 场景 +
+> gui 后端到 Execute 步，结果文件仍待补）；P7-4 已扩 box_disc/L-shape。
+> 条件域另经 Wave C（官方例键并入）达 165/165 带字段、56 真实键。
+> 12 域最新清单见 function_gap_analysis §0。
+
 1. **P7-1 条件 schema 扩源**（已交付，见上）：样本深扫把「更多样本
    工程」需求转化为「吃透现有样本」——嵌套条件面首次全量入注册表；
 2. **P7-2 Register Region GUI 归档 flush 接线**：`mdl.add_surface_region`

@@ -438,3 +438,56 @@ round-trip 测试锁定）。本轮做**全成员逐一改名/追加的宿主实
 
 **诚实边界**：Symm*DEM 在样本中是裸默认条件（仅 type/name/regions 无
 参数面），入注册表但表单元数据为空——如实反映样本，不虚构字段。
+
+### 9.5 Wave A–E 执行结果与 12 域刷新（2026-08-17 晚，P7 首轮波次）
+
+> P7-1 之后按 §8「产品 100%」计划推进 Wave A–E（10 提交：
+> `5ae3b71`/`3a8a826`/`558a468`/`db04808`/`0c18ef8`/`084d3a2`/
+> `6971cdc`/`3ca616c`/`183ffc3`/`0703049`）。本表取代 §9.2（P6 快照）。
+
+#### 9.5.1 Wave 交付摘要
+
+| Wave | 交付 | 测试增量 | 提交 |
+|---|---|---|---|
+| A 写端闸门 | `project_persist.py`（clone_pph 新成员/XT 登记/MDL regions）+ GUI Save As/XT register/Register Region MDL flush + 空工程模板 | test_project_persist 196 行、test_empty_project 85 行、test_register_region +108 行 | `5ae3b71`/`3a8a826` |
+| B 宿主闸门 | Disc/Overset 开关持久化（COM True/False 锁定）+ OpenCadFile/QueryFace VBS | test_host_pipeline +41 行、test_parts_control 139 行 | `558a468` |
+| C 条件扩面 | 精确 XML 键 60+ 类型 + 官方例工程键并入（`official_examples.py` + merge 工具） | test_official_schema 120 行 | `db04808`/`183ffc3` |
+| D 网格/八叉树收口 | box_disc 黄金 + L-shape OCTREEREGION/mesh 检查 + CAD tessellation 回退 | benchmark +57 行、oct_region_write +70 行、surface_mdl_fallback 69 行 | `0c18ef8`/`3ca616c` |
+| E Select 收口 | Spread Face to Edge（mdl 邻接查询 + GUI） | test_spread_face_to_edge 81 行 | `084d3a2` |
+| 独立 | GPH LS_SurfaceRegions 写端（原地改名宿主 open=0 实测；追加=宿主无界重建，已作 host-hostile 警告）；官方 Disc/Overset group layout 钉死 | gph_write_sections +42 行、official_disc_overset 82 行 | `6971cdc`/`0703049` |
+
+**条件域量化（实测）**：注册表 165/165 目录类型带字段 schema（总量
+28,111 字段），其中 56 类型由真实 PPH 背书（count>0：仓内样本 + 官方
+例工程；CondBatteryModel 576 / CondMoving 644 / CondBoundaryFlowIO 439 /
+ParticleForceConnection 411 / CondMultiphaseMaterial 390 / CondPorousMedia
+293 / CondParticleGenerationDEM 240 / CondFan 184 字段）。
+
+#### 9.5.2 12 域完整度 × 深度清单（Wave A–E 后，vs scFLOWpre 2025.2）
+
+| 域 | 完整度 | 深度 | Wave 变化与证据 |
+|---|---|---|---|
+| PPH 解析与写端 | **96%** | 深 | 95→96：clone_pph 新成员追加固化 + GPH LS_SurfaceRegions 写端（原地改名宿主 open=0；追加宿主敌对——诚实负面入警告） |
+| 工程文件管理 | **97%** | 深 | 95→97：Save As 接线 + XT→xml/mdl/zip 登记 + 空工程模板（New→Import XT→Save→宿主开闭环测试） |
+| Select/View/3D | **90%** | 中–深 | 88→90：Spread Face to Edge；NYI 清单减员 |
+| CAD/XT 几何导入 | **85%** | 深 | 80→85：XT 预览+工程登记统一路径（Save 后宿主 Parts 树非空）+ OpenCadFile（STEP 走宿主）VBS |
+| Octree 八叉树 | **78%** | 中 | 75→78：L-shape OCTREEREGION 回归（oct_region_write 扩 70 行） |
+| BAM 分析模型 | 73% | 中 | 无增量（域 6 宿主 e2e 属 Wave B 剩余项） |
+| 宿主自动化 COM/VBS | **76%** | 中 | 72→76：全成员宿主实测矩阵 7 场景（OpenProject+QueryFaceRegionByName 真机）+ gui 后端实机配方到 Execute 步 + Disc/Overset 开关 VBS；**完整管线 set_handle>0→结果文件仍待补** |
+| 条件体系（~165 Cond*） | **80%** | 中 | 68→80：165/165 带字段 + 56 真实 PPH 精确键（官方例并入）；§8.2 的「≥60 精确键」差 4 个，其余按「generic+不覆盖未知」满分口径已满足 |
+| 自研网格生成 | **68%** | 中 | 63→68：box_disc 黄金 + L-shape mesh 检查 + CAD tessellation 回退 + GPH 区域名写端 |
+| 几何编辑 Create/Modify | **66%** | 底层深、GUI 中 | 62→66：Register Region GUI flush 接线（mdl.add_surface_region→clone_pph）；**宿主 QueryFaceRegionByName 全路径「新名不注册」**（7 场景矩阵全负面——权威名表源在宿主内部，未定位）；ridge.mdl 回退 |
+| Wrapping/Disc/Overset | **65%** | 中 | 58→65：Disc/Overset 开关持久化 + 官方 group layout 钉死；建组/BDF·RotorInfo 映射录制仍缺 |
+| Solver/FPH 链路 | 10% | 读侧深 | 无变化（合理延后） |
+
+#### 9.5.3 诚实负面与剩余缺口（P8 输入）
+
+1. **宿主名表权威源未定位**：7 场景写路径（main.xml regions/SECTITEM、
+   part/ridge MDL 名表、GPH LS_SurfaceRegions、snapshot FACEGROUPSW）
+   全部「打开 ok 但新名不注册」；GPH 追加更触发宿主无界重建——
+   Register Region 的宿主生效路径需下一轮反推（疑内部二进制缓存/注册
+   流程，非任何已测绘容器）；
+2. **宿主管线最后一公里**：gui 后端到 Execute 步生效（对话框关闭）但
+   无结果文件产出；Kicker 前台实例一键复跑仍是最短路径；
+3. **BAM 宿主 e2e**（域 6）与 Wrapping 建组/BDF 映射录制（域 11 剩余）
+   未动；
+4. **条件精确键 56→60+**：补 4 个即可达 §8.2 关门线（持续数据积累）。
