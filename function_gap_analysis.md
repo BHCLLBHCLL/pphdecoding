@@ -715,3 +715,15 @@ Wave E  Select 收口                    约 2–3 天
   脏节表（实测第二个 GPH 解析出 0 cells）。修复：内容指纹守卫
   （长度 + 首尾 64 字节），指纹不同必重扫；毒化注入 + 同内容 twin
   双路径回归（`tests/test_oct_examples.py::TestGphCacheFingerprint`）。
+### 8.7 执行状态追加（P9，2026-08-20：宿主自动化切官方 typed COM 路线）
+
+- **域 9（宿主自动化）基础设施升级**：新增 `automation/scflowpre_api.py`
+  typed COM 桥（参考 cabdecoding 模式）——手册机读目录
+  `schemas/vb_api_catalog.json`（199 类 / 4455 成员，`tools/
+  extract_vb_api_scflow.py` 生成）为唯一真相源；`ComObject.call`
+  `_FlagAsMethod` 派发使手册任一成员可达；`ScFlowpreSession` ROT 附着
+  Kicker 常驻实例（实机 owned=False / GetWorkerState=0 就绪握手），
+  open/pipeline 实机 round-trip 验证（tr01 输出规模与源一致）。对拍
+  与深管线影响：typed 直调覆盖命令类操作（Open/Save/条件/网格），
+  SCTprime 深管线（CreateShapeGroupSet）在 ROT 附着实例上经
+  `ExecuteVBS` 是否可用待实测（P10 候选）。详见 DEV_PLAN §17.7。

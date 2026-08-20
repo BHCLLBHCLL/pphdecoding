@@ -1319,5 +1319,55 @@ Solver/FPH 维持合理延后。
 遗留不变：P7-2 宿主 QueryFaceRegionByName 权威名表反推、P7-3 前台
 Kicker 管线复跑（见 §17.5 执行状态追加）。
 
+### 17.7 执行记录（P9，2026-08-20：官方 typed COM 路线重实现宿主自动化）
+
+> 输入：用户指令「参考 cabdecoding，走官方 typed COM 路线按 P9 重新实现
+> VBS 自动化」。架构参考 cabdecoding `cab_stpre_api.py`（ComObject 包装 +
+> Session 进程管理模式），适配 scFLOWpre 宿主事实。三项交付：
+
+1. **P9-1 手册机读**（`tools/extract_vb_api_scflow.py` →
+   `schemas/vb_api_catalog.json`）：从官方 VB 接口手册 HTML
+   （MediaWiki 导出，`VB_Interface_eng`）提取 **199 类 / 4455 成员**
+   （签名 / 参数表 / 返回值 / Note），关键类：Doc 424 方法、Conditions
+   606、MeshingGroup 173、Octree 28 / OctParam 18 / WrappingGroup 30 /
+   Utility 16 / Condition 8；138 个 `Cond*` 子类纯标记类标注
+   `inherits Condition`；另含 Kicker 三类。该目录是 typed 桥与 VBS
+   生成器共用的**权威 API 面**（唯一真相源）；
+2. **P9-2/P9-3 typed COM 桥**（`automation/scflowpre_api.py`，
+   ProgID `scFLOWpre_Bx64net.Application.2025`）：
+   - `ComObject.call` 通用派发：`_FlagAsMethod` 先行再 invoke——手册
+     认证的 Python 晚绑定模式（无参 / 纯 VARIANT 成员不 flag 会
+     DISP_E_MEMBERNOTFOUND），**手册任一成员可达，无需预写包装**；
+   - typed 包装类 9 个（Application/Doc/Conditions/Condition/
+     MeshingGroup/Octree/OctParam/WrappingGroup/Utility），每个公开
+     方法名与 catalog 对账（防手写漂移）；`Conditions.create_cond/
+     query_cond` 泛型覆盖 85 个 `CreateCond*`；
+   - `ScFlowpreSession` 附着优先：宿主进程在跑 → `GetActiveObject`
+     （ROT）附着（`_owned=False` 守卫，**永不 Quit 常驻实例**）；
+     否则 `Dispatch` 自启（close 时 Quit）。**实机验证 ROT 附着成功**
+     （修正 DEV_SUMMARY §6.3 #3 的「宿主未注册 ROT，此路不通」旧
+     结论——Kicker 常驻实例已注册 ROT）；
+   - 就绪握手：`Doc.GetWorkerState`（0=空闲 / 1=忙）+
+     `GetWorkerStateString` 轮询，取代 pywinauto 猜窗口；`open_project`
+     内置手册 Note 建议的 `FixDefault`；
+   - CLI：`status` / `open` / `vbs` / `pipeline`（status 线程 + join
+     超时保护，COM 挂起不无限阻塞）；
+3. **P9-4 回归 + 实机验收**：`tests/test_scflowpre_api.py` 15 项三层
+   验证（catalog 完整性 / typed 对账 / 无宿主降级），全部不依赖宿主
+   在位。全仓回归 **762 passed / 4 skipped / 4 errors**（errors 均为本机
+   py3.14 缺 capstone 模块的环境项，非代码回归）。实机（本机
+   CradleCFD2025.2 + Kicker 常驻）：`status`（ROT attach OK /
+   owned=False / worker_state=0 / file_version=5225.20302.20251223）、
+   `open` 官方例程 tr01.pph（OpenProject+FixDefault+wait_ready 全过）、
+   `pipeline` round-trip（tr01 打开 → 保存 → 解析器验证输出规模与源
+   一致，大小差异 0.0%）。
+
+与 `host_pipeline.py` 的关系：两条路线互补不互斥——typed 直调覆盖
+命令类操作（Open/Save/条件/网格，COM 出进程调用即可），
+`ExecuteVBS`/`ExecuteVBSWithFile` 保留为兼容通道；SCTprime 深管线
+（CreateShapeGroupSet 等）旧结论「必须宿主内 VBS」基于瞬态实例
+ContextReady=0，**ROT 附着 Kicker 实例后 ExecuteVBS 是否随之可用待
+实测**（P10 候选项）。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

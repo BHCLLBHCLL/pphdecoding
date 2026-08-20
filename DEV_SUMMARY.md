@@ -351,7 +351,11 @@ GUI 运行：`python pph_gui.py [项目.pph]`；依赖缺失时
    下次宿主窗口就绪时 gui 后端一键复跑或 manual 后端人工执行即可；
 3. 外部脚本试 `GetObject(, "scFLOWpre_Bx64net.Application.2025")`
    **ROT 附加**。**实测：失败（宿主未注册 ROT，GetActiveObject 抛
-   MK_E_UNAVAILABLE），此路不通**；
+   MK_E_UNAVAILABLE），此路不通**。**回填（2026-08-20，P9）**：Kicker
+   常驻实例在跑时 `GetActiveObject` 附着**成功**（`automation/
+   scflowpre_api.py` typed COM 桥实测 owned=False / worker_state=0）——
+   旧失败结论仅适用于当时无宿主在跑的场景；P9 宿主自动化已整体切换到
+   typed COM 路线，见 DEV_PLAN §17.7；
 4. 再试 `CreateObject`。**实测："拉新进程"成立**——COM 激活拉起瞬态新
    实例（PID 出现又退出，Kicker 双实例从不加载本仓 DLL）。与本 §6.1/6.2
    的"裸 exe 必崩 0xE0000000"不同，本机瞬态实例**正常工作**（OpenProject/
