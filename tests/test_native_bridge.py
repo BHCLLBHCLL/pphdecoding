@@ -67,6 +67,19 @@ class TestNativeBridgeFallback(unittest.TestCase):
             native_bridge.BRIDGE_DLL = orig_dll
             native_bridge._INITIALIZED_LIB = None
 
+    def test_p11_calls_unknown_handle(self):
+        """P11：handle 不在 _OBJECT_BUFFERS 时先校验，不触发 DLL 加载。"""
+        native_bridge._OBJECT_BUFFERS.clear()
+        r1 = native_bridge.create_facet_octree(12345, "oct")
+        self.assertFalse(r1["ok"])
+        self.assertEqual(r1["error_code"], native_bridge.SCF_ERR_ARG)
+        r2 = native_bridge.execute_wrapping(12345)
+        self.assertFalse(r2["ok"])
+        self.assertEqual(r2["error_code"], native_bridge.SCF_ERR_ARG)
+        r3 = native_bridge.create_mesh_octree(12345)
+        self.assertFalse(r3["ok"])
+        self.assertEqual(r3["error_code"], native_bridge.SCF_ERR_ARG)
+
 
 @unittest.skipUnless(
     native_bridge.is_compiled()

@@ -746,3 +746,21 @@ Wave E  Select 收口                    约 2–3 天
   CreateFacetOctree/ExecuteWrapping/CreateMeshOctreeByDefaultParam
   待按相同模式逐一直调验证。详见 DEV_PLAN §17.8。
 
+### 8.9 执行状态追加（P11，2026-08-20：深管线实际网格生成直调）
+
+- **域 9（宿主自动化）深管线网格生成直调**：承接 §8.8 遗留，在 ROT 附着
+  Kicker 实例上直调 SCTprime 实际网格生成——`CreateFacetOctree` 返回业务
+  ErrorCode 312（空 group 无 facet）、`ExecuteWrapping` 返回 311（空 group
+  无 wrapping），`last_exception_code=0`（SEH 守卫未触发、无访问违例）。
+  证明 C ABI 符号解析 + x64 ABI（this 在 RCX、`IOctree&` 按指针）+ SEH
+  守卫全链路正确。
+- **钉死 VBS 生成 bug**：`build_pipeline_vbs(deep=True)` 深管线段原复用主段
+  已 `ReleaseHandle` 的 `hSet`（COM 桥 `ReleaseHandle` 会 erase 句柄），
+  导致 `CreateShapeGroup` 查不到句柄返回 SCF_ERR_ARG、深管线被跳过；改为
+  新建独立 `hSet2`。
+- **C ABI 落地 4 项**：`create_facet_octree` / `execute_wrapping` /
+  `create_mesh_octree` / `convert_facet_to_xt`（`native/scflow_bridge.h/.cpp`
+  + `native_bridge.py` 封装）。前两者实机验证；后两者（需 IVMDL 句柄 /
+  真实 facet 文件）C ABI 已实现并单元测试，in-proc 实机验证待 P12。
+  详见 DEV_PLAN §17.9。
+

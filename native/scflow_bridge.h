@@ -102,6 +102,35 @@ SCF_API int scf_pipeline_create_shape_group(unsigned __int64 set_handle,
 SCF_API int scf_pipeline_create_mdl(unsigned __int64 group_handle,
                                     int* ok, int* err);
 
+/*
+ * P11 deep-pipeline calls (SCTprime C++ ABI, x64 member-function convention:
+ * this in RCX, then RDX/R8/R9). All return 1 when the SEH-guarded call did
+ * not fault (bridge-level success), 0 on a bridge-level failure (*err =
+ * SCF_ERR_ARG / SCF_ERR_SYMBOL / SCF_ERR_EXCEPTION). When the return is 1,
+ * *error_code holds the callee's SCTprime ErrorCode (4-byte enum; 0 is
+ * conventionally OK) and any 16-byte IOctree out buffer has been filled.
+ */
+
+/* IShapeGroup::CreateFacetOctree(name, IOctree&) -> ErrorCode */
+SCF_API int scf_pipeline_create_facet_octree(unsigned __int64 group_handle,
+                                             const wchar_t* name,
+                                             void* out_octree,
+                                             int* error_code, int* err);
+
+/* IShapeGroup::ExecuteWrapping() -> ErrorCode */
+SCF_API int scf_pipeline_execute_wrapping(unsigned __int64 group_handle,
+                                          int* error_code, int* err);
+
+/* IVMDL::CreateMeshOctreeByDefaultParam(IOctree&) -> ErrorCode */
+SCF_API int scf_pipeline_create_mesh_octree(unsigned __int64 mdl_handle,
+                                            void* out_octree,
+                                            int* error_code, int* err);
+
+/* SCTprime::ConvertFacetToXT(src, dst) -> ErrorCode */
+SCF_API int scf_pipeline_convert_facet_to_xt(const wchar_t* src,
+                                             const wchar_t* dst,
+                                             int* error_code, int* err);
+
 
 /* 释放全部已加载模块。 */
 SCF_API void scf_finalize(void);

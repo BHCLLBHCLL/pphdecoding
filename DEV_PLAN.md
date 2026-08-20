@@ -1406,5 +1406,44 @@ ExecuteWrapping / CreateMeshOctreeByDefaultParam）待按相同模式逐一
 直调验证。
 
 
+### 17.9 执行记录（P11，2026-08-20：SCTprime 深管线实际网格生成直调 + 实机验证）
+
+> 输入：承接 §17.8 遗留「SCTprime 深管线实际网格生成待按相同模式逐一
+> 直调验证」。四项深管线调用 C ABI 扩展、封装、实机验证，全部本地就绪。
+
+1. **P11-1 C ABI 扩展**（`native/scflow_bridge.h/.cpp`）：新增 4 个导出
+   —— `scf_pipeline_create_facet_octree`
+   （`?CreateFacetOctree@IShapeGroup@SCTprime@@QEAA?AW4ErrorCode@2@PEB_WAEAVIOctree@2@@Z`）、
+   `scf_pipeline_execute_wrapping`（`IShapeGroup::ExecuteWrapping`）、
+   `scf_pipeline_create_mesh_octree`（`IVMDL::CreateMeshOctreeByDefaultParam`）、
+   `scf_pipeline_convert_facet_to_xt`（`SCTprime::ConvertFacetToXT` 自由函数）。
+   每个导出遵循「符号解析 → memset 16B out → SEH 守卫 → 写 `*error_code`」
+   模式：SEH 成功返回 1 且 `*err=SCF_ERR_OK`（业务结果在 `*error_code`），
+   访问违例返回 0 且 `*err=SCF_ERR_EXCEPTION`；`scf_initialize` 内
+   `GetProcAddress` 解析全部 4 符号（`SCTprime_Bx64.dll`）。
+2. **P11-2 封装 + 测试**：`native_bridge.py` 新增 `create_facet_octree` /
+   `execute_wrapping` / `create_mesh_octree` / `convert_facet_to_xt`（引用参数
+   按 `void*` 传，`ErrorCode` 按 `ctypes.c_int`）；`host_pipeline.build_pipeline_vbs`
+   增加 `deep=True`（追加 CreateFacetOctree/ExecuteWrapping 深管线段）；
+   测试 `test_host_pipeline.py`（deep/no-deep 生成断言 + hSet2 独立 set）与
+   `test_native_bridge.py`（P11 未知句柄 → SCF_ERR_ARG 不加载 DLL）。
+3. **P11-3 实机验证**（ROT 附着 Kicker 实例 + `ExecuteVBSWithFile`）：
+   `OpenProject scFLOWpre.pph` 后深管线在空 group 上直调——`CreateFacetOctree`
+   返回业务 ErrorCode **312**（空 group 无 facet）、`ExecuteWrapping` 返回业务
+   ErrorCode **311**（空 group 无 wrapping），`last_exception_code=0`（SEH 未触发，
+   无访问违例），证明符号解析 + x64 ABI（this 在 RCX、`IOctree&` 按指针）+
+   SEH 守卫全链路正确。**钉死一个 VBS 生成 bug**：深管线段原复用主段已
+   `ReleaseHandle` 的 `hSet`（COM 桥 `ReleaseHandle` 会 erase 句柄），导致
+   `CreateShapeGroup` 查不到句柄返回 SCF_ERR_ARG、深管线被 `If hGroup2 > 0`
+   跳过；改为新建独立 `hSet2`（`{set_name}Deep`）后复现修复。
+4. **P11-4 回归 + 收尾**：全仓回归 **768 passed / 4 skipped / 4 errors**
+   （4 errors 均为本机 py3.14 缺 capstone 的环境项，非代码回归）。
+
+遗留（P12 候选）：`CreateMeshOctreeByDefaultParam`（需 IVMDL 句柄，空 group 的
+`CreateMDL` 返回 False → 拿不到 MDL）与 `ConvertFacetToXT`（需真实 facet 文件 +
+XT 输出）C ABI 已实现并单元测试（未知句柄/参数校验），但实机 in-proc 验证需
+注入几何节点（ISNode）或真实面文件——属更深逆向，待 P12。
+
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

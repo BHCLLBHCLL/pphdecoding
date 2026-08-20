@@ -360,7 +360,11 @@ GUI 运行：`python pph_gui.py [项目.pph]`；依赖缺失时
    （`context_ready=1`，OpenProject 后 `CreateShapeGroupSet` →
    `CreateShapeGroup` 全通）——旧「必须 GUI/manual 宿主内 VBS」结论
    被推翻，COM `rot` 后端即等价于宿主内 File → Execute VBScript，见
-   DEV_PLAN §17.8；
+   DEV_PLAN §17.8；**回填（2026-08-20，P11）**：同通道下 SCTprime 深管线
+   实际网格生成直调实机验证——`CreateFacetOctree` 返回业务 ErrorCode 312、
+   `ExecuteWrapping` 返回 311（空 group 无 facet/无 wrapping），
+   `last_exception_code=0`（SEH 守卫未触发、无访问违例），证明符号解析 +
+   x64 ABI + SEH 全链路正确，见 DEV_PLAN §17.9；
 4. 再试 `CreateObject`。**实测："拉新进程"成立**——COM 激活拉起瞬态新
    实例（PID 出现又退出，Kicker 双实例从不加载本仓 DLL）。与本 §6.1/6.2
    的"裸 exe 必崩 0xE0000000"不同，本机瞬态实例**正常工作**（OpenProject/

@@ -101,6 +101,23 @@ def _ensure_initialized() -> ctypes.CDLL:
         ctypes.c_uint64, ctypes.POINTER(ctypes.c_int),
         ctypes.POINTER(ctypes.c_int)]
     lib.scf_pipeline_create_mdl.restype = ctypes.c_int
+    # P11 深管线（ErrorCode 返回；引用参数 IOctree& 按指针传）
+    lib.scf_pipeline_create_facet_octree.argtypes = [
+        ctypes.c_uint64, ctypes.c_wchar_p, ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
+    lib.scf_pipeline_create_facet_octree.restype = ctypes.c_int
+    lib.scf_pipeline_execute_wrapping.argtypes = [
+        ctypes.c_uint64, ctypes.POINTER(ctypes.c_int),
+        ctypes.POINTER(ctypes.c_int)]
+    lib.scf_pipeline_execute_wrapping.restype = ctypes.c_int
+    lib.scf_pipeline_create_mesh_octree.argtypes = [
+        ctypes.c_uint64, ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
+    lib.scf_pipeline_create_mesh_octree.restype = ctypes.c_int
+    lib.scf_pipeline_convert_facet_to_xt.argtypes = [
+        ctypes.c_wchar_p, ctypes.c_wchar_p,
+        ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
+    lib.scf_pipeline_convert_facet_to_xt.restype = ctypes.c_int
     global _INITIALIZED_MODULES
     _INITIALIZED_MODULES = int(lib.scf_initialize(str(programs_dir)))
     _INITIALIZED_LIB = lib
@@ -234,6 +251,80 @@ def create_mdl(handle: int) -> dict:
         return {"ok": False, "error_code": int(err.value),
                 "message": _error_message(int(err.value))}
     return {"ok": True, "result": bool(ok.value), "handle": handle}
+
+
+def create_facet_octree(handle: int, name: str) -> dict:
+    """Call IShapeGroup::CreateFacetOctree(name, IOctree&) (P11)."""
+    if handle not in _OBJECT_BUFFERS:
+        return {"ok": False, "error_code": SCF_ERR_ARG,
+                "message": "unknown shape group handle"}
+    lib = _ensure_initialized()
+    out = (ctypes.c_ubyte * 16)()
+    error_code = ctypes.c_int(0)
+    err = ctypes.c_int(0)
+    rc = lib.scf_pipeline_create_facet_octree(
+        handle, name, ctypes.byref(out), ctypes.byref(error_code),
+        ctypes.byref(err))
+    if rc != 1:
+        return {"ok": False, "error_code": int(err.value),
+                "message": _error_message(int(err.value))}
+    result = {"ok": True, "sct_error_code": int(error_code.value)}
+    if int(error_code.value) == 0:
+        new_handle = ctypes.addressof(out)
+        _OBJECT_BUFFERS[new_handle] = out
+        result.update(_describe_wrapper(new_handle, out))
+    return result
+
+
+def execute_wrapping(handle: int) -> dict:
+    """Call IShapeGroup::ExecuteWrapping() (P11)."""
+    if handle not in _OBJECT_BUFFERS:
+        return {"ok": False, "error_code": SCF_ERR_ARG,
+                "message": "unknown shape group handle"}
+    lib = _ensure_initialized()
+    error_code = ctypes.c_int(0)
+    err = ctypes.c_int(0)
+    rc = lib.scf_pipeline_execute_wrapping(handle, ctypes.byref(error_code),
+                                           ctypes.byref(err))
+    if rc != 1:
+        return {"ok": False, "error_code": int(err.value),
+                "message": _error_message(int(err.value))}
+    return {"ok": True, "sct_error_code": int(error_code.value)}
+
+
+def create_mesh_octree(handle: int) -> dict:
+    """Call IVMDL::CreateMeshOctreeByDefaultParam(IOctree&) (P11)."""
+    if handle not in _OBJECT_BUFFERS:
+        return {"ok": False, "error_code": SCF_ERR_ARG,
+                "message": "unknown mdl handle"}
+    lib = _ensure_initialized()
+    out = (ctypes.c_ubyte * 16)()
+    error_code = ctypes.c_int(0)
+    err = ctypes.c_int(0)
+    rc = lib.scf_pipeline_create_mesh_octree(
+        handle, ctypes.byref(out), ctypes.byref(error_code), ctypes.byref(err))
+    if rc != 1:
+        return {"ok": False, "error_code": int(err.value),
+                "message": _error_message(int(err.value))}
+    result = {"ok": True, "sct_error_code": int(error_code.value)}
+    if int(error_code.value) == 0:
+        new_handle = ctypes.addressof(out)
+        _OBJECT_BUFFERS[new_handle] = out
+        result.update(_describe_wrapper(new_handle, out))
+    return result
+
+
+def convert_facet_to_xt(src: str | Path, dst: str | Path) -> dict:
+    """Call SCTprime::ConvertFacetToXT(src, dst) (P11)."""
+    lib = _ensure_initialized()
+    error_code = ctypes.c_int(0)
+    err = ctypes.c_int(0)
+    rc = lib.scf_pipeline_convert_facet_to_xt(
+        str(src), str(dst), ctypes.byref(error_code), ctypes.byref(err))
+    if rc != 1:
+        return {"ok": False, "error_code": int(err.value),
+                "message": _error_message(int(err.value))}
+    return {"ok": True, "sct_error_code": int(error_code.value)}
 
 
 def release(handle: int) -> bool:

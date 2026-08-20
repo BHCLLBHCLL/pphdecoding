@@ -74,11 +74,23 @@ const char* kCreateShapeGroupSymbol =
     "?CreateShapeGroup@IShapeGroupSet@SCTprime@@QEAA?AVIShapeGroup@2@PEB_WAEAV?$vector@VISNode@SCTprime@@V?$allocator@VISNode@SCTprime@@@std@@@std@@@Z";
 const char* kCreateMDLSymbol =
     "?CreateMDL@IShapeGroup@SCTprime@@QEAA_NXZ";
+const char* kCreateFacetOctreeSymbol =
+    "?CreateFacetOctree@IShapeGroup@SCTprime@@QEAA?AW4ErrorCode@2@PEB_WAEAVIOctree@2@@Z";
+const char* kExecuteWrappingSymbol =
+    "?ExecuteWrapping@IShapeGroup@SCTprime@@QEAA?AW4ErrorCode@2@XZ";
+const char* kCreateMeshOctreeSymbol =
+    "?CreateMeshOctreeByDefaultParam@IVMDL@SCTprime@@QEAA?AW4ErrorCode@2@AEAVIOctree@2@@Z";
+const char* kConvertFacetToXTSymbol =
+    "?ConvertFacetToXT@SCTprime@@YA?AW4ErrorCode@1@PEB_W0@Z";
 
 struct PipelineApi {
     void* create_set = nullptr;
     void* create_group = nullptr;
     void* create_mdl = nullptr;
+    void* create_facet_octree = nullptr;
+    void* execute_wrapping = nullptr;
+    void* create_mesh_octree = nullptr;
+    void* convert_facet_to_xt = nullptr;
 };
 
 PipelineApi g_pipeline_api;
@@ -154,6 +166,59 @@ bool call_create_mdl_guarded(void* thisptr, bool* result) {
     }
 }
 
+// P11: 四个深管线成员/自由函数的 SEH 保护调用。返回值 ErrorCode 是
+// 4 字节 enum；引用参数（IOctree&）在 x64 下按指针传。
+bool call_create_facet_octree_guarded(void* thisptr, const wchar_t* name,
+                                      void* out_octree, int* error_code) {
+    __try {
+        typedef int (*Fn)(void*, const wchar_t*, void*);
+        Fn fn = reinterpret_cast<Fn>(g_pipeline_api.create_facet_octree);
+        *error_code = fn(thisptr, name, out_octree);
+        return true;
+    } __except (seh_filter(GetExceptionInformation()->ExceptionRecord->ExceptionCode,
+                           GetExceptionInformation())) {
+        return false;
+    }
+}
+
+bool call_execute_wrapping_guarded(void* thisptr, int* error_code) {
+    __try {
+        typedef int (*Fn)(void*);
+        Fn fn = reinterpret_cast<Fn>(g_pipeline_api.execute_wrapping);
+        *error_code = fn(thisptr);
+        return true;
+    } __except (seh_filter(GetExceptionInformation()->ExceptionRecord->ExceptionCode,
+                           GetExceptionInformation())) {
+        return false;
+    }
+}
+
+bool call_create_mesh_octree_guarded(void* thisptr, void* out_octree,
+                                     int* error_code) {
+    __try {
+        typedef int (*Fn)(void*, void*);
+        Fn fn = reinterpret_cast<Fn>(g_pipeline_api.create_mesh_octree);
+        *error_code = fn(thisptr, out_octree);
+        return true;
+    } __except (seh_filter(GetExceptionInformation()->ExceptionRecord->ExceptionCode,
+                           GetExceptionInformation())) {
+        return false;
+    }
+}
+
+bool call_convert_facet_to_xt_guarded(const wchar_t* src, const wchar_t* dst,
+                                      int* error_code) {
+    __try {
+        typedef int (*Fn)(const wchar_t*, const wchar_t*);
+        Fn fn = reinterpret_cast<Fn>(g_pipeline_api.convert_facet_to_xt);
+        *error_code = fn(src, dst);
+        return true;
+    } __except (seh_filter(GetExceptionInformation()->ExceptionRecord->ExceptionCode,
+                           GetExceptionInformation())) {
+        return false;
+    }
+}
+
 int pipeline_context_ready_raw() {
     HMODULE sct = find_module_handle(L"SCTprime_Bx64.dll");
     if (sct == nullptr || g_pipeline_api.create_set == nullptr) {
@@ -209,6 +274,14 @@ SCF_API int scf_initialize(const wchar_t* programs_dir) {
             reinterpret_cast<void*>(GetProcAddress(sct, kCreateShapeGroupSymbol));
         g_pipeline_api.create_mdl =
             reinterpret_cast<void*>(GetProcAddress(sct, kCreateMDLSymbol));
+        g_pipeline_api.create_facet_octree =
+            reinterpret_cast<void*>(GetProcAddress(sct, kCreateFacetOctreeSymbol));
+        g_pipeline_api.execute_wrapping =
+            reinterpret_cast<void*>(GetProcAddress(sct, kExecuteWrappingSymbol));
+        g_pipeline_api.create_mesh_octree =
+            reinterpret_cast<void*>(GetProcAddress(sct, kCreateMeshOctreeSymbol));
+        g_pipeline_api.convert_facet_to_xt =
+            reinterpret_cast<void*>(GetProcAddress(sct, kConvertFacetToXTSymbol));
     }
     return loaded;
 }
@@ -380,6 +453,102 @@ SCF_API int scf_pipeline_create_mdl(unsigned __int64 group_handle,
         return 0;
     }
     *ok = result ? 1 : 0;
+    *err = SCF_ERR_OK;
+    return 1;
+}
+
+SCF_API int scf_pipeline_create_facet_octree(unsigned __int64 group_handle,
+                                             const wchar_t* name,
+                                             void* out_octree,
+                                             int* error_code, int* err) {
+    if (group_handle == 0 || name == nullptr || out_octree == nullptr ||
+        error_code == nullptr || err == nullptr) {
+        return 0;
+    }
+    *err = SCF_ERR_ARG;
+    if (g_pipeline_api.create_facet_octree == nullptr) {
+        *err = SCF_ERR_SYMBOL;
+        return 0;
+    }
+    memset(out_octree, 0, kInterfaceObjSize);
+    *error_code = 0;
+    g_last_exception_code = 0;
+    g_last_exception_addr = nullptr;
+    if (!call_create_facet_octree_guarded(reinterpret_cast<void*>(group_handle),
+                                          name, out_octree, error_code)) {
+        *err = SCF_ERR_EXCEPTION;
+        return 0;
+    }
+    *err = SCF_ERR_OK;
+    return 1;
+}
+
+SCF_API int scf_pipeline_execute_wrapping(unsigned __int64 group_handle,
+                                          int* error_code, int* err) {
+    if (group_handle == 0 || error_code == nullptr || err == nullptr) {
+        return 0;
+    }
+    *err = SCF_ERR_ARG;
+    if (g_pipeline_api.execute_wrapping == nullptr) {
+        *err = SCF_ERR_SYMBOL;
+        return 0;
+    }
+    *error_code = 0;
+    g_last_exception_code = 0;
+    g_last_exception_addr = nullptr;
+    if (!call_execute_wrapping_guarded(reinterpret_cast<void*>(group_handle),
+                                       error_code)) {
+        *err = SCF_ERR_EXCEPTION;
+        return 0;
+    }
+    *err = SCF_ERR_OK;
+    return 1;
+}
+
+SCF_API int scf_pipeline_create_mesh_octree(unsigned __int64 mdl_handle,
+                                            void* out_octree,
+                                            int* error_code, int* err) {
+    if (mdl_handle == 0 || out_octree == nullptr ||
+        error_code == nullptr || err == nullptr) {
+        return 0;
+    }
+    *err = SCF_ERR_ARG;
+    if (g_pipeline_api.create_mesh_octree == nullptr) {
+        *err = SCF_ERR_SYMBOL;
+        return 0;
+    }
+    memset(out_octree, 0, kInterfaceObjSize);
+    *error_code = 0;
+    g_last_exception_code = 0;
+    g_last_exception_addr = nullptr;
+    if (!call_create_mesh_octree_guarded(reinterpret_cast<void*>(mdl_handle),
+                                         out_octree, error_code)) {
+        *err = SCF_ERR_EXCEPTION;
+        return 0;
+    }
+    *err = SCF_ERR_OK;
+    return 1;
+}
+
+SCF_API int scf_pipeline_convert_facet_to_xt(const wchar_t* src,
+                                             const wchar_t* dst,
+                                             int* error_code, int* err) {
+    if (src == nullptr || dst == nullptr ||
+        error_code == nullptr || err == nullptr) {
+        return 0;
+    }
+    *err = SCF_ERR_ARG;
+    if (g_pipeline_api.convert_facet_to_xt == nullptr) {
+        *err = SCF_ERR_SYMBOL;
+        return 0;
+    }
+    *error_code = 0;
+    g_last_exception_code = 0;
+    g_last_exception_addr = nullptr;
+    if (!call_convert_facet_to_xt_guarded(src, dst, error_code)) {
+        *err = SCF_ERR_EXCEPTION;
+        return 0;
+    }
     *err = SCF_ERR_OK;
     return 1;
 }

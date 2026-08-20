@@ -36,6 +36,8 @@ enum ScfPipelineDispId {
     kDispStatus = 8,             // scf_status 摘要（定位 VBS 执行进程）
     kDispContextReadyRaw = 9,    // -1=探针读故障 / 0=无上下文 / 1=就绪
     kDispLastExceptionCode = 10, // 最近 SEH 捕获的异常码
+    kDispCreateFacetOctree = 11, // IShapeGroup::CreateFacetOctree
+    kDispExecuteWrapping = 12,   // IShapeGroup::ExecuteWrapping
 };
 
 static bool wcs_eq(const wchar_t* a, const wchar_t* b) {
@@ -53,6 +55,8 @@ static DISPID lookup_disp_id(const wchar_t* name) {
     if (wcs_eq(name, L"Status")) return kDispStatus;
     if (wcs_eq(name, L"ContextReadyRaw")) return kDispContextReadyRaw;
     if (wcs_eq(name, L"LastExceptionCode")) return kDispLastExceptionCode;
+    if (wcs_eq(name, L"CreateFacetOctree")) return kDispCreateFacetOctree;
+    if (wcs_eq(name, L"ExecuteWrapping")) return kDispExecuteWrapping;
     return DISPID_UNKNOWN;
 }
 
@@ -223,6 +227,27 @@ class ScfPipelineCom : public IDispatch {
                 }
                 return S_OK;
             }
+            case kDispCreateFacetOctree: {
+                if (params->cArgs < 2) return DISP_E_BADPARAMCOUNT;
+                long group_id = V_I4(&params->rgvarg[1]);
+                std::wstring name = variant_to_string(params->rgvarg[0]);
+                long id = DoCreateFacetOctree(group_id, name);
+                if (result != nullptr) {
+                    V_VT(result) = VT_I4;
+                    V_I4(result) = id;
+                }
+                return S_OK;
+            }
+            case kDispExecuteWrapping: {
+                if (params->cArgs < 1) return DISP_E_BADPARAMCOUNT;
+                long group_id = V_I4(&params->rgvarg[0]);
+                long ec = DoExecuteWrapping(group_id);
+                if (result != nullptr) {
+                    V_VT(result) = VT_I4;
+                    V_I4(result) = ec;
+                }
+                return S_OK;
+            }
             default:
                 return DISP_E_MEMBERNOTFOUND;
         }
@@ -306,6 +331,53 @@ class ScfPipelineCom : public IDispatch {
         }
         SetError(SCF_ERR_OK);
         return ok != 0;
+    }
+
+    long DoCreateFacetOctree(long group_id, const std::wstring& name) {
+        auto it = objects_.find(group_id);
+        if (it == objects_.end()) {
+            SetError(SCF_ERR_ARG);
+            return 0;
+        }
+        std::array<unsigned char, 16> buf{};
+        int error_code = 0;
+        int err = 0;
+        unsigned __int64 handle =
+            reinterpret_cast<unsigned __int64>(it->second.data());
+        if (scf_pipeline_create_facet_octree(handle, name.c_str(), buf.data(),
+                                             &error_code, &err) != 1) {
+            SetError(err);
+            return 0;
+        }
+        // error_code != 0 = SCTprime 业务失败（如空 group 无 facet）。
+        // 桥级成功但业务失败：记录 error_code 供诊断，返回 0（无 octree）。
+        if (error_code != 0) {
+            SetError(error_code);
+            return 0;
+        }
+        long id = next_id_++;
+        objects_[id] = buf;
+        SetError(SCF_ERR_OK);
+        return id;
+    }
+
+    long DoExecuteWrapping(long group_id) {
+        auto it = objects_.find(group_id);
+        if (it == objects_.end()) {
+            SetError(SCF_ERR_ARG);
+            return 0;
+        }
+        int error_code = 0;
+        int err = 0;
+        unsigned __int64 handle =
+            reinterpret_cast<unsigned __int64>(it->second.data());
+        if (scf_pipeline_execute_wrapping(handle, &error_code, &err) != 1) {
+            SetError(err);
+            return 0;
+        }
+        SetError(SCF_ERR_OK);
+        // 返回 SCTprime ErrorCode（业务结果）；0 = OK。
+        return error_code;
     }
 
     LONG ref_;

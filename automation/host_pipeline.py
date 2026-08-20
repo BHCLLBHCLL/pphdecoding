@@ -131,8 +131,13 @@ def build_pipeline_vbs(result_path: str | Path,
                        set_name: str = "Probe",
                        group_name: str = "ProbeGroup",
                        project_path: Optional[str | Path] = None,
-                       output: Optional[str | Path] = None) -> Path:
-    """Write the VBS that drives the COM bridge inside the host."""
+                       output: Optional[str | Path] = None,
+                       deep: bool = False) -> Path:
+    """Write the VBS that drives the COM bridge inside the host.
+
+    ``deep=True`` 在 CreateMDL 后追加 P11 深管线调用（CreateFacetOctree /
+    ExecuteWrapping），验证 ABI 不崩溃 + 观察 SCTprime ErrorCode。
+    """
     result_path = Path(result_path).resolve()
     lines = [
         "' pphdecoding NativeBridge host pipeline",
@@ -178,6 +183,32 @@ def build_pipeline_vbs(result_path: str | Path,
         "End If",
         "out.Close",
     ]
+    if deep:
+        # P11 深管线段：空 group 上 CreateFacetOctree 返回 0（业务失败码）
+        # / ExecuteWrapping 返回非 0 ErrorCode，但两者都不该崩溃
+        # （last_exception_code 应为 0）。插在 out.Close 之前。
+        #
+        # 注意：主段已 `ReleaseHandle CLng(hSet)`，此处不能再复用 hSet
+        # （COM 桥 ReleaseHandle 会 erase 句柄）。须新建独立 set，避免
+        # CreateShapeGroup 查不到句柄而返回 SCF_ERR_ARG 导致深管线段被
+        # `If hGroup2 > 0` 跳过。
+        deep_lines = [
+            f'    hSet2 = Pipe.CreateShapeGroupSet("{set_name}Deep")',
+            "    If hSet2 > 0 Then",
+            f'        hGroup2 = Pipe.CreateShapeGroup(CLng(hSet2), "{group_name}Deep")',
+            "        If hGroup2 > 0 Then",
+            f'            hOct = Pipe.CreateFacetOctree(CLng(hGroup2), "{group_name}Oct")',
+            '            out.WriteLine "facet_oct_handle=" & CStr(hOct) & "|err=" & CStr(Pipe.LastError())',
+            "            wrapEc = Pipe.ExecuteWrapping(CLng(hGroup2))",
+            '            out.WriteLine "wrapping_ec=" & CStr(wrapEc) & "|err=" & CStr(Pipe.LastError())',
+            '            out.WriteLine "last_exception_code=" & CStr(Pipe.LastExceptionCode())',
+            "            If hOct > 0 Then Pipe.ReleaseHandle CLng(hOct)",
+            "            Pipe.ReleaseHandle CLng(hGroup2)",
+            "        End If",
+            '        Pipe.ReleaseHandle CLng(hSet2)',
+            "    End If",
+        ]
+        lines = lines[:-1] + deep_lines + ["out.Close"]
     target = Path(output) if output else result_path.with_suffix(".vbs")
     return write_vbs_file(lines, target,
                           title="pphdecoding host pipeline")

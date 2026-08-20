@@ -33,6 +33,39 @@ class TestBuildAndParse(unittest.TestCase):
             self.assertIn('CreateMDL(CLng(hGroup))', text)
             self.assertIn("Pipe.LastError()", text)
 
+    def test_build_pipeline_vbs_deep(self):
+        """P11：deep=True 追加 CreateFacetOctree / ExecuteWrapping 段。"""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            result = td / "result.txt"
+            vbs = host_pipeline.build_pipeline_vbs(
+                result, set_name="Box", group_name="BoxGroup", deep=True,
+                output=td / "deep.vbs")
+            text = decode_vbs(vbs.read_bytes())
+            self.assertIn('CreateFacetOctree(CLng(hGroup2), "BoxGroupOct")',
+                          text)
+            self.assertIn('ExecuteWrapping(CLng(hGroup2))', text)
+            self.assertIn("facet_oct_handle=", text)
+            self.assertIn("wrapping_ec=", text)
+            self.assertIn("last_exception_code=", text)
+            # P11：深管线段须新建独立 set（主段已 ReleaseHandle hSet），
+            # 否则 CreateShapeGroup 查不到句柄 → 深管线被 `If hGroup2 > 0`
+            # 跳过（实机复现：facet_oct_handle/wrapping_ec 全部缺失）。
+            self.assertIn('hSet2 = Pipe.CreateShapeGroupSet("BoxDeep")', text)
+            self.assertIn('CreateShapeGroup(CLng(hSet2), "BoxGroupDeep")',
+                          text)
+
+    def test_build_pipeline_vbs_no_deep_by_default(self):
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            result = td / "result.txt"
+            vbs = host_pipeline.build_pipeline_vbs(
+                result, set_name="Box", group_name="BoxGroup",
+                output=td / "plain.vbs")
+            text = decode_vbs(vbs.read_bytes())
+            self.assertNotIn("CreateFacetOctree", text)
+            self.assertNotIn("ExecuteWrapping", text)
+
     def test_parse_result_ok(self):
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "result.txt"
