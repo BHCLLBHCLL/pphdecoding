@@ -10,15 +10,28 @@ Backends:
 - ``manual``: write the script and ask the user to run it in the host;
 - ``com``: ``Application.ExecuteVBSWithFile`` / ``ExecuteVBS`` via win32com
   (must ``_FlagAsMethod`` — late binding otherwise exposes them as bool props);
+- ``rot``: attach the resident Kicker instance via ``GetActiveObject``
+  (ROT) and run ``ExecuteVBSWithFile`` — SCTprime context is ready
+  (``context_ready=1``), so the deep pipeline (CreateShapeGroupSet etc.)
+  runs in-proc without GUI (P10 核心通道);
 - ``gui``: best-effort pywinauto automation of File -> Execute VBScript.
 
-宿主验证环境事实（2026-08-17 实测，规范记录见 DEV_SUMMARY §6.3 前置块）：
+宿主验证环境事实（2026-08-17 实测，规范记录见 DEV_SUMMARY §6.3 前置块；
+2026-08-20 P10 实测补充见下）：
 本机 CradleCFD2025.2 已安装、许可 27500@localhost 可达、Kicker 实例常驻。
 COM ``Dispatch`` 会经 LocalServer32 拉起**瞬态新实例**（非 Kicker 注入，
 SCTprime 全局上下文为空 → ``ContextReady`` 为 0，pipeline 调用返回
 SCF_ERR_CONTEXT_NOT_READY）；命令类脚本（Open/Save/条件/网格）在该瞬态
-实例内为真 in-proc 且实测可用。SCTprime 管线（CreateShapeGroupSet 等）
-必须走 Kicker 实例：宿主内 File → Execute VBScript（gui/manual 后端）。
+实例内为真 in-proc 且实测可用。
+
+P10-1（2026-08-20）实测反转：SCTprime 管线（CreateShapeGroupSet 等）
+**无需 GUI/manual 后端**——``rot`` 后端经 ROT 附着 Kicker 实例后
+``ExecuteVBSWithFile`` 执行 pipeline VBS 得到 ``context_ready=1``，
+OpenProject 后 ``CreateShapeGroupSet`` → ``CreateShapeGroup`` 全通
+（CreateShapeGroupSet 返回的句柄在 VBScript 里是 Integer/VT_I2，传回
+COM 需 ``CLng()`` 转 Long/VT_I4，否则 SCF_ERR_ARG；``build_pipeline_vbs``
+已内置 CLng）。CreateMDL 在空 group 上返回 False（合理：无几何节点）。
+
 """
 
 from __future__ import annotations
@@ -151,13 +164,16 @@ def build_pipeline_vbs(result_path: str | Path,
         f'    hSet = Pipe.CreateShapeGroupSet("{set_name}")',
         '    out.WriteLine "set_handle=" & CStr(hSet) & "|last_error=" & CStr(Pipe.LastError())',
         "    If hSet > 0 Then",
-        f'        hGroup = Pipe.CreateShapeGroup(hSet, "{group_name}")',
+        # P10-1 实测：CreateShapeGroupSet 返回的句柄在 VBScript 里是
+        # Integer（VT_I2，16 位），直接传回 COM 方法时 V_I4 读错 → 返回
+        # SCF_ERR_ARG(-1)。必须 CLng() 强制转 Long（VT_I4，32 位）。
+        f'        hGroup = Pipe.CreateShapeGroup(CLng(hSet), "{group_name}")',
         '        out.WriteLine "group_handle=" & CStr(hGroup) & "|last_error=" & CStr(Pipe.LastError())',
         "        If hGroup > 0 Then",
-        '            out.WriteLine "mdl=" & CStr(Pipe.CreateMDL(hGroup)) & "|last_error=" & CStr(Pipe.LastError())',
-        "            Pipe.ReleaseHandle hGroup",
+        '            out.WriteLine "mdl=" & CStr(Pipe.CreateMDL(CLng(hGroup))) & "|last_error=" & CStr(Pipe.LastError())',
+        "            Pipe.ReleaseHandle CLng(hGroup)",
         "        End If",
-        "        Pipe.ReleaseHandle hSet",
+        "        Pipe.ReleaseHandle CLng(hSet)",
         "    End If",
         "End If",
         "out.Close",
@@ -559,6 +575,8 @@ def run_in_host(vbs_path: str | Path, *, backend: str = "manual",
     if backend != "gui":
         if backend == "com":
             return _run_com_vbs(vbs_path, timeout=timeout)
+        if backend == "rot":
+            return _run_rot_vbs(vbs_path, timeout=timeout)
         raise ValueError(f"unknown backend: {backend}")
     return _run_gui(vbs_path, timeout=timeout, menu=menu or {})
 
@@ -679,6 +697,32 @@ def _run_com_vbs(vbs_path: Path, timeout: float) -> dict:
     return {"backend": "com", "ok": False,
             "error": result.get("error", "unknown COM failure"),
             "script": path, "method": result.get("method")}
+
+
+def _run_rot_vbs(vbs_path: Path, timeout: float) -> dict:
+    """ROT 附着 Kicker 实例执行 VBS（P10 核心通道）。
+
+    与 :func:`_run_com_vbs`（``Dispatch`` 拉起瞬态新实例，SCTprime
+    上下文为空 → ``ContextReady=0``）不同，这里经 ``GetActiveObject``
+    附着 Kicker 常驻实例，SCTprime 上下文就绪（``context_ready=1``），
+    可驱动深管线（CreateShapeGroupSet 等）。P10-1 实机验证：
+    附着实例上 ``ExecuteVBSWithFile`` 执行 pipeline VBS 得到
+    ``context_ready=1``、``CreateShapeGroupSet`` 成功（配合
+    ``build_pipeline_vbs`` 的 CLng 句柄转换）。
+    """
+    from automation import scflowpre_api
+
+    session = scflowpre_api.ScFlowpreSession()
+    try:
+        if not session.connect():
+            return {"backend": "rot", "ok": False,
+                    "error": scflowpre_api.last_error or "connect failed",
+                    "script": str(vbs_path)}
+        ok = session.execute_vbs_file(vbs_path)
+        return {"backend": "rot", "ok": bool(ok),
+                "owned": session.owned, "script": str(vbs_path)}
+    finally:
+        session.close()
 
 
 def _run_gui(vbs_path: Path, timeout: float, menu: dict) -> dict:
@@ -867,7 +911,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--write-vbs", metavar="OUT", help="write host VBS only")
     ap.add_argument("--run", action="store_true",
                     help="run the pipeline in the host")
-    ap.add_argument("--backend", choices=["manual", "gui"], default="manual")
+    ap.add_argument("--backend", choices=["manual", "gui", "com", "rot"],
+                    default="manual")
     ap.add_argument("--set-name", default="Probe")
     ap.add_argument("--project", default=None,
                     help="PPH/CAD path to open in the host before the pipeline")

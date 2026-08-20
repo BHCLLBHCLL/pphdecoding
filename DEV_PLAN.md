@@ -1366,8 +1366,45 @@ Kicker 管线复跑（见 §17.5 执行状态追加）。
 命令类操作（Open/Save/条件/网格，COM 出进程调用即可），
 `ExecuteVBS`/`ExecuteVBSWithFile` 保留为兼容通道；SCTprime 深管线
 （CreateShapeGroupSet 等）旧结论「必须宿主内 VBS」基于瞬态实例
-ContextReady=0，**ROT 附着 Kicker 实例后 ExecuteVBS 是否随之可用待
-实测**（P10 候选项）。
+ContextReady=0，**ROT 附着 Kicker 实例后 ExecuteVBS 已实测可用**（P10，见 §17.8）。
+
+### 17.8 执行记录（P10，2026-08-20：SCTprime 深管线 ROT 附着打通 + typed 直调业务自动化）
+
+> 输入：承接 P9 遗留「ROT 附着 Kicker 实例后 ExecuteVBS 是否随之可用
+> 待实测」（§17.7 末）。三项交付，全部实机验证（本机 Kicker 常驻实例 +
+> ROT 附着）：
+
+1. **P10-1 核心验证（推翻旧结论）**：ROT 附着 Kicker 实例 +
+   `Application.ExecuteVBSWithFile` 执行 pipeline VBS，得到
+   `context_ready=1`（SCTprime 上下文可读）且无访问违例——**SCTprime
+   深管线无需 GUI/manual 后端，COM 通道（rot 后端）即等价于宿主内
+   File → Execute VBScript**。OpenProject 后 `CreateShapeGroupSet` →
+   `CreateShapeGroup` 全通（set_handle=1 → group_handle=2）。附带钉死
+   一个桥 bug：`CreateShapeGroupSet` 返回的句柄在 VBScript 里是
+   `Integer`（VT_I2，16 位），直接传回 COM 时 `V_I4` 读错 → 返回
+   `SCF_ERR_ARG(-1)`；加 `CLng()` 转 `Long`（VT_I4）后成功。
+   `CreateMDL` 在空 group 上返回 False（合理：无几何节点）；
+2. **P10-2 代码落地**（`automation/host_pipeline.py`）：
+   - `build_pipeline_vbs` 的 `CreateShapeGroup`/`CreateMDL`/
+     `ReleaseHandle` 句柄参数内置 `CLng()`（修复 VT_I2 传递 bug）；
+   - 新增 `_run_rot_vbs` + `run_in_host(backend="rot")` + CLI
+     `--backend rot`：经 `scflowpre_api.ScFlowpreSession` 附着 Kicker
+     实例后 `ExecuteVBSWithFile`，作为 SCTprime 深管线的 COM 直驱通道；
+   - 测试 `tests/test_host_pipeline.py` 新增 3 项（rot 后端路由 /
+     attach 优先 / connect 失败降级），CLng 断言随修复更新；
+3. **P10-3 typed 直调业务自动化**（`automation/scflowpre_api.py`）：
+   在 ROT 附着实例上，typed 方法（非 VBS）直调业务级操作实机验证——
+   条件：`GetConditions` → `create_cond("Acceleration", ...)` →
+   `GetName`/`GetConditionType`/`SetName`/`DeleteCondition` 全链路闭环；
+   网格：`SetModeOctree` → `IsModeOctree` → `GetActiveMeshingGroup` →
+   `DoesMeshingOctreeExist` 全通。证明 P9 typed COM 桥可完整驱动
+   「条件 + 网格」业务自动化，替代 VBS 字符串拼接。
+
+遗留（P11 候选）：`CreateMDL` 需往 group 注入几何节点（ISNode）才能
+返回 True；SCTprime 深管线的实际网格生成（CreateFacetOctree /
+ExecuteWrapping / CreateMeshOctreeByDefaultParam）待按相同模式逐一
+直调验证。
+
 
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

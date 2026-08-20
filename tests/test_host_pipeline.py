@@ -27,7 +27,10 @@ class TestBuildAndParse(unittest.TestCase):
             self.assertIn('Doc_.OpenProject "D:\\training\\cradle\\box\\box.pph", False', text)
             self.assertIn('CreateObject("pphdecoding.ScflowPipeline")', text)
             self.assertIn('CreateShapeGroupSet("Box")', text)
-            self.assertIn('CreateShapeGroup(hSet, "BoxGroup")', text)
+            # P10-1：句柄须 CLng() 转 Long，否则 VBScript Integer/VT_I2
+            # 传回 COM 时 V_I4 读错 → SCF_ERR_ARG
+            self.assertIn('CreateShapeGroup(CLng(hSet), "BoxGroup")', text)
+            self.assertIn('CreateMDL(CLng(hGroup))', text)
             self.assertIn("Pipe.LastError()", text)
 
     def test_parse_result_ok(self):
@@ -143,6 +146,56 @@ class TestRegistration(unittest.TestCase):
                 result = host_pipeline.run_in_host(vbs, backend="com")
         self.assertEqual(result["backend"], "com")
         self.assertTrue(result["ok"])
+
+    def test_run_in_host_rot_backend(self):
+        """P10-2：rot 后端经 _run_rot_vbs 附着 Kicker 实例执行。"""
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            with mock.patch.object(
+                    host_pipeline, "_run_rot_vbs",
+                    return_value={"backend": "rot", "ok": True,
+                                  "owned": False, "script": str(vbs)}):
+                result = host_pipeline.run_in_host(vbs, backend="rot")
+        self.assertEqual(result["backend"], "rot")
+        self.assertTrue(result["ok"])
+        self.assertFalse(result["owned"])
+
+    def test_run_rot_vbs_attach_first(self):
+        """rot 后端不真连 COM：ScFlowpreSession 附着优先（owned=False）。"""
+        fake_session = mock.MagicMock()
+        fake_session.connect.return_value = True
+        fake_session.owned = False
+        fake_session.execute_vbs_file.return_value = True
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            with mock.patch(
+                    "automation.scflowpre_api.ScFlowpreSession",
+                    return_value=fake_session):
+                result = host_pipeline._run_rot_vbs(vbs, timeout=5.0)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["backend"], "rot")
+        self.assertFalse(result["owned"])
+        fake_session.connect.assert_called_once()
+        fake_session.execute_vbs_file.assert_called_once_with(vbs)
+        fake_session.close.assert_called_once()
+
+    def test_run_rot_vbs_connect_failure(self):
+        fake_session = mock.MagicMock()
+        fake_session.connect.return_value = False
+        import automation.scflowpre_api as api_mod
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            with mock.patch.object(api_mod, "last_error", "no host"), \
+                 mock.patch("automation.scflowpre_api.ScFlowpreSession",
+                            return_value=fake_session):
+                result = host_pipeline._run_rot_vbs(vbs, timeout=5.0)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["backend"], "rot")
+        self.assertIn("no host", result["error"])
+        fake_session.execute_vbs_file.assert_not_called()
 
     def test_run_com_vbs_flags_methods(self):
         """晚绑定须 FlagAsMethod，禁止属性赋值。"""

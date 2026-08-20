@@ -726,4 +726,23 @@ Wave E  Select 收口                    约 2–3 天
   open/pipeline 实机 round-trip 验证（tr01 输出规模与源一致）。对拍
   与深管线影响：typed 直调覆盖命令类操作（Open/Save/条件/网格），
   SCTprime 深管线（CreateShapeGroupSet）在 ROT 附着实例上经
-  `ExecuteVBS` 是否可用待实测（P10 候选）。详见 DEV_PLAN §17.7。
+  `ExecuteVBS` 已实测可用（P10，见 §8.8）。详见 DEV_PLAN §17.7。
+
+### 8.8 执行状态追加（P10，2026-08-20：SCTprime 深管线 ROT 附着打通）
+
+- **域 9（宿主自动化）深管线突破**：ROT 附着 Kicker 实例 +
+  `ExecuteVBSWithFile` 可驱动 SCTprime 深管线（`context_ready=1`，
+  OpenProject 后 `CreateShapeGroupSet` → `CreateShapeGroup` 全通）——
+  推翻旧「必须 GUI/manual 宿主内 VBS」结论，COM `rot` 后端等价于
+  宿主内 File → Execute VBScript。附带钉死桥 bug：CreateShapeGroupSet
+  句柄在 VBScript 是 Integer/VT_I2，传回 COM 需 `CLng()` 转 Long，否则
+  `SCF_ERR_ARG`；`build_pipeline_vbs` 已内置 CLng。
+- **typed 直调业务自动化**：`scflowpre_api` typed 方法（非 VBS）在 ROT
+  附着实例上实机验证——条件 `create_cond` → `GetName`/`GetConditionType`/
+  `SetName`/`DeleteCondition` 闭环；网格 `SetModeOctree` →
+  `GetActiveMeshingGroup` → `DoesMeshingOctreeExist` 全通。证明 typed
+  COM 桥可完整驱动「条件 + 网格」业务自动化，替代 VBS 字符串拼接。
+- 遗留（P11 候选）：CreateMDL 需注入几何节点（ISNode）才返回 True；
+  CreateFacetOctree/ExecuteWrapping/CreateMeshOctreeByDefaultParam
+  待按相同模式逐一直调验证。详见 DEV_PLAN §17.8。
+
