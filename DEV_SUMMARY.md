@@ -364,7 +364,7 @@ GUI 运行：`python pph_gui.py [项目.pph]`；依赖缺失时
    实际网格生成直调实机验证——`CreateFacetOctree` 返回业务 ErrorCode 312、
    `ExecuteWrapping` 返回 311（空 group 无 facet/无 wrapping），
    `last_exception_code=0`（SEH 守卫未触发、无访问违例），证明符号解析 +
-   x64 ABI + SEH 全链路正确，见 DEV_PLAN §17.9；
+   x64 ABI + SEH 全链路正确，见 DEV_PLAN §17.9；**回填（2026-08-25，P12-A）**：rot 收敛为唯一权威通道（gui/manual 降级诊断）后，四流程 e2e——Ridge/Octant 编辑、BAM Wizard 3125 步全回放、OpenCadFile 真实 STEP——经该通道全量 err=0 归档；typed COM 包装对 catalog 199 类对账无死角，见 DEV_PLAN §17.10；
 4. 再试 `CreateObject`。**实测："拉新进程"成立**——COM 激活拉起瞬态新
    实例（PID 出现又退出，Kicker 双实例从不加载本仓 DLL）。与本 §6.1/6.2
    的"裸 exe 必崩 0xE0000000"不同，本机瞬态实例**正常工作**（OpenProject/

@@ -1445,5 +1445,116 @@ XT 输出）C ABI 已实现并单元测试（未知句柄/参数校验），但�
 注入几何节点（ISNode）或真实面文件——属更深逆向，待 P12。
 
 
+### 17.10 执行记录（P12-A，2026-08-25：权威通道收官）
+
+> 输入：function_gap_analysis §9.4 域 7 四工作项（P12 双 100% 计划总闸门）。
+> 四项全部落地：typed 199 类对账、深管线 2 ABI COM 暴露、四流程 e2e 日志
+> 入库、rot 后端收敛。
+
+1. **P12-A-1 typed 包装扩展 + catalog 对账**（`automation/scflowpre_api.py`）：
+   typed 包装 9→17 个业务关键类（SNode 145 方法 / FaceRegion 70 / FluidRegion
+   66 / MeshingGroupSetting 104 / NumericalRegion 20 / SubmeshSurfaceRegion 19 /
+   AdaptiveParam 4 等），`TYPED_CLASSES` 注册表 + 工厂返回 typed
+   （`Doc.CreateFaceRegion` → `ScFlowpreFaceRegion`，P12-D 路线地基）；
+   `catalog_coverage()` 把 `vb_api_catalog.json` 199 类钉进三个桶——
+   17 typed 直达 / 136 `Cond*` 经 `Conditions` 泛型 / 46 generic
+   `ComObject.call` 兜底，199/199 无第四桶（24 测试）。`Doc.ExecuteSolver`
+   （首参 sphPath）/ `QuitAndExecuteSolver` 在 catalog 面上锁定为 P12-B 地基。
+2. **P12-A-2 深管线 2 ABI COM 暴露**（`native/scflow_com.cpp`）：
+   `CreateMeshOctree`（DISPID 13 → `IVMDL::CreateMeshOctreeByDefaultParam`）、
+   `ConvertFacetToXT`（DISPID 14 → `SCTprime::ConvertFacetToXT` 自由函数）；
+   实机全链验证——mesh_oct 走通参数校验（SCF_ERR_ARG）、xt 返回业务码
+   202，`last_exception_code=0` 无 AV（35 测试 + DLL 重建）。业务码非 -1
+   的完整验收仍卡 §17.9 遗留前置（SNode 注入拿 IVMDL / 真实 facet 文件，
+   P12-D/E）。
+3. **P12-A-3 e2e 日志入库**（`tools/_p12a_e2e_run.py` 编排，`automation/
+   edit_ops.py`/`pipeline_plan.py` 生成器扩展）：四流程经 rot 权威通道全
+   PASS、日志/VBS/产物归档仓库根（`p12a_*_e2e.*`，沿 p5 先例）——
+   - **ridge 30/30 err=0**：OpenCadFile(box.x_t) → CreateVMDL（Ridge 方法
+     仅在虚拟部件模型上，solid MDL 工程 GetVMDL 返回 Nothing）→
+     set/unset/recalc30 → SaveProject；显式 `VMDL.Save` MDL 1.7MB；
+   - **octant 42/42 err=0**：同名副本 `_p12a_e2e/box.pph`（改名副本触发
+     「Project name and PPH file name are different」模态）→ refine/merge/
+     refine_rec/refine_num/refine_curv/show_all 六组 → SaveProject，
+     out.pph 含 meshinggroup1.oct；
+   - **bam 3125/3125 err=0**：`box_scflow_mdl.vbs` 2662 行录制完整回放 +
+     AF faceter/流体域前置（`pipeline_plan` 新增 `mesher_settings` 步，
+     录制 :71-348 锁定，防 `FindAFFaceMatching` RPC_E_SERVERFAULT）+
+     `VMDL.Save` 显式导出 1.7MB + out.pph 内嵌 meshinggroup1.gph/
+     meshinggroup1_ridge.mdl；
+   - **cad 12/12 err=0**：真实 STEP OpenCadFile，App/Doc/Env/Conditions/
+     MeshingGroup 对象链全 alive。
+   验收双闸门：日志全量 err=0 + `ExecuteVBSWithFile` 返回 True（脚本无错
+   时返回 True，P12-A 实测）。
+4. **P12-A-4 后端收敛**（`automation/host_pipeline.py`）：
+   `AUTHORITATIVE_BACKEND = "rot"` + `run_vbs_authoritative()` 唯一权威
+   入口；gui/manual 降级为诊断（`--status`），路由锁定 29 测试。
+
+实测钉死的坑（P12-A 增量，全部已修复并留档）：
+
+- **VBS `Array()` 整型字面量 AV**：`Array(-1000, ...)` 元素是 VT_I2，
+  `Octree.RefineFromCurvature` 原生端按 double 读数组 → mfc140u.dll
+  0xc0000005（Windows 事件日志定位）。`edit_ops` 改 `repr(float)` 恒带
+  小数点（VBS 解析为 Double），`tests/test_edit_ops.py` 断言同步升级。
+- **RefineFromCurvature 文件选择框**：box 工程（wrapping 产物 octree）上
+  该调用弹一次「File does not exist. Specify alternative file.」模态（空
+  文件名），Cancel 后 err=0 返回——宿主侧行为，e2e 判定不受影响。
+- **cad e2e 需裸宿主**：带已开工程的宿主上 OpenCadFile(STEP) 解析
+  （CPU ~60s）后不返回（idle 挂起，无模态无 worker）；裸宿主 30s 干净
+  跑完——e2e 编排按「裸宿主跑 cad」固化。
+- **BAM wizard 前置顺序**：AF faceter prelude 必须保留原 `BeginMDLWizard`
+  行（曾整行替换 → `GetMDLWizard` 全程 Nothing、后续批量 424）；
+  `EndMDLWizard` 产出的 VMDL 不经 SaveProject 内嵌，权威导出 =
+  `VMDL.Save(path)`。
+- **Kicker 冷启动**：`C:\Program Files\Cradle\CradleCFD2025.2\Programs_x64\
+  Kicker_Bx64.exe` → `BM_CLICK` 消息直发 `SCFLOWPRE`（窗口隐藏时物理点击
+  抛 ElementNotVisible）→ 关「Select Project」启动模态 → ROT 就绪。
+
+回归：全仓 **789 passed / 3 skipped / 0 failed**（`py -m pytest
+--ignore=tests/box`；首跑 1 failed = test_edit_ops 旧 `:g` 格式断言，随
+Double 修复同步升级后复跑全绿；终跑前再修 `TestSessionWithoutHost`
+两用例的隔离——宿主在位且会话内已真导入 win32com.client 时，仅替换
+sys.modules["win32com.client"] 条目挡不住 `win32com.client.Dispatch`
+真连/拉起 GUI，顶层 win32com 条目须一并替换；789/3/0 为宿主在位终跑）。
+
+遗留（P12 后续入口）：`CreateMeshOctreeByDefaultParam` 业务码非 -1 需
+SNode 注入拿 IVMDL（P12-D）；`ConvertFacetToXT` 需真实 facet 文件
+（P12-E）；RefineFromCurvature 的「替代文件」语义（facet 源）与 cad
+带工程挂起根因属宿主深逆向，如实记录待查。
+
+## 18. 高杠杆冲刺计划（P12-B..F 顺序重排，2026-08-30 立）
+
+> 完整杠杆分析、实测重核、轨迹预估与差异说明见
+> [function_gap_analysis.md](function_gap_analysis.md) §10（同源，
+> 2026-08-30 实测复核后立）。本节为**执行入口**，逐冲刺交付后按
+> §18.2 追加执行记录。口径沿用 §9.1 双 100%，豁免沿用 §9.6。
+
+### 18.1 冲刺总览（执行顺序 = 分/周杠杆序）
+
+| 冲刺 | 域 | 增量 | 投入 | 验收一句话 | 状态 |
+|---|---|---|---|---|---|
+| **0 基线固化** | — | 0 | 0.5 天 | 提交 P12-A + e2e 证据入库 + 186 未跟踪件分拣；git status 干净 | 未开始 |
+| **B 求解链路** | 12（+域 7 尾） | **+90** | 1 周 | box 提交→求解完成日志 + FLD 场量非空（`ExecuteSolver` 包装已就绪，scflowpre_api.py:368） | 未开始 |
+| **E 网格/BAM/包装收口** | 5/6/9/11 | **+102** | 2 周 | CreateMesh e2e（复用 BAM 产物）/ Wrapping 对齐 / Disc-Overset 建组 / ConvertFacetToXT 真实 facet / BAM 对拍，全链 err=0 | 未开始 |
+| **D 几何/Region 权威接线** | 10/4 | **+46** | 1.5-2 周 | `QueryFaceRegionByName` 首次非 Nothing + CreateMDL True + PKBody3 字节闭环 | 未开始 |
+| **C 条件深度收割** | 8 | +18 | 1-2 周（可插） | 89 `CreateCond*` 脚本化收割 + 2023.2 增量 → 165/165 精确键 | 未开始 |
+| **F 格式长尾 + Select 收口** | 1/2/3 | +17 | 1-2 周（最后） | 4 暂缓 NYI typed 接线 + sctsnapshot 6+ 样本 + LZMS 策略钉死 | 未开始 |
+
+轨迹：76.6% →（+B）84.1% →（+E）92.6% →（+D）96.4% →（+C）97.9%
+→（+F）**100%**，总量 ~7-8 周（较 §9.5 原估 8-11 周收敛）。
+
+### 18.2 执行纪律与记录位
+
+1. **Sprint 0 是硬前置**：P12-A 未提交（HEAD=`245f1c4`）= 全部后续
+   冲刺的基线风险；
+2. **宿主实机时间统一排程**：B/E/D 的实机验收集中批量执行，Kicker
+   冷启动用 §17.10 钉死配方（Kicker_Bx64.exe → BM_CLICK SCFLOWPRE →
+   关 Select Project 模态 → ROT 就绪）；
+3. **纪律闸门**（违反即虚假达标）：B 无求解完成日志不宣称域 12；
+   E 无 err=0 日志不宣称域 5/6/9/11；D 无 Query 非 Nothing 不宣称
+   域 10；C 的键必须来自真实 XML（HTML 显示名猜测禁令沿用）；
+4. **执行记录追加位**：各冲刺交付后按 §18.3+ 顺序补记（交付项 /
+   实测钉死 / 域分数更新 / 回归规模 / 遗留）。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*
