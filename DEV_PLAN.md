@@ -1535,7 +1535,7 @@ SNode 注入拿 IVMDL（P12-D）；`ConvertFacetToXT` 需真实 facet 文件
 |---|---|---|---|---|---|
 | **0 基线固化** | — | 0 | 0.5 天 | 提交 P12-A + e2e 证据入库 + 186 未跟踪件分拣；git status 干净 | **完成**（2026-08-30，`2b0edfd`+`109d416`） |
 | **B 求解链路** | 12（+域 7 尾） | **+90** | 1 周 | box 提交→求解完成日志 + FLD 场量非空（`ExecuteSolver` 包装已就绪，scflowpre_api.py:368） | **完成**（2026-08-30，双通道求解完成日志 + 场量对拍，见 §18.3） |
-| **E 网格/BAM/包装收口** | 5/6/9/11 | **+102** | 2 周 | CreateMesh e2e（复用 BAM 产物）/ Wrapping 对齐 / Disc-Overset 建组 / ConvertFacetToXT 真实 facet / BAM 对拍，全链 err=0 | 未开始 |
+| **E 网格/BAM/包装收口** | 5/6/9/11 | **+102** | 2 周 | CreateMesh e2e（复用 BAM 产物）/ Wrapping 对齐 / Disc-Overset 建组 / ConvertFacetToXT 真实 facet / BAM 对拍，全链 err=0 | **完成**（2026-08-30，五 flow gate 全过 + 对拍/对齐离线闭环，见 §18.4） |
 | **D 几何/Region 权威接线** | 10/4 | **+46** | 1.5-2 周 | `QueryFaceRegionByName` 首次非 Nothing + CreateMDL True + PKBody3 字节闭环 | 未开始 |
 | **C 条件深度收割** | 8 | +18 | 1-2 周（可插） | 89 `CreateCond*` 脚本化收割 + 2023.2 增量 → 165/165 精确键 | 未开始 |
 | **F 格式长尾 + Select 收口** | 1/2/3 | +17 | 1-2 周（最后） | 4 暂缓 NYI typed 接线 + sctsnapshot 6+ 样本 + LZMS 策略钉死 | 未开始 |
@@ -1615,6 +1615,106 @@ SNode 注入拿 IVMDL（P12-D）；`ConvertFacetToXT` 需真实 facet 文件
 （`FOUT_OPTION` 空），中途场读回待需要时再钉；③
 `QuitAndExecuteSolver` 未实机（`ExecuteSolver` 已覆盖验收，且其
 语义会退出宿主，不利批处理）。
+
+### 18.4 Sprint E 执行记录（2026-08-30，当日交付）
+
+**交付项**：
+
+1. 新模块 `bam_reconcile.py`（域 6 BAM 对拍）：`host_mdl_facts`
+   （解析宿主 MDL：顶点/面/封闭体/开边/multifold/watertight/
+   buildable/ridge 半边/frid 组/面体 Region 名）× `native_facts`
+   （`cad_import.import_xt_file` → 自研 `native_bam` 分析报告）→
+   `reconcile()` 拓扑不变量硬对拍（`n_closed_volumes`/`n_open_edges`/
+   `watertight`/`buildable`/multifold/FluidRegion），密度键
+   （顶点/面数）按 §9.6 **recorded-only 豁免**。box 实测
+   **VERDICT PASS**：host 18470 顶点/34310 面/1 封闭体/0 开边/
+   1200 ridge 半边/6 frid × native 8/12/1/0（`scratch/bam_reconcile.json`）。
+2. 新模块 `disc_overset.py`（域 11 黄金指纹）：`golden_fingerprint`
+   （parts_control 开关 + rotor 文件名 + overset 骨架五键 +
+   movinggroup + gph/oct 成员）× `fingerprint_same_class`（白名单
+   ignore 差异容忍）。黄金钉死：box_disc/box_overset 官方 PPH 的
+   **parts_control/overset 均为 false**（语义在各 condition 块内，
+   开关位不翻——实测纠正了想当然）；rotor 文件名
+   `box_disc_RotorInfo` / `box_overset_RotorInfo`。
+3. 新模块 `tools/_p12e_e2e_run.py`（P12-E 实机编排）：六 flow
+   （wrap/mesh/disc/overset/reopen/xt）单宿主会话批量 + `gate`
+   门禁（run.ok + err 全 0 + min_checks + end 标记 + alive）+
+   产物成员/指纹后检 + `_p12e_e2e/p12e_run_summary.json`。
+4. typed 补环：`Doc.CreateDiscontinuousMeshingGroupWithoutMovingPart`
+   （Overset 路线；catalog 键 `…Witouth…` 为录制原文错拼，真实
+   方法名以签名为准，`test_all_methods_exist_in_catalog` 增
+   `_CATALOG_TYPO_ALIASES` 对账别名）。
+
+**实机五 flow gate（rot 权威通道，证据归仓库根）**：
+
+- **wrap**（域 11）：`box_scflow_wrapping.vbs` 录制回放 3100 动作
+  （Goto 0→Resume Next 变换、SaveProject 重定向），**3100 检查全
+  err=0**、25 对象 alive 全 True（`p12e_wrapping_e2e.log`）；产物
+  `p12e_wrapping_e2e_out.pph` 含 Disc 拓扑全套
+  （meshinggroup1.gph/.oct/_part.mdl/_ridge.mdl + wrappinggroup2）。
+- **mesh**（域 9）：OpenProject（P12-A BAM 产物）→
+  `MeshingGroup.CreateMesh` → **create_ret=True** →
+  `Doc.WaitForWorker` → **wait_ret=1**（`p12e_mesh_e2e.log` err 全
+  0）；产物含 meshinggroup1.gph + _ridge.mdl。
+- **disc**（域 11）：`SetPartsControl "Discontinuous",True` →
+  `CreateDiscontinuousMeshingGroupWithMovingPart("Part")`，12 检查
+  err 全 0，产物指纹与官方 `box_disc.pph` **same_class=True**。
+- **overset**（域 11）：`CreateDiscontinuousMeshingGroupWithoutMovingPart`
+  （typed 新环），9 检查 err 全 0，与 `box_overset.pph`
+  **same_class=True**。
+- **xt**（域 7/9 深管线）：`ConvertFacetToXT` 用 P12-A BAM VMDL
+  真实 facet，**业务码 0（达 SCTprime 内核）**、last_exception_code=0、
+  产物 `p12e_xt_out.X_T` 为真 Parasolid（FRU=Software Cradle，
+  SCH_3701153，4855 B）。
+
+**离线闭环**（域 5/6）：BAM 对拍 PASS（上）+ 三向对齐扩样
+（`tests/test_oct_tri_alignment.py`）：box 20105 / P12-A octant
+Refine 后 94185 / CRADLE interference 32633 octants，不变量
+`n_octants_bits == n_octants_member` 三样本**精确**成立，GPH 顶点
+bbox ⊆ oct 根框。域 5 重开验证另测两次全绿（s004=0/GetOctree
+alive，见遗留③）。
+
+**实测钉死**：
+
+- **catalog 键可错拼**：`CreateDiscontinuousMeshingGroupWitouth…`
+  （录制原文）≠ 真实 COM 方法名——typed 包装以签名为准，对账测试
+  显式别名，不做「catalog 即真理」盲信；
+- **Disc 黄金开关位**：`parts_control/Discontinuous=true` 且
+  `overset=false`，而 box_overset 工程 `parts_control/overset=
+  false`——Overset 语义在 condition 块内，**开关位不是判据**；
+- **rot 通道 ExecuteVBSWithFile 提前返回**：慢 VBS（大工程
+  OpenProject）未写完日志调用即返回，verdict 必须**轮询 end 标记**
+  后再读（`run_e2e` end_wait）；
+- **宿主会话 OpenProject 挂起现象**（未定因，遗留③）：一次
+  OpenProject 挂起（10-16 min、无模态、无 err）后该目标工程被
+  持有，同文件后续打开全部挂；**不同目标工程打开正常**（3.7-7.6s）。
+  应对：flow 各用独立目标工程；挂起即换宿主实例；
+- **Kicker/宿主会话时长不保险**：长会话（8h+）后冷启动宿主首跑
+  亦可能挂；批量验收前置一次丢弃式探针更稳。
+
+**域分数更新**：域 5 Octree 80%→**100%**（三向对齐三样本精确 +
+重开实测两绿）；域 6 BAM 85%→**100%**（对拍 PASS，密度豁免按
+§9.6 recorded-only）；域 9 自研网格 68%→**100%**（宿主
+CreateMesh e2e 全链 ret=True/wait=1 + 真 facet XT 业务码 0）；
+域 11 Wrap/Disc/Overset 65%→**100%**（录制回放 3100 err=0 +
+Disc/Overset 建组指纹同类 + 黄金钉死）。整体 84.1%→**92.6%**
+（§10.3 轨迹第二跳兑现，实际投入 1 天 < 预估 2 周）。
+
+**回归规模**：全仓新增 27 项（`tests/test_bam_reconcile.py` 7、
+`tests/test_oct_tri_alignment.py` 4、`tests/test_disc_overset_golden.py` 6、
+`tests/test_p12e_generators.py` 10；`tests/*` 被 gitignore，
+`git add -f` 入库）；终跑 **830 passed / 3 skipped / 0 failed**
+（803 基线 + 27 新增，`python -m pytest tests -q --ignore=tests/box
+-p no:cacheprovider`，404s）。
+
+**遗留**：① **reopen 正式 gate 未取**：域 5 重开链实测两绿（上午
+全量日志 + ANSI 探针）但日志被重跑覆盖/门禁 race，午后宿主会话
+OpenProject 挂起现象（上）阻断官方重录——不影响 E 验收句（reopen
+不在验收句内），D/C 实机批量时补正式日志；② 三向对齐的第四样本
+（tr03 双向）已覆盖无 .oct 成员路径，更多真实大样本随 D/C 顺带扩；
+③ 宿主 OpenProject 挂起未定因（涉及宿主内部实现，超出逆向边界），
+已记录现象与应对配方；④ box 双边界压差工程配置（B 遗留①）随 C
+条件收割一并处理。
 
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

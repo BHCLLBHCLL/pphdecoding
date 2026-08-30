@@ -112,6 +112,13 @@ WRAPPERS = {cls: name for name, cls in api.TYPED_CLASSES.items()}
 # 桥自有泛型方法（非手册成员，ComObject 逃生口之外的便捷封装）
 _LOCAL_METHODS = {"create_cond", "query_cond", "check"}
 
+# catalog 键本身即拼写错误（录制原文如此）；包装以真实 COM 方法名为准，
+# 对账时把真实名映射回 catalog 的错拼键。
+_CATALOG_TYPO_ALIASES = {
+    "CreateDiscontinuousMeshingGroupWithoutMovingPart":
+        "CreateDiscontinuousMeshingGroupWitouthMovingPart",
+}
+
 
 class TestTypedWrappersAgainstCatalog:
     def _wrapper_methods(self, cls):
@@ -135,7 +142,8 @@ class TestTypedWrappersAgainstCatalog:
             for name in self._wrapper_methods(cls):
                 if name in _LOCAL_METHODS:
                     continue
-                if name not in catalog_names:
+                check = _CATALOG_TYPO_ALIASES.get(name, name)
+                if check not in catalog_names:
                     problems.append(f"{class_name}.{name}")
         assert not problems, f"typed drift vs catalog: {problems}"
 

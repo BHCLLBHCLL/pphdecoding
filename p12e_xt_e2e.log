@@ -1,0 +1,12 @@
+start
+s001=0
+pipe__alive=True err=0
+s002=0
+xt_ec=0 err=0
+s003=0
+s004=0
+xt_exists=True err=0
+s005=0
+pipe_exc=0 err=0
+s006=0
+end

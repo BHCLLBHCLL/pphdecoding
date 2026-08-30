@@ -296,6 +296,17 @@ class ScFlowpreDoc(ComObject):
         return ComObject(
             self.call("CreateDiscontinuousMeshingGroupWithMovingPart", name))
 
+    def CreateDiscontinuousMeshingGroupWithoutMovingPart(
+            self, name: str) -> ComObject:
+        """不指定运动部件的非连续网格组（Overset 路线）。
+
+        catalog 键拼作 ``Witouth``（原文如此），真实方法名以签名
+        ``CreateDiscontinuousMeshingGroupWithoutMovingPart`` 为准。
+        """
+        return ComObject(
+            self.call("CreateDiscontinuousMeshingGroupWithoutMovingPart",
+                      name))
+
     def CreateCoordinatesSpecifiedPart(self, name: str) -> ComObject:
         return ComObject(self.call("CreateCoordinatesSpecifiedPart", name))
 
