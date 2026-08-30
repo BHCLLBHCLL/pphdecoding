@@ -56,6 +56,22 @@ class TestDecodeBrep(unittest.TestCase):
         self.assertEqual(len(brep["edges"]), 12)
         self.assertEqual(len(brep["vertices"]), 8)
 
+    def test_facet_crosscheck(self):
+        # 对拍：B-rep 拓扑（PK_BODY_ask_*）↔ 分面（PK_TOPOL_facet_2），
+        # 同一 box 实体：三角数 = 2×面数，分面角点数 = B-rep 顶点数。
+        sess = psf._get_session()
+        tags = sess.receive_xt(BOX_XT.read_bytes())
+        solid = max(tags, key=lambda b: len(sess.body_faces(b) or []))
+        n_faces = len(sess.body_faces(solid))
+        verts = sess.body_vertices(solid)
+        part = sess.facet2(solid)
+        self.assertEqual(n_faces, 6)
+        verts = [] if verts is None else list(verts)
+        self.assertEqual(len(verts), 8)
+        self.assertIsNotNone(part)
+        self.assertEqual(len(part.triangles), 2 * n_faces)
+        self.assertEqual(len(part.points), len(verts))
+
 
 if __name__ == "__main__":
     unittest.main()

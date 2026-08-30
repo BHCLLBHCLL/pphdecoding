@@ -1016,34 +1016,35 @@ SaveProject 内嵌）。
 | 宿主环境 | 宿主进程未在跑（需 Kicker 冷启动，配方钉死于 DEV_PLAN §17.10）；许可 27500@localhost 在线（SCFLOWPP 32 席） |
 | Git 风险 | HEAD=`245f1c4`（P11），**P12-A 交付（13 文件 +1803 行）未提交**；未跟踪 186 个（`_p12a_*` 诊断临时件与 `p12a_*_e2e.*` 证据混放） |
 
-### 10.1 12 域基线与差距（2026-08-30 Sprint E 后实况；基线快照见 §9.8）
+### 10.1 12 域基线与差距（2026-08-30 Sprint D 后实况；基线快照见 §9.8）
 
 | # | 域 | 完整度 | 深度 | 距 100% | 卡点性质 |
 |---|---|---|---|---|---|
 | 12 | Solver/FPH | 100% | L2+ | **0** | ✅ B 关（求解日志 ×2 + FLD 对拍） |
-| 10 | 几何编辑 | 66% | L2 | 34 | Region 权威路线 + SNode 注入（D） |
+| 10 | 几何编辑 | 100% | L2+ | **0** | ✅ D 关（Query 闸门 + 持久腿 + CreateMDL 产物闭环） |
 | 11 | Wrap/Disc/Overset | 100% | L2+ | **0** | ✅ E 关（回放 3100 err=0 + 建组指纹同类） |
 | 9 | 自研网格 | 100% | L2+ | **0** | ✅ E 关（CreateMesh e2e + 真 facet XT 码 0） |
 | 5 | Octree | 100% | L2+ | **0** | ✅ E 关（三向对齐三样本精确 + 重开两绿） |
 | 8 | 条件体系 | 82% | L2 | 18 | 数据瓶颈已被 typed API 解锁（C） |
 | 6 | BAM | 100% | L2+ | **0** | ✅ E 关（拓扑不变量对拍 PASS） |
-| 4 | CAD/XT | 88% | L2-3 | 12 | CATIA/patch e2e（D/E 尾） |
+| 4 | CAD/XT | 94% | L2-3 | 6 | patch e2e 环境受阻（宿主崩溃夜）+ CATIA 样本缺失（D 尾） |
 | 3 | Select/View | 90% | L2 | 10 | 4 暂缓 NYI 接线（F） |
-| 7 | 宿主自动化 | 92% | L2-3 | 8 | 「深管线业务码非 -1」**实测解除**（xt_ec=0，§10.6），分数随 D 复核 |
+| 7 | 宿主自动化 | 92% | L2-3 | 8 | 「深管线业务码非 -1」**实测解除**（xt_ec=0，§10.6），分数随 C 复核 |
 | 2 | 工程管理 | 97% | L3 | 3 | — |
-| 1 | PPH 读写 | 96% | L3 | 4 | PKBody3 字节闭环（D，域 1 共享） |
+| 1 | PPH 读写 | 100% | L3 | **0** | ✅ D 关（PKBody3 三路字节恒等，P2/P4 回归） |
 
-**整体完整度 ≈ 92.6%（12 域均分），剩余 81 分。** 结构性判断：
+**整体完整度 ≈ 96.3%（12 域均分），剩余 44 分。** 结构性判断：
 
 1. 哑铃结构已收敛为「底层满格、腰部待接线」：格式层（字节级闭环）与
    内核驱动层（typed 199/199 对账 + C ABI 深管线 + 四流程 e2e 全 err=0）
    均生产级，剩余缺口**几乎全是"接线 + 实机验收"，无结构性逆向风险**；
-2. 域 12 是单点最大洼地（90 分）与单位投入产出之王：「合理延后」旧据
-   （§9.2）已被 catalog 实查推翻，typed 包装已写好，只差 Execute 面板
-   接线 + 一次实机提交闭环；
-3. 域 8 瓶颈性质已变：P10 证明 typed `create_cond` 实机闭环，89 个
-   `CreateCond*` 意味着 **create → Save → diff main.xml → 提取精确键**
-   可全自动脚本化，63 → 165 是纯工程量问题。
+2. 域 8 是单点最大洼地（18 分）与单位投入产出之王：P10 证明 typed
+   `create_cond` 实机闭环，89 个 `CreateCond*` 意味着 **create →
+   Save → diff main.xml → 提取精确键** 可全自动脚本化，63 → 165 是
+   纯工程量问题（B 后原最大洼地域 12 已关闭，E/D 后满格域增至 8）；
+3. 域 4 尾 6 分（patch e2e + CATIA 样本）与域 3/7 尾为 F/C 顺带项；
+   patch flow 已建（typed 包装 + 编排 + 离线测试），仅欠实机日志
+   （§10.7 遗留①）。
 
 ### 10.2 冲刺计划（执行顺序，取代 §9.5 字母序）
 
@@ -1052,7 +1053,7 @@ SaveProject 内嵌）。
 | **0 基线固化** | — | 0 | 0.5 天 | 提交 P12-A（13 文件）独立提交；`p12a_*_e2e.*` 证据入库；186 未跟踪件分拣（证据保留 / 诊断件移 `scratch/` 或删除） | git status 干净；792 回归全绿 |
 | **B 求解链路** | 12（+域 7 尾 8） | **+90** | 1 周 | Execute 面板勾 API → rot 调 `Doc.ExecuteSolver(sphPath)`；FPH/FLD 产物经 `fph.py` / `fldstats.py` 回读；Day-1 先探 solver 启动与许可需求 | box 提交→求解完成日志 + FLD 场量非空断言 |
 | **E 网格/BAM/包装收口** | 5/6/9/11 | **+102** | 2 周 | `MeshingGroup.CreateMesh` e2e（复用 P12-A BAM e2e 的 VMDL/gph 产物，绕「无几何」死锁）；Wrapping GUI 参数对齐锁定序列；Disc/Overset 建组录制（对照 box_disc/box_overset 黄金）；`ConvertFacetToXT` 用 BAM 产物真实 facet；BAM 报告对拍；三向对齐扩样 | 四域 err=0 日志 + 成员与黄金同类 **✅ 完成（2026-08-30，§10.6）** |
-| **D 几何/Region 权威接线** | 10/4 | **+46** | 1.5-2 周 | Register Region 走 `Doc.CreateFaceRegion`（typed 70 方法就绪）；SNode 注入（`CreateGroupPart` / `ImportCADAsFacet`）→ `CreateMDL` True → 深管线业务码非 -1；B-rep 提取（`PK_BODY_ask_*` 全家）；PKBody3 token 字母表→字节闭环（域 1 共享） | `QueryFaceRegionByName` **首次非 Nothing**（§8.5 #10 关门） |
+| **D 几何/Region 权威接线** | 10/4 | **+46** | 1.5-2 周 | Register Region 走 `Doc.CreateFaceRegion`（typed 70 方法就绪）；SNode 注入（`CreateGroupPart` / `ImportCADAsFacet`）→ `CreateMDL` True → 深管线业务码非 -1；B-rep 提取（`PK_BODY_ask_*` 全家）；PKBody3 token 字母表→字节闭环（域 1 共享） | `QueryFaceRegionByName` **首次非 Nothing**（§8.5 #10 关门）**✅ 完成（2026-08-30，§10.7；CreateMDL 实测 void 改判产物证据，+44/+46）** |
 | **C 条件深度收割** | 8 | +18 | 1-2 周（随时可插） | 收割机脚本化：89 `CreateCond*` → create → SaveProject → diff main.xml → 精确键自动入 `merged.json`（HTML 显示名猜测禁令沿用 §9.4）；2023.2 库 150 PPH 增量收割；材料五库 prp 写端 | 165/165 精确键 + Save 不破坏宿主 Cond 节点 |
 | **F 格式长尾 + Select 收口** | 1/2/3 | +17 | 1-2 周（最后） | 4 暂缓 NYI typed 接线；Actran 重评估；sctsnapshot 重序列化扩 6+ 样本；LZMS 跨平台写端策略钉死（写对称实现或豁免声明，二选一如实记录） | NYI 清单仅剩产品边界项 |
 
@@ -1063,8 +1064,8 @@ SaveProject 内嵌）。
 | Sprint 0 | 0.5 天 | 76.6%（基线固化） |
 | +B | ~1 周 | **84.1%** |
 | +E | ~3 周 | **92.6%** |
-| +D | ~5 周 | 96.4% |
-| +C | ~6 周 | 97.9% |
+| +D | ~5 周 | **96.3%**（实测，+44/+46） |
+| +C | ~6 周 | 97.8% |
 | +F | ~7-8 周 | **100%（12 域双口径）** |
 
 对 §9.5 原估（8-11 周）：B 提前（单项 ROI 之王）+ E 复用 P12-A 产物
@@ -1140,3 +1141,43 @@ D/C 实机批量**每 flow 用独立工程 + 前置换宿主预案**；② rot �
 Overset 黄金指纹与模块（`disc_overset.py`）直接服务 D 的
 Region/Part 建组验收对拍；④ reopen 正式 gate 日志未取（实测两绿，
 非验收句项）——D/C 批量时顺带补录。
+
+### 10.7 Sprint D 交付实录（2026-08-30）
+
+**结果**：域 10 几何编辑 66%→**100%（L2+）**、域 1 PPH 读写
+96%→**100%（L3）**、域 4 CAD/XT 88%→**94%**；整体 92.6%→**96.3%**
+（+44/+46，实际投入 1 天 < 预估 1.5-2 周）。执行细节与实测钉死见
+DEV_PLAN §18.5。
+
+**纪律闸门核验**（§10.3 口径，四 flow 官方 gate 全 PASS，证据归
+仓库根 `p12d_*_e2e.*`）：
+- **region**（§8.5 #10 关门）：`Doc.CreateFaceRegion("P12DRegion")`
+  → `Doc.QueryFaceRegionByName` **项目史上首次非 Nothing**，
+  13/13 err=0；负面对照 `_p12d_absent` 判别有效；
+- **region_reopen**：Save → 重开 → 再 Query 非 Nothing（8/8）；
+  字节扫描钉死权威名表文件层落点 = main.xml 三结构
+  （conditions 区 / phase_pair / auto_grouping 各 1 处）——
+  §6.3 七场景「新名不注册」之谜解答：读侧名表只在宿主写回时存在，
+  权威注册唯一正路 = 宿主 API；
+- **snode**（CreateMDL 项）：录制 2662 行回放 + SNode 注入 +
+  VMDL.Save 显式导出，3134/3134 err=0，产物 .gph + MDL 1.7 MB；
+  `MDLWizard.CreateMDL` 实测 **void 方法**（验收按产物证据改判）；
+- **facet**（域 4）：`ImportCADAsFacet(box.x_t)` typed 直调 err=0。
+
+**离线闭环**（域 1/10）：PKBody3 → `parse_binary_xt` →
+`encode_binary_xt` **字节恒等**三路全绿（box 'A' 流 + kernel 'B'
+流 + 2023.2 V34.1 'A' 流，P2/P4 既有回归）；`decode_brep` box.x_t
+拓扑计数（5 体/6 面/16 边/16 顶点）+ 新增 `test_facet_crosscheck`
+（B-rep 拓扑 ↔ PK_TOPOL_facet_2 分面：三角=2×面数、分面角点=
+B-rep 顶点）。
+
+**对后续冲刺的输入**：① patch flow（`ImportPatchAsCAD` +
+PotatoChips.stl）流程/包装/离线测试已就绪，仅欠实机 err=0 日志
+——2026-08-30 夜连续 3 实例 WER APPCRASH（mfc140u.dll，同期
+NVIDIA 后端 AV）致两轮冷启动均未准入执行，环境恢复后
+`py tools/_p12d_e2e_run.py patch` 直接重跑；② rot 通道
+`ExecuteVBSWithFile` 接纳/拒绝逐次不稳定（拒=零执行、忙时幻影
+True），`_p12d_e2e_run.py` 的 end 标记判据 + 拒绝重试模式可复用
+于 C 批量；③ `Doc.CreateGroupPart` headless Nothing 负发现存档，
+SNode 注入走 `QuerySNodeByName`；④ E 遗留①（域 5 reopen 正式
+日志）与 box 双边界压差随 C 批量处理。

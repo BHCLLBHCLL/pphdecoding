@@ -1536,11 +1536,11 @@ SNode 注入拿 IVMDL（P12-D）；`ConvertFacetToXT` 需真实 facet 文件
 | **0 基线固化** | — | 0 | 0.5 天 | 提交 P12-A + e2e 证据入库 + 186 未跟踪件分拣；git status 干净 | **完成**（2026-08-30，`2b0edfd`+`109d416`） |
 | **B 求解链路** | 12（+域 7 尾） | **+90** | 1 周 | box 提交→求解完成日志 + FLD 场量非空（`ExecuteSolver` 包装已就绪，scflowpre_api.py:368） | **完成**（2026-08-30，双通道求解完成日志 + 场量对拍，见 §18.3） |
 | **E 网格/BAM/包装收口** | 5/6/9/11 | **+102** | 2 周 | CreateMesh e2e（复用 BAM 产物）/ Wrapping 对齐 / Disc-Overset 建组 / ConvertFacetToXT 真实 facet / BAM 对拍，全链 err=0 | **完成**（2026-08-30，五 flow gate 全过 + 对拍/对齐离线闭环，见 §18.4） |
-| **D 几何/Region 权威接线** | 10/4 | **+46** | 1.5-2 周 | `QueryFaceRegionByName` 首次非 Nothing + CreateMDL True + PKBody3 字节闭环 | 未开始 |
+| **D 几何/Region 权威接线** | 10/4 | **+46** | 1.5-2 周 | `QueryFaceRegionByName` 首次非 Nothing + CreateMDL True + PKBody3 字节闭环 | **完成**（2026-08-30，Query 闸门达成 + 四 flow gate 全过，见 §18.5；CreateMDL 实测为 void 方法，验收按产物证据改判；域 4 patch e2e 受宿主崩溃环境受阻，+44/+46） |
 | **C 条件深度收割** | 8 | +18 | 1-2 周（可插） | 89 `CreateCond*` 脚本化收割 + 2023.2 增量 → 165/165 精确键 | 未开始 |
 | **F 格式长尾 + Select 收口** | 1/2/3 | +17 | 1-2 周（最后） | 4 暂缓 NYI typed 接线 + sctsnapshot 6+ 样本 + LZMS 策略钉死 | 未开始 |
 
-轨迹：76.6% →（+B）84.1% →（+E）92.6% →（+D）96.4% →（+C）97.9%
+轨迹：76.6% →（+B）84.1% →（+E）92.6% →（+D）96.3% →（+C）97.9%
 →（+F）**100%**，总量 ~7-8 周（较 §9.5 原估 8-11 周收敛）。
 
 ### 18.2 执行纪律与记录位
@@ -1715,6 +1715,90 @@ OpenProject 挂起现象（上）阻断官方重录——不影响 E 验收句�
 ③ 宿主 OpenProject 挂起未定因（涉及宿主内部实现，超出逆向边界），
 已记录现象与应对配方；④ box 双边界压差工程配置（B 遗留①）随 C
 条件收割一并处理。
+
+### 18.5 Sprint D 执行记录（2026-08-30，当日交付）
+
+**交付项**：
+
+1. 新模块 `tools/_p12d_e2e_run.py`（P12-D 实机编排，沿 P12-E 模式）：
+   四 flow（snode/region/region_reopen/facet）+ patch flow（已建待
+   验）单宿主会话批量 + `gate` 门禁（run.ok + err 全 0 + min_checks
+   + end 标记 + alive）+ 产物成员后检 + region 落点字节扫描
+   （`check_region_landing`）+ `_p12d_e2e/p12d_run_summary.json`。
+2. `run_e2e` 重试强化：rot 通道 `ExecuteVBSWithFile` 接纳/拒绝实测
+   **逐次不稳定**（同脚本同状态一次拒一次纳、拒绝零执行、宿主忙时
+   幻影 True）——判据收敛为日志 `end` 标记，拒绝即立即重试（retries
+   次内），接纳则轮询等待。
+3. 离线回归：`tests/test_p12d_generators.py`（region/reopen/snode
+   回放变换/facet/patch + verify_log 共 9 项）；
+   `tests/test_decode_brep.py` 增 `test_facet_crosscheck`（B-rep
+   拓扑 ↔ PK_TOPOL_facet_2 分面对拍：box 实体 6 面/8 顶点 ↔
+   三角=2×面数/分面角点=B-rep 顶点——域 10「拓扑计数与 facet 对拍」
+   验收键闭环）。
+
+**实机四 flow gate（rot 权威通道，晨间稳定实例 pid 44552，证据归
+仓库根）**：
+
+- **region**（域 10 纪律闸门 §18.2-3）：OpenProject(box) →
+  `Doc.CreateFaceRegion("P12DRegion")` →
+  `Doc.QueryFaceRegionByName("P12DRegion")` **首次非 Nothing**
+  （13/13 检查全 err=0，`p12d_region_e2e.log`）；负面对照
+  `_p12d_absent` 查询 Nothing（判别有效）。
+- **region_reopen**（§8.5 #10 持久腿）：Save → 重开 → 再 Query 非
+  Nothing（8/8 err=0，`p12d_region_reopen_e2e.log`）；字节扫描钉死
+  权威名表文件层落点 = **main.xml 三结构**（conditions 区
+  `<region><name>` 全参数块 / phase_pair `<region><region_name>` /
+  auto_grouping `<fregion><name>`，恰好 3 处命中，基线 box.pph 零
+  命中）——P7-2 §6.3 七场景「新名不注册」之谜解答：文件层读到的
+  名表只在宿主 SaveProject 写回时出现，权威注册只能走宿主 API。
+- **snode**（域 10 CreateMDL 项，裸宿主）：BAM 录制 2662 行回放 +
+  SNode 注入（`CreateGroupPart` 前后探针 + 录制自身路线
+  `QuerySNodeByName("Part")`）+ `MDLWizard_.CreateMDL` 执行 +
+  VMDL.Save 显式导出（3134/3134 检查全 err=0，
+  `p12d_snode_e2e.log`）；产物 `p12d_snode_e2e_out.pph` 含 .gph +
+  `p12d_snode_part.mdl`（1.7 MB）。
+- **facet**（域 4）：OpenProject(box) → `Doc.CreateMeshingGroup` →
+  `Doc.ImportCADAsFacet(box.x_t, MG)` → SaveProject，err 全 0
+  （`p12d_facet_e2e.log`）。
+
+**实测钉死**：
+
+- **`MDLWizard.CreateMDL` 是 void 方法**（catalog retval None 实机
+  证实：赋值无错但 Empty）——验收句「CreateMDL True」按宿主 API
+  真实语义改判为**产物证据**（.gph 内嵌 + VMDL.Save MDL 1.7 MB 与
+  P12-A 权威导出同量级），不虚标 retval；
+- **`Doc.CreateGroupPart` 返回 Nothing headless**（wizard 前后两探
+  针均 False）——负发现存档；活 SNode 权威路线 = 录制原文
+  `Doc.QuerySNodeByName("Part")`（闸门键 SN2_ alive=True）；
+- **rot 通道接纳/拒绝逐次不稳定**（上，retry 强化入工具）；
+- **当晚宿主连环崩溃**（2026-08-30 夜，连续 3 实例 WER APPCRASH
+  `mfc140u.dll`，同期 nvcontainer.exe/NVIDIA 后端 AV 两次）：patch
+  flow（`ImportPatchAsCAD` + 2025.2 例程 PotatoChips.stl 真样本）
+  两轮冷启动均未能取得 err=0 日志——脚本从未被准入执行（日志文件
+  零创建），**非 ImportPatchAsCAD 本身失败**；按纪律不宣称，域 4
+  尾项如实保留。
+
+**域分数更新**：域 10 几何编辑 66%→**100%**（Query 闸门 + 持久腿
++ CreateMDL 管线产物闭环 + B-rep/facet 对拍 + PKBody3 字节闭环）；
+域 4 CAD/XT 88%→**94%**（STEP/ImportCADAsFacet e2e err=0 实证；
+patch e2e 环境受阻 + CATIA/3dxml 样本缺失，尾 6 分保留）；域 1
+PPH 读写 96%→**100%**（PKBody3 → `parse_binary_xt`→
+`encode_binary_xt` 字节恒等：box 'A' 流 + kernel 'B' 流 + 2023.2
+V34.1 'A' 流三路全绿，P2/P4 既有回归）。整体 92.6%→**96.3%**
+（+44/+46，§10.3 第三跳基本兑现）。
+
+**回归规模**：全仓新增 10 项（`tests/test_p12d_generators.py` 9 +
+`test_decode_brep.py` 对拍 1；`tests/*` 被 gitignore 需
+`git add -f`）；全量 **838 passed / 3 skipped / 0 failed**（496s，
+含 P12-D 全部新增）。
+
+**遗留**：① patch flow e2e 正式日志待环境恢复后补取（流程与
+`ImportPatchAsCAD` typed 包装、离线测试已就绪，`p12d_patch_e2e.vbs`
+可直接重跑）——宿主连环崩溃疑环境级（GPU 后端同期崩溃），非代码
+回归；② CATIA V4/V5/V6（.CATPart/.model/.3dxml）样本全机缺失，
+如实记录（typed `OpenCadFile` 路线已由 STEP/XT 双格式证实）；③ E
+遗留①（域 5 reopen 正式 gate 日志）随 C 批量补录；④ E 遗留④ box
+双边界压差随 C 处理。
 
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*
