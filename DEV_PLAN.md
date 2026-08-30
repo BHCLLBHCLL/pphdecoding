@@ -1533,8 +1533,8 @@ SNode 注入拿 IVMDL（P12-D）；`ConvertFacetToXT` 需真实 facet 文件
 
 | 冲刺 | 域 | 增量 | 投入 | 验收一句话 | 状态 |
 |---|---|---|---|---|---|
-| **0 基线固化** | — | 0 | 0.5 天 | 提交 P12-A + e2e 证据入库 + 186 未跟踪件分拣；git status 干净 | 未开始 |
-| **B 求解链路** | 12（+域 7 尾） | **+90** | 1 周 | box 提交→求解完成日志 + FLD 场量非空（`ExecuteSolver` 包装已就绪，scflowpre_api.py:368） | 未开始 |
+| **0 基线固化** | — | 0 | 0.5 天 | 提交 P12-A + e2e 证据入库 + 186 未跟踪件分拣；git status 干净 | **完成**（2026-08-30，`2b0edfd`+`109d416`） |
+| **B 求解链路** | 12（+域 7 尾） | **+90** | 1 周 | box 提交→求解完成日志 + FLD 场量非空（`ExecuteSolver` 包装已就绪，scflowpre_api.py:368） | **完成**（2026-08-30，双通道求解完成日志 + 场量对拍，见 §18.3） |
 | **E 网格/BAM/包装收口** | 5/6/9/11 | **+102** | 2 周 | CreateMesh e2e（复用 BAM 产物）/ Wrapping 对齐 / Disc-Overset 建组 / ConvertFacetToXT 真实 facet / BAM 对拍，全链 err=0 | 未开始 |
 | **D 几何/Region 权威接线** | 10/4 | **+46** | 1.5-2 周 | `QueryFaceRegionByName` 首次非 Nothing + CreateMDL True + PKBody3 字节闭环 | 未开始 |
 | **C 条件深度收割** | 8 | +18 | 1-2 周（可插） | 89 `CreateCond*` 脚本化收割 + 2023.2 增量 → 165/165 精确键 | 未开始 |
@@ -1555,6 +1555,66 @@ SNode 注入拿 IVMDL（P12-D）；`ConvertFacetToXT` 需真实 facet 文件
    域 10；C 的键必须来自真实 XML（HTML 显示名猜测禁令沿用）；
 4. **执行记录追加位**：各冲刺交付后按 §18.3+ 顺序补记（交付项 /
    实测钉死 / 域分数更新 / 回归规模 / 遗留）。
+
+### 18.3 Sprint B 执行记录（2026-08-30，当日交付）
+
+**交付项**：
+
+1. typed 补环：`Doc.SaveSphFile(sphPath, gphPath)`（求解链路首环，
+   与 catalog 对账通过；`ExecuteSolver`/`QuitAndExecuteSolver` 沿用
+   P12-A 既有包装）。
+2. 新模块 `automation/solver_run.py`（求解链路编排 + 读回验证）：
+   `build_solve_vbs`（OpenProject → SetModeMesh → SavePolyFile →
+   SaveSphFile → ExecuteSolver，每步记 err/产物存在性）/
+   `solver_processes`（计算进程判定）/ `find_solver_artifacts`
+   （双通用名扫描）/ `wait_for_solver` / `verify_fph_file`
+   （`ok`=场量在位有限、`strict_ok`=至少一场非全零）/
+   CLI（build|prep|run|wait|verify|status）。
+3. 实机双跑（证据归档仓库根，沿 p5/P12-A 先例）：
+   - **rot 权威通道**：`_p12a_e2e/box.pph` → gph 1MB / sph →
+     `ExecuteSolver` → 400 CYCLE `CALCULATION FINISH`（CPU 478.7s、
+     SEC/CYCLE 1.197、ERROR LOG 空）→ `box_400.fph` 1.3MB 读回，
+     11 场量数组在位（`p12b_solve_e2e.*`）；
+   - **JobLauncher 直驱**（手册官方命令行入口）+ 50Pa 压差变体：
+     400 CYCLE 37.1s，`boxdp_400.fph` `strict_ok=true`——VEL/PRES
+     非零，且 VEL min −2.15652e-05 与 L 日志 FIELD EXTREMA、
+     P=50Pa 与边界条件**逐值对上**（`p12b_dp50_e2e.*`）。
+
+**实测钉死**：
+
+- `ExecuteSolver` = **异步拉起**（VBS 即返回，求解器后台跑）——
+  完成判定走「计算进程退出 + 产物落盘」，不依赖调用返回语义；
+- **产物命名分裂**：场文件跟 sph 内 FPH/RPH 通用名（=工程名，
+  `box_400.fph`）；L 日志 `.ccdt`/`.csln` 跟 **sph 文件干名**
+  （`scFLOWpre.l`）——收集器按双名扫描；
+- **scMonitor 常驻**：求解完成后监视器进程不退，不得计入
+  「求解在跑」判据（首版观察器因此不收敛，已拆分）；
+- **Kicker 配方修正**（对 §17.10）：2025.2 实测按钮文本 `STPRE`
+  （非 SCFLOWPRE），宿主进程名 `STpre_Bx64net.exe`，启动模态为
+  「Initial Wizard Project (1/6) step」——WM_CLOSE 关闭即 ROT 就绪；
+- 首跑 VEL=0 为**物理退化**（单一 open 边界、总压 0 无压差驱动），
+  非读回失败——钉死依据：TURK/TEPS 恰等于 sph `INIT` 初值、
+  EVIS 非零；压差变体出非零流场；
+- 求解器落产物于 **sph 所在目录**（相对 `GPH scFLOWpre.gph` 依
+  工作目录解析）；官方样例对照（`scFLOW_tutorial.fph` VEL∈[−31,14]）
+  排除解析器问题。
+
+**域分数更新**：域 12 Solver/FPH **10%→100%（L0→L2+）**——
+纪律闸门通过：求解完成日志 ×2（CALCULATION FINISH + ERROR LOG 空）
++ FLD 场量非空（`strict_ok`，压差变体非零，与日志逐值对拍）；
+域 7 尾项（ExecuteSolver 实机接线）一并关闭。整体 76.6%→**84.1%**
+（§10.3 轨迹首跳兑现，实际投入 1 天 < 预估 1 周）。
+
+**回归规模**：全仓新增 14 项（`tests/test_solver_run.py`，注意
+`tests/*` 被 gitignore，`git add -f` 入库）；终跑 **803 passed /
+3 skipped / 0 failed**（789 基线 + 14 新增，`python -m pytest tests -q
+--ignore=tests/box -p no:cacheprovider`，468s）。
+
+**遗留**：① box 物理设置仅单一 open 边界——非零流量验收由压差变体
+兜底，双边界工程配置归 E/C；② FPH 输出时机默认仅末步
+（`FOUT_OPTION` 空），中途场读回待需要时再钉；③
+`QuitAndExecuteSolver` 未实机（`ExecuteSolver` 已覆盖验收，且其
+语义会退出宿主，不利批处理）。
 
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

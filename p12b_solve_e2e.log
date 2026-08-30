@@ -1,0 +1,12 @@
+start
+app_alive=True err=0
+doc_alive=True err=0
+open_err=0
+setmode_err=0
+savepoly_err=0
+gph_exists=True
+savesph_err=0
+sph_exists=True
+exec_err=0
+exec_ret=True
+end

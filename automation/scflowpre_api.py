@@ -379,6 +379,11 @@ class ScFlowpreDoc(ComObject):
     def SavePolyFile(self, path: str | Path) -> bool:
         return bool(self.call("SavePolyFile", str(Path(path).resolve())))
 
+    def SaveSphFile(self, sph_path: str | Path, gph_path: str | Path) -> bool:
+        """导出求解工程（P12-B 求解链路首环，ExecuteSolver 的输入）。"""
+        return bool(self.call("SaveSphFile", str(Path(sph_path).resolve()),
+                              str(Path(gph_path).resolve())))
+
     def SaveXTFile(self, path: str | Path) -> bool:
         return bool(self.call("SaveXTFile", str(Path(path).resolve())))
 

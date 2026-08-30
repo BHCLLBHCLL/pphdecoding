@@ -1084,3 +1084,28 @@ C 的键必须来自真实 XML。**宿主实机时间是唯一瓶颈资源**—�
 | C/D 并行 | C 独立随时 | D 与 C 并行（C 抢宿主窗口时排队） | C 收割为脚本化小步，占 rot 窗口时间短 |
 | Sprint 0 | 无 | **新增** | P12-A 未提交 + 186 临时件 = 基线风险，半天消除 |
 | 豁免口径 | §9.6 | 不变 | — |
+
+### 10.5 Sprint B 交付实录（2026-08-30）
+
+**结果**：域 12 Solver/FPH **10%→100%，L0→L2+**；域 7 尾项
+（ExecuteSolver 实机接线）关闭；整体 76.6%→**84.1%**（§10.3 首跳
+兑现，实际投入 1 天）。执行细节与实测钉死见 DEV_PLAN §18.3。
+
+**纪律闸门核验**（§10.3 口径）：
+- 求解完成日志 ×2：`CALCULATION FINISH` + ERROR LOG 空
+  （`p12b_solve_e2e.l` rot 通道 / `p12b_dp50_e2e.l` JobLauncher 直驱）；
+- FLD 场量非空：`boxdp_400.fph` `strict_ok=true`（11 场量、
+  VEL/PRES 非零），且 VEL min −2.15652e-05 与 L 日志 FIELD EXTREMA、
+  P=50Pa 与边界条件逐值对上——读回不是「有文件」，是「数值对拍」。
+
+**链路**（新模块 `automation/solver_run.py` + typed `SaveSphFile`）：
+OpenProject → SetModeMesh → SavePolyFile(gph) → SaveSphFile(sph,gph)
+→ `ExecuteSolver(sph)`（rot，异步）→ 计算进程退出判定（scMonitor
+常驻不计）→ `<工程名>_400.fph` 经 `fph.py` 全解析。
+
+**对后续冲刺的输入**：① 产物命名分裂（场文件=工程名 / 日志=
+sph 干名）与 scMonitor 常驻已钉死，E 的实机编排直接复用；
+② Kicker 2025.2 冷启动实测修正（按钮 `STPRE`、宿主进程
+`STpre_Bx64net`、模态「Initial Wizard」）替代 §17.10 旧文本；
+③ box 单 open 边界物理退化（零流量）——E/C 若要真实流量验收，
+需双边界压差配置（本次已用 50Pa 变体兜底证明链路产真实场）。
