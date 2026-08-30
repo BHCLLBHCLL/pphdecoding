@@ -5674,8 +5674,8 @@ class PphViewer(QMainWindow):
         if not path:
             return
         from automation import host_pipeline
-        self.log(f"Executing VBS via COM: {path}")
-        result = host_pipeline.run_in_host(path, backend="com")
+        self.log(f"Executing VBS via rot (authoritative): {path}")
+        result = host_pipeline.run_vbs_authoritative(path)
         self.log(f"Execute VBScript 返回: {result}")
 
     def _focus_status(self, focus: str) -> None:
@@ -6875,7 +6875,7 @@ class PphViewer(QMainWindow):
         def worker() -> None:
             try:
                 from automation import host_pipeline
-                result = host_pipeline.run_in_host(vbs, backend="com")
+                result = host_pipeline.run_vbs_authoritative(vbs)
                 self.log(f"scFLOWpre API 执行返回: {result}")
             except Exception as exc:  # noqa: BLE001
                 self.log(f"scFLOWpre API 自动执行失败: {exc}", "WARN")

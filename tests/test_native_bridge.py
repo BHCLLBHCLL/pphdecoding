@@ -81,6 +81,33 @@ class TestNativeBridgeFallback(unittest.TestCase):
         self.assertEqual(r3["error_code"], native_bridge.SCF_ERR_ARG)
 
 
+class TestComDispatchSurface(unittest.TestCase):
+    """P12-A：COM 桥（scflow_com.cpp）分发表完整性——每个业务方法须有
+    dispid enum + 名称表条目 + Invoke case，防止新增 C ABI 后忘记接 COM
+    分发（P12-A 前车之鉴：CreateMeshOctree/ConvertFacetToXT 有 C ABI 无
+    dispid）。源码级守卫，不依赖宿主。"""
+
+    CASES = (
+        ("ContextReady", 1), ("CreateShapeGroupSet", 2),
+        ("CreateShapeGroup", 3), ("CreateMDL", 4), ("ReleaseHandle", 5),
+        ("LastError", 6), ("LastErrorMessage", 7), ("Status", 8),
+        ("ContextReadyRaw", 9), ("LastExceptionCode", 10),
+        ("CreateFacetOctree", 11), ("ExecuteWrapping", 12),
+        ("CreateMeshOctree", 13), ("ConvertFacetToXT", 14),
+    )
+
+    def test_dispatch_table_complete(self):
+        src = (ROOT / "native" / "scflow_com.cpp").read_text(
+            encoding="utf-8")
+        for name, dispid in self.CASES:
+            self.assertIn(f"L\"{name}\"", src,
+                          f"名称表缺 {name}")
+            self.assertIn(f"kDisp{name} = {dispid},", src,
+                          f"enum 缺 {name}={dispid}")
+            self.assertIn(f"case kDisp{name}:", src,
+                          f"Invoke case 缺 {name}")
+
+
 @unittest.skipUnless(
     native_bridge.is_compiled()
     and os.environ.get("SCF_RUN_BRIDGE_TESTS") == "1",

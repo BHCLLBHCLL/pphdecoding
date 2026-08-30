@@ -56,6 +56,15 @@ class TestVbApiCatalog:
         assert len(CLASSES["WrappingGroup"]["methods"]) == 30
         assert len(CLASSES["Utility"]["methods"]) == 16
         assert len(CLASSES["Condition"]["methods"]) == 8
+        # P12-A typed expansion
+        assert len(CLASSES["SNode"]["methods"]) == 145
+        assert len(CLASSES["FaceRegion"]["methods"]) == 70
+        assert len(CLASSES["FluidRegion"]["methods"]) == 66
+        assert len(CLASSES["NumericalRegion"]["methods"]) == 20
+        assert len(CLASSES["SubmeshSurfaceRegion"]["methods"]) == 19
+        assert len(CLASSES["AdaptiveParam"]["methods"]) == 4
+        assert len(CLASSES["MeshingGroupSetting"]["methods"]) == 104
+        assert len(CLASSES["Region"]["methods"]) == 6
 
     def test_open_project_full_entry(self):
         m = CLASSES["Doc"]["methods"]["OpenProject"]
@@ -85,26 +94,23 @@ class TestVbApiCatalog:
     def test_progid_source(self):
         assert CATALOG["progid"] == api.PROGID
 
+    def test_solver_entry(self):
+        # P12-B basis: ExecuteSolver on the Doc authority surface
+        m = CLASSES["Doc"]["methods"]["ExecuteSolver"]
+        assert m["arguments"][0]["name"] == "sphPath"
+        assert "QuitAndExecuteSolver" in CLASSES["Doc"]["methods"]
+
 
 # ---------------------------------------------------------------------------
 # 2. typed 包装对账（唯一真相源 = catalog）
 # ---------------------------------------------------------------------------
 
-WRAPPERS = {
-    api.ScFlowpreApplication: "Application",
-    api.ScFlowpreDoc: "Doc",
-    api.ScFlowpreConditions: "Conditions",
-    api.ScFlowpreCondition: "Condition",
-    api.ScFlowpreMeshingGroup: "MeshingGroup",
-    api.ScFlowpreOctree: "Octree",
-    api.ScFlowpreOctParam: "OctParam",
-    api.ScFlowpreWrappingGroup: "WrappingGroup",
-    api.ScFlowpreUtility: "Utility",
-}
+# P12-A: invert the api registry (name -> class) to class -> name
+WRAPPERS = {cls: name for name, cls in api.TYPED_CLASSES.items()}
 
 
 # 桥自有泛型方法（非手册成员，ComObject 逃生口之外的便捷封装）
-_LOCAL_METHODS = {"create_cond", "query_cond"}
+_LOCAL_METHODS = {"create_cond", "query_cond", "check"}
 
 
 class TestTypedWrappersAgainstCatalog:
@@ -146,6 +152,25 @@ class TestTypedWrappersAgainstCatalog:
         # 未 typed 的成员同样直调
         assert doc.call("GetPPHVersionString") == "2025.2"
 
+    def test_registry_names_exist_in_catalog(self):
+        missing = [n for n in api.TYPED_CLASSES if n not in CLASSES]
+        assert not missing, f"registry names not in catalog: {missing}"
+
+    def test_doc_region_factory_typed(self):
+        # P12-A: Doc.CreateFaceRegion returns typed wrapper (P12-D route)
+        fake = _FakeDispatch({"CreateFaceRegion": _FakeDispatch()})
+        doc = api.ScFlowpreDoc(fake)
+        region = doc.CreateFaceRegion("wall")
+        assert isinstance(region, api.ScFlowpreFaceRegion)
+        assert fake.calls == [("CreateFaceRegion", "wall")]
+
+    def test_snode_faceting_roundtrip(self):
+        fake = _FakeDispatch({"GetFacetingParameter": (1.0, 2.0),
+                              "SetFacetingParameter": True})
+        node = api.ScFlowpreSNode(fake)
+        assert node.GetFacetingParameter() == (1.0, 2.0)
+        assert node.SetFacetingParameter((3.0,)) is True
+
 
 class _FakeDispatch:
     """win32com dispatch 替身：记录 _FlagAsMethod，按名派发。
@@ -174,7 +199,64 @@ class _FakeDispatch:
 
 
 # ---------------------------------------------------------------------------
-# 3. 无宿主降级
+# 3. catalog coverage reconciliation (P12-A domain 7 acceptance)
+# ---------------------------------------------------------------------------
+
+class TestCatalogCoverage:
+    def test_coverage_complete_no_fourth_bucket(self):
+        """199 classes each land in one of three buckets."""
+        coverage = api.catalog_coverage(CATALOG)
+        assert set(coverage) == set(CLASSES)
+        assert set(coverage.values()) == {
+            "typed", "condition-subclass", "generic-call"}
+
+    def test_typed_bucket(self):
+        coverage = api.catalog_coverage(CATALOG)
+        typed = {n for n, c in coverage.items() if c == "typed"}
+        assert typed == set(api.TYPED_CLASSES)
+        for name in ("SNode", "FaceRegion", "FluidRegion", "NumericalRegion",
+                     "SubmeshSurfaceRegion", "AdaptiveParam",
+                     "MeshingGroupSetting"):
+            assert name in typed, f"{name} not typed"
+
+    def test_condition_subclass_bucket(self):
+        coverage = api.catalog_coverage(CATALOG)
+        conds = {n for n, c in coverage.items()
+                 if c == "condition-subclass"}
+        expected = {n for n in CLASSES if n.startswith("Cond")} - {
+            "Condition", "Conditions"}
+        assert conds == expected
+        # 136 marker subclasses (+ Condition/Conditions typed as bases)
+        assert len(conds) == 136
+        assert api.TYPED_CLASSES["Condition"] is api.ScFlowpreCondition
+
+    def test_generic_bucket_is_call_reachable(self):
+        """generic bucket: ComObject.call reaches any manual member."""
+        coverage = api.catalog_coverage(CATALOG)
+        generic = {n for n, c in coverage.items() if c == "generic-call"}
+        for class_name, member in (("Env", "GetMeshingGroupSetting"),
+                                   ("ProjectSetting", "GetCADImportType"),
+                                   ("MDLWizard", "CreateMDL"),
+                                   ("ClosedVolume", "GetAttribute")):
+            assert class_name in generic
+            assert member in CLASSES[class_name]["methods"]
+        fake = _FakeDispatch({member: "ok"})
+        obj = api.ComObject(fake)
+        assert obj.call(member) == "ok"
+
+    def test_coverage_counts(self):
+        coverage = api.catalog_coverage(CATALOG)
+        counts = {}
+        for c in coverage.values():
+            counts[c] = counts.get(c, 0) + 1
+        assert counts["typed"] == len(api.TYPED_CLASSES)
+        assert counts["condition-subclass"] == 136
+        assert counts["generic-call"] == (
+            199 - len(api.TYPED_CLASSES) - 136)
+
+
+# ---------------------------------------------------------------------------
+# 4. 无宿主降级
 # ---------------------------------------------------------------------------
 
 class TestSessionWithoutHost:
@@ -186,7 +268,14 @@ class TestSessionWithoutHost:
         assert api.last_error == "no document"
 
     def test_execute_vbs_requires_connection(self, monkeypatch):
+        # 仅替换 "win32com.client" 条目不够：本会话早前真实导入过
+        # win32com.client 时（如宿主在位、vbs_acceptance 先跑），
+        # connect() 里 `import win32com.client` 绑定的顶层名 win32com
+        # 仍指向真实包，`win32com.client.Dispatch` 照样可达——宿主在位
+        # 会真连、不在位甚至会拉起 GUI。顶层条目一并替换才彻底隔离。
         monkeypatch.setattr(api, "host_process_running", lambda: False)
+        monkeypatch.setitem(sys.modules, "win32com",
+                            _MissingModule("win32com"))
         monkeypatch.setitem(sys.modules, "win32com.client",
                             _MissingModule("win32com.client"))
         s = api.ScFlowpreSession()
@@ -213,6 +302,10 @@ class TestSessionWithoutHost:
         # vbs_acceptance 实机验收的职责）：模拟无宿主机。
         monkeypatch.setattr(api, "api_available", lambda: False)
         monkeypatch.setattr(api, "host_process_running", lambda: False)
+        # 同 test_execute_vbs_requires_connection：顶层 win32com 条目
+        # 一并替换，防止单测真连 COM / 拉起宿主。
+        monkeypatch.setitem(sys.modules, "win32com",
+                            _MissingModule("win32com"))
         monkeypatch.setitem(sys.modules, "win32com.client",
                             _MissingModule("win32com.client"))
         info = api.host_status()

@@ -75,13 +75,15 @@ class TestOctantVbs(unittest.TestCase):
         self.assertIn("Octree_.RefineByNumber 1, 4", actions)
 
     def test_refine_curv_arrays(self):
+        # P12-A：VBS 整型字面量（如 -1000）在 Array() 中是 VT_I2，原生端
+        # 按 double 读数组会 AV——生成器必须产出恒带小数点的 Double 字面量。
         actions = octant_actions(
             FAKE, "refine_curv",
             rmin=[0.0, 0.1, 0.2], rmax=[0.1, 0.2, 0.3], lowerlimit=30.0)
         text = "\n".join(actions)
-        self.assertIn("rmin_ = Array(0, 0.1, 0.2)", text)
+        self.assertIn("rmin_ = Array(0.0, 0.1, 0.2)", text)
         self.assertIn("rmax_ = Array(0.1, 0.2, 0.3)", text)
-        self.assertIn("Octree_.RefineFromCurvature rmin_, rmax_, 30", text)
+        self.assertIn("Octree_.RefineFromCurvature rmin_, rmax_, 30.0", text)
 
     def test_separation_not_supported(self):
         self.assertIsNone(octant_op_label("refine_sep"))

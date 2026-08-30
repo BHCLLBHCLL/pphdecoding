@@ -12,6 +12,7 @@ build/
 dist/
 *.egg-info/
 native/out/
+scratch/
 
 tests/*
 cases/*

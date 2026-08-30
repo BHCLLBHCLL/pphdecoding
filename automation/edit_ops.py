@@ -19,14 +19,23 @@ from typing import Iterable, Optional, Sequence
 from automation.vbs_bridge import write_vbs_file
 
 
+# CAD 后缀：header 走 OpenCadFile（fresh CAD → solid 阶段），
+# 其余按 PPH 工程走 OpenProject。
+_CAD_SUFFIXES = {".x_t", ".x_b", ".step", ".stp", ".iges", ".igs", ".stl"}
+
+
 def _header(project_path: str | Path) -> list[str]:
-    path = Path(project_path).as_posix()
+    path = Path(project_path)
+    if path.suffix.lower() in _CAD_SUFFIXES:
+        opener = f'Doc_.OpenCadFile "{path.as_posix()}"'
+    else:
+        opener = f'Doc_.OpenProject "{path.as_posix()}", False'
     return [
         "Set App_ = GetApplication()",
         'If App_ Is Nothing Then Set App_ = '
         'CreateObject("scFLOWpre_Bx64net.Application.2025")',
         "Set Doc_ = App_.GetDocument",
-        f'Doc_.OpenProject "{path}", False',
+        opener,
         "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
     ]
 
@@ -44,11 +53,24 @@ def _marker_actions(marker: Optional[str | Path]) -> list[str]:
 def ridge_actions(project_path: str | Path, op: str,
                   *, angle: Optional[float] = None,
                   edge_numbers: Sequence[int] = (),
-                  select_all_edges: bool = True) -> list[str]:
-    """Ridge 编辑 VBS（``op`` ∈ set / unset / recalc）。"""
+                  select_all_edges: bool = True,
+                  create_vmdl: bool = False,
+                  save_path: Optional[str | Path] = None) -> list[str]:
+    """Ridge 编辑 VBS（``op`` ∈ set / unset / recalc）。
+
+    Ridge 方法仅存在于 VMDL（虚拟部件模型，手册
+    Scf_vb_Preprocessor_VMDL_Class.html）：solid MDL 工程上
+    ``GetVMDL`` 返回 Nothing（P12-A 实测 box.pph），后续调用 424。
+    要在 solid 工程上编辑 Ridge，须先 ``CreateVMDL`` 进入虚拟部件
+    阶段——传 ``create_vmdl=True``（CAD 路径 header 自动走
+    OpenCadFile，P12-A 实测 CreateVMDL→GetVMDL→Ridge 全链 err=0）。
+    ``save_path``：SaveProject 目标（默认写回 ``project_path``）。
+    """
     if op not in ("set", "unset", "recalc"):
         raise ValueError(f"unknown ridge op: {op}")
     actions = _header(project_path)
+    if create_vmdl:
+        actions.append("MeshingGroup_.CreateVMDL")
     actions.append("Set VMDL_ = MeshingGroup_.GetVMDL")
     if op == "recalc":
         if angle is not None:
@@ -72,7 +94,8 @@ def ridge_actions(project_path: str | Path, op: str,
         actions.append("VMDL_.SetSelectedEdgeToRidge"
                        if op == "set"
                        else "VMDL_.SetSelectedEdgeToNonRidge")
-    actions.append(f'Doc_.SaveProject "{Path(project_path).as_posix()}"')
+    save = Path(save_path) if save_path is not None else Path(project_path)
+    actions.append(f'Doc_.SaveProject "{save.as_posix()}"')
     return actions
 
 
@@ -108,14 +131,19 @@ def octant_actions(project_path: str | Path, op: str,
         if rmin is None or rmax is None or len(rmin) != len(rmax):
             raise ValueError(
                 "refine_curv requires rmin/rmax arrays of equal length")
-        actions.append("Dim rmin_()")
+        # VBS: int literals in Array() become VT_I2; native side reads
+        # doubles -> AV in mfc140u.dll (P12-A). repr(float) always has
+        # a decimal point so VBS parses Double.
+        def _dbl(v):
+            return repr(float(v))
+        actions.append("Dim rmin_")
         actions.append("rmin_ = Array("
-                       + ", ".join(f"{v:g}" for v in rmin) + ")")
-        actions.append("Dim rmax_()")
+                       + ", ".join(_dbl(v) for v in rmin) + ")")
+        actions.append("Dim rmax_")
         actions.append("rmax_ = Array("
-                       + ", ".join(f"{v:g}" for v in rmax) + ")")
+                       + ", ".join(_dbl(v) for v in rmax) + ")")
         actions.append(
-            f"Octree_.RefineFromCurvature rmin_, rmax_, {lowerlimit:g}")
+            f"Octree_.RefineFromCurvature rmin_, rmax_, {_dbl(lowerlimit)}")
     elif op == "show_by_face":
         actions.append("Octree_.ShowOctBySelectedFace")
     elif op == "show_by_edge":
@@ -157,12 +185,15 @@ def write_ridge_vbs(project_path: str | Path, op: str,
                     *, angle: Optional[float] = None,
                     edge_numbers: Sequence[int] = (),
                     select_all_edges: bool = True,
+                    create_vmdl: bool = False,
+                    save_path: Optional[str | Path] = None,
                     marker: Optional[str | Path] = None) -> Path:
     return write_host_edit_vbs(
         project_path,
         ridge_actions(project_path, op, angle=angle,
                       edge_numbers=edge_numbers,
-                      select_all_edges=select_all_edges),
+                      select_all_edges=select_all_edges,
+                      create_vmdl=create_vmdl, save_path=save_path),
         output, marker=marker, title=f"pph_gui ridge {op}")
 
 

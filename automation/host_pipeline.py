@@ -5,16 +5,19 @@ The bridge DLL is registered as a per-user in-proc COM server
 (File -> Execute VBScript) creates that object, so the bridge runs in the
 host process where the SCTprime document context is already initialized.
 
-Backends:
+Backends (P12-A 后端收敛：rot 为唯一权威执行通道，其余仅诊断):
 
-- ``manual``: write the script and ask the user to run it in the host;
-- ``com``: ``Application.ExecuteVBSWithFile`` / ``ExecuteVBS`` via win32com
-  (must ``_FlagAsMethod`` — late binding otherwise exposes them as bool props);
-- ``rot``: attach the resident Kicker instance via ``GetActiveObject``
-  (ROT) and run ``ExecuteVBSWithFile`` — SCTprime context is ready
-  (``context_ready=1``), so the deep pipeline (CreateShapeGroupSet etc.)
-  runs in-proc without GUI (P10 核心通道);
-- ``gui``: best-effort pywinauto automation of File -> Execute VBScript.
+- ``rot``: **权威通道** — attach the resident Kicker instance via
+  ``GetActiveObject`` (ROT) and run ``ExecuteVBSWithFile`` — SCTprime
+  context is ready (``context_ready=1``), so the deep pipeline
+  (CreateShapeGroupSet etc.) runs in-proc without GUI (P10 核心通道);
+- ``manual``: 诊断 — write the script and ask the user to run it in the
+  host;
+- ``com``: 诊断 — ``Application.ExecuteVBSWithFile`` / ``ExecuteVBS`` via
+  win32com Dispatch（瞬态新实例，SCTprime 上下文为空 → 无深管线;
+  must ``_FlagAsMethod`` — late binding otherwise exposes them as bool props);
+- ``gui``: 诊断 — best-effort pywinauto automation of
+  File -> Execute VBScript.
 
 宿主验证环境事实（2026-08-17 实测，规范记录见 DEV_SUMMARY §6.3 前置块；
 2026-08-20 P10 实测补充见下）：
@@ -47,6 +50,25 @@ from automation.vbs_bridge import write_vbs_file
 CLSID = "{9F8D2C1A-3B4E-4C5D-8E6F-1A2B3C4D5E6F}"
 PROGID = "pphdecoding.ScflowPipeline"
 PROGID_HOST = "scFLOWpre_Bx64net.Application.2025"
+
+# P12-A 后端收敛：rot 为唯一权威执行通道；manual/gui/com 仅诊断。
+AUTHORITATIVE_BACKEND = "rot"
+_KNOWN_BACKENDS = ("manual", "gui", "com", "rot")
+
+
+def resolve_backend(explicit: Optional[str] = None) -> str:
+    """P12-A 后端收敛：未指定 → rot（唯一权威通道）。
+
+    rot 附着 Kicker 常驻实例（SCTprime 上下文就绪）；显式 backend
+    仅用于诊断——manual（草稿+提示）/ gui（pywinauto 菜单点击）/
+    com（Dispatch 瞬态实例，上下文为空，无深管线）。
+    """
+    if explicit is None:
+        return AUTHORITATIVE_BACKEND
+    if explicit not in _KNOWN_BACKENDS:
+        raise ValueError(f"unknown backend: {explicit}")
+    return explicit
+
 
 _REG_ROOT = r"Software\Classes"
 
@@ -132,11 +154,18 @@ def build_pipeline_vbs(result_path: str | Path,
                        group_name: str = "ProbeGroup",
                        project_path: Optional[str | Path] = None,
                        output: Optional[str | Path] = None,
-                       deep: bool = False) -> Path:
+                       deep: bool = False,
+                       xt_src: Optional[str | Path] = None,
+                       xt_dst: Optional[str | Path] = None) -> Path:
     """Write the VBS that drives the COM bridge inside the host.
 
     ``deep=True`` 在 CreateMDL 后追加 P11 深管线调用（CreateFacetOctree /
     ExecuteWrapping），验证 ABI 不崩溃 + 观察 SCTprime ErrorCode。
+    P12 追加：CreateMeshOctree（未知句柄 → COM 层 SCF_ERR_ARG 校验）与
+    ConvertFacetToXT（``xt_src``→``xt_dst``，C ABI 全链：符号解析 + x64
+    ABI + SEH + 业务 ErrorCode）。``xt_src`` 缺省指向 result 同目录下
+    不存在的 ``_p12_no_such.facet``——缺文件走 SCTprime 业务失败路径，
+    本身即验证（无访问违例、last_exception_code=0）。
     """
     result_path = Path(result_path).resolve()
     lines = [
@@ -192,6 +221,10 @@ def build_pipeline_vbs(result_path: str | Path,
         # （COM 桥 ReleaseHandle 会 erase 句柄）。须新建独立 set，避免
         # CreateShapeGroup 查不到句柄而返回 SCF_ERR_ARG 导致深管线段被
         # `If hGroup2 > 0` 跳过。
+        xt_src_p = Path(xt_src) if xt_src else \
+            result_path.parent / "_p12_no_such.facet"
+        xt_dst_p = Path(xt_dst) if xt_dst else \
+            result_path.parent / "_p12_xt_out.xt"
         deep_lines = [
             f'    hSet2 = Pipe.CreateShapeGroupSet("{set_name}Deep")',
             "    If hSet2 > 0 Then",
@@ -201,6 +234,15 @@ def build_pipeline_vbs(result_path: str | Path,
             '            out.WriteLine "facet_oct_handle=" & CStr(hOct) & "|err=" & CStr(Pipe.LastError())',
             "            wrapEc = Pipe.ExecuteWrapping(CLng(hGroup2))",
             '            out.WriteLine "wrapping_ec=" & CStr(wrapEc) & "|err=" & CStr(Pipe.LastError())',
+            # P12-A：CreateMeshOctree 用未知句柄（999901）验证 COM 层
+            # 参数校验（返回 0 + LastError=SCF_ERR_ARG，不触 DLL）；不
+            # 传 hGroup2——那是 IShapeGroup，传给 IVMDL 方法属类型混淆。
+            # ConvertFacetToXT 走 C ABI 全链（符号 + ABI + SEH），缺
+            # 文件 → SCTprime 业务 ErrorCode。
+            "            hMeshOct = Pipe.CreateMeshOctree(CLng(999901))",
+            '            out.WriteLine "mesh_oct_handle=" & CStr(hMeshOct) & "|err=" & CStr(Pipe.LastError())',
+            f'            xtEc = Pipe.ConvertFacetToXT("{xt_src_p}", "{xt_dst_p}")',
+            '            out.WriteLine "xt_ec=" & CStr(xtEc) & "|err=" & CStr(Pipe.LastError())',
             '            out.WriteLine "last_exception_code=" & CStr(Pipe.LastExceptionCode())',
             "            If hOct > 0 Then Pipe.ReleaseHandle CLng(hOct)",
             "            Pipe.ReleaseHandle CLng(hGroup2)",
@@ -589,13 +631,19 @@ def _dismiss_warning_dialogs(app) -> None:
         time.sleep(1.0)
 
 
-def run_in_host(vbs_path: str | Path, *, backend: str = "manual",
+def run_in_host(vbs_path: str | Path, *,
+                backend: Optional[str] = None,
                 timeout: float = 180.0,
                 menu: Optional[dict] = None) -> dict:
-    """Run a VBS inside the scFLOWpre host."""
+    """Run a VBS inside the scFLOWpre host.
+
+    P12-A：未指定 backend 时解析为 rot（权威通道）；manual/gui/com
+    仅经显式参数作诊断使用。
+    """
     vbs_path = Path(vbs_path)
     if not vbs_path.is_file():
         raise FileNotFoundError(vbs_path)
+    backend = resolve_backend(backend)
     if backend == "manual":
         return {
             "backend": "manual",
@@ -636,6 +684,17 @@ def run_vbs_if_ready(vbs_path: str | Path, *, timeout: float = 180.0) -> dict:
     payload["attempted"] = True
     payload.setdefault("ok", True)
     return payload
+
+
+def run_vbs_authoritative(vbs_path: str | Path, *,
+                          timeout: float = 180.0) -> dict:
+    """P12-A 权威执行入口（rot 附着 Kicker 常驻实例）。
+
+    GUI Execute/VBS 执行一律走此通道；无 com 回退——Dispatch 瞬态
+    实例 SCTprime 上下文为空（ContextReady=0），跑不了深管线。
+    """
+    return run_in_host(vbs_path, backend=AUTHORITATIVE_BACKEND,
+                       timeout=timeout)
 
 
 def locate_scflowpre() -> dict:
@@ -894,11 +953,13 @@ def run_pipeline(set_name: str = "Probe",
                  project_path: Optional[str | Path] = None,
                  result_path: Optional[str | Path] = None,
                  vbs_path: Optional[str | Path] = None,
-                 backend: str = "manual",
+                 backend: Optional[str] = None,
                  timeout: float = 180.0,
                  menu: Optional[dict] = None,
-                 register: bool = True) -> dict:
+                 register: bool = True,
+                 deep: bool = False) -> dict:
     """Register the COM bridge, build the VBS and run it in the host."""
+    backend = resolve_backend(backend)
     if register:
         register_com()
     result = Path(result_path) if result_path else \
@@ -906,7 +967,7 @@ def run_pipeline(set_name: str = "Probe",
     vbs = Path(vbs_path) if vbs_path else result.with_suffix(".vbs")
     build_pipeline_vbs(result, set_name=set_name, group_name=group_name,
                        project_path=project_path,
-                       output=vbs)
+                       output=vbs, deep=deep)
     run = run_in_host(vbs, backend=backend, timeout=timeout, menu=menu)
     if backend == "manual":
         return {"run": run, "result_path": str(result), "ok": False,
@@ -943,7 +1004,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--run", action="store_true",
                     help="run the pipeline in the host")
     ap.add_argument("--backend", choices=["manual", "gui", "com", "rot"],
-                    default="manual")
+                    default=AUTHORITATIVE_BACKEND,
+                    help="default rot (P12-A authoritative); "
+                         "manual/gui/com are diagnostics")
     ap.add_argument("--set-name", default="Probe")
     ap.add_argument("--project", default=None,
                     help="PPH/CAD path to open in the host before the pipeline")

@@ -38,6 +38,8 @@ enum ScfPipelineDispId {
     kDispLastExceptionCode = 10, // 最近 SEH 捕获的异常码
     kDispCreateFacetOctree = 11, // IShapeGroup::CreateFacetOctree
     kDispExecuteWrapping = 12,   // IShapeGroup::ExecuteWrapping
+    kDispCreateMeshOctree = 13,  // IVMDL::CreateMeshOctreeByDefaultParam
+    kDispConvertFacetToXT = 14,  // SCTprime::ConvertFacetToXT（自由函数）
 };
 
 static bool wcs_eq(const wchar_t* a, const wchar_t* b) {
@@ -57,6 +59,8 @@ static DISPID lookup_disp_id(const wchar_t* name) {
     if (wcs_eq(name, L"LastExceptionCode")) return kDispLastExceptionCode;
     if (wcs_eq(name, L"CreateFacetOctree")) return kDispCreateFacetOctree;
     if (wcs_eq(name, L"ExecuteWrapping")) return kDispExecuteWrapping;
+    if (wcs_eq(name, L"CreateMeshOctree")) return kDispCreateMeshOctree;
+    if (wcs_eq(name, L"ConvertFacetToXT")) return kDispConvertFacetToXT;
     return DISPID_UNKNOWN;
 }
 
@@ -248,6 +252,27 @@ class ScfPipelineCom : public IDispatch {
                 }
                 return S_OK;
             }
+            case kDispCreateMeshOctree: {
+                if (params->cArgs < 1) return DISP_E_BADPARAMCOUNT;
+                long mdl_id = V_I4(&params->rgvarg[0]);
+                long id = DoCreateMeshOctree(mdl_id);
+                if (result != nullptr) {
+                    V_VT(result) = VT_I4;
+                    V_I4(result) = id;
+                }
+                return S_OK;
+            }
+            case kDispConvertFacetToXT: {
+                if (params->cArgs < 2) return DISP_E_BADPARAMCOUNT;
+                std::wstring src = variant_to_string(params->rgvarg[1]);
+                std::wstring dst = variant_to_string(params->rgvarg[0]);
+                long ec = DoConvertFacetToXT(src, dst);
+                if (result != nullptr) {
+                    V_VT(result) = VT_I4;
+                    V_I4(result) = ec;
+                }
+                return S_OK;
+            }
             default:
                 return DISP_E_MEMBERNOTFOUND;
         }
@@ -377,6 +402,52 @@ class ScfPipelineCom : public IDispatch {
         }
         SetError(SCF_ERR_OK);
         // 返回 SCTprime ErrorCode（业务结果）；0 = OK。
+        return error_code;
+    }
+
+    long DoCreateMeshOctree(long mdl_id) {
+        auto it = objects_.find(mdl_id);
+        if (it == objects_.end()) {
+            SetError(SCF_ERR_ARG);
+            return 0;
+        }
+        std::array<unsigned char, 16> buf{};
+        int error_code = 0;
+        int err = 0;
+        unsigned __int64 handle =
+            reinterpret_cast<unsigned __int64>(it->second.data());
+        if (scf_pipeline_create_mesh_octree(handle, buf.data(), &error_code,
+                                            &err) != 1) {
+            SetError(err);
+            return 0;
+        }
+        // error_code != 0 = SCTprime 业务失败（如非 IVMDL 对象）。桥级
+        // 成功但业务失败：记录 error_code 供诊断，返回 0（无 octree）。
+        if (error_code != 0) {
+            SetError(error_code);
+            return 0;
+        }
+        long id = next_id_++;
+        objects_[id] = buf;
+        SetError(SCF_ERR_OK);
+        return id;
+    }
+
+    long DoConvertFacetToXT(const std::wstring& src, const std::wstring& dst) {
+        if (src.empty() || dst.empty()) {
+            SetError(SCF_ERR_ARG);
+            return -1;
+        }
+        int error_code = 0;
+        int err = 0;
+        if (scf_pipeline_convert_facet_to_xt(src.c_str(), dst.c_str(),
+                                             &error_code, &err) != 1) {
+            SetError(err);
+            return -1;
+        }
+        SetError(error_code == 0 ? SCF_ERR_OK : error_code);
+        // 返回 SCTprime ErrorCode（业务结果）；0 = OK，-1 = 桥级失败
+        //（LastError 区分 SCF_ERR_ARG/SYMBOL/EXCEPTION）。
         return error_code;
     }
 

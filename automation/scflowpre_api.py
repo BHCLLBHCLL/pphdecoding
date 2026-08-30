@@ -10,8 +10,12 @@ Note）。ProgID：``scFLOWpre_Bx64net.Application.2025``。
 * :class:`ComObject.call` 做 ``_FlagAsMethod`` 派发——手册任一成员可达，
   无需预写包装（官方手册 "VB interface usage in Python" 认证的模式；
   Application/Doc 的无参方法不 flag 会 DISP_E_MEMBERNOTFOUND）；
-* typed 包装类覆盖高频成员：Application/Doc/Conditions/Condition/
-  MeshingGroup/Octree/OctParam/WrappingGroup/Utility；
+* typed 包装类覆盖高频成员（P12-A 起 17 类，经 ``TYPED_CLASSES``
+  注册表对 catalog 199 类全量对账）：Application/Doc/Conditions/
+  Condition/MeshingGroup/Octree/OctParam/WrappingGroup/Utility/Region/
+  SNode/FaceRegion/FluidRegion/NumericalRegion/SubmeshSurfaceRegion/
+  AdaptiveParam/MeshingGroupSetting；136 个 ``Cond*`` 标记子类经
+  Condition 泛型出口，其余手册类经 ``ComObject.call`` 直达；
 * :class:`ScFlowpreSession` 附着优先：宿主机上 Kicker 常驻实例
   （headless）几乎总在运行，``GetActiveObject``（ROT）附着它驱动，
   ``_owned=False`` 守卫——附着实例永不 ``Quit``；无运行实例时
@@ -264,8 +268,46 @@ class ScFlowpreDoc(ComObject):
         return ScFlowpreWrappingGroup(
             self.call("QueryWrappingGroupByIndex", index))
 
-    def QueryFaceRegionByName(self, name: str) -> ComObject:
-        return ComObject(self.call("QueryFaceRegionByName", name))
+    def QueryFaceRegionByName(self, name: str) -> "ScFlowpreFaceRegion":
+        return ScFlowpreFaceRegion(self.call("QueryFaceRegionByName", name))
+
+    # --- 区域创建（P12-A typed 建面：Register Region 权威路线） ---
+    def CreateFaceRegion(self, name: str) -> "ScFlowpreFaceRegion":
+        return ScFlowpreFaceRegion(self.call("CreateFaceRegion", name))
+
+    def CreateFluidRegion(self, name: str) -> "ScFlowpreFluidRegion":
+        return ScFlowpreFluidRegion(self.call("CreateFluidRegion", name))
+
+    def CreateNumericalRegion(self, name: str,
+                              type_) -> "ScFlowpreNumericalRegion":
+        return ScFlowpreNumericalRegion(
+            self.call("CreateNumericalRegion", name, type_))
+
+    def CreateSubmeshSurfaceRegion(
+            self, name: str) -> "ScFlowpreSubmeshSurfaceRegion":
+        return ScFlowpreSubmeshSurfaceRegion(
+            self.call("CreateSubmeshSurfaceRegion", name))
+
+    def CreateSubmeshMeshingGroup(self, name: str) -> ComObject:
+        return ComObject(self.call("CreateSubmeshMeshingGroup", name))
+
+    def CreateDiscontinuousMeshingGroupWithMovingPart(
+            self, name: str) -> ComObject:
+        return ComObject(
+            self.call("CreateDiscontinuousMeshingGroupWithMovingPart", name))
+
+    def CreateCoordinatesSpecifiedPart(self, name: str) -> ComObject:
+        return ComObject(self.call("CreateCoordinatesSpecifiedPart", name))
+
+    def CreateGroupPart(self, name: str) -> Any:
+        return self.call("CreateGroupPart", name)
+
+    # --- SNode（P12-D CreateMDL 注入路线） ---
+    def QuerySNodeByName(self, name: str) -> "ScFlowpreSNode":
+        return ScFlowpreSNode(self.call("QuerySNodeByName", name))
+
+    def GetAdaptiveParam(self) -> "ScFlowpreAdaptiveParam":
+        return ScFlowpreAdaptiveParam(self.call("GetAdaptiveParam"))
 
     # --- 区域 ---
     def GetFaceRegions(self) -> Any:
@@ -300,13 +342,19 @@ class ScFlowpreDoc(ComObject):
         return ScFlowpreWrappingGroup(self.call("CreateWrappingGroup"))
 
     # --- CAD / 求解 / 导出 ---
-    def OpenCadFile(self, path: str | Path) -> ComObject:
-        """导入 CAD（返回 SNode）。"""
-        return ComObject(self.call("OpenCadFile", str(Path(path).resolve())))
+    def OpenCadFile(self, path: str | Path) -> "ScFlowpreSNode":
+        """导入 CAD（XT/STEP 等，返回 SNode）。"""
+        return ScFlowpreSNode(
+            self.call("OpenCadFile", str(Path(path).resolve())))
 
     def ImportCADAsFacet(self, path: str | Path, meshgroup) -> bool:
         return bool(self.call("ImportCADAsFacet",
                               str(Path(path).resolve()), meshgroup))
+
+    def ImportPatchAsCAD(self, path: str | Path) -> ComObject:
+        """导入 patch 文件为 CAD（Define Facet Part 前置）。"""
+        return ComObject(
+            self.call("ImportPatchAsCAD", str(Path(path).resolve())))
 
     def ImportXML(self, path: str | Path) -> ComObject:
         return ComObject(self.call("ImportXML", str(Path(path).resolve())))
@@ -319,6 +367,11 @@ class ScFlowpreDoc(ComObject):
 
     def ExecuteSolver(self, sph_path: str | Path) -> bool:
         return bool(self.call("ExecuteSolver", str(Path(sph_path).resolve())))
+
+    def QuitAndExecuteSolver(self, sph_path: str | Path) -> bool:
+        """提交求解并退出前处理（P12-B 求解链路入口）。"""
+        return bool(self.call("QuitAndExecuteSolver",
+                              str(Path(sph_path).resolve())))
 
     def SaveCmbFile(self, path: str | Path, type_=0) -> bool:
         return bool(self.call("SaveCmbFile", str(Path(path).resolve()), type_))
@@ -427,6 +480,57 @@ class ScFlowpreMeshingGroup(ComObject):
 
     def DoesMeshErrorExist(self) -> bool:
         return bool(self.call("DoesMeshErrorExist"))
+
+    def IsAnalysisModelBuilt(self) -> bool:
+        return bool(self.call("IsAnalysisModelBuilt"))
+
+    # --- 子对象（P12-A typed 建面） ---
+    def GetOctree(self) -> "ScFlowpreOctree":
+        return ScFlowpreOctree(self.call("GetOctree"))
+
+    def GetOctParam(self) -> "ScFlowpreOctParam":
+        return ScFlowpreOctParam(self.call("GetOctParam"))
+
+    def GetMeshingGroupSetting(self) -> "ScFlowpreMeshingGroupSetting":
+        return ScFlowpreMeshingGroupSetting(
+            self.call("GetMeshingGroupSetting"))
+
+    # --- MDL Wizard / VMDL（P12-E BAM e2e 面） ---
+    def BeginMDLWizard(self) -> bool:
+        return bool(self.call("BeginMDLWizard"))
+
+    def EndMDLWizard(self) -> bool:
+        return bool(self.call("EndMDLWizard"))
+
+    def CancelMDLWizard(self) -> bool:
+        return bool(self.call("CancelMDLWizard"))
+
+    def GetMDLWizard(self) -> ComObject:
+        return ComObject(self.call("GetMDLWizard"))
+
+    def CreateVMDL(self) -> bool:
+        return bool(self.call("CreateVMDL"))
+
+    def GetVMDL(self) -> ComObject:
+        return ComObject(self.call("GetVMDL"))
+
+    def GetMDL(self) -> ComObject:
+        return ComObject(self.call("GetMDL"))
+
+    def DeleteMDL(self) -> bool:
+        return bool(self.call("DeleteMDL"))
+
+    def GetCreateVMDLError(self) -> Any:
+        return self.call("GetCreateVMDLError")
+
+    # --- 网格检查族（View/Select 菜单权威后端） ---
+    def CheckIntersectionForMeshModel(self) -> Any:
+        return self.call("CheckIntersectionForMeshModel")
+
+    def check(self, name: str, *args) -> Any:
+        """泛型 ``Check*``（12 项质量检查：AbnormalFaceDirection /
+        AtomicElementVolume / BothSideSameElement / …）。"""
+        return self.call("Check" + name, *args)
 
 
 class ScFlowpreOctree(ComObject):
@@ -728,6 +832,648 @@ class ScFlowpreUtility(ComObject):
 
     def ConvertPlaneParamXYZtoNorm(self, param) -> Any:
         return self.call("ConvertPlaneParamXYZtoNorm", param)
+
+
+
+
+class ScFlowpreRegion(ComObject):
+    """Region 基类（手册 6 方法全量；FaceRegion/FluidRegion 等的公共面）。"""
+
+    def GetName(self) -> Any:
+        return self.call("GetName")
+
+    def SetName(self, name: str) -> Any:
+        return self.call("SetName", name)
+
+    def GetRegionType(self) -> Any:
+        return self.call("GetRegionType")
+
+    def GetConditions(self) -> Any:
+        return self.call("GetConditions")
+
+    def GetValue(self, name: str) -> Any:
+        return self.call("GetValue", name)
+
+    def CheckConditionExist(self, name: str) -> bool:
+        return bool(self.call("CheckConditionExist", name))
+
+
+class ScFlowpreSNode(ComObject):
+    """SNode 类高频成员（手册 145 方法，其余经 :meth:`call` 直达）。
+
+    P12-D CreateMDL 注入路线的核心对象（OpenCadFile / QuerySNodeByName /
+    CreateGroupPart 产物）。
+    """
+
+    # --- 树结构 ---
+    def GetParent(self) -> "ScFlowpreSNode":
+        return ScFlowpreSNode(self.call("GetParent"))
+
+    def GetChild(self, index) -> "ScFlowpreSNode":
+        return ScFlowpreSNode(self.call("GetChild", index))
+
+    def GetChildren(self) -> Any:
+        return self.call("GetChildren")
+
+    def GetNextSibling(self) -> "ScFlowpreSNode":
+        return ScFlowpreSNode(self.call("GetNextSibling"))
+
+    def CanHaveChild(self) -> bool:
+        return bool(self.call("CanHaveChild"))
+
+    # --- 身份 / 类型 ---
+    def GetOriginalName(self) -> Any:
+        return self.call("GetOriginalName")
+
+    def IsGroupPart(self) -> bool:
+        return bool(self.call("IsGroupPart"))
+
+    def IsGroupPartComponent(self) -> bool:
+        return bool(self.call("IsGroupPartComponent"))
+
+    def IsAssembly(self) -> bool:
+        return bool(self.call("IsAssembly"))
+
+    def IsFluid(self) -> bool:
+        return bool(self.call("IsFluid"))
+
+    def IsObstacle(self) -> bool:
+        return bool(self.call("IsObstacle"))
+
+    def SetObstacle(self, flag) -> Any:
+        return self.call("SetObstacle", flag)
+
+    def IsSheet(self) -> bool:
+        return bool(self.call("IsSheet"))
+
+    def IsSheetTypePanel(self) -> bool:
+        return bool(self.call("IsSheetTypePanel"))
+
+    def GetGroupNumber(self) -> Any:
+        return self.call("GetGroupNumber")
+
+    def SetGroupNumber(self, number) -> Any:
+        return self.call("SetGroupNumber", number)
+
+    # --- 细化参数 ---
+    def GetFacetingParameter(self) -> Any:
+        return self.call("GetFacetingParameter")
+
+    def SetFacetingParameter(self, param) -> Any:
+        return self.call("SetFacetingParameter", param)
+
+    def ClearFacetingParameter(self) -> Any:
+        return self.call("ClearFacetingParameter")
+
+    def IsFacetingParameterSet(self) -> bool:
+        return bool(self.call("IsFacetingParameterSet"))
+
+    def GetFacetingParameterType(self) -> Any:
+        return self.call("GetFacetingParameterType")
+
+    def SetFacetingParameterType(self, type_) -> Any:
+        return self.call("SetFacetingParameterType", type_)
+
+    def GetFacetingOptionParameter(self) -> Any:
+        return self.call("GetFacetingOptionParameter")
+
+    def SetFacetingOptionParameter(self, param) -> Any:
+        return self.call("SetFacetingOptionParameter", param)
+
+    # --- 几何量 ---
+    def GetBoundingBox(self) -> Any:
+        return self.call("GetBoundingBox")
+
+    def GetCentroid(self) -> Any:
+        return self.call("GetCentroid")
+
+    def GetArea(self) -> Any:
+        return self.call("GetArea")
+
+    def GetVolume(self) -> Any:
+        return self.call("GetVolume")
+
+    def GetThickness(self) -> Any:
+        return self.call("GetThickness")
+
+    def SetThickness(self, thickness) -> Any:
+        return self.call("SetThickness", thickness)
+
+    def GetSphereCenterRadius(self) -> Any:
+        return self.call("GetSphereCenterRadius")
+
+    # --- 关联对象 ---
+    def GetFluidRegion(self) -> "ScFlowpreFluidRegion":
+        return ScFlowpreFluidRegion(self.call("GetFluidRegion"))
+
+    def GetSurfaceRegion(self) -> ComObject:
+        return ComObject(self.call("GetSurfaceRegion"))
+
+    def GetWrappingGroup(self) -> "ScFlowpreWrappingGroup":
+        return ScFlowpreWrappingGroup(self.call("GetWrappingGroup"))
+
+    def GetMovingGroup(self) -> ComObject:
+        return ComObject(self.call("GetMovingGroup"))
+
+    def GetBelongingGroupPart(self) -> "ScFlowpreSNode":
+        return ScFlowpreSNode(self.call("GetBelongingGroupPart"))
+
+    def GetCoordinatesSpecifiedParts(self) -> Any:
+        return self.call("GetCoordinatesSpecifiedParts")
+
+    # --- 显示 / 选择 ---
+    def GetVisible(self) -> bool:
+        return bool(self.call("GetVisible"))
+
+    def SetVisible(self, flag) -> Any:
+        return self.call("SetVisible", flag)
+
+    def GetSelect(self) -> bool:
+        return bool(self.call("GetSelect"))
+
+    def SetSelect(self, flag) -> Any:
+        return self.call("SetSelect", flag)
+
+    def IsExpanded(self) -> bool:
+        return bool(self.call("IsExpanded"))
+
+    def SetExpand(self, flag) -> Any:
+        return self.call("SetExpand", flag)
+
+    # --- IO / 属性 ---
+    def SaveXTFile(self, path: str | Path) -> bool:
+        return bool(self.call("SaveXTFile", str(Path(path).resolve())))
+
+    def ImportCSV(self, path: str | Path) -> Any:
+        return self.call("ImportCSV", str(Path(path).resolve()))
+
+    def QueryPropValueObj(self, name: str) -> ComObject:
+        return ComObject(self.call("QueryPropValueObj", name))
+
+    def GetMaterial(self) -> Any:
+        return self.call("GetMaterial")
+
+    def SetMaterial(self, material) -> Any:
+        return self.call("SetMaterial", material)
+
+
+class ScFlowpreFaceRegion(ComObject):
+    """FaceRegion 类高频成员（手册 70 方法；Register Region 权威路线核心）。"""
+
+    # --- 注册（P12-D：Register Region 关门验收的官方路径） ---
+    def RegisterSelectedMDLFace(self) -> bool:
+        return bool(self.call("RegisterSelectedMDLFace"))
+
+    def RegisterVFace(self, faces) -> bool:
+        return bool(self.call("RegisterVFace", faces))
+
+    def RegisterSFace(self, faces) -> bool:
+        return bool(self.call("RegisterSFace", faces))
+
+    def SetSelectMDLFaces(self, faces, flag) -> Any:
+        return self.call("SetSelectMDLFaces", faces, flag)
+
+    # --- 类型 / 编组 ---
+    def GetFaceRegionType(self) -> Any:
+        return self.call("GetFaceRegionType")
+
+    def SetFaceRegionType(self, type_) -> Any:
+        return self.call("SetFaceRegionType", type_)
+
+    def GetGroupNumber(self) -> Any:
+        return self.call("GetGroupNumber")
+
+    def SetGroupNumber(self, number) -> Any:
+        return self.call("SetGroupNumber", number)
+
+    def IsDiscontinuous(self) -> bool:
+        return bool(self.call("IsDiscontinuous"))
+
+    # --- 面 / 部件 ---
+    def GetMDLFaceCount(self) -> Any:
+        return self.call("GetMDLFaceCount")
+
+    def GetMDLFaces(self) -> Any:
+        return self.call("GetMDLFaces")
+
+    def GetVFaces(self) -> Any:
+        return self.call("GetVFaces")
+
+    def GetSFaces(self) -> Any:
+        return self.call("GetSFaces")
+
+    def GetPartSNode(self) -> "ScFlowpreSNode":
+        return ScFlowpreSNode(self.call("GetPartSNode"))
+
+    def GetPartVPart(self) -> ComObject:
+        return ComObject(self.call("GetPartVPart"))
+
+    def GetPartClosedVolume(self) -> ComObject:
+        return ComObject(self.call("GetPartClosedVolume"))
+
+    # --- 几何 / 显示 ---
+    def GetBoundingBox(self) -> Any:
+        return self.call("GetBoundingBox")
+
+    def GetCentroid(self) -> Any:
+        return self.call("GetCentroid")
+
+    def GetColor(self) -> Any:
+        return self.call("GetColor")
+
+    def SetColor(self, color) -> Any:
+        return self.call("SetColor", color)
+
+    def RemoveColor(self) -> Any:
+        return self.call("RemoveColor")
+
+    def IsColorSet(self) -> bool:
+        return bool(self.call("IsColorSet"))
+
+    def GetContactAngle(self) -> Any:
+        return self.call("GetContactAngle")
+
+    def SetContactAngle(self, angle) -> Any:
+        return self.call("SetContactAngle", angle)
+
+    # --- Overset ---
+    def GetOversetMeshingGroup(self) -> ComObject:
+        return ComObject(self.call("GetOversetMeshingGroup"))
+
+    def SetOversetMeshingGroup(self, group) -> Any:
+        return self.call("SetOversetMeshingGroup", group)
+
+    def QueryPropValueObj(self, name: str) -> ComObject:
+        return ComObject(self.call("QueryPropValueObj", name))
+
+
+class ScFlowpreFluidRegion(ComObject):
+    """FluidRegion 类高频成员（手册 66 方法）。"""
+
+    # --- 注册 ---
+    def RegisterSPart(self, part) -> bool:
+        return bool(self.call("RegisterSPart", part))
+
+    def RegisterSPartWithVPart(self, spart, vpart) -> bool:
+        return bool(self.call("RegisterSPartWithVPart", spart, vpart))
+
+    def RegisterVPart(self, part) -> bool:
+        return bool(self.call("RegisterVPart", part))
+
+    def RegisterClosedVolume(self, volume) -> bool:
+        return bool(self.call("RegisterClosedVolume", volume))
+
+    def RegisterCoordinatesSpecifiedPart(self, part) -> bool:
+        return bool(self.call("RegisterCoordinatesSpecifiedPart", part))
+
+    def RegisterFaceRegionDerivedSheet(self, sheet) -> bool:
+        return bool(self.call("RegisterFaceRegionDerivedSheet", sheet))
+
+    def RemoveSPart(self, part) -> bool:
+        return bool(self.call("RemoveSPart", part))
+
+    def RemoveVParts(self, parts) -> bool:
+        return bool(self.call("RemoveVParts", parts))
+
+    def RemoveClosedVolume(self, volume) -> bool:
+        return bool(self.call("RemoveClosedVolume", volume))
+
+    # --- 查询 ---
+    def GetClosedVolumes(self) -> Any:
+        return self.call("GetClosedVolumes")
+
+    def GetSParts(self) -> Any:
+        return self.call("GetSParts")
+
+    def GetVParts(self) -> Any:
+        return self.call("GetVParts")
+
+    def GetFaceRegionDerivedSheets(self) -> Any:
+        return self.call("GetFaceRegionDerivedSheets")
+
+    def GetCoordinatesSpecifiedParts(self) -> Any:
+        return self.call("GetCoordinatesSpecifiedParts")
+
+    def GetBoundingBox(self) -> Any:
+        return self.call("GetBoundingBox")
+
+    # --- 材料 / 参数 ---
+    def GetMaterial(self) -> Any:
+        return self.call("GetMaterial")
+
+    def SetMaterial(self, material) -> Any:
+        return self.call("SetMaterial", material)
+
+    def GetParam(self) -> Any:
+        return self.call("GetParam")
+
+    def SetParam(self, param) -> Any:
+        return self.call("SetParam", param)
+
+    def GetValue(self, name: str) -> Any:
+        return self.call("GetValue", name)
+
+    def ImportCSV(self, path: str | Path) -> Any:
+        return self.call("ImportCSV", str(Path(path).resolve()))
+
+    def IsObstacle(self) -> bool:
+        return bool(self.call("IsObstacle"))
+
+    def SetObstacle(self, flag) -> Any:
+        return self.call("SetObstacle", flag)
+
+    def IsExpanded(self) -> bool:
+        return bool(self.call("IsExpanded"))
+
+    def SetExpand(self, flag) -> Any:
+        return self.call("SetExpand", flag)
+
+
+class ScFlowpreNumericalRegion(ComObject):
+    """NumericalRegion 类（手册 20 方法全量）。"""
+
+    def GetDefinitionType(self) -> Any:
+        return self.call("GetDefinitionType")
+
+    def GetDefinitionTypeDisplayStr(self) -> Any:
+        return self.call("GetDefinitionTypeDisplayStr")
+
+    def GetCombinationOption(self) -> Any:
+        return self.call("GetCombinationOption")
+
+    def SetCombinationOption(self, option) -> Any:
+        return self.call("SetCombinationOption", option)
+
+    def GetCombinationUnits(self) -> Any:
+        return self.call("GetCombinationUnits")
+
+    def SetCombinationUnits(self, units) -> Any:
+        return self.call("SetCombinationUnits", units)
+
+    def GetCuboid(self) -> Any:
+        return self.call("GetCuboid")
+
+    def SetCuboid(self, cuboid) -> Any:
+        return self.call("SetCuboid", cuboid)
+
+    def GetCylinder(self) -> Any:
+        return self.call("GetCylinder")
+
+    def SetCylinder(self, cylinder) -> Any:
+        return self.call("SetCylinder", cylinder)
+
+    def GetSphere(self) -> Any:
+        return self.call("GetSphere")
+
+    def SetSphere(self, sphere) -> Any:
+        return self.call("SetSphere", sphere)
+
+    def GetPlaneType(self) -> Any:
+        return self.call("GetPlaneType")
+
+    def SetPlaneType(self, type_) -> Any:
+        return self.call("SetPlaneType", type_)
+
+    def GetPlaneParam(self) -> Any:
+        return self.call("GetPlaneParam")
+
+    def SetPlaneParam(self, param) -> Any:
+        return self.call("SetPlaneParam", param)
+
+    def GetSide(self) -> Any:
+        return self.call("GetSide")
+
+    def SetSide(self, side) -> Any:
+        return self.call("SetSide", side)
+
+    def GetMovingOption(self) -> Any:
+        return self.call("GetMovingOption")
+
+    def SetMovingOption(self, option) -> Any:
+        return self.call("SetMovingOption", option)
+
+
+class ScFlowpreSubmeshSurfaceRegion(ComObject):
+    """SubmeshSurfaceRegion 类（手册 19 方法全量）。"""
+
+    def RegisterSelectedMDLFace(self) -> bool:
+        return bool(self.call("RegisterSelectedMDLFace"))
+
+    def RegisterVFace(self, faces) -> bool:
+        return bool(self.call("RegisterVFace", faces))
+
+    def RegisterSFace(self, faces) -> bool:
+        return bool(self.call("RegisterSFace", faces))
+
+    def SetSelectMDLFaces(self, faces, flag) -> Any:
+        return self.call("SetSelectMDLFaces", faces, flag)
+
+    def SetSelectMeshFaces(self, faces, flag) -> Any:
+        return self.call("SetSelectMeshFaces", faces, flag)
+
+    def SetSelectSFaces(self, faces, flag) -> Any:
+        return self.call("SetSelectSFaces", faces, flag)
+
+    def SetSelectVFaces(self, faces, flag) -> Any:
+        return self.call("SetSelectVFaces", faces, flag)
+
+    def GetMDLFaces(self) -> Any:
+        return self.call("GetMDLFaces")
+
+    def GetSFaces(self) -> Any:
+        return self.call("GetSFaces")
+
+    def GetVFaces(self) -> Any:
+        return self.call("GetVFaces")
+
+    def GetSubmeshMeshingGroup(self) -> ComObject:
+        return ComObject(self.call("GetSubmeshMeshingGroup"))
+
+    def IsLinkedWithMeshingGroup(self) -> bool:
+        return bool(self.call("IsLinkedWithMeshingGroup"))
+
+    def GetBoundingBox(self) -> Any:
+        return self.call("GetBoundingBox")
+
+    def GetFacetingParameter(self) -> Any:
+        return self.call("GetFacetingParameter")
+
+    def SetFacetingParameter(self, param) -> Any:
+        return self.call("SetFacetingParameter", param)
+
+    def GetFacetingParameterType(self) -> Any:
+        return self.call("GetFacetingParameterType")
+
+    def SetFacetingParameterType(self, type_) -> Any:
+        return self.call("SetFacetingParameterType", type_)
+
+    def ClearFacetingParameter(self) -> Any:
+        return self.call("ClearFacetingParameter")
+
+    def IsFacetingParameterSet(self) -> bool:
+        return bool(self.call("IsFacetingParameterSet"))
+
+
+class ScFlowpreAdaptiveParam(ComObject):
+    """AdaptiveParam 类（手册 4 方法全量）。"""
+
+    def Initialize(self) -> Any:
+        return self.call("Initialize")
+
+    def GetParam(self) -> Any:
+        return self.call("GetParam")
+
+    def SetParam(self, param) -> Any:
+        return self.call("SetParam", param)
+
+    def GetValue(self) -> Any:
+        return self.call("GetValue")
+
+
+class ScFlowpreMeshingGroupSetting(ComObject):
+    """MeshingGroupSetting 类高频成员（手册 104 方法）。
+
+    网格生成参数（mesher / faceter / 容差）的官方参数面。
+    """
+
+    # --- mesher 选择 ---
+    def GetMesher(self) -> Any:
+        return self.call("GetMesher")
+
+    def ChangeMesher(self, mesher) -> Any:
+        return self.call("ChangeMesher", mesher)
+
+    def GetSurfMesher(self) -> Any:
+        return self.call("GetSurfMesher")
+
+    def ChangeSurfMesher(self, mesher) -> Any:
+        return self.call("ChangeSurfMesher", mesher)
+
+    def GetMDLMethod(self) -> Any:
+        return self.call("GetMDLMethod")
+
+    def SetMDLMethod(self, method) -> Any:
+        return self.call("SetMDLMethod", method)
+
+    # --- faceter 简易设置 ---
+    def GetFacetAccuracySpecificationType(self) -> Any:
+        return self.call("GetFacetAccuracySpecificationType")
+
+    def SetFacetAccuracySpecificationType(self, type_) -> Any:
+        return self.call("SetFacetAccuracySpecificationType", type_)
+
+    def GetFacetUseSimpleSetting(self) -> Any:
+        return self.call("GetFacetUseSimpleSetting")
+
+    def SetFacetUseSimpleSetting(self, flag) -> Any:
+        return self.call("SetFacetUseSimpleSetting", flag)
+
+    def GetFacetSimpleChordTol(self) -> Any:
+        return self.call("GetFacetSimpleChordTol")
+
+    def SetFacetSimpleChordTol(self, tol) -> Any:
+        return self.call("SetFacetSimpleChordTol", tol)
+
+    def GetFacetSimpleMaxWidth(self) -> Any:
+        return self.call("GetFacetSimpleMaxWidth")
+
+    def SetFacetSimpleMaxWidth(self, width) -> Any:
+        return self.call("SetFacetSimpleMaxWidth", width)
+
+    def GetFacetSimpleMaxAngle(self) -> Any:
+        return self.call("GetFacetSimpleMaxAngle")
+
+    def SetFacetSimpleMaxAngle(self, angle) -> Any:
+        return self.call("SetFacetSimpleMaxAngle", angle)
+
+    # --- ridge / 容差 ---
+    def GetRidgeAngle(self) -> Any:
+        return self.call("GetRidgeAngle")
+
+    def SetRidgeAngle(self, angle) -> Any:
+        return self.call("SetRidgeAngle", angle)
+
+    def GetContactTolerance(self) -> Any:
+        return self.call("GetContactTolerance")
+
+    def SetContactTolerance(self, tol) -> Any:
+        return self.call("SetContactTolerance", tol)
+
+    def GetSewingTolerance(self) -> Any:
+        return self.call("GetSewingTolerance")
+
+    def SetSewingTolerance(self, tol) -> Any:
+        return self.call("SetSewingTolerance", tol)
+
+    def GetOverlapTolerance(self) -> Any:
+        return self.call("GetOverlapTolerance")
+
+    def SetOverlapTolerance(self, tol) -> Any:
+        return self.call("SetOverlapTolerance", tol)
+
+    def GetInvalidTolerance(self) -> Any:
+        return self.call("GetInvalidTolerance")
+
+    def SetInvalidTolerance(self, tol) -> Any:
+        return self.call("SetInvalidTolerance", tol)
+
+    # --- 单位 / 归属 ---
+    def GetInternalUnit(self) -> Any:
+        return self.call("GetInternalUnit")
+
+    def GetMeshingGroup(self) -> ScFlowpreMeshingGroup:
+        return ScFlowpreMeshingGroup(self.call("GetMeshingGroup"))
+
+
+# ============================================================================
+# typed 类注册表（P12-A：catalog 199 类覆盖对账的单一映射）
+# ============================================================================
+
+#: 手册类名 → typed 包装类。新增包装必须在此登记——
+#: ``tests/test_scflowpre_api.py`` 以此对 catalog 全类对账。
+TYPED_CLASSES: dict[str, type] = {
+    "Application": ScFlowpreApplication,
+    "Doc": ScFlowpreDoc,
+    "Conditions": ScFlowpreConditions,
+    "Condition": ScFlowpreCondition,
+    "MeshingGroup": ScFlowpreMeshingGroup,
+    "Octree": ScFlowpreOctree,
+    "OctParam": ScFlowpreOctParam,
+    "WrappingGroup": ScFlowpreWrappingGroup,
+    "Utility": ScFlowpreUtility,
+    "Region": ScFlowpreRegion,
+    "SNode": ScFlowpreSNode,
+    "FaceRegion": ScFlowpreFaceRegion,
+    "FluidRegion": ScFlowpreFluidRegion,
+    "NumericalRegion": ScFlowpreNumericalRegion,
+    "SubmeshSurfaceRegion": ScFlowpreSubmeshSurfaceRegion,
+    "AdaptiveParam": ScFlowpreAdaptiveParam,
+    "MeshingGroupSetting": ScFlowpreMeshingGroupSetting,
+}
+
+#: 条件标记类前缀：136 个 ``Cond*`` 标记子类无自有方法（catalog
+#: ``inherits: Condition``；另有 Condition/Conditions 两个基类已 typed），
+#: 全部经 :class:`ScFlowpreCondition` 包装 +
+#: :meth:`ScFlowpreConditions.create_cond` 泛型出口覆盖。
+COND_CLASS_PREFIX = "Cond"
+
+
+def catalog_coverage(catalog: dict) -> dict[str, str]:
+    """catalog 类名 → 覆盖方式（typed / condition-subclass / generic-call）。
+
+    P12-A 域 7 验收口径：199 类每类可判——typed 包装，或 Cond* 子类
+    （Condition 泛型），或 generic（``ComObject.call`` 逃生口，手册
+    任一成员可达）。对账测试断言无第四类。
+    """
+    coverage: dict[str, str] = {}
+    for name in catalog["classes"]:
+        if name in TYPED_CLASSES:
+            coverage[name] = "typed"
+        elif name.startswith(COND_CLASS_PREFIX):
+            coverage[name] = "condition-subclass"
+        else:
+            coverage[name] = "generic-call"
+    return coverage
 
 
 # ============================================================================

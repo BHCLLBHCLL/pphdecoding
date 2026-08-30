@@ -48,6 +48,13 @@ class TestBuildAndParse(unittest.TestCase):
             self.assertIn("facet_oct_handle=", text)
             self.assertIn("wrapping_ec=", text)
             self.assertIn("last_exception_code=", text)
+            # P12-A：CreateMeshOctree（未知句柄→COM 层 SCF_ERR_ARG）+
+            # ConvertFacetToXT（C ABI 全链）。
+            self.assertIn("CreateMeshOctree(CLng(999901))", text)
+            self.assertIn("mesh_oct_handle=", text)
+            self.assertIn("ConvertFacetToXT(", text)
+            self.assertIn("xt_ec=", text)
+            self.assertIn("_p12_no_such.facet", text)
             # P11：深管线段须新建独立 set（主段已 ReleaseHandle hSet），
             # 否则 CreateShapeGroup 查不到句柄 → 深管线被 `If hGroup2 > 0`
             # 跳过（实机复现：facet_oct_handle/wrapping_ec 全部缺失）。
@@ -65,6 +72,8 @@ class TestBuildAndParse(unittest.TestCase):
             text = decode_vbs(vbs.read_bytes())
             self.assertNotIn("CreateFacetOctree", text)
             self.assertNotIn("ExecuteWrapping", text)
+            self.assertNotIn("CreateMeshOctree", text)
+            self.assertNotIn("ConvertFacetToXT", text)
 
     def test_parse_result_ok(self):
         with tempfile.TemporaryDirectory() as td:
@@ -288,6 +297,254 @@ class TestRegistration(unittest.TestCase):
                         ["scConverter_Sx64net.Application.2025"])
         self.assertFalse(info["related_progpids"]
                          ["STpre_Bx64net.Application.2025"])
+
+
+class TestBackendConvergence(unittest.TestCase):
+    """P12-A 后端收敛：rot 唯一权威通道，gui/manual/com 仅诊断。"""
+
+    def test_authoritative_backend_constant(self):
+        self.assertEqual(host_pipeline.AUTHORITATIVE_BACKEND, "rot")
+
+    def test_resolve_backend_default_is_rot(self):
+        self.assertEqual(host_pipeline.resolve_backend(), "rot")
+        self.assertEqual(host_pipeline.resolve_backend(None), "rot")
+        # 显式诊断通道按原样放行
+        self.assertEqual(host_pipeline.resolve_backend("manual"), "manual")
+        self.assertEqual(host_pipeline.resolve_backend("gui"), "gui")
+        self.assertEqual(host_pipeline.resolve_backend("com"), "com")
+        self.assertEqual(host_pipeline.resolve_backend("rot"), "rot")
+
+    def test_resolve_backend_rejects_unknown(self):
+        with self.assertRaises(ValueError):
+            host_pipeline.resolve_backend("bogus")
+
+    def test_run_in_host_default_routes_rot(self):
+        """未指定 backend → rot（权威），不再默认 manual。"""
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            with mock.patch.object(
+                    host_pipeline, "_run_rot_vbs",
+                    return_value={"backend": "rot", "ok": True,
+                                  "script": str(vbs)}) as rot:
+                result = host_pipeline.run_in_host(vbs)
+        self.assertEqual(result["backend"], "rot")
+        self.assertTrue(result["ok"])
+        rot.assert_called_once()
+
+    def test_run_vbs_authoritative_routes_rot(self):
+        """GUI Execute 权威入口：rot，无 com 回退。"""
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            with mock.patch.object(
+                    host_pipeline, "_run_rot_vbs",
+                    return_value={"backend": "rot", "ok": True,
+                                  "script": str(vbs)}) as rot, \
+                 mock.patch.object(
+                    host_pipeline, "_run_com_vbs") as com:
+                result = host_pipeline.run_vbs_authoritative(vbs)
+        self.assertEqual(result["backend"], "rot")
+        self.assertTrue(result["ok"])
+        rot.assert_called_once()
+        com.assert_not_called()
+
+    def test_gui_uses_authoritative_channel(self):
+        """pph_gui 的两处执行调用点必须走 run_vbs_authoritative。
+
+        P12-A 验收「测试锁定路由」：GUI 不再直接指定 com 后端。
+        """
+        src = Path("pph_gui.py").read_text(encoding="utf-8")
+        self.assertNotIn('run_in_host(path, backend="com")', src)
+        self.assertNotIn('run_in_host(vbs, backend="com")', src)
+        self.assertIn("host_pipeline.run_vbs_authoritative(path)", src)
+        self.assertIn("host_pipeline.run_vbs_authoritative(vbs)", src)
+
+
+class TestBackendConvergence(unittest.TestCase):
+    """P12-A 后端收敛：rot 唯一权威通道，gui/manual/com 仅诊断。"""
+
+    def test_authoritative_backend_constant(self):
+        self.assertEqual(host_pipeline.AUTHORITATIVE_BACKEND, "rot")
+
+    def test_resolve_backend_default_is_rot(self):
+        self.assertEqual(host_pipeline.resolve_backend(), "rot")
+        self.assertEqual(host_pipeline.resolve_backend(None), "rot")
+        # 显式诊断通道按原样放行
+        self.assertEqual(host_pipeline.resolve_backend("manual"), "manual")
+        self.assertEqual(host_pipeline.resolve_backend("gui"), "gui")
+        self.assertEqual(host_pipeline.resolve_backend("com"), "com")
+        self.assertEqual(host_pipeline.resolve_backend("rot"), "rot")
+
+    def test_resolve_backend_rejects_unknown(self):
+        with self.assertRaises(ValueError):
+            host_pipeline.resolve_backend("bogus")
+
+    def test_run_in_host_default_routes_rot(self):
+        """未指定 backend → rot（权威），不再默认 manual。"""
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            with mock.patch.object(
+                    host_pipeline, "_run_rot_vbs",
+                    return_value={"backend": "rot", "ok": True,
+                                  "script": str(vbs)}) as rot:
+                result = host_pipeline.run_in_host(vbs)
+        self.assertEqual(result["backend"], "rot")
+        self.assertTrue(result["ok"])
+        rot.assert_called_once()
+
+    def test_run_vbs_authoritative_routes_rot(self):
+        """GUI Execute 权威入口：rot，无 com 回退。"""
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            with mock.patch.object(
+                    host_pipeline, "_run_rot_vbs",
+                    return_value={"backend": "rot", "ok": True,
+                                  "script": str(vbs)}) as rot, \
+                 mock.patch.object(
+                    host_pipeline, "_run_com_vbs") as com:
+                result = host_pipeline.run_vbs_authoritative(vbs)
+        self.assertEqual(result["backend"], "rot")
+        self.assertTrue(result["ok"])
+        rot.assert_called_once()
+        com.assert_not_called()
+
+    def test_gui_uses_authoritative_channel(self):
+        """pph_gui 的两处执行调用点必须走 run_vbs_authoritative。
+
+        P12-A 验收「测试锁定路由」：GUI 不再直接指定 com 后端。
+        """
+        src = Path("pph_gui.py").read_text(encoding="utf-8")
+        self.assertNotIn('run_in_host(path, backend="com")', src)
+        self.assertNotIn('run_in_host(vbs, backend="com")', src)
+        self.assertIn("host_pipeline.run_vbs_authoritative(path)", src)
+        self.assertIn("host_pipeline.run_vbs_authoritative(vbs)", src)
+
+
+class TestBackendConvergence(unittest.TestCase):
+    """P12-A 后端收敛：rot 唯一权威通道，gui/manual/com 仅诊断。"""
+
+    def test_authoritative_backend_constant(self):
+        self.assertEqual(host_pipeline.AUTHORITATIVE_BACKEND, "rot")
+
+    def test_resolve_backend_default_is_rot(self):
+        self.assertEqual(host_pipeline.resolve_backend(), "rot")
+        self.assertEqual(host_pipeline.resolve_backend(None), "rot")
+        # 显式诊断通道按原样放行
+        self.assertEqual(host_pipeline.resolve_backend("manual"), "manual")
+        self.assertEqual(host_pipeline.resolve_backend("gui"), "gui")
+        self.assertEqual(host_pipeline.resolve_backend("com"), "com")
+        self.assertEqual(host_pipeline.resolve_backend("rot"), "rot")
+
+    def test_resolve_backend_rejects_unknown(self):
+        with self.assertRaises(ValueError):
+            host_pipeline.resolve_backend("bogus")
+
+    def test_run_in_host_default_routes_rot(self):
+        """未指定 backend → rot（权威），不再默认 manual。"""
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            with mock.patch.object(
+                    host_pipeline, "_run_rot_vbs",
+                    return_value={"backend": "rot", "ok": True,
+                                  "script": str(vbs)}) as rot:
+                result = host_pipeline.run_in_host(vbs)
+        self.assertEqual(result["backend"], "rot")
+        self.assertTrue(result["ok"])
+        rot.assert_called_once()
+
+    def test_run_vbs_authoritative_routes_rot(self):
+        """GUI Execute 权威入口：rot，无 com 回退。"""
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            with mock.patch.object(
+                    host_pipeline, "_run_rot_vbs",
+                    return_value={"backend": "rot", "ok": True,
+                                  "script": str(vbs)}) as rot, \
+                 mock.patch.object(
+                    host_pipeline, "_run_com_vbs") as com:
+                result = host_pipeline.run_vbs_authoritative(vbs)
+        self.assertEqual(result["backend"], "rot")
+        self.assertTrue(result["ok"])
+        rot.assert_called_once()
+        com.assert_not_called()
+
+    def test_gui_uses_authoritative_channel(self):
+        """pph_gui 的两处执行调用点必须走 run_vbs_authoritative。
+
+        P12-A 验收「测试锁定路由」：GUI 不再直接指定 com 后端。
+        """
+        src = Path("pph_gui.py").read_text(encoding="utf-8")
+        self.assertNotIn('run_in_host(path, backend="com")', src)
+        self.assertNotIn('run_in_host(vbs, backend="com")', src)
+        self.assertIn("host_pipeline.run_vbs_authoritative(path)", src)
+        self.assertIn("host_pipeline.run_vbs_authoritative(vbs)", src)
+
+
+class TestBackendConvergence(unittest.TestCase):
+    """P12-A 后端收敛：rot 唯一权威通道，gui/manual/com 仅诊断。"""
+
+    def test_authoritative_backend_constant(self):
+        self.assertEqual(host_pipeline.AUTHORITATIVE_BACKEND, "rot")
+
+    def test_resolve_backend_default_is_rot(self):
+        self.assertEqual(host_pipeline.resolve_backend(), "rot")
+        self.assertEqual(host_pipeline.resolve_backend(None), "rot")
+        # 显式诊断通道按原样放行
+        self.assertEqual(host_pipeline.resolve_backend("manual"), "manual")
+        self.assertEqual(host_pipeline.resolve_backend("gui"), "gui")
+        self.assertEqual(host_pipeline.resolve_backend("com"), "com")
+        self.assertEqual(host_pipeline.resolve_backend("rot"), "rot")
+
+    def test_resolve_backend_rejects_unknown(self):
+        with self.assertRaises(ValueError):
+            host_pipeline.resolve_backend("bogus")
+
+    def test_run_in_host_default_routes_rot(self):
+        """未指定 backend → rot（权威），不再默认 manual。"""
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            with mock.patch.object(
+                    host_pipeline, "_run_rot_vbs",
+                    return_value={"backend": "rot", "ok": True,
+                                  "script": str(vbs)}) as rot:
+                result = host_pipeline.run_in_host(vbs)
+        self.assertEqual(result["backend"], "rot")
+        self.assertTrue(result["ok"])
+        rot.assert_called_once()
+
+    def test_run_vbs_authoritative_routes_rot(self):
+        """GUI Execute 权威入口：rot，无 com 回退。"""
+        with tempfile.TemporaryDirectory() as td:
+            vbs = Path(td) / "host.vbs"
+            vbs.write_text("' test", encoding="utf-8")
+            with mock.patch.object(
+                    host_pipeline, "_run_rot_vbs",
+                    return_value={"backend": "rot", "ok": True,
+                                  "script": str(vbs)}) as rot, \
+                 mock.patch.object(
+                    host_pipeline, "_run_com_vbs") as com:
+                result = host_pipeline.run_vbs_authoritative(vbs)
+        self.assertEqual(result["backend"], "rot")
+        self.assertTrue(result["ok"])
+        rot.assert_called_once()
+        com.assert_not_called()
+
+    def test_gui_uses_authoritative_channel(self):
+        """pph_gui 的两处执行调用点必须走 run_vbs_authoritative。
+
+        P12-A 验收「测试锁定路由」：GUI 不再直接指定 com 后端。
+        """
+        src = Path("pph_gui.py").read_text(encoding="utf-8")
+        self.assertNotIn('run_in_host(path, backend="com")', src)
+        self.assertNotIn('run_in_host(vbs, backend="com")', src)
+        self.assertIn("host_pipeline.run_vbs_authoritative(path)", src)
+        self.assertIn("host_pipeline.run_vbs_authoritative(vbs)", src)
 
 
 class TestHostStatus(unittest.TestCase):
