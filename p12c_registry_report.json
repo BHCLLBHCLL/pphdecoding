@@ -1,0 +1,129 @@
+{
+ "universe": 165,
+ "universe_source": "scFLOWpreGUI_Bx64net.dll + scFLOWpreCmd_Bx64net.dll Cond* 注册表（cond_types.json，Cmd/GUI 实证）",
+ "exact_keys_in_universe": 90,
+ "exact_keys_baseline_corrected": 47,
+ "baseline_note": "原记录口径「63」= merged.json 键数（含 16 个非注册表原始键）；与 165 注册表交集重核后诚实基线 47",
+ "keys_source": "301 样例 PPH 全量扫描 + 宿主 CreateCond* 收割产物 main.xml（真实 XML；HTML 显示名猜测禁令遵守）",
+ "net_new_by_C": 43,
+ "net_new_all_via_harvest_pipeline": true,
+ "measured_aliases_registered": 21,
+ "sweep_2023_2_increment_types": 0,
+ "sweep_2023_2_entries_enriched": 59,
+ "sample_sweep_note": "2023.2 库 150 PPH 全扫：0 新类型（被 2025.2 全覆盖），59 条目样本翻倍级扩充",
+ "save_preserves_cond_nodes": "宿主重开→SaveProject→重开 实体集合 71=71 恒等（p12c_keep 实测）",
+ "missing_total": 75,
+ "missing_classification": {
+  "create_ok_aliased_to_haved": {
+   "count": 4,
+   "types": [
+    "CondBoundaryHumidity",
+    "CondOutputLFileWaterLevel",
+    "CondParticleConcentrationFpDEM",
+    "CondRepulsion"
+   ]
+  },
+  "create_ok_not_serialized": {
+   "count": 1,
+   "types": [
+    "CondFMIVariable"
+   ]
+  },
+  "create_returns_nothing": {
+   "count": 1,
+   "types": [
+    "CondCoSim"
+   ]
+  },
+  "no_com_creator": {
+   "count": 68,
+   "types": [
+    "CondActranAnalysisControl",
+    "CondAnalysisControl",
+    "CondBatteryOption",
+    "CondBoundaryDetail",
+    "CondBoussinesqBaseTemp",
+    "CondCavitation",
+    "CondClassNameToDispName",
+    "CondCoSimOption",
+    "CondCoSimRegion",
+    "CondCoSimRegionMarker",
+    "CondCoSimRegionSurface",
+    "CondCoSimRegionVolume",
+    "CondCombustion",
+    "CondCosimCutBack",
+    "CondCosimIteration",
+    "CondCosimMapping",
+    "CondCosimMirroring",
+    "CondCosimNastranAnalysisControl",
+    "CondCosimNastranCommonSetting",
+    "CondCosimNastranCouplingSetting",
+    "CondCosimNastranInitialDisp",
+    "CondCosimNastranOutputSetting",
+    "CondCosimScflow",
+    "CondCosimScflowMove",
+    "CondCosimScflowStructure",
+    "CondCosimStreamMove",
+    "CondCosimStreamStructure",
+    "CondDiscontinuousOption",
+    "CondFanDetail",
+    "CondFreeSurface",
+    "CondInitAxis",
+    "CondLDCMorphingParamCommon",
+    "CondMapForStructure",
+    "CondMixedGas",
+    "CondMovingStability",
+    "CondMultiphaseControl",
+    "CondMultiphaseSurfaceTension",
+    "CondMultiphseSurfaceTension",
+    "CondNastranAnalysisControl",
+    "CondNastranFieldOutput",
+    "CondNastranPointConstraint",
+    "CondNastranPointLoad",
+    "CondNastranPressureLoad",
+    "CondNastranRegionConstraint",
+    "CondOutput",
+    "CondOutputLFileAeroCoef",
+    "CondOutputPclFile",
+    "CondOversetGap",
+    "CondOversetGapItem",
+    "CondOversetGapList",
+    "CondOversetRegionOption",
+    "CondParticleDomainDEM",
+    "CondParticleForceFPDEM",
+    "CondParticleHeatFPDEM",
+    "CondParticleHistogram",
+    "CondParticlePropertyDEM",
+    "CondParticlePropertyMemberDEM",
+    "CondParticleRestitutionDEM",
+    "CondParticleTracking",
+    "CondParticleUDVDEM",
+    "CondPartition",
+    "CondPassiveScalar",
+    "CondReactionIncompSpecies",
+    "CondSolidification",
+    "CondTreeListItemGroupMove",
+    "CondUPWDOption",
+    "CondVofToParticle",
+    "CondWaveletOption"
+   ]
+  },
+  "save_poison": {
+   "count": 1,
+   "types": [
+    "CondBatteryARCDataPreprocessing"
+   ]
+  }
+ },
+ "createcond_coverage": {
+  "methods": 89,
+  "mapped_into_universe": 79,
+  "note": "CreateCond* 面结构性只覆盖 79/165——其余为 GUI 向导门控家族，COM 单调用路径不存在；165 全覆盖需 GUI 向导自动化（后续项）"
+ },
+ "measured_unlock_model": [
+  "COM CreateCond* 条件存活于脚本会话事务层：同脚本 create→改动强制脏→SaveProject 才落 main.xml",
+  "脚本边界丢弃未提交条件（跨脚本纯保存为空）",
+  "CondBatteryARCDataPreprocessing 序列化毒杀同脚本保存（三层版本转换 Confirm 后脚本死亡）",
+  "SetAnalysisType/SetCalculationType/SetDTType 数值枚举 ×0-8 不触发缺失家族落盘"
+ ]
+}

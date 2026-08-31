@@ -89,8 +89,9 @@ class TestApplyHelpSchema(unittest.TestCase):
         cls.stats = apply_help_schema(cls.reg)
 
     def test_injects_fields(self):
-        # tree/sibling 扩面后 help 注入面可能缩小；仍应写入一批可选字段
-        self.assertGreaterEqual(self.stats["types_with_new_fields"], 8)
+        # tree/sibling 扩面后 help 注入面可能缩小；仍应写入一批可选字段。
+        # P12-C 后样本背书类型再增（47→90 精确键），注入面 8→4。
+        self.assertGreaterEqual(self.stats["types_with_new_fields"], 4)
         self.assertGreater(self.stats["total_fields_injected"], 50)
 
     def test_expands_coverage(self):
@@ -121,8 +122,9 @@ class TestApplyHelpSchema(unittest.TestCase):
     def test_new_fields_optional(self):
         # 帮助字段 count=0 → required=None（不做必填误判）。
         # CondBoundaryRadiation 在 P7-1 后为样本类型（required 按
-        # count 语义计算），不再属于 help 注入面。
-        for tname in ("CondFreeSurface", "CondAcceleration"):
+        # count 语义计算）；CondAcceleration 在 P12-C 后经宿主收割
+        # 成为样本类型——两者均不再是 help 注入面。
+        for tname in ("CondFreeSurface",):
             t = self.reg.get(tname)
             if t is None:
                 continue

@@ -1537,12 +1537,15 @@ SNode 注入拿 IVMDL（P12-D）；`ConvertFacetToXT` 需真实 facet 文件
 | **B 求解链路** | 12（+域 7 尾） | **+90** | 1 周 | box 提交→求解完成日志 + FLD 场量非空（`ExecuteSolver` 包装已就绪，scflowpre_api.py:368） | **完成**（2026-08-30，双通道求解完成日志 + 场量对拍，见 §18.3） |
 | **E 网格/BAM/包装收口** | 5/6/9/11 | **+102** | 2 周 | CreateMesh e2e（复用 BAM 产物）/ Wrapping 对齐 / Disc-Overset 建组 / ConvertFacetToXT 真实 facet / BAM 对拍，全链 err=0 | **完成**（2026-08-30，五 flow gate 全过 + 对拍/对齐离线闭环，见 §18.4） |
 | **D 几何/Region 权威接线** | 10/4 | **+46** | 1.5-2 周 | `QueryFaceRegionByName` 首次非 Nothing + CreateMDL True + PKBody3 字节闭环 | **完成**（2026-08-30，Query 闸门达成 + 四 flow gate 全过，见 §18.5；CreateMDL 实测为 void 方法，验收按产物证据改判；域 4 patch e2e 受宿主崩溃环境受阻，+44/+46） |
-| **C 条件深度收割** | 8 | +18 | 1-2 周（可插） | 89 `CreateCond*` 脚本化收割 + 2023.2 增量 → 165/165 精确键 | 未开始 |
+| **C 条件深度收割** | 8 | +18 | 1-2 周（可插） | 89 `CreateCond*` 脚本化收割 + 2023.2 增量 → 165/165 精确键 | **部分达标**（2026-08-31，见 §18.7：精确键 **47→90/165**（+43 全走收割管线；基线重核口径修正），`CreateCond*` 路线到结构性上限（79/165）；Save 不破坏宿主 Cond 节点实测通过；材料五库 prp 写端完成；剩余 75 为向导门控家族 → GUI 向导自动化归后续项） |
 | **F 格式长尾 + Select 收口** | 1/2/3 | +17 | 1-2 周（最后） | 4 暂缓 NYI typed 接线 + Actran 重评估；sctsnapshot 6+ 样本；LZMS 策略钉死 | **完成**（2026-08-30，5 项 NYI 接线 e2e err=0、快照 150/150 字节恒等、LZMS 写对称实现钉死、D 遗留 patch 关账，见 §18.6） |
 
 轨迹：76.6% →（+B）84.1% →（+E）92.6% →（+D）96.3% →（+F）
 **97.3%**（12 域满格 9 个；余域 8 条件 18 分待 C、域 7 尾 8 分随 C
-复核、域 4 尾 6 分 patch 腿已绿待 CATIA 样本裁决）→（+C）**100%**。
+复核、域 4 尾 6 分 patch 腿已绿待 CATIA 样本裁决）→（+C）**98.8%**
+（域 7 复核满格；域 8 +10/+18——余 8 分为向导门控家族需 GUI 向导
+自动化；域 4 尾 6 分待 CATIA 样本）→（+向导自动化+CATIA 裁决）
+**100%**。
 
 ### 18.2 执行纪律与记录位
 
@@ -1611,11 +1614,30 @@ SNode 注入拿 IVMDL（P12-D）；`ConvertFacetToXT` 需真实 facet 文件
 3 skipped / 0 failed**（789 基线 + 14 新增，`python -m pytest tests -q
 --ignore=tests/box -p no:cacheprovider`，468s）。
 
+**P12-B 续接加固（2026-09-01）**：
+- `solver_run.build_solve_vbs` 加 `quit_after` 开关（切到 catalog 的
+  `Doc.QuitAndExecuteSolver`，VBS 内写 `exec_method=<X>` 元数据归因），
+  并透传到 `run_solve` 与 `build/prep/run` CLI 的 `--quit-after`；
+- `find_solver_artifacts` `case=cases=None` 不再回退硬编码
+  `DEFAULT_CASE="box"`（原漏报 car/wing 等非 box 工程产物），改为按
+  通用后缀 `*.fph/*.rph/*.log/*.l/...` 全扫；`wait/status` CLI `--case`
+  默认 `None` 同步；
+- `DEV_SUMMARY.md` §6.3 补上 P12-B 回填（rot→求解链，CALCULATION
+  FINISH×2 + dp50 strict_ok，域 12 10%→100%，76.6%→84.1%）；
+- test_solver_run 由 14 → **20 项**（新增 `quit_after` 切入口 +
+  元数据断言 ×2、后缀全扫/shape 断言 ×2、CLI `--quit-after` 生效 +
+  `wait --case` 默认 None ×2）。
+- 回归：P12-B 直接相关 11 个测试文件在 Python 3.13 环境上 **152 passed /
+  3 skipped / 3 failed**，3 项失败为 host_pipeline 真宿主/真 GUI 桩缺
+  `pythoncom`/`pywinauto`（与 solver 改动无关，另有完整 Python 3.12
+  环境下 803/3/0 终跑记录为纪律口径）。
+
 **遗留**：① box 物理设置仅单一 open 边界——非零流量验收由压差变体
 兜底，双边界工程配置归 E/C；② FPH 输出时机默认仅末步
 （`FOUT_OPTION` 空），中途场读回待需要时再钉；③
 `QuitAndExecuteSolver` 未实机（`ExecuteSolver` 已覆盖验收，且其
-语义会退出宿主，不利批处理）。
+语义会退出宿主，不利批处理；现已在 CLI + build/run 提供开关，
+批处理仍默认 `ExecuteSolver`）。
 
 ### 18.4 Sprint E 执行记录（2026-08-30，当日交付）
 
@@ -1869,6 +1891,79 @@ err=0 + NYI 清单收敛）；域 2 工程管理 97%→**100%**（sctsnapshot
 **遗留**：① Actran 业务前置（Acoustic Session 样本缺失）如实
 记录，typed 路线已就绪可随时复验；② CATIA 样本缺失（沿 D 遗留
 ②）；③ 域 8 → 冲刺 C（89 `CreateCond*` 收割）。
+
+### 18.7 Sprint C 执行记录（2026-08-31，部分达标 + 结构性发现）
+
+**交付项**：
+
+1. 新模块 `tools/_p12c_cond_harvest.py`（条件收割机，域 8 核心）：
+   `plan`（目标清单 = catalog `CreateCond*` × universe × 缺口，毒类型
+   排除）/ `build`（单脚本 VBS：逐类型 create → 无参签名重试 → 强制
+   脏 → SaveProject）/ `run` / `merge`（收割产物 vs 基线 diff →
+   精确键自动入 `merged.json`）/ `probe`（二分定位保存毒）/ `all`。
+   纪律：只收录真实 XML（schema_extract 深扫规则），HTML 显示名
+   猜测禁令遵守。
+2. 实机批量收割（`p12e_disc_e2e_out.pph` 为 2025.2 原生基线，
+   `p12c_cond_harvest.{vbs,log,out.pph}` 证据入库）：57 目标 create
+   全部 err=0；**精确键（universe∩merged）47→90/165（+43）**，
+   全部经收割管线落盘；21 个实测别名入册
+   （宿主落盘原始 `type=` 短名 → 注册表 Cond* 名，如
+   `BladeShape→CondBladeShape`、`ALECancel→CondALECancel`、
+   `WaveGeneration→CondWaveGeneration`——全部来自真实 XML）。
+3. 2023.2 库全量收割（150 PPH，`merge_official_schema --root … --all`）：
+   **0 新类型**（被 2025.2 库 151 PPH 全覆盖，增量如实记录），
+   59 条目样本翻倍级扩充（如 CondBoundaryWallThermal 576→1053 实例）；
+   `pphxml.all_conditions` 容器规则扩展短名别名归一（配套回归 27 项绿）。
+4. 材料五库 prp 写端（`material_lib.py` 补齐）：`PrpDocument`/
+   `parse_prp_document`/`write_prp_document`（scFLOWpre.prp 与
+   main.prp 同方言，UTF-8 BOM + CRLF）+ `write_prp_struct`；
+   round-trip 测试（`tests/test_material_prp_write.py`，厂商库真实
+   数据解析级恒等）。
+5. 对账报告 `p12c_registry_report.json`（165/165 如实分类）+ 收割机
+   离线测试（`tests/test_p12c_harvest.py` 10 项）。
+
+**实测钉死（本冲刺最值钱产出——三条宿主行为模型）**：
+
+- **条件事务层模型**：COM `CreateCond*` 条件存活于脚本会话事务层，
+  只有「同脚本内 create → 改动强制脏（如 `SetDefaultTemperature`）
+  → SaveProject」才落 main.xml；脚本一结束未提交条件即被丢弃
+  （跨脚本纯保存为空，P10 的 Acceleration 闭环只验了对象级操作、
+  未验持久化——本冲刺补上）。
+- **保存毒**：`CondBatteryARCDataPreprocessing` create err=0 但其
+  序列化毒杀同脚本 SaveProject（脚本静默死亡、无 save_err 行）；
+  二分定位法（`probe` 子命令）可复用。基线必须用 2025.2 原生工程：
+  2023.2 旧版 CAB（box.pph）保存触发版本转换 Confirm 死循环。
+- **`CreateCond*` 面结构性上限**：catalog 89 方法仅映射 79/165
+  universe 类型；其余 86 类型（cosim 28 / particle 11 / multiphase 7 /
+  misc 10 等）无 COM 单调用创建路径，是 GUI 向导门控家族——
+  165/165 需 GUI 向导自动化（新冲刺项，非本路线可达）。
+  缺口 75 的如实分类：no_com_creator 68 / create_ok_aliased_to_haved 4 /
+  create_returns_nothing 1（CondCoSim）/ create_ok_not_serialized 1
+  （CondFMIVariable）/ save_poison 1（CondBatteryARCDataPreprocessing）。
+- **Save 不破坏宿主 Cond 节点**（C 验收第二腿）：宿主重开收割产物 →
+  SaveProject → 重开，条件实体集合 71=71 恒等（`p12c_keep` 实测）。
+- 旧版 CAB 基线 + SetAnalysisType/SetCalculationType/SetDTType 数值
+  枚举 ×0-8 均不触发缺失家族落盘（负结果也如实入档）。
+
+**域分数更新**：
+
+- 域 8 条件体系 **82%→92%（L2→L2+）**：收割机 + 事务层/毒类型/
+  覆盖上限三模型 + prp 写端 + 实测别名入册；+10/+18，余 8 分 =
+  向导门控家族（GUI 向导自动化后续项）。整体 97.3%→**98.8%**。
+- 域 7 宿主自动化 **92%→100%（L2-3→L2+）**：尾项复核关闭——
+  「深管线业务码非 -1」xt_ec=0 已证（§10.6）+ 条件 typed 自动化
+  持久化路径实测打通（本冲刺）。
+
+**回归规模**：新增 `tests/test_material_prp_write.py`（5+1 skip）+
+`tests/test_p12c_harvest.py`（10）+ `tests/test_p12e_generators.py`
+（10）；`pphxml` 容器规则扩展配套回归 27 项绿。
+
+**遗留**：① 域 8 尾 8 分 = 75 缺口中可达子集，需 GUI 向导自动化
+（pywinauto 驱动 Analysis Type/DEM/CoSIM 向导，录制反推）；
+② 域 4 尾 6 分 = CATIA 样本缺失（沿 D 遗留）；③ `CreateCondCoSim`/
+`CreateCondDTSI`/`CreateCondDTSR` 三创建器实测返回 Nothing，参数
+形态待 GUI 录制反推；④ merged.json 含 25 个非注册表原始键（真实
+XML 实体，不入 165 对账，保留作证据）。
 
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

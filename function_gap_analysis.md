@@ -1025,17 +1025,17 @@ SaveProject 内嵌）。
 | 11 | Wrap/Disc/Overset | 100% | L2+ | **0** | ✅ E 关（回放 3100 err=0 + 建组指纹同类） |
 | 9 | 自研网格 | 100% | L2+ | **0** | ✅ E 关（CreateMesh e2e + 真 facet XT 码 0） |
 | 5 | Octree | 100% | L2+ | **0** | ✅ E 关（三向对齐三样本精确 + 重开两绿） |
-| 8 | 条件体系 | 82% | L2 | 18 | 数据瓶颈已被 typed API 解锁（C） |
+| 8 | 条件体系 | 92% | L2+ | 8 | ✅ C 主收割（§10.9：精确键 47→90/165 + 事务层/毒类型/覆盖上限三模型 + prp 写端）；余 8 分 = 向导门控家族（GUI 向导自动化后续项） |
 | 6 | BAM | 100% | L2+ | **0** | ✅ E 关（拓扑不变量对拍 PASS） |
 | 4 | CAD/XT | 94% | L2-3 | 6 | patch e2e 已随 F 绿（§10.8）；余 CATIA 样本缺失待裁决 |
 | 3 | Select/View | 100% | L2 | **0** | ✅ F 关（5 项 NYI 接线 e2e err=0，清单仅剩产品边界项） |
-| 7 | 宿主自动化 | 92% | L2-3 | 8 | 「深管线业务码非 -1」**实测解除**（xt_ec=0，§10.6），分数随 C 复核 |
+| 7 | 宿主自动化 | 100% | L2+ | **0** | ✅ C 复核关（xt_ec=0 §10.6 + 条件 typed 自动化持久化路径实测 §10.9） |
 | 2 | 工程管理 | 100% | L3 | **0** | ✅ F 关（sctsnapshot 150 样本字节恒等 + LZMS 策略钉死） |
 | 1 | PPH 读写 | 100% | L3 | **0** | ✅ D 关（PKBody3 三路字节恒等，P2/P4 回归） |
 
-**整体完整度 ≈ 97.3%（12 域均分），剩余 32 分**（域 8 条件 18 → C；
-域 7 宿主自动化 8 → C 复核；域 4 CAD 6 → patch 腿已随 F 绿，余
-CATIA 样本缺失待裁决）。结构性判断：
+**整体完整度 ≈ 98.8%（12 域均分），剩余 14 分**（域 8 条件 8 →
+GUI 向导自动化后续项；域 4 CAD 6 → patch 腿已随 F 绿，余 CATIA
+样本缺失待裁决）。结构性判断：
 
 1. 哑铃结构已收敛为「底层满格、腰部待接线」：格式层（字节级闭环）与
    内核驱动层（typed 199/199 对账 + C ABI 深管线 + 四流程 e2e 全 err=0）
@@ -1055,7 +1055,7 @@ CATIA 样本缺失待裁决）。结构性判断：
 | **B 求解链路** | 12（+域 7 尾 8） | **+90** | 1 周 | Execute 面板勾 API → rot 调 `Doc.ExecuteSolver(sphPath)`；FPH/FLD 产物经 `fph.py` / `fldstats.py` 回读；Day-1 先探 solver 启动与许可需求 | box 提交→求解完成日志 + FLD 场量非空断言 |
 | **E 网格/BAM/包装收口** | 5/6/9/11 | **+102** | 2 周 | `MeshingGroup.CreateMesh` e2e（复用 P12-A BAM e2e 的 VMDL/gph 产物，绕「无几何」死锁）；Wrapping GUI 参数对齐锁定序列；Disc/Overset 建组录制（对照 box_disc/box_overset 黄金）；`ConvertFacetToXT` 用 BAM 产物真实 facet；BAM 报告对拍；三向对齐扩样 | 四域 err=0 日志 + 成员与黄金同类 **✅ 完成（2026-08-30，§10.6）** |
 | **D 几何/Region 权威接线** | 10/4 | **+46** | 1.5-2 周 | Register Region 走 `Doc.CreateFaceRegion`（typed 70 方法就绪）；SNode 注入（`CreateGroupPart` / `ImportCADAsFacet`）→ `CreateMDL` True → 深管线业务码非 -1；B-rep 提取（`PK_BODY_ask_*` 全家）；PKBody3 token 字母表→字节闭环（域 1 共享） | `QueryFaceRegionByName` **首次非 Nothing**（§8.5 #10 关门）**✅ 完成（2026-08-30，§10.7；CreateMDL 实测 void 改判产物证据，+44/+46）** |
-| **C 条件深度收割** | 8 | +18 | 1-2 周（随时可插） | 收割机脚本化：89 `CreateCond*` → create → SaveProject → diff main.xml → 精确键自动入 `merged.json`（HTML 显示名猜测禁令沿用 §9.4）；2023.2 库 150 PPH 增量收割；材料五库 prp 写端 | 165/165 精确键 + Save 不破坏宿主 Cond 节点 |
+| **C 条件深度收割** | 8 | +18 | 1-2 周（随时可插） | 收割机脚本化：89 `CreateCond*` → create → SaveProject → diff main.xml → 精确键自动入 `merged.json`（HTML 显示名猜测禁令沿用 §9.4）；2023.2 库 150 PPH 增量收割；材料五库 prp 写端 | 165/165 精确键 + Save 不破坏宿主 Cond 节点 **◐ 部分达标（2026-08-31，§10.9：47→90/165，CreateCond* 面结构性上限 79/165；Save 不破坏实测通过；prp 写端完成；余 75 向导门控 → GUI 向导自动化后续项）** |
 | **F 格式长尾 + Select 收口** | 1/2/3 | +17 | 1-2 周（最后） | 4 暂缓 NYI typed 接线；Actran 重评估；sctsnapshot 重序列化扩 6+ 样本；LZMS 跨平台写端策略钉死（写对称实现或豁免声明，二选一如实记录） | NYI 清单仅剩产品边界项 **✅ 完成（2026-08-30，§10.8；域 3/2 满格，整体 97.3%）** |
 
 ### 10.3 轨迹预估与纪律闸门
@@ -1222,3 +1222,36 @@ SNode 注入走 `QuerySNodeByName`；④ E 遗留①（域 5 reopen 正式
 `_p12d/_p12f` 的 end 标记判据 + 拒绝重试 + **retval 括号调用**
 （P12-F 新钉死）配方；② 域 4 尾 6 分裁决待定：patch e2e 已绿，
 CATIA V4/V5/V6 样本全机缺失（无样本不猜口径，如实记录）。
+
+### 10.9 Sprint C 交付实录（2026-08-31）
+
+**结果**：域 8 条件体系 82%→**92%（L2→L2+）**、域 7 宿主自动化
+92%→**100%（L2+）**；整体 97.3%→**98.8%**（12 域满格 10/12；余
+域 8 尾 8 分 + 域 4 尾 6 分）。C 为**部分达标**：165/165 中精确键
+**47→90**（+43，全走收割管线），`CreateCond*` 路线到结构性上限
+——执行细节与实测钉死见 DEV_PLAN §18.7。
+
+**核心交付**：`tools/_p12c_cond_harvest.py`（收割机 plan/build/
+run/merge/probe/all）+ `p12c_registry_report.json`（75 缺口如实
+五分类）+ 材料五库 prp 写端（`material_lib.py` PrpDocument 读写 +
+round-trip 测试）+ 收割机离线测试 10 项 + `pphxml` 容器短名别名
+归一（配套回归 27 项绿）+ 21 个实测别名入册。
+
+**实测钉死（宿主行为三模型，后续冲刺的地基）**：
+
+1. **条件事务层**：COM `CreateCond*` 条件只活在与创建同脚本的会话
+   事务里，「create → 强制脏（SetDefaultTemperature）→ SaveProject」
+   同脚本才落 main.xml；脚本边界未提交即弃（P10 Acceleration 闭环
+   只验对象级、未验持久化——C 补上）；
+2. **保存毒**：`CondBatteryARCDataPreprocessing` create err=0 但
+   序列化毒杀同脚本保存（`probe` 二分定位法沉淀）；基线须 2025.2
+   原生工程（2023.2 旧 CAB 保存触发版本转换 Confirm 死循环）；
+3. **覆盖上限**：89 个 `CreateCond*` 仅映射 79/165 universe 类型，
+   其余 86 个（cosim 28 / particle 11 / multiphase 7 等）为 GUI
+   向导门控家族，无 COM 单调用路径——165 全覆盖需 GUI 向导自动化
+   （pywinauto 驱动向导 + 录制反推，登记为后续冲刺项）。
+
+**对后续冲刺的输入**：① 域 8 尾 8 分 = GUI 向导自动化（Analysis
+Type/DEM/CoSIM 向导逐族收割，沿 `probe` 配方 + end 标记 + 括号
+retval 调用）；② 域 4 尾 6 分 = CATIA 样本裁决（沿 D/F 遗留）；
+③ `CondCoSim`/`CondDTSI`/`CondDTSR` 创建器参数形态待向导录制反推。

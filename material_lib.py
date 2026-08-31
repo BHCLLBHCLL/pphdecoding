@@ -393,3 +393,135 @@ def material_lib_cached() -> Optional[MaterialLib]:
             return None
         _LIB_CACHE = lib
     return _LIB_CACHE
+
+
+# ---------------------------------------------------------------------------
+# 9) prp 写端（P12-C：P4-2 只读补齐，scFLOWpre.prp / main.prp 同方言）
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PrpEntry:
+    key: str
+    name_jpn: str = ""
+    name_eng: str = ""
+    kind: str = ""                       # <type>（fluid/solid/...）
+    subtype: str = ""
+    props: list[tuple[str, str]] = field(default_factory=list)  # 有序 (tag, value)
+
+    def as_material_entry(self, group: str) -> MaterialEntry:
+        return MaterialEntry(name=self.key or self.name_eng,
+                             name_jpn=self.name_jpn, group=group,
+                             kind=self.kind, props=dict(self.props))
+
+
+@dataclass
+class PrpGroup:
+    key: str
+    name_jpn: str = ""
+    name_eng: str = ""
+    entries: list[PrpEntry] = field(default_factory=list)
+
+
+@dataclass
+class PrpDocument:
+    groups: list[PrpGroup] = field(default_factory=list)
+
+
+def parse_prp_document(data: bytes) -> PrpDocument:
+    """结构化解析 prp 方言（保留 entry key/双语名/type/subtype/有序属性）。"""
+    root = ET.fromstring(data.decode("utf-8", errors="replace"))
+    doc = PrpDocument()
+    for g in root.findall("group"):
+        grp = PrpGroup(
+            key=(g.findtext("key") or "").strip(),
+            name_jpn=next((n.text or "" for n in g.findall("name")
+                           if n.get("lang") == "jpn"), ""),
+            name_eng=next((n.text or "" for n in g.findall("name")
+                           if n.get("lang") == "eng"), ""),
+        )
+        for e in g.findall("entry"):
+            props: list[tuple[str, str]] = []
+            for ch in e:
+                if ch.tag in ("key", "name", "type", "subtype") or len(ch):
+                    continue
+                v = (ch.text or "").strip()
+                if v:
+                    props.append((ch.tag, v))
+            grp.entries.append(PrpEntry(
+                key=(e.findtext("key") or "").strip(),
+                name_jpn=next((n.text or "" for n in e.findall("name")
+                               if n.get("lang") == "jpn"), ""),
+                name_eng=next((n.text or "" for n in e.findall("name")
+                               if n.get("lang") == "eng"), ""),
+                kind=(e.findtext("type") or "").strip(),
+                subtype=(e.findtext("subtype") or "").strip(),
+                props=props,
+            ))
+        doc.groups.append(grp)
+    return doc
+
+
+def write_prp_document(doc: PrpDocument, path: str | Path) -> Path:
+    """按 scFLOWpre.prp 方言写出（UTF-8 BOM + CRLF + 制表缩进）。
+
+    与厂商原始文件的差异（如实记录）：不含 ``<!-- date/time -->``
+    注释头；其余可解析结构（组/条目/属性顺序）保持恒等。
+    """
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        "<!-- Property Data Base -->",
+        "<property>",
+    ]
+    for g in doc.groups:
+        lines.append("\t<group>")
+        if g.key:
+            lines.append(f"\t\t<key>{g.key}</key>")
+        if g.name_jpn:
+            lines.append(f'\t\t<name lang="jpn">{g.name_jpn}</name>')
+        if g.name_eng:
+            lines.append(f'\t\t<name lang="eng">{g.name_eng}</name>')
+        for e in g.entries:
+            lines.append("\t\t\t<entry>")
+            if e.key:
+                lines.append(f"\t\t\t\t<key>{e.key}</key>")
+            if e.name_jpn:
+                lines.append(f'\t\t\t\t<name lang="jpn">{e.name_jpn}</name>')
+            if e.name_eng:
+                lines.append(f'\t\t\t\t<name lang="eng">{e.name_eng}</name>')
+            if e.kind:
+                lines.append(f"\t\t\t\t<type>{e.kind}</type>")
+            if e.subtype:
+                lines.append(f"\t\t\t\t<subtype>{e.subtype}</subtype>")
+            for tag, v in e.props:
+                lines.append(f"\t\t\t\t<{tag}>{v}</{tag}>")
+            lines.append("\t\t\t</entry>")
+        lines.append("\t</group>")
+    lines.append("</property>")
+    text = "\r\n".join(lines) + "\r\n"
+    Path(path).write_bytes(text.encode("utf-8-sig"))
+    return Path(path)
+
+
+def parse_prp_document_from_file(path: str | Path) -> PrpDocument:
+    return parse_prp_document(Path(path).read_bytes())
+
+
+def write_prp_struct(metals: list[StructMetal], path: str | Path) -> Path:
+    """SCTpre.prp_struct 定长文本写端（四行一组，%g 数值）。
+
+    状态行实测厂商库恒为 ``complete``（parse 端不保留）；与厂商原始
+    文件差异：数值格式化走 ``%g``（原文为定宽空格），解析级恒等
+    （parse→write→parse 结果一致）。
+    """
+    lines = ['# prp_struct version="2.0" encoding="UTF-8"']
+    for m in metals:
+        lines += [
+            # parse 端 name 已含括注（'copper(Cu)'），与 category 空格分隔
+            f"{m.name} {m.category}",
+            m.model,
+            "complete",
+            "%g %g %g %g %g" % (m.young, m.poisson, m.density,
+                                m.thermal_exp, m.ref_temp),
+        ]
+    Path(path).write_bytes(("\n".join(lines) + "\n").encode("utf-8-sig"))
+    return Path(path)

@@ -272,8 +272,12 @@ class MainXml:
                     if inferred:
                         out.append((el, inferred))
                 continue
-            # 条件形容器：type 子元素必须是目录中的 Cond* 名
+            # 条件形容器：type 子元素为目录中的 Cond* 名或其已登记
+            # 短名别名（如 ALECancel/SymmetricalBoundary——实测样本中
+            # 以短名出现的家族；别名归一由调用方 aliases.get 完成）
             if tname.startswith("Cond") and tname in known:
+                out.append((el, tname))
+            elif ("Cond" + tname) in known or tname in known:
                 out.append((el, tname))
         return out
 
