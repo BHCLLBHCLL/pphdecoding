@@ -88,21 +88,13 @@ def _extract_nyi_from_source(src: str) -> list[tuple[str, str]]:
 
 # P4-4 逐项评估结论（依据 Manuals\scFLOW\HTML\Pre_eng 帮助页，
 # 2026-08-16）。key 为菜单标签，value 为处置说明。
+# P12-F：Define Facet Part / Create Non-Facet/Closed Volume Part /
+# Create 2D Sub-mesh Meshing Unit / Fix Marked Element Shape /
+# Create Actran Files 五项已接宿主 typed 路线（automation/edit_ops.py），
+# 不再出现在扫描结果中。
 EVALUATIONS: dict[str, str] = {
-    "Create Actran Files…":
-        "**产品边界**：仅 scFLOW2Actran Acoustic Session 可用"
-        "（帮助页原文），保持灰显。",
-    "Define Facet Part…":
-        "**暂缓**：依赖 facet(patch) 数据导入链路，查看器暂无 patch 导入。",
-    "Create Non-Facet/Closed Volume Part…":
-        "**暂缓**：坐标指定 part 表单可做，但需补 pph 写回语义验证。",
-    "Create 2D Sub-mesh Meshing Unit…":
-        "**暂缓**：2D sub-mesh 单元编辑属 mesher 深水区（且 patch/网格"
-        "导入/wrapping 场景不可用）。",
     "Restore Closed Volume Data…":
         "**产品边界**：仅 patch 导入 + Store and Open 再导入场景可用。",
-    "Fix Marked Element Shape":
-        "**暂缓**：选中单元形状修改（网格编辑），需单元级编辑器。",
 }
 
 

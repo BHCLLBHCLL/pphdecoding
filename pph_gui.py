@@ -4005,7 +4005,8 @@ class PphViewer(QMainWindow):
         m.addSeparator()
         add_act(m, "Import…", nav("import_part"), key="file_import")
         add_act(m, "Export…", self._export_member, key="file_export")
-        add_act(m, "Create Actran Files…", key="file_actran")
+        add_act(m, "Create Actran Files…", self._create_actran_files,
+                key="file_actran")
         m.addSeparator()
         add_act(m, "Start Recording VBScript", self._vbs_start_recording,
                 key="file_vbs_start")
@@ -4027,14 +4028,15 @@ class PphViewer(QMainWindow):
                 key="edit_modify_parts")
         add_act(m, "Create Non-Solid Part…", nav("non_solid"),
                 key="edit_non_solid")
-        add_act(m, "Define Facet Part…", key="edit_define_facet")
+        add_act(m, "Define Facet Part…", self._define_facet_part,
+                key="edit_define_facet")
         add_act(m, "Create Non-Facet/Closed Volume Part…",
-                key="edit_non_facet_cv")
+                self._create_non_facet_cv, key="edit_non_facet_cv")
         m.addSeparator()
         add_act(m, "Register Region…", nav("regions"),
                 key="edit_register_region")
         add_act(m, "Create 2D Sub-mesh Meshing Unit…",
-                key="edit_2d_submesh")
+                self._create_2d_submesh, key="edit_2d_submesh")
         add_act(m, "Measurement Tool", self._measurement_tool,
                 key="edit_measure")
         m.addSeparator()
@@ -4071,7 +4073,8 @@ class PphViewer(QMainWindow):
         m.addSeparator()
         add_act(m, "Restore Closed Volume Data…",
                 key="edit_restore_cv")
-        add_act(m, "Fix Marked Element Shape", key="edit_fix_elem")
+        add_act(m, "Fix Marked Element Shape", self._fix_marked_elements,
+                key="edit_fix_elem")
 
         # ── Select ────────────────────────────────────────────────
         m = mb.addMenu("Select(&S)")
@@ -5348,6 +5351,121 @@ class PphViewer(QMainWindow):
             f"{note}\n"
             "请在 scFLOWpre 中 File → Execute VBScript 执行；"
             "勾选“使用 scFLOWpre API”后将自动后台执行并刷新。")
+
+    def _submit_host_action(self, vbs: Path, marker: Path, label: str,
+                            api_label: str) -> None:
+        """P12-F 接线共用：写日志 + 就绪则后台执行，否则提示手动执行。"""
+        self.log(f"{label} — VBS written: {vbs} ({api_label})")
+        if self._host_api_enabled():
+            self._start_api_refresh_poll(marker)
+            self._start_api_execute_thread(vbs)
+            self.log(f"{label} — 已提交宿主后台执行")
+            return
+        QMessageBox.information(
+            self, label,
+            f"已写出可执行宿主脚本（{api_label}）：\n{vbs}\n"
+            "请在 scFLOWpre 中 File → Execute VBScript 执行；"
+            "勾选“使用 scFLOWpre API”后将自动后台执行并刷新。")
+
+    def _nyi_action(self, label: str, key: str, api_label: str,
+                    build) -> None:
+        """P12-F 菜单接线骨架：守卫 → 生成 → 提交。
+
+        ``build`` 为回调：调用方提供输入后生成 VBS/marker 并返回；
+        守卫失败或用户取消输入时不生成。
+        """
+        if not self.archive_path:
+            QMessageBox.information(self, label, "请先打开 PPH 项目")
+            return
+        marker = Path(self.archive_path).with_suffix(f".{key}.done")
+        try:
+            marker.unlink(missing_ok=True)
+        except OSError:
+            pass
+        self._pending_vbs = None
+        build(marker)
+        vbs = self._pending_vbs
+        self._pending_vbs = None
+        if vbs is None:
+            return
+        self._submit_host_action(vbs, marker, label, api_label)
+
+    def _define_facet_part(self) -> None:
+        """Define Facet Part → CreateMeshingGroup + ImportCADAsFacet。"""
+        def build(marker: Path) -> None:
+            cad, _ = QFileDialog.getOpenFileName(
+                self, "Define Facet Part — CAD 文件", "",
+                "CAD (*.x_t *.x_b *.stp *.step *.igs *.iges *.stl);;"
+                "All files (*)")
+            if not cad:
+                return
+            from automation import edit_ops
+            out = Path(self.archive_path).with_suffix(".facet_part.vbs")
+            edit_ops.write_facet_part_vbs(self.archive_path, cad, out,
+                                          marker=marker)
+            self._pending_vbs = out
+        self._nyi_action("Define Facet Part", "facet_part",
+                         "Doc_.CreateMeshingGroup + Doc_.ImportCADAsFacet",
+                         build)
+
+    def _create_non_facet_cv(self) -> None:
+        """Create Non-Facet/Closed Volume Part → 坐标指定 part 建区。"""
+        def build(marker: Path) -> None:
+            name, ok = QInputDialog.getText(
+                self, "Create Non-Facet/Closed Volume Part",
+                "Part name:", text="CoordPart1")
+            if not ok or not name:
+                return
+            from automation import edit_ops
+            out = Path(self.archive_path).with_suffix(".coord_part.vbs")
+            edit_ops.write_coord_part_vbs(self.archive_path, name, out,
+                                          marker=marker)
+            self._pending_vbs = out
+        self._nyi_action("Create Non-Facet/Closed Volume Part",
+                         "coord_part",
+                         "Doc_.CreateCoordinatesSpecifiedPart", build)
+
+    def _create_2d_submesh(self) -> None:
+        """Create 2D Sub-mesh Meshing Unit → sub-mesh 网格组建组。"""
+        def build(marker: Path) -> None:
+            name, ok = QInputDialog.getText(
+                self, "Create 2D Sub-mesh Meshing Unit",
+                "Meshing unit name:", text="SubMeshUnit1")
+            if not ok or not name:
+                return
+            from automation import edit_ops
+            out = Path(self.archive_path).with_suffix(".submesh_mg.vbs")
+            edit_ops.write_submesh_mg_vbs(self.archive_path, name, out,
+                                          marker=marker)
+            self._pending_vbs = out
+        self._nyi_action("Create 2D Sub-mesh Meshing Unit", "submesh_mg",
+                         "Doc_.CreateSubmeshMeshingGroup", build)
+
+    def _fix_marked_elements(self) -> None:
+        """Fix Marked Element Shape → MeshingGroup.FixMarkedElements。"""
+        def build(marker: Path) -> None:
+            from automation import edit_ops
+            out = Path(self.archive_path).with_suffix(".fix_marked.vbs")
+            edit_ops.write_fix_marked_vbs(self.archive_path, out,
+                                          marker=marker)
+            self._pending_vbs = out
+        self._nyi_action("Fix Marked Element Shape", "fix_marked",
+                         "MeshingGroup_.FixMarkedElements", build)
+
+    def _create_actran_files(self) -> None:
+        """Create Actran Files → MeshingGroup.CreateActranFilesMonitor。"""
+        def build(marker: Path) -> None:
+            folder = QFileDialog.getExistingDirectory(
+                self, "Create Actran Files — 输出目录")
+            if not folder:
+                return
+            from automation import edit_ops
+            out = Path(self.archive_path).with_suffix(".actran.vbs")
+            edit_ops.write_actran_vbs(self.archive_path, folder, out,
+                                      marker=marker)
+            self._pending_vbs = out
+        self._nyi_action("Create Actran Files", "actran",
+                         "MeshingGroup_.CreateActranFilesMonitor", build)
 
     def _octant_op(self, op: str) -> None:
         """Refine/Merge/Show Octants → Octree API 宿主 VBS（或本地算法）。"""

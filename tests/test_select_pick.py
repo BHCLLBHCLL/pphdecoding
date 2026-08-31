@@ -41,16 +41,17 @@ class TestSelectPickMode(unittest.TestCase):
         from tools.scan_nyi_menus import _extract_nyi_from_source
         src = (ROOT / "pph_gui.py").read_text(encoding="utf-8")
         items = {label for _, label in _extract_nyi_from_source(src)}
+        # P12-F：五项暂缓/重评估菜单已接宿主 typed 路线，不再 NYI
         for label in (
             "Create Actran Files…",
             "Define Facet Part…",
             "Create Non-Facet/Closed Volume Part…",
             "Create 2D Sub-mesh Meshing Unit…",
-            "Restore Closed Volume Data…",
             "Fix Marked Element Shape",
         ):
-            self.assertIn(label, items, label)
-        self.assertEqual(len(items), 6)
+            self.assertNotIn(label, items, label)
+        self.assertIn("Restore Closed Volume Data…", items)
+        self.assertEqual(items, {"Restore Closed Volume Data…"})
 
 
 if __name__ == "__main__":

@@ -1538,10 +1538,11 @@ SNode 注入拿 IVMDL（P12-D）；`ConvertFacetToXT` 需真实 facet 文件
 | **E 网格/BAM/包装收口** | 5/6/9/11 | **+102** | 2 周 | CreateMesh e2e（复用 BAM 产物）/ Wrapping 对齐 / Disc-Overset 建组 / ConvertFacetToXT 真实 facet / BAM 对拍，全链 err=0 | **完成**（2026-08-30，五 flow gate 全过 + 对拍/对齐离线闭环，见 §18.4） |
 | **D 几何/Region 权威接线** | 10/4 | **+46** | 1.5-2 周 | `QueryFaceRegionByName` 首次非 Nothing + CreateMDL True + PKBody3 字节闭环 | **完成**（2026-08-30，Query 闸门达成 + 四 flow gate 全过，见 §18.5；CreateMDL 实测为 void 方法，验收按产物证据改判；域 4 patch e2e 受宿主崩溃环境受阻，+44/+46） |
 | **C 条件深度收割** | 8 | +18 | 1-2 周（可插） | 89 `CreateCond*` 脚本化收割 + 2023.2 增量 → 165/165 精确键 | 未开始 |
-| **F 格式长尾 + Select 收口** | 1/2/3 | +17 | 1-2 周（最后） | 4 暂缓 NYI typed 接线 + sctsnapshot 6+ 样本 + LZMS 策略钉死 | 未开始 |
+| **F 格式长尾 + Select 收口** | 1/2/3 | +17 | 1-2 周（最后） | 4 暂缓 NYI typed 接线 + Actran 重评估；sctsnapshot 6+ 样本；LZMS 策略钉死 | **完成**（2026-08-30，5 项 NYI 接线 e2e err=0、快照 150/150 字节恒等、LZMS 写对称实现钉死、D 遗留 patch 关账，见 §18.6） |
 
-轨迹：76.6% →（+B）84.1% →（+E）92.6% →（+D）96.3% →（+C）97.9%
-→（+F）**100%**，总量 ~7-8 周（较 §9.5 原估 8-11 周收敛）。
+轨迹：76.6% →（+B）84.1% →（+E）92.6% →（+D）96.3% →（+F）
+**97.3%**（12 域满格 9 个；余域 8 条件 18 分待 C、域 7 尾 8 分随 C
+复核、域 4 尾 6 分 patch 腿已绿待 CATIA 样本裁决）→（+C）**100%**。
 
 ### 18.2 执行纪律与记录位
 
@@ -1799,6 +1800,75 @@ V34.1 'A' 流三路全绿，P2/P4 既有回归）。整体 92.6%→**96.3%**
 如实记录（typed `OpenCadFile` 路线已由 STEP/XT 双格式证实）；③ E
 遗留①（域 5 reopen 正式 gate 日志）随 C 批量补录；④ E 遗留④ box
 双边界压差随 C 处理。
+
+### 18.6 Sprint F 执行记录（2026-08-30，当日交付）
+
+**交付项**：
+
+1. **5 项 NYI 菜单 typed 接线**（`automation/edit_ops.py` 新增
+   `facet_part/coord_part/submesh_mg/fix_marked/actran` 五对
+   actions/write_*_vbs 生成器；`pph_gui.py` 菜单接 slot +
+   `_submit_host_action`/`_nyi_action` 共用骨架，沿 `_ridge_op`
+   就绪即后台执行/否则手动执行模式）：Define Facet Part →
+   `Doc.CreateMeshingGroup`+`Doc.ImportCADAsFacet`（P12-D 配方）；
+   Create Non-Facet/Closed Volume Part →
+   `Doc.CreateCoordinatesSpecifiedPart`；Create 2D Sub-mesh
+   Meshing Unit → `Doc.CreateSubmeshMeshingGroup`；Fix Marked
+   Element Shape → `MeshingGroup.FixMarkedElements`；Create Actran
+   Files → `MeshingGroup.CreateActranFilesMonitor`。
+2. `tools/scan_nyi_menus.py` EVALUATIONS 清理 + `docs/NYI_INVENTORY.md`
+   重生成：NYI 6 项 → **1 项**（Restore Closed Volume Data，产品
+   边界，帮助页原文证据）。
+3. **sctsnapshot 重序列化扩样**（`tests/test_snapshot_reserialize.py`
+   新增 `TestOfficialSnapshots`）：官方案例库 151 pph 中 150 个含
+   `main.sctsnapshot`，**150/150 字节恒等**（18s；1 个无快照成员
+   跳过）——远超 §10.6 要求的 6+。
+4. **LZMS 写端策略钉死**（DEV_SUMMARY §3.5）：选择**写对称实现**
+   （写 `CreateCompressor` / 读 `CreateDecompressor` 同 API 族）+
+   非 Windows 平台守卫；纯 Python LZMS 压缩器**豁免**（读侧已有
+   wimlib 回退、写侧无跨平台消费场景、独立实现体量无需求支撑），
+   豁免声明如实记录。
+5. **D 遗留① patch e2e 关账**：`scratch/_p12f_patch_variant.py`
+   两变体实测——A（短路径+无括号）仍 5/5 被 rot 拒；**B（括号
+   retval 调用 `Set SN5_ = Doc_.ImportPatchAsCAD("…")`）GATE
+   PASS**：err=0、`sn5_` 非 Nothing、产物含
+   `meshinggroup1_part.mdl`（patch 落为 facet part MDL，沿 P12-A
+   成员族）。
+
+**实测钉死（P12-F）**：
+
+- **rot 内容性拒绝对策（新）**：无括号 retval 调用
+  `Set X_ = Doc_.Method "arg"` 会被宿主 VBS 预处理**稳定拒绝**
+  （5/5 零执行，非逐次不稳定）；**括号形式
+  `Set X_ = Doc_.Method("arg")` 被接纳**——retval 取值一律括号。
+- `CreateCoordinatesSpecifiedPart` / `CreateSubmeshMeshingGroup`
+  headless 直调返回非 Nothing；建组名权威落点 = **main.xml ×2**
+  （`P12FCoordPart` / `P12FSubMG`，与 P12-D region 三结构结论一致
+  的成员面）。
+- `FixMarkedElements` 实测 retval=0（err=0，meshed box 工程）。
+- `CreateActranFilesMonitor` **typed 链全绿但业务层返回 False**
+  （err=0、无异常；SetModeMesh+SetActiveMeshingGroup 前置变体同
+  结果，输出 0 文件）——帮助页原文「仅 scFLOW2Actran Acoustic
+  Session 可用」与实测一致：菜单已接线（不再灰显），业务前置在
+  无 Acoustic 样本环境不可满足，**边界如实记录**，不影响域 3
+  「NYI 清单仅剩产品边界项」验收。
+
+**域分数更新**：域 3 Select/View 90%→**100%**（5 项接线 + e2e
+err=0 + NYI 清单收敛）；域 2 工程管理 97%→**100%**（sctsnapshot
+150 样本字节恒等 + LZMS 策略钉死）。整体 96.3%→**97.3%**
+（12 域满格 9 个；剩余 32 分 = 域 8 条件 18（C）+ 域 7 宿主自动
+化 8（C 复核）+ 域 4 CAD 6（patch 腿本冲刺已绿，余 CATIA 样本
+缺失待裁决））。
+
+**回归规模**：全仓新增 13 项（`tests/test_p12f_generators.py` 8 +
+`test_p12f_e2e_generators.py` 5）；修改 2（
+`test_snapshot_reserialize.py` +2 扩样、`test_select_pick.py` NYI
+期望 6→1）；全量 **855 passed / 3 skipped / 0 failed**（403s；
+`tests/*` 需 `git add -f`）。
+
+**遗留**：① Actran 业务前置（Acoustic Session 样本缺失）如实
+记录，typed 路线已就绪可随时复验；② CATIA 样本缺失（沿 D 遗留
+②）；③ 域 8 → 冲刺 C（89 `CreateCond*` 收割）。
 
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

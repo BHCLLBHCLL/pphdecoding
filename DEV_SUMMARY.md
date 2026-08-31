@@ -173,6 +173,17 @@
   XML 改后重解析、完整"解压→解密→加密→再压缩→再解压"闭环。
 - ❌ 未做：sctsnapshot 记录流的字节级重序列化（解析器不保留原始负载
   字节），以及 SCTpre 对改写文件的实测验收（需要图形界面/许可环境）。
+- **📌 P12-F LZMS 写端策略钉死（二选一如实记录）**：选择**写对称实现**
+  路线——写端 `lzms_compress` 与读端主后端同用 Windows Compression API
+  （`cabinet.dll`：读 `CreateDecompressor` / 写 `CreateCompressor`，
+  同一 `COMPRESSION_ALGORITHM_LZMS=4`），输出经既有解压器 round-trip
+  逐字节还原（`tests/test_writer.py::test_lzms_compress_roundtrip`）。
+  非 Windows 写端为**平台守卫**（`lzms_compress` 显式 raise +
+  测试 `skipif os.name != "nt"`），不做 wimlib 写端绑定；**纯 Python
+  LZMS 压缩器豁免**——依据：读侧已有 wimlib 跨平台回退保解码能力，
+  写侧无跨平台消费场景（PPH 产物仅由本写端产生），而 MS-LZMS
+  压缩器独立实现体量大且无产品需求支撑。此豁免不影响 §9.7 第 1 句
+  「LZMS 策略钉死」验收。
 
 ### 3.6（原难度 1）验证覆盖局限
 

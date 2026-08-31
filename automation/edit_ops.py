@@ -197,6 +197,120 @@ def write_ridge_vbs(project_path: str | Path, op: str,
         output, marker=marker, title=f"pph_gui ridge {op}")
 
 
+def _typed_header(project_path: str | Path) -> list[str]:
+    return [
+        "Set App_ = GetApplication()",
+        'If App_ Is Nothing Then Set App_ = '
+        'CreateObject("scFLOWpre_Bx64net.Application.2025")',
+        "Set Doc_ = App_.GetDocument",
+        f'Doc_.OpenProject "{Path(project_path).as_posix()}", False',
+    ]
+
+
+def _save_action(save_path: Optional[str | Path],
+                 project_path: str | Path) -> str:
+    save = Path(save_path) if save_path is not None else Path(project_path)
+    return f'Doc_.SaveProject "{save.as_posix()}"'
+
+
+def facet_part_actions(project_path: str | Path, cad_path: str | Path,
+                       *, save_path: Optional[str | Path] = None) -> list[str]:
+    """Define Facet Part（P12-D 已钉死配方：新建 MG 后 ImportCADAsFacet）。"""
+    return _typed_header(project_path) + [
+        "Set FacetMG_ = Doc_.CreateMeshingGroup",
+        f'Doc_.ImportCADAsFacet "{Path(cad_path).as_posix()}", FacetMG_',
+        _save_action(save_path, project_path),
+    ]
+
+
+def write_facet_part_vbs(project_path: str | Path, cad_path: str | Path,
+                         output: str | Path, *,
+                         save_path: Optional[str | Path] = None,
+                         marker: Optional[str | Path] = None) -> Path:
+    return write_host_edit_vbs(
+        project_path,
+        facet_part_actions(project_path, cad_path, save_path=save_path),
+        output, marker=marker, title="pph_gui define facet part")
+
+
+def coord_part_actions(project_path: str | Path, name: str, *,
+                       save_path: Optional[str | Path] = None) -> list[str]:
+    """Create Non-Facet/Closed Volume Part → 坐标指定 part 建区。"""
+    return _typed_header(project_path) + [
+        f'Set CoordPart_ = Doc_.CreateCoordinatesSpecifiedPart("{name}")',
+        _save_action(save_path, project_path),
+    ]
+
+
+def write_coord_part_vbs(project_path: str | Path, name: str,
+                         output: str | Path, *,
+                         save_path: Optional[str | Path] = None,
+                         marker: Optional[str | Path] = None) -> Path:
+    return write_host_edit_vbs(
+        project_path,
+        coord_part_actions(project_path, name, save_path=save_path),
+        output, marker=marker, title="pph_gui create non-facet/cvol part")
+
+
+def submesh_mg_actions(project_path: str | Path, name: str, *,
+                       save_path: Optional[str | Path] = None) -> list[str]:
+    """Create 2D Sub-mesh Meshing Unit → sub-mesh 网格组建组。"""
+    return _typed_header(project_path) + [
+        f'Set SubMG_ = Doc_.CreateSubmeshMeshingGroup("{name}")',
+        _save_action(save_path, project_path),
+    ]
+
+
+def write_submesh_mg_vbs(project_path: str | Path, name: str,
+                         output: str | Path, *,
+                         save_path: Optional[str | Path] = None,
+                         marker: Optional[str | Path] = None) -> Path:
+    return write_host_edit_vbs(
+        project_path,
+        submesh_mg_actions(project_path, name, save_path=save_path),
+        output, marker=marker, title="pph_gui create 2d submesh unit")
+
+
+def fix_marked_actions(project_path: str | Path, *,
+                       save_path: Optional[str | Path] = None) -> list[str]:
+    """Fix Marked Element Shape → MeshingGroup.FixMarkedElements（retval）。"""
+    return _typed_header(project_path) + [
+        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
+        "fix_ret_ = MeshingGroup_.FixMarkedElements",
+        _save_action(save_path, project_path),
+    ]
+
+
+def write_fix_marked_vbs(project_path: str | Path, output: str | Path, *,
+                         save_path: Optional[str | Path] = None,
+                         marker: Optional[str | Path] = None) -> Path:
+    return write_host_edit_vbs(
+        project_path,
+        fix_marked_actions(project_path, save_path=save_path),
+        output, marker=marker, title="pph_gui fix marked element shape")
+
+
+def actran_actions(project_path: str | Path,
+                   folder: str | Path) -> list[str]:
+    """Create Actran Files → MeshingGroup.CreateActranFilesMonitor(folder)。
+
+    仅产出 BDF/EDAT 文件，不改工程，故不 SaveProject。
+    """
+    return _typed_header(project_path) + [
+        "Set MeshingGroup_ = Doc_.QueryMeshingGroupByIndex(0)",
+        f'MeshingGroup_.CreateActranFilesMonitor "{Path(folder).as_posix()}"',
+    ]
+
+
+def write_actran_vbs(project_path: str | Path, folder: str | Path,
+                     output: str | Path, *,
+                     marker: Optional[str | Path] = None) -> Path:
+    return write_host_edit_vbs(
+        project_path,
+        actran_actions(project_path, folder),
+        output, marker=marker, title="pph_gui create actran files")
+
+
 def write_octant_vbs(project_path: str | Path, op: str,
                      output: str | Path,
                      *, level: Optional[int] = None,

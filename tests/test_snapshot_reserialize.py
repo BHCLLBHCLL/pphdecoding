@@ -72,6 +72,63 @@ class TestModifyLeaf(unittest.TestCase):
         self.assertEqual(rec2.value.value, 100.0)
 
 
+class TestOfficialSnapshots(unittest.TestCase):
+    """P12-F：重序列化字节恒等从 box/laptop 扩到官方案例库全体。
+
+    2026-08-30 实测：库内 151 个 pph 中 150 个含 main.sctsnapshot，
+    全部字节恒等（1 个无快照成员跳过）。若未来样本失败，按 gap §10.6
+    约定如实记「语义等价」并载明失败原因，不得静默豁免。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import official_examples
+        root = official_examples.example_root()
+        if root is None:
+            raise unittest.SkipTest(
+                f"set {official_examples.ENV_VAR} to the Cradle example "
+                "library")
+        import zipfile
+        cls.samples = []
+        for pph in sorted(Path(root).rglob("*.pph")):
+            try:
+                with zipfile.ZipFile(pph) as zf:
+                    if "main.sctsnapshot" not in zf.namelist():
+                        continue
+                    raw = zf.read("main.sctsnapshot")
+            except zipfile.BadZipFile:
+                continue
+            cls.samples.append((pph, raw))
+        if len(cls.samples) < 6:
+            raise unittest.SkipTest(
+                f"only {len(cls.samples)} snapshot samples available")
+
+    def test_byte_identity_all_samples(self):
+        import tempfile
+        problems = []
+        for pph, raw in self.samples:
+            with tempfile.NamedTemporaryFile(suffix=".sctsnapshot",
+                                             delete=False) as tf:
+                tf.write(raw)
+                tmp = tf.name
+            try:
+                snap = sctsnapshot.SctSnapshot.load(tmp)
+                if snap.serialize(raw) != raw:
+                    problems.append(f"{pph.name}: reserialize differs")
+            except Exception as exc:  # noqa: BLE001
+                problems.append(f"{pph.name}: {exc!r}")
+            finally:
+                Path(tmp).unlink(missing_ok=True)
+        self.assertFalse(
+            problems,
+            "字节恒等失败样本（如确认记录层语义等价，须回填 gap §10.6 "
+            "逐条载明）:\n" + "\n".join(problems))
+
+    def test_sample_count_reported(self):
+        # 覆盖面证据：样本量必须显著超过 §10.6 要求的 6+
+        self.assertGreaterEqual(len(self.samples), 6)
+
+
 class TestOctreeRegionWrite(unittest.TestCase):
     """P3-2：OCTREEREGION 后序写端（encode + LZMS 压缩 + 写回）。"""
 
