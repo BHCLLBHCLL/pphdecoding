@@ -108,6 +108,29 @@ class TestBuildSolveVbs(unittest.TestCase):
             self.assertIn("scFLOWpre.sph", text)
             self.assertNotIn("\\\\", text)
 
+    def test_quit_after_selects_quit_and_execute_solver(self):
+        # P12-B 加固：QuitAndExecuteSolver 变体必须真正切到 catalog
+        # 另一入口，并写出 exec_method= 元数据，便于 VBS 日志归因。
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            vbs = solver_run.build_solve_vbs(
+                td / "box.pph", td / "work", td / "work" / "solve_vbs.log",
+                quit_after=True)
+            text = decode_vbs(vbs.read_bytes())
+            self.assertIn("QuitAndExecuteSolver", text)
+            self.assertNotIn("Doc_.ExecuteSolver(", text)
+            self.assertIn("exec_method=QuitAndExecuteSolver", text)
+
+    def test_default_execute_writes_exec_method_and_no_quit(self):
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            vbs = solver_run.build_solve_vbs(
+                td / "box.pph", td / "work", td / "work" / "solve_vbs.log")
+            text = decode_vbs(vbs.read_bytes())
+            self.assertIn("Doc_.ExecuteSolver(", text)
+            self.assertNotIn("QuitAndExecuteSolver", text)
+            self.assertIn("exec_method=ExecuteSolver", text)
+
 
 class TestArtifacts(unittest.TestCase):
     def test_collect_and_classify(self):
@@ -129,6 +152,31 @@ class TestArtifacts(unittest.TestCase):
             arts = solver_run.find_solver_artifacts(
                 "box", dirs=[Path(td)])
             self.assertEqual(arts["artifacts"], [])
+
+    def test_no_case_falls_back_to_suffix_glob_not_default_box(self):
+        # P12-B 加固：find_solver_artifacts(case=None, cases=None) 此前
+        # 回退 DEFAULT_CASE="box"，会把与 box 无关的工程（如 car/wing）
+        # 结果漏报——现改为按通用后缀全扫。
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / "car_100.fph").write_bytes(b"car")
+            (td / "wing.rph").write_bytes(b"w")
+            (td / "wing_202.l").write_text("L log")
+            (td / "other.bin").write_bytes(b"junk")
+            arts = solver_run.find_solver_artifacts(dirs=[td])
+            paths = {Path(a["path"]).name for a in arts["artifacts"]}
+            self.assertIn("car_100.fph", paths)
+            self.assertIn("wing.rph", paths)
+            self.assertIn("wing_202.l", paths)
+            self.assertNotIn("other.bin", paths)
+            # 返回的 names 不应硬编码 "box"
+            self.assertNotIn("box", arts.get("case", []))
+
+    def test_no_case_empty_names_shape(self):
+        # names=[] 时返回的 case 字段为空列表（诊断输出易读）。
+        with tempfile.TemporaryDirectory() as td:
+            arts = solver_run.find_solver_artifacts(dirs=[td])
+            self.assertEqual(arts.get("case"), [])
 
 
 class TestWaitForSolver(unittest.TestCase):
@@ -207,12 +255,34 @@ class TestCli(unittest.TestCase):
             self.assertEqual(rc, 0)
             self.assertTrue((td / "work" / "solve_vbs.vbs").exists())
 
+    def test_build_cli_quit_after_flag(self):
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            rc = solver_run.main(
+                ["build", "--pph", str(td / "box.pph"), "--work",
+                 str(td / "work"), "--quit-after"])
+            self.assertEqual(rc, 0)
+            vbs = td / "work" / "solve_vbs.vbs"
+            self.assertTrue(vbs.exists())
+            self.assertIn("QuitAndExecuteSolver",
+                          decode_vbs(vbs.read_bytes()))
+
     def test_verify_cli_exit_codes(self):
         with tempfile.TemporaryDirectory() as td:
             bad = Path(td) / "bad.fph"
             bad.write_bytes(b"junk")
             rc = solver_run.main(["verify", str(bad)])
             self.assertEqual(rc, 1)
+
+    def test_wait_cli_default_case_is_none(self):
+        # P12-B 加固：wait --case 不再回退 DEFAULT_CASE="box"，改为无
+        # case 时 wait_for_solver 也走 find_solver_artifacts 全扫路径。
+        with mock.patch.object(solver_run, "wait_for_solver",
+                               return_value={"ok": True}) as m:
+            rc = solver_run.main(["wait", "--timeout", "0.05"])
+        self.assertEqual(rc, 0)
+        _, kwargs = m.call_args
+        self.assertIsNone(kwargs.get("case"))
 
 
 if __name__ == "__main__":

@@ -375,7 +375,7 @@ GUI 运行：`python pph_gui.py [项目.pph]`；依赖缺失时
    实际网格生成直调实机验证——`CreateFacetOctree` 返回业务 ErrorCode 312、
    `ExecuteWrapping` 返回 311（空 group 无 facet/无 wrapping），
    `last_exception_code=0`（SEH 守卫未触发、无访问违例），证明符号解析 +
-   x64 ABI + SEH 全链路正确，见 DEV_PLAN §17.9；**回填（2026-08-25，P12-A）**：rot 收敛为唯一权威通道（gui/manual 降级诊断）后，四流程 e2e——Ridge/Octant 编辑、BAM Wizard 3125 步全回放、OpenCadFile 真实 STEP——经该通道全量 err=0 归档；typed COM 包装对 catalog 199 类对账无死角，见 DEV_PLAN §17.10；
+   x64 ABI + SEH 全链路正确，见 DEV_PLAN §17.9；**回填（2026-08-25，P12-A）**：rot 收敛为唯一权威通道（gui/manual 降级诊断）后，四流程 e2e——Ridge/Octant 编辑、BAM Wizard 3125 步全回放、OpenCadFile 真实 STEP——经该通道全量 err=0 归档；typed COM 包装对 catalog 199 类对账无死角，见 DEV_PLAN §17.10；**回填（2026-08-30，P12-B）**：同一 rot 权威通道扩展到求解链路——`Doc.SaveSphFile(sph,gph) → ExecuteSolver(sph)`（异步）+ 计算进程退出判定（scMonitor 常驻不计）——双实机纪律闸门：rot 基线（400 CYCLE，478.7s）与 50Pa 压差变体（400 CYCLE，37.1s）各 `CALCULATION FINISH` 1 条、ERROR LOG 空；`p12b_dp50_e2e.fph` strict_ok=true（8000 cells / 25200 faces，11 场量 VEL/PRES/TURK/TEPS/EVIS/TPRS 非零且与 L 日志 FIELD EXTREMA 逐值对拍）；域 12 Solver/FPH 10%→100%，域 7 尾（ExecuteSolver 实机接线）一并关，整体 76.6%→84.1%，见 DEV_PLAN §18.3 / function_gap_analysis §10.5；
 4. 再试 `CreateObject`。**实测："拉新进程"成立**——COM 激活拉起瞬态新
    实例（PID 出现又退出，Kicker 双实例从不加载本仓 DLL）。与本 §6.1/6.2
    的"裸 exe 必崩 0xE0000000"不同，本机瞬态实例**正常工作**（OpenProject/

@@ -54,10 +54,14 @@ def build_solve_vbs(project_pph: str | Path,
                     *,
                     execute: bool = True,
                     gph_name: str = "scFLOWpre.gph",
-                    sph_name: str = "scFLOWpre.sph") -> Path:
+                    sph_name: str = "scFLOWpre.sph",
+                    quit_after: bool = False) -> Path:
     """生成求解链路 VBS（UTF-16，宿主内执行）。
 
     ``execute=False`` 时只导出 gph/sph（探测用，不拉起求解器）。
+    ``quit_after=True`` 时用 ``QuitAndExecuteSolver``（语义：宿主
+    提交求解后退出前处理 GUI），不利批量多会话编排，默认走
+    ``ExecuteSolver``（只异步拉起求解器，宿主不退）。
     路径一律正斜杠（P12-A e2e 先例）。
     """
     pph = Path(project_pph).resolve().as_posix()
@@ -97,8 +101,10 @@ def build_solve_vbs(project_pph: str | Path,
         "Err.Clear",
     ]
     if execute:
+        method_ = "QuitAndExecuteSolver" if quit_after else "ExecuteSolver"
         lines += [
-            f'RetExec_ = Doc_.ExecuteSolver("{sph}")',
+            f'RetExec_ = Doc_.{method_}("{sph}")',
+            f'out_.WriteLine "exec_method={method_}"',
             'out_.WriteLine "exec_err=" & CStr(Err.Number)',
             'out_.WriteLine "exec_ret=" & CStr(RetExec_)',
             "Err.Clear",
@@ -152,15 +158,29 @@ def find_solver_artifacts(case=None,
     FPH/RPH 条目的通用名（=工程名）；而 L 日志 ``<sph 干名>.l`` /
     ``.ccdt`` / ``.csln`` 跟 sph 文件干名——故支持多通用名扫描。
     """
-    names = list(cases or ([case] if case else [DEFAULT_CASE]))
+    names: list[str]
+    if cases:
+        names = list(cases)
+    elif case:
+        names = [case]
+    else:
+        # 无 case/cases 时不按工程名前缀扫（此前回退 DEFAULT_CASE="box"
+        # 会把与 box 无关的工程产物漏报，是 STATUS CLI 的误判根因）。
+        # 空 names = 扫所有候选目录下的 fph/rph/log/... 通用后缀。
+        names = []
     cands = [Path(d) for d in (dirs or [])]
     cands += cradle_work_dirs()
     seen: dict[str, dict] = {}
-    patterns = []
-    for c in dict.fromkeys(names):
-        patterns += [f"{c}*.fph", f"{c}*.rph", f"{c}*.log",
-                     f"{c}*.l", f"{c}*.xml", f"{c}*.csln",
-                     f"{c}*.fld"]
+    patterns: list[str]
+    if names:
+        patterns = []
+        for c in dict.fromkeys(names):
+            patterns += [f"{c}*.fph", f"{c}*.rph", f"{c}*.log",
+                         f"{c}*.l", f"{c}*.xml", f"{c}*.csln",
+                         f"{c}*.fld"]
+    else:
+        patterns = ["*.fph", "*.rph", "*.log",
+                    "*.l", "*.xml", "*.csln", "*.fld"]
     for d in cands:
         if not d.is_dir():
             continue
@@ -309,6 +329,7 @@ def run_solve(project_pph: str | Path,
               *,
               case: Optional[str] = None,
               execute: bool = True,
+              quit_after: bool = False,
               vbs_timeout: float = 3600.0,
               wait_timeout: float = 1800.0,
               sph_name: str = "scFLOWpre.sph") -> dict:
@@ -316,6 +337,8 @@ def run_solve(project_pph: str | Path,
 
     ``case`` 缺省 = 双通用名扫描（实测产物命名分裂：场文件跟工程名
     ``box_400.fph``，L 日志跟 sph 干名 ``scFLOWpre.l``）。
+    ``quit_after=True`` 走 ``QuitAndExecuteSolver``（提交后退出前
+    处理宿主，不利批量；默认 ``ExecuteSolver`` 仅异步拉起求解器）。
     """
     from automation import host_pipeline
 
@@ -325,9 +348,11 @@ def run_solve(project_pph: str | Path,
     work = Path(work_dir)
     work.mkdir(parents=True, exist_ok=True)
     log = work / "solve_vbs.log"
-    vbs = build_solve_vbs(project_pph, work, log, execute=execute)
+    vbs = build_solve_vbs(project_pph, work, log, execute=execute,
+                          quit_after=quit_after)
     report: dict = {"vbs": str(vbs), "log": str(log),
-                    "backend": "rot", "execute": execute}
+                    "backend": "rot", "execute": execute,
+                    "quit_after": quit_after}
     res = host_pipeline.run_vbs_authoritative(vbs, timeout=vbs_timeout)
     report["vbs_run"] = res
     if log.exists():
@@ -367,11 +392,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     for p in (p_build, p_prep, p_run):
         p.add_argument("--pph", required=True, help="工程 .pph 路径")
         p.add_argument("--work", required=True, help="gph/sph 工作目录")
+    for p in (p_build, p_prep, p_run):
+        p.add_argument(
+            "--quit-after", action="store_true",
+            help="用 QuitAndExecuteSolver（提交后退出前处理宿主，不利批量；"
+                 "prep/build 仅影响 VBS 内容占位，实际作用在 run 阶段）")
     p_run.add_argument("--case", default=None,
-                       help="产物通用名（缺省= sph 干名）")
+                       help="产物通用名（缺省=工程名干名 + sph 干名双扫）")
     p_run.add_argument("--vbs-timeout", type=float, default=3600.0)
     p_run.add_argument("--wait-timeout", type=float, default=1800.0)
-    p_wait.add_argument("--case", default=DEFAULT_CASE)
+    # wait/status 不指定 case => 按通用后缀全扫（此前 DEFAULT_CASE="box"
+    # 会漏报非 box 工程，现更符合运维视角）。
+    p_wait.add_argument("--case", default=None,
+                        help="通用名（缺省=所有候选目录按 FPH/RPH/LOG 后缀全扫）")
     p_wait.add_argument("--timeout", type=float, default=1800.0)
     p_wait.add_argument("--dir", action="append", default=[],
                         help="额外产物扫描目录（可重复）")
@@ -380,15 +413,18 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.cmd == "build":
         vbs = build_solve_vbs(args.pph, args.work,
-                               Path(args.work) / "solve_vbs.log")
+                               Path(args.work) / "solve_vbs.log",
+                               quit_after=args.quit_after)
         print(vbs)
         return 0
     if args.cmd == "prep":
-        rep = run_solve(args.pph, args.work, execute=False)
+        rep = run_solve(args.pph, args.work, execute=False,
+                        quit_after=args.quit_after)
         print(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
         return 0 if rep.get("ok") else 1
     if args.cmd == "run":
         rep = run_solve(args.pph, args.work, case=args.case,
+                        quit_after=args.quit_after,
                         vbs_timeout=args.vbs_timeout,
                         wait_timeout=args.wait_timeout)
         print(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
