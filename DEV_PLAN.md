@@ -2055,5 +2055,46 @@ XML 实体，不入 165 对账，保留作证据）。
 **回归规模**：G1 断言扩展（`test_xt` +3 断言）；全量回归见提交
 说明（`scratch/_g_regression.log`）。
 
+## 19. 冲刺 H：域 8 收口 → 12 域双口径 100%（2026-09-02 立）
+
+> 输入：§18.8（Sprint G 摸底）+ gap §0/§10.1（基线 98.8%）+
+> `p12c_registry_report.json`（75 缺口五分类复核，2026-09-02）。
+> 口径不变：§9.1 双 100%（完整度 × 深度）+ §9.6 豁免；域 4 尾 6 分
+> 已裁决产品边界项（§18.8 G3），不再占开发量。
+
+### 19.1 剩余差距精确分解（全部在域 8 的 75 类）
+
+| 缺口（`p12c_registry_report.json` 五分类） | 数量 | 性质 | 路线 |
+|---|---|---|---|
+| `no_com_creator`（CoSIM/Nastran/Multiphase/AnalysisControl 等向导门控族） | 68 | 无 COM 单调用路径，GUI 向导门控 | 向导收割（§18.8 配方） |
+| `create_returns_nothing`（CondCoSim） | 1 | COM 创建器返回 Nothing | 同上（向导路线） |
+| `create_ok_aliased_to_haved`（BoundaryHumidity / OutputLFileWaterLevel / ParticleConcentrationFpDEM / Repulsion） | 4 | create err=0 但别名到已有类型 | 对账入册（键 = 宿主落盘原始短名映射） |
+| `create_ok_not_serialized`（CondFMIVariable） | 1 | create err=0 但不落 main.xml | 查序列化使能条件（FMI 前置） |
+| `save_poison`（CondBatteryARCDataPreprocessing） | 1 | create ok 但毒杀保存 | 隔离声明（产品级缺陷，如实记录） |
+
+### 19.2 工作项（H1–H5，预估 2–3 周）
+
+| # | 工作项 | 做法 | 验收一句话 | 预估 |
+|---|---|---|---|---|
+| **H1** | **68+1 类落点钉死**（一切的前提） | GUI 会话内沿 §18.8 配方（还原窗口 → UIA invoke Condition Wizard → 限宿主 pid 模态管理）创建 1 个 no_com_creator 条件 / 勾选 1 个分析族，**全成员 byte-diff** 找真实落点；顺带走通 Finish 的 Confirm/联动流（probe6 显示 UIA toggle 未投影） | 落点钉死报告：每类落 main.xml / main.prp / xenv / 纯会话态 四选一 | 1–2 天 |
+| **H2** | 收割机 v2（`tools/_p12h_wizard_harvest.py`，沿 C 收割机 plan/build/run/merge 形态） | 一次一类型、独立工程副本（Finish 全量投影语义，§18.8-4）；基线工程先纯化 2025.2 原生（消 2023.2 血统 Confirm，§18.8-7）；向导交互 → Save → diff → 入 `merged.json` | 收割 batch 实机日志 + 每类精确键入册 | 1–2 周 |
+| **H3** | 特殊 6 类处置 | aliased 4 类对账入册（`cond_types.json` aliases 扩展）；CondFMIVariable 查 FMI 前置使能；save_poison 隔离声明 | 6 类逐类有归属（键 / 别名 / 边界声明） | 2–3 天 |
+| **H4** | 对账收束 + 测试扩面 | `p12h_registry_report.json`：165/165 全覆盖对账（精确键 / 别名 / 边界三类归属）；round-trip 测试扩面 | 165/165 对账报告 0 未归类 | 2 天 |
+| **H5** | 边界项统一入册 + 100% 声明 | 域 4 CATIA（样本缺失）、Actran（无 Acoustic 样本）、Restore Closed Volume Data → `docs/NYI_INVENTORY.md` 登记（§9.1 完整度口径认可「灰显 + 理由」）；§9.7 十二句验收逐句打勾核对；gap §0/§9.3/§10.1 刷新；全量回归；提交推送 | **12 域双口径 100%（含边界项声明）+ 12 句验收全勾** | 1 天 |
+
+### 19.3 风险与决策点
+
+1. **H1 是分叉点**：若落点 = 纯会话态（宿主从不持久化该 68 类），
+   域 8 口径重估为「GUI 向导会话态配置」对标本仓 `pph_gui` 替代
+   面板覆盖，而非 XML 键收割（工作量骤降，100% 提前）。
+2. **Finish 全量投影**（§18.8-4 已钉死）：收割只用一次性工程，
+   收获物是键不是工程——不影响 H2 可行性。
+3. **勾选→落盘链路未通**（§18.8-5）：H1 必须先走通；若 UIA
+   toggle 不触发向导内部 model，降级 `click_input`（主窗口已
+   还原到可见坐标，物理点击可用）。
+4. 深度维度无新工作：域 8 收割后维持 L2+；§9.6 豁免（自研引擎
+   bit 等 / 自研 wrapping 内核 / CADthru faceter / Influence
+   faceter）为既定口径，不在本冲刺范围。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*
