@@ -83,6 +83,15 @@ class TestGroupFlows(unittest.TestCase):
         self.assertIn("ConvertFacetToXT", joined)
         self.assertIn(p12e.BAM_MDL.name, joined)
         self.assertIn("pipe_exc=", joined)
+        # 2026-09-01 复测钉死：符号表惰性初始化前转换逐次 -1，
+        # priming（ContextReady + Status）必须先于 ConvertFacetToXT。
+        self.assertLess(joined.index("Pipe_.Status"),
+                        joined.index("ConvertFacetToXT"))
+        self.assertLess(joined.index("Pipe_.ContextReady"),
+                        joined.index("ConvertFacetToXT"))
+        # Status 多行只落长度（st_len），不直接进日志行流
+        self.assertIn("st_len=", joined)
+        self.assertNotIn("out_.WriteLine st_", joined)
 
 
 class TestVerifyLog(unittest.TestCase):

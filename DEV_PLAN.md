@@ -1739,6 +1739,21 @@ OpenProject 挂起现象（上）阻断官方重录——不影响 E 验收句�
 已记录现象与应对配方；④ box 双边界压差工程配置（B 遗留①）随 C
 条件收割一并处理。
 
+**回填（2026-09-01 复测）**：
+
+- **ConvertFacetToXT 需 Status priming（xt 非确定性根因钉死）**：
+  同一脚本 8-30 实测 `xt_ec=0`、9-01 两次复测 `-1`（桥级失败、
+  `pipe_exc=0` 无 SEH、产物不落盘）——根因为**桥符号表惰性初始化**：
+  VBS 先读 `Pipe_.ContextReady` + `Pipe_.Status`（触发符号表初始化）
+  再转换则稳定 0，产物真 Parasolid（FRU=Software Cradle，4855B）。
+  `build_xt_groups` 已回填 priming（`cr_`/`st_len` 单行落日志，
+  Status 多行不进 verify_log 行流），`test_xt` 断言 priming 先于
+  转换；实机重跑随收口 batch 取正式 err=0 日志。
+- **reopen 遗留①维持**：OpenProject 至 post-Refine 八叉树工程
+  （p12a_octant_e2e_out.pph）稳定中止脚本（无 s004、无模态或先弹
+  Initial Wizard 模态），宿主存活——按宿主行为已知问题配方处置
+  （挂起即换宿主实例），不再重复排查；域 5 验收句不依赖该项。
+
 ### 18.5 Sprint D 执行记录（2026-08-30，当日交付）
 
 **交付项**：
@@ -1964,6 +1979,81 @@ err=0 + NYI 清单收敛）；域 2 工程管理 97%→**100%**（sctsnapshot
 `CreateCondDTSI`/`CreateCondDTSR` 三创建器实测返回 Nothing，参数
 形态待 GUI 录制反推；④ merged.json 含 25 个非注册表原始键（真实
 XML 实体，不入 165 对账，保留作证据）。
+
+### 18.8 Sprint G 收口冲刺执行记录（2026-09-01/02）
+
+目标：冲 100% 最后两域（域 8 尾 8 分、域 4 尾 6 分）+ E 冲刺 xt
+遗留回填。结果：G1 ✅ 关账、G3 ✅ 关账（产品边界裁决）、G2 ◐
+摸底完成（向导行为模型钉死，收割执行转下一冲刺）。
+
+**G1 · ConvertFacetToXT Status priming（✅ 关账）**：
+
+- 根因钉死：桥符号表**惰性初始化**——未 priming 时调用逐次 -1
+  （桥级失败、无 SEH、产物不落盘）；VBS 先读 `Pipe_.ContextReady`
+  + `Pipe_.Status` 再转换则稳定 0。
+- 回填：`build_xt_groups` priming（`cr_`/`st_len` 单行落日志）+
+  `test_xt` 顺序断言 + §18.4 回填块。
+- 实机重跑（2026-09-01，Kicker 宿主 52040 会话）：**18/18 err=0、
+  `xt_ec=0`、`xt_exists=True`、`pipe_exc=0`——GATE PASS**，正式
+  err=0 日志入库（`p12e_xt_e2e.log/.vbs`），E 冲刺域 9 验收句
+  「真 facet XT 业务码 0」在复测条件下复现成立。
+
+**G3 · 域 4 CATIA 样本裁决（✅ 关账——产品边界声明）**：
+
+- 全机扫描（Cradle 安装树 ×2 + 案例库 + training 树；CATPart/
+  CATProduct/cgr/model/session/exp 全扩展名）：**0 个真 CATIA
+  几何样本**——22 个命中全为误报（HDF5 `.exp` 测试件、链接器
+  export、Datakit `dtk.model` schema）。
+- Datakit schema 在位（2023/2025.2 两版安装均有）证明宿主 CATIA
+  转换链（CADTHRU）已安装；typed 面 `OpenCadFile`/`ImportCADAsFacet`
+  就绪。**裁决：样本缺失非代码缺口，6 分转为产品边界项**（gap
+  §10.1/§10 结构性判断已更新）。
+
+**G2 · 域 8 GUI 向导自动化（◐ 摸底完成，9 轮 probe）**：
+
+已钉死（`scratch/_p12g_probe1..10.py`）：
+
+1. **GUI 动线配方全通**：Kicker headless 宿主 → `ShowWindow(
+   SW_RESTORE)` + `MoveWindow` 还原主窗口 → UIA（`backend="uia"`）
+   `invoke()` 触发按钮 → **限宿主 pid** 的模态枚举与 `WM_CLOSE`
+   （probe3 教训：全局模态枚举误关 Kicker 窗口）。
+2. **Condition Wizard 入口**：主窗口 [Edit] 工具栏 "Condition
+   Wizard" 按钮，UIA invoke 在 headless 会话有效。
+3. **向导结构**：`#32770` 模态 + `SysTreeView32` 分步树 25 页
+   （Analysis Types / Basic Settings / Fluid Region / Flow / Heat /
+   Initial Condition / Boundary Condition / … / Analysis Control /
+   Solver Parameters / Output Condition / … / Condition List /
+   Setting Confirmation）；首页 = 26 分析族勾选面（Flow/Heat/
+   Radiation/Particle/Free surface/MSC CoSim/Electric current/
+   Topology optimization/BCI-ROM…）；Analysis Control 页 = Simple/
+   Detailed setting + JFNK 参数编辑器。
+4. **Finish = 全量投影（关键语义）**：初始态从工程现状加载
+   （probe9：Flow/Heat/Radiation 勾着），但 Finish 以向导状态
+   **重建工程**——probe6：parts 1453→626、regions 82→10、
+   conditions 10128→6404、mesh 成员 5 个消失、基线 Radiation 子
+   条件 `Condition_emissivity` 被删；对照轮（probe7：Open→Save
+   不动向导）全成员保留 → 破坏源是 Finish 非 SaveProject。
+   收割策略必须用一次性工程。
+5. **勾选→落盘链路未通（开放问题①）**：Free surface toggle=1 →
+   Finish → Save，落盘仍 `<FreeSurface>false</FreeSurface>` 且
+   ADDED Cond* 为空——Analysis Types 勾选既不投影开关也不创建
+   条件实体；Finish 的 Confirm/联动流未走通。
+6. **68 类落点未定（开放问题②，先于收割）**：CondFreeSurface/
+   CondAnalysisControl/CondCavitation/CondCombustion 均不在
+   merged.json（151 官方样本从未出现）+ probe6 证明勾选不创建
+   Cond* 实体 → 真实持久化位置（conditions 节 / main.prp / xenv /
+   纯会话态）需先钉死：GUI 会话内创建一个 no_com_creator 条件 →
+   全成员 byte-diff 找落点。
+7. **基线血统风险**：p12c 收割输出工程仍带 2023.2 CAB 血统
+   （box 源），切 Analysis Control 深页触发版本转换 Confirm——
+   收割基线须纯 2025.2 原生工程。
+
+下一冲刺入口：① 落点钉死 probe（全成员 byte-diff）；② 沿本轮
+配方逐族收割（一次一类型、独立工程副本）；③ 域 8 尾 8 分按真实
+落点重估口径。
+
+**回归规模**：G1 断言扩展（`test_xt` +3 断言）；全量回归见提交
+说明（`scratch/_g_regression.log`）。
 
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

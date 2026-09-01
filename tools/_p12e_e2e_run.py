@@ -274,9 +274,22 @@ def build_reopen_groups():
 
 
 def build_xt_groups():
-    """深管线 ConvertFacetToXT：真实 facet = P12-A VMDL.Save MDL。"""
+    """深管线 ConvertFacetToXT：真实 facet = P12-A VMDL.Save MDL。
+
+    2026-09-01 复测钉死：桥符号表惰性初始化前调 ConvertFacetToXT
+    会逐次 -1（桥级失败、无 SEH、产物不落盘）——同一 VBS 先读
+    ``ContextReady`` + ``Status`` priming 再转换则稳定 0。Status
+    返回多行，落日志只记长度（st_len），不进 verify_log 行流。
+    """
     return [("xt", [
         'Set Pipe_ = CreateObject("pphdecoding.ScflowPipeline")',
+        "cr_ = Pipe_.ContextReady",
+        'out_.WriteLine "cr_=" & CStr(cr_) & " err=" & CStr(Err.Number)',
+        "Err.Clear",
+        "st_ = Pipe_.Status",
+        ('out_.WriteLine "st_len=" & CStr(Len(st_)) & " err=" '
+         "& CStr(Err.Number)"),
+        "Err.Clear",
         'xtEc_ = Pipe_.ConvertFacetToXT("' + BAM_MDL.as_posix() + '", "'
         + XT_OUT.as_posix() + '")',
         'out_.WriteLine "xt_ec=" & CStr(xtEc_) & " err=" & CStr(Err.Number)',

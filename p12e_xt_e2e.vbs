@@ -11,20 +11,38 @@ out_.WriteLine "s001=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "pipe__alive=" & CStr(Not (Pipe_ Is Nothing)) & " err=" & CStr(Err.Number)
 Err.Clear
-xtEc_ = Pipe_.ConvertFacetToXT("D:/training/cgns/pphdecoding/p12a_bam_e2e_part.mdl", "D:/training/cgns/pphdecoding/p12e_xt_out.x_t")
+cr_ = Pipe_.ContextReady
 out_.WriteLine "s002=" & CStr(Err.Number)
 Err.Clear
-out_.WriteLine "xt_ec=" & CStr(xtEc_) & " err=" & CStr(Err.Number)
+out_.WriteLine "cr_=" & CStr(cr_) & " err=" & CStr(Err.Number)
 out_.WriteLine "s003=" & CStr(Err.Number)
 Err.Clear
 Err.Clear
 out_.WriteLine "s004=" & CStr(Err.Number)
 Err.Clear
-out_.WriteLine "xt_exists=" & CStr(fso_.FileExists("D:/training/cgns/pphdecoding/p12e_xt_out.x_t")) & " err=0"
+st_ = Pipe_.Status
 out_.WriteLine "s005=" & CStr(Err.Number)
 Err.Clear
-out_.WriteLine "pipe_exc=" & CStr(Pipe_.LastExceptionCode) & " err=0"
+out_.WriteLine "st_len=" & CStr(Len(st_)) & " err=" & CStr(Err.Number)
 out_.WriteLine "s006=" & CStr(Err.Number)
+Err.Clear
+Err.Clear
+out_.WriteLine "s007=" & CStr(Err.Number)
+Err.Clear
+xtEc_ = Pipe_.ConvertFacetToXT("D:/training/cgns/pphdecoding/p12a_bam_e2e_part.mdl", "D:/training/cgns/pphdecoding/p12e_xt_out.x_t")
+out_.WriteLine "s008=" & CStr(Err.Number)
+Err.Clear
+out_.WriteLine "xt_ec=" & CStr(xtEc_) & " err=" & CStr(Err.Number)
+out_.WriteLine "s009=" & CStr(Err.Number)
+Err.Clear
+Err.Clear
+out_.WriteLine "s010=" & CStr(Err.Number)
+Err.Clear
+out_.WriteLine "xt_exists=" & CStr(fso_.FileExists("D:/training/cgns/pphdecoding/p12e_xt_out.x_t")) & " err=0"
+out_.WriteLine "s011=" & CStr(Err.Number)
+Err.Clear
+out_.WriteLine "pipe_exc=" & CStr(Pipe_.LastExceptionCode) & " err=0"
+out_.WriteLine "s012=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "end"
 out_.Close

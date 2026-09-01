@@ -2,11 +2,19 @@ start
 s001=0
 pipe__alive=True err=0
 s002=0
-xt_ec=-1 err=0
+cr_=True err=0
 s003=0
 s004=0
-xt_exists=False err=0
 s005=0
-pipe_exc=0 err=0
+st_len=520 err=0
 s006=0
+s007=0
+s008=0
+xt_ec=0 err=0
+s009=0
+s010=0
+xt_exists=True err=0
+s011=0
+pipe_exc=0 err=0
+s012=0
 end
