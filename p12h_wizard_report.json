@@ -1,0 +1,15 @@
+{
+ "baseline": "C:\\Users\\sdcll\\AppData\\Local\\Temp\\tmpli8v_pzc\\base.pph",
+ "families": {
+  "Flow": {
+   "status": "ok",
+   "added": [],
+   "removed": [],
+   "changed": [],
+   "changed_detail": {},
+   "snapshot_changed": true,
+   "attribution": "vs_base",
+   "verdict": "session_state"
+  }
+ }
+}

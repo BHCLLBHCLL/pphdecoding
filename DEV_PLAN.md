@@ -2140,5 +2140,48 @@ Wizard 打开依赖有效活动工程。 dirty 态排查一律 `GetProjectName`
 循环清 Confirm → Save → 忽略自反引用 diff → 归属判定），一次一
 类型、独立工程副本；纯会话态类按 §19.3-1 转口径登记。
 
+### 19.5 H2 执行记录（2026-09-02，收割 batch + 落点终审）
+
+**收割机 v2（`tools/_p12h_wizard_harvest.py`）**：plan/base/run/
+runcombo/merge CLI；GUI 轮 = §19.4 配方；离线归一化判定器 =
+species 块剔除 + prp date 剔除 + sctsnapshot 排除（Finish 全量投
+影固有噪声，对照轮实测钉死）；组合轮 pre-only 对照 + 内容哈希
+归因。离线测试 `tests/test_p12h_wizard_harvest.py`（12 用例）。
+
+**batch 结果（27 分析族，`p12h_wizard_report.json`）**：
+
+- **25 族 session_state**：勾选（BM_GETCHECK 铁证）→ Finish →
+  Confirm → Save 全链后，归一化 diff 与基线零差异——族勾选不投
+  影任何 XML 键。
+- **Electric current = keys_projected（唯一）**：mesh 四成员
+  （gph/oct/_part.mdl/_ridge.mdl）字节级重投影（三次复现）；
+  main.xml 无实质键——非 165 类对账的键来源。
+- **Thermoregulation model = not_run（深页门控）**：Heat 前置不
+  解锁，BM_CLICK 3 轮无效；留 H3 与特殊 6 类并轨处置。
+
+**级联门控模型（实钉）**：Evaporation(free surf.) ← Free surface；
+Boil/condensation、Phase change material ← Heat；Topology
+optimization ← Flow。Flow/Heat 为 CreateProject 默认勾选。BM_CLICK
+可点性跨向导会话不稳定（同族时灵时不灵）→ 收割机失败即冷重启
+重试（attempts=3）。
+
+**深页探针（24 页全翻，`scratch/_p12h_h2_deeppage2.py`）**：
+Condition List 页 = "Already defined conditions are shown below."
+**只读展示，无 Add/Delete/Edit 按钮**；页 22-24 Setting
+Confirmation 为只读汇总（Clipboard/File Output 导出）；参数页
+（Flow/Heat/边界系/Analysis Control/Output Condition）只编辑既
+有条件类配置。Topology optimization 参数页含大量 Edit 字段
+（Impermeability/MMA 优化器等）——勾选后深页参数是键候选，但族
+勾选本身不创建 Cond* 实体。
+
+**68 类落点终审（§19.3-1 分叉点裁定）**：纯会话态。证据链 =
+①族勾选面 25/27 零键 + 1 mesh 重投影无 XML 键；②向导 24 页无
+Cond* 实体创建入口；③P12-C 实测无 COM 创建器；④151 官方样本
+merged.json 从未出现。**域 8 口径重估**（§19.3-1 预授权）：
+「GUI 向导会话态配置」对标本仓 `pph_gui` 替代面板覆盖 = 对齐实
+现，不再做 XML 键收割；域 8 分数与 165 类对账中 68 类归属
+（`wizard_session_state`）在 H4/H5 收口统一入册。aliased 4 +
+FMIVariable + save_poison + Thermoregulation 深页门控转 H3。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

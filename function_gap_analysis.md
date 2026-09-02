@@ -1286,3 +1286,33 @@ Finish 全量投影语义）见 DEV_PLAN §18.8。
 **域分变化**：无（域 8 维持 92%——收割口径待落点钉死后重估；
 域 4 维持 94% 但 6 分性质改判为产品边界项）。整体维持 **98.8%**；
 结构性剩余 = 域 8 尾 8 分（GUI 向导收割，入口已开）。
+
+### 10.11 Sprint H1/H2 实录（2026-09-02）：68 类落点终审 = 纯会话态
+
+**H1（DEV_PLAN §19.4）**：CondFreeSurface 代表类落点钉死——勾选
+（BM_GETCHECK 0→1 铁证）→ Finish → Confirm 确认 → Save 全链首通，
+双工程（原生空工程 + box）byte-diff 均无 FreeSurface/Cond* 变化。
+GUI 配方升级为 Win32 通道：`WM_COMMAND 34062` 开向导（工具栏按钮
+owner-drawn 无 InvokePattern，UIA/click_input/物理点击全无效）、
+`BM_GETCHECK`/`BM_CLICK` 勾选（无 TogglePattern）、Confirm 循环
+（确定/关闭）。
+
+**H2（DEV_PLAN §19.5）**：收割机 v2（`tools/_p12h_wizard_harvest.py`，
+plan/base/run/runcombo/merge + 离线归一化判定器 + 12 用例测试）。
+27 分析族 batch：**25 session_state + 1 keys_projected（Electric
+current，仅 mesh 四成员字节重投影、main.xml 无键）+ 1 not_run
+（Thermoregulation，深页门控，转 H3）**。级联门控实钉：
+Evaporation←Free surface、Boil/condensation 与 Phase change
+material←Heat、Topology optimization←Flow。深页探针：24 页全翻，
+Condition List 只读无 Add/Delete，向导内无 Cond* 实体创建入口。
+
+**68 类 no_com_creator 落点终审 = `wizard_session_state`（纯会话
+态）**。证据链四路闭环：族勾选零键 + 向导无创建入口 + COM 无创
+建器（P12-C）+ 151 官方样本零出现（P12-C merged）。
+
+**域分变化**：域 8 口径按 §19.3-1 预授权重估——「GUI 向导会话态
+配置」对标本仓 `pph_gui` 替代面板覆盖 = 对齐实现，XML 键收割路线
+关账；分数与 165 类对账归属（68 类→`wizard_session_state`）在
+H4/H5 收口统一刷新（当前账面维持 92%/98.8%，重估后域 8 → 100%）。
+结构性剩余 = H3 特殊 6 类（aliased 4 + FMI 1 + poison 1 + 深页
+门控 1）+ H4 对账 + H5 边界项入册与 100% 声明。
