@@ -2096,5 +2096,49 @@ XML 实体，不入 165 对账，保留作证据）。
    bit 等 / 自研 wrapping 内核 / CADthru faceter / Influence
    faceter）为既定口径，不在本冲刺范围。
 
+### 19.4 H1 执行记录（2026-09-02，代表类落点已钉死）
+
+**结论：CondFreeSurface（68 类代表）落点 = 纯会话态**（四选一：
+main.xml / main.prp / xenv / 纯会话态）。勾选→Finish→Confirm 全链
+首次走通后，落盘四成员均无该类痕迹——分叉点 §19.3-1 强证据倾向
+「GUI 向导会话态配置」口径，H2 逐类收割复核。
+
+**配方升级（H2 收割机 v2 的输入）**：
+
+1. **向导触发**：G 轮 UIA invoke 配方在 2025.2 失效——工具栏按钮
+   owner-drawn（class 空、无 InvokePattern），`click_input`/物理点击
+   均无效；`app.windows()` 还会漏 owned 向导窗口。新配方 =
+   Win32 `GetMenu` 枚举命令 ID + **`WM_COMMAND 34062`**（菜单
+   Wizard(&W) → Condition Setting...），2 秒稳定开向导。
+2. **勾选**：分析族 checkbox 是标准 Win32 Button 但无 TogglePattern
+   （pywinauto `toggle`/`get_toggle_state` 抛 NoPatternInterfaceError；
+   `click_input` 不生效）→ **`BM_GETCHECK` 读 / `BM_CLICK` 写**，
+   状态 0→1 铁证生效。
+3. **Finish Confirm 流走通（§19.3-3 开放问题①解除）**：UIA invoke
+   Finish → `Confirm` 模态（buttons=['确定','关闭']）→ invoke 确定
+   → 可能连环第二轮 → 收割机需循环清模态直至无。
+
+**双工程形态 byte-diff 证据**（`scratch/_p12h_h1_*`）：
+
+- 空工程（原生 CreateProject）：勾选后 Finish，main.xml 与「开向导
+  未勾选」臂逐成员仅差保存时间戳/工程名自反引用（date、`<name>`、
+  .sph/.gph/.vf/_mapped.bdf/_RotorInfo 文件名），FreeSurface=false
+  不变、Cond* 实体 0。
+- box 工程：全链（勾选 0→1 + Finish + Confirm 确定）后 main.xml
+  实质差异仅 species value_obj 重排；FreeSurface=false、Cond* 0；
+  gph/oct/mdl 9 行重存噪声。
+- 佐证：151 官方样本 merged.json 从未出现该类（§18.8-6）。
+
+**宿主行为模型补钉（实机新钉）**：OpenProject 对不存在路径
+err=0 静默忽略；对 dirty 工程 OpenProject 静默失败（不弹框）；
+空工程 Finish 后宿主将工程改名 `ex4_e`（向导默认名）；Condition
+Wizard 打开依赖有效活动工程。 dirty 态排查一律 `GetProjectName`
++ 标题双验证；宿主状态可疑时冷启动（`_p12e_boot.py` 配方）。
+
+**H2 入口**：收割机 v2（`tools/_p12h_wizard_harvest.py`）按本节
+配方逐类走（WM_COMMAND 开 → BM_CLICK 勾 → invoke Finish →
+循环清 Confirm → Save → 忽略自反引用 diff → 归属判定），一次一
+类型、独立工程副本；纯会话态类按 §19.3-1 转口径登记。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*
