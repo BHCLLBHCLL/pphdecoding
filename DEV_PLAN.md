@@ -2183,5 +2183,44 @@ merged.json 从未出现。**域 8 口径重估**（§19.3-1 预授权）：
 （`wizard_session_state`）在 H4/H5 收口统一入册。aliased 4 +
 FMIVariable + save_poison + Thermoregulation 深页门控转 H3。
 
+### 19.6 H3 执行记录（2026-09-03，特殊 6 类逐类有归属）
+
+**复验机 `tools/_p12h_special6.py`**（arm 矩阵 plan/run/merge/all
+CLI）：6 类 7 处置、实机 6 臂（FMIVariable 双臂 plain/param，
+Battery/Thermoregulation 为静态处置不复跑），每臂独立 VBS =
+OpenProject 2025.2 原生基线（p12e_disc 产物）→ 按 catalog 真实签
+名 create（多形状形状间 If Nothing 重试）→ 强制脏 → SaveProject
+独立产物；rot 权威通道 + 模态看守线程（P12-C 看门狗内联）。离线
+归并 = 日志解析 + 产物四成员 byte 扫描（H1 方法学：只看 main.xml
+的 `condition` 元素会漏内联落点）→ `p12h_special6_report.json` +
+`cond_types.json` dispositions 入册（version 3）。离线测试
+`tests/test_p12h_special6.py`（15 用例：归类器六分支 / 日志解析 /
+落点扫描含 name-only condition / 入册一致性）。
+
+**处置结果（6 类 + Thermoregulation 并轨，逐类有归属）**：
+
+| universe | kind | target / 键 | 关键证据 |
+|---|---|---|---|
+| CondBoundaryHumidity | alias | CondHumidity | 落盘 `type=HumidityBoundary`（已注册别名），复验钉死 |
+| CondOutputLFileWaterLevel | member_locus | `main.xml:output_timing/condition@name`（无 type 短名） | create True 且真实落盘——C 轮"产物缺行"系扫描只认 type 形态 |
+| CondFMIVariable | member_locus | `main.xml:cosim_struct_data/fmi/variables/variable@name` | plain 臂无任何配置即落盘 → **无 FMI 前置使能要求**；SetFMIParam err=0 但键值未见于 variable 块（会话态/他处） |
+| CondParticleConcentrationFpDEM | create_returns_nothing | —（向导唯一路径） | 按 catalog 签名 `(particlepropertyname)` 复验仍 Nothing |
+| CondRepulsion | create_returns_nothing | —（向导唯一路径） | 按 catalog 签名 `(target1, target2Type, target2Name)` 复验仍 Nothing |
+| CondBatteryARCDataPreprocessing | poison_isolated | — | C 轮 probe 二分毒杀证据在册，不复跑（防宿主污染） |
+| Thermoregulation | wizard_session_state_gated | — | H2 深页门控并轨；解锁后预期纯会话态（§19.5 模型） |
+
+**对 P12-C 五分类的两处修正**：①OutputLFileWaterLevel 与
+FMIVariable 由 create_ok_not_serialized / 缺行 → **member_locus
+（真实键，内联形态）**——四成员 byte 扫描抓到 C 轮 typed 扫描漏
+掉的落点；②FpDEM/Repulsion 由 create_ok_aliased_to_haved →
+**create_returns_nothing**——真实签名复验失败，归入向导唯一路径
+族（H4 对账时与 68 类同归属候选 `wizard_session_state`）。
+
+**探针注记（如实）**：fmi_param 臂 `IsFMIVariableNameUsed` 返回
+False 系探针名不匹配（探 `P12h3FMIVariable`、实建
+`P12h3FMIVariableP`），非"未使用"证据；plain 臂同方法 True 证明
+会话注册链路可用。臂日志全 err=0（6/6 open/dirty/save），验收
+「6 类逐类有归属（键 / 别名 / 边界声明）」达成。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

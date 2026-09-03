@@ -1316,3 +1316,27 @@ Condition List 只读无 Add/Delete，向导内无 Cond* 实体创建入口。
 H4/H5 收口统一刷新（当前账面维持 92%/98.8%，重估后域 8 → 100%）。
 结构性剩余 = H3 特殊 6 类（aliased 4 + FMI 1 + poison 1 + 深页
 门控 1）+ H4 对账 + H5 边界项入册与 100% 声明。
+
+### 10.12 Sprint H3 实录（2026-09-03）：特殊 6 类逐类有归属
+
+**复验机 `tools/_p12h_special6.py`**（DEV_PLAN §19.6）：6 类实机
+6 臂（FMIVariable 双臂）+ 2 静态处置，臂日志全 err=0；离线归并 =
+四成员 byte 扫描（H1 方法学）→ `p12h_special6_report.json` +
+`cond_types.json` dispositions 入册（version 3）。测试
+`tests/test_p12h_special6.py`（15 用例）。
+
+**处置**：CondBoundaryHumidity = alias→CondHumidity（复验钉死）；
+CondOutputLFileWaterLevel = member_locus
+（`main.xml:output_timing/condition@name`，无 type 短名内联）；
+CondFMIVariable = member_locus
+（`main.xml:cosim_struct_data/fmi/variables/variable@name`，**无
+FMI 前置使能要求**，plain 臂裸 create 即落盘）；FpDEM/Repulsion =
+create_returns_nothing（catalog 真实签名复验仍 Nothing，归向导唯
+一路径族）；Battery = poison_isolated（C 轮证据在册不复跑）；
+Thermoregulation = wizard_session_state_gated（H2 并轨）。
+
+**对 P12-C 五分类修正**：WaterLevel/FMIVariable 由"不序列化/缺行"
+→ 真实键（typed 扫描漏内联落点）；FpDEM/Repulsion 由 aliased→
+create_returns_nothing。H4 对账口径随之更新：165 类中
+create_returns_nothing 族 3 类（CoSIM/FpDEM/Repulsion）与 68 类
+同归属候选。

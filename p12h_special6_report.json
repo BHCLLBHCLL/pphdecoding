@@ -1,0 +1,210 @@
+{
+ "baseline": "D:\\training\\cgns\\pphdecoding\\p12e_disc_e2e_out.pph",
+ "prefix": "P12h3",
+ "arms": {
+  "humidity": {
+   "universe": "CondBoundaryHumidity",
+   "note": "C 轮唯一留有落盘证据（→HumidityBoundary），复验钉死",
+   "creates": {
+    "named": "True"
+   },
+   "probes": {
+    "open_err": "0",
+    "cond_alive": "True",
+    "dirty_err": "0",
+    "save_err": "0",
+    "out_exists": "True"
+   },
+   "landed": [
+    [
+     "P12h3BoundaryHumidity",
+     "HumidityBoundary"
+    ]
+   ],
+   "prefix_members": [
+    "main.xml"
+   ],
+   "verdict": {
+    "kind": "alias",
+    "landed_types": [
+     "HumidityBoundary"
+    ],
+    "targets": [
+     "CondHumidity"
+    ]
+   }
+  },
+  "waterlevel": {
+   "universe": "CondOutputLFileWaterLevel",
+   "note": "C 轮 create True 但产物缺行，落点未知",
+   "creates": {
+    "named": "True"
+   },
+   "probes": {
+    "open_err": "0",
+    "cond_alive": "True",
+    "dirty_err": "0",
+    "save_err": "0",
+    "out_exists": "True"
+   },
+   "landed": [],
+   "prefix_members": [
+    "main.xml"
+   ],
+   "verdict": {
+    "kind": "member_locus",
+    "landed_types": [],
+    "members": [
+     "main.xml"
+    ]
+   }
+  },
+  "fpdem": {
+   "universe": "CondParticleConcentrationFpDEM",
+   "note": "签名 = (particlepropertyname)；C 轮 noarg 返回 Nothing",
+   "creates": {
+    "propname": "False",
+    "noarg": "False"
+   },
+   "probes": {
+    "open_err": "0",
+    "cond_alive": "True",
+    "dirty_err": "0",
+    "save_err": "0",
+    "out_exists": "True"
+   },
+   "landed": [],
+   "prefix_members": [],
+   "verdict": {
+    "kind": "create_returns_nothing",
+    "landed_types": []
+   }
+  },
+  "repulsion": {
+   "universe": "CondRepulsion",
+   "note": "签名 = (target1, target2Type, target2Name)；C 轮 noarg 返回 Nothing",
+   "creates": {
+    "three": "False",
+    "named": "False",
+    "noarg": "False"
+   },
+   "probes": {
+    "open_err": "0",
+    "cond_alive": "True",
+    "dirty_err": "0",
+    "save_err": "0",
+    "out_exists": "True"
+   },
+   "landed": [],
+   "prefix_members": [],
+   "verdict": {
+    "kind": "create_returns_nothing",
+    "landed_types": []
+   }
+  },
+  "fmi_plain": {
+   "universe": "CondFMIVariable",
+   "note": "create + 会话探针（IsFMIVariableNameUsed/GetFMIVariables），无配置",
+   "creates": {
+    "named": "True"
+   },
+   "probes": {
+    "open_err": "0",
+    "cond_alive": "True",
+    "fmi_used": "True",
+    "fmi_list_err": "0",
+    "dirty_err": "0",
+    "save_err": "0",
+    "out_exists": "True"
+   },
+   "landed": [],
+   "prefix_members": [
+    "main.xml"
+   ],
+   "verdict": {
+    "kind": "member_locus",
+    "landed_types": [],
+    "members": [
+     "main.xml"
+    ]
+   }
+  },
+  "fmi_param": {
+   "universe": "CondFMIVariable",
+   "note": "create + SetFMIParam 配置置脏 + 会话探针",
+   "creates": {
+    "named": "True"
+   },
+   "probes": {
+    "open_err": "0",
+    "cond_alive": "True",
+    "fmi_param_err": "0",
+    "fmi_used": "False",
+    "fmi_list_err": "0",
+    "dirty_err": "0",
+    "save_err": "0",
+    "out_exists": "True"
+   },
+   "landed": [],
+   "prefix_members": [
+    "main.xml"
+   ],
+   "verdict": {
+    "kind": "member_locus",
+    "landed_types": [],
+    "members": [
+     "main.xml"
+    ]
+   }
+  }
+ },
+ "dispositions": {
+  "CondBoundaryHumidity": {
+   "kind": "alias",
+   "target": "CondHumidity",
+   "evidence": "p12h3_humidity 臂（p12h3_humidity.log + p12h3_humidity_out.pph）；C 轮唯一留有落盘证据（→HumidityBoundary），复验钉死"
+  },
+  "CondOutputLFileWaterLevel": {
+   "kind": "member_locus",
+   "target": "main.xml:output_timing/condition@name（无 type 短名）",
+   "evidence": "p12h3_waterlevel 臂（p12h3_waterlevel.log + p12h3_waterlevel_out.pph）；C 轮 create True 但产物缺行，落点未知"
+  },
+  "CondParticleConcentrationFpDEM": {
+   "kind": "create_returns_nothing",
+   "target": null,
+   "evidence": "p12h3_fpdem 臂（p12h3_fpdem.log + p12h3_fpdem_out.pph）；签名 = (particlepropertyname)；C 轮 noarg 返回 Nothing"
+  },
+  "CondRepulsion": {
+   "kind": "create_returns_nothing",
+   "target": null,
+   "evidence": "p12h3_repulsion 臂（p12h3_repulsion.log + p12h3_repulsion_out.pph）；签名 = (target1, target2Type, target2Name)；C 轮 noarg 返回 Nothing"
+  },
+  "CondFMIVariable": {
+   "kind": "member_locus",
+   "target": "main.xml:cosim_struct_data/fmi/variables/variable@name",
+   "evidence": "p12h3_fmi_param 臂（p12h3_fmi_param.log + p12h3_fmi_param_out.pph）；create + SetFMIParam 配置置脏 + 会话探针"
+  },
+  "CondBatteryARCDataPreprocessing": {
+   "kind": "poison_isolated",
+   "target": null,
+   "evidence": "P12-C probe 二分钉死：create err=0 但序列化毒杀同脚本 SaveProject（p12c_save_probe 轮）；收割机毒类型排除；H3 隔离声明不复跑（防宿主状态污染）"
+  },
+  "Thermoregulation": {
+   "kind": "wizard_session_state_gated",
+   "target": null,
+   "evidence": "H2 batch：分析族 checkbox BM_CLICK 3 轮无效（Heat 前置解锁链未通，深页门控）；按 §19.5 族勾选零键模型，解锁后预期仍为纯会话态（与 68 类同归属），账面归属 wizard_session_state 并保留门控注记"
+  }
+ },
+ "static_dispositions": {
+  "CondBatteryARCDataPreprocessing": {
+   "kind": "poison_isolated",
+   "target": null,
+   "evidence": "P12-C probe 二分钉死：create err=0 但序列化毒杀同脚本 SaveProject（p12c_save_probe 轮）；收割机毒类型排除；H3 隔离声明不复跑（防宿主状态污染）"
+  },
+  "Thermoregulation": {
+   "kind": "wizard_session_state_gated",
+   "target": null,
+   "evidence": "H2 batch：分析族 checkbox BM_CLICK 3 轮无效（Heat 前置解锁链未通，深页门控）；按 §19.5 族勾选零键模型，解锁后预期仍为纯会话态（与 68 类同归属），账面归属 wizard_session_state 并保留门控注记"
+  }
+ }
+}

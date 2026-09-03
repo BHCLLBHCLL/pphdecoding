@@ -1,5 +1,5 @@
 {
- "version": 1,
+ "version": 5,
  "sources": {
   "GUI": "scFLOWpreGUI_Bx64net.dll",
   "Cmd": "scFLOWpreCmd_Bx64net.dll"
@@ -1662,6 +1662,43 @@
    ],
    "lineage": "cmd",
    "help": ""
+  }
+ },
+ "dispositions": {
+  "CondBoundaryHumidity": {
+   "kind": "alias",
+   "target": "CondHumidity",
+   "evidence": "p12h3_humidity 臂（p12h3_humidity.log + p12h3_humidity_out.pph）；C 轮唯一留有落盘证据（→HumidityBoundary），复验钉死"
+  },
+  "CondOutputLFileWaterLevel": {
+   "kind": "member_locus",
+   "target": "main.xml:output_timing/condition@name（无 type 短名）",
+   "evidence": "p12h3_waterlevel 臂（p12h3_waterlevel.log + p12h3_waterlevel_out.pph）；C 轮 create True 但产物缺行，落点未知"
+  },
+  "CondParticleConcentrationFpDEM": {
+   "kind": "create_returns_nothing",
+   "target": null,
+   "evidence": "p12h3_fpdem 臂（p12h3_fpdem.log + p12h3_fpdem_out.pph）；签名 = (particlepropertyname)；C 轮 noarg 返回 Nothing"
+  },
+  "CondRepulsion": {
+   "kind": "create_returns_nothing",
+   "target": null,
+   "evidence": "p12h3_repulsion 臂（p12h3_repulsion.log + p12h3_repulsion_out.pph）；签名 = (target1, target2Type, target2Name)；C 轮 noarg 返回 Nothing"
+  },
+  "CondFMIVariable": {
+   "kind": "member_locus",
+   "target": "main.xml:cosim_struct_data/fmi/variables/variable@name",
+   "evidence": "p12h3_fmi_param 臂（p12h3_fmi_param.log + p12h3_fmi_param_out.pph）；create + SetFMIParam 配置置脏 + 会话探针"
+  },
+  "CondBatteryARCDataPreprocessing": {
+   "kind": "poison_isolated",
+   "target": null,
+   "evidence": "P12-C probe 二分钉死：create err=0 但序列化毒杀同脚本 SaveProject（p12c_save_probe 轮）；收割机毒类型排除；H3 隔离声明不复跑（防宿主状态污染）"
+  },
+  "Thermoregulation": {
+   "kind": "wizard_session_state_gated",
+   "target": null,
+   "evidence": "H2 batch：分析族 checkbox BM_CLICK 3 轮无效（Heat 前置解锁链未通，深页门控）；按 §19.5 族勾选零键模型，解锁后预期仍为纯会话态（与 68 类同归属），账面归属 wizard_session_state 并保留门控注记"
   }
  }
 }
