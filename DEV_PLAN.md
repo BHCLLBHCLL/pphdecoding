@@ -2292,5 +2292,54 @@ XML 键」→「三类归属有账 + Save 零破坏 + 71 会话态族替代 GUI
 **验收「12 域双口径 100%（含边界项声明）+ 12 句验收全勾」达成；
 全量回归见提交记录。**
 
+## 20. 冲刺 I：证据收口 + 边界实战化 + 深度补强（2026-09-03 立）
+
+> 前提：§19 H1–H5 落地后 12 域双口径 100% 已声明（边界项入册
+> `docs/NYI_INVENTORY.md`，内核等价豁免沿 §9.6）。本冲刺**不动域
+> 分数**，目标是把「声明之上」的三类残留做实：①多次未取成的正式
+> gate 证据；②可构造场景下的产品边界项实战收口；③§9.6 豁免面的
+> 诚实补强（求解数值等价对拍）。口径与纪律沿用 §18.2（执行记录
+> 落 §20.x；「无 err=0 日志不宣称」；回归基线 921 passed / 4 skipped）。
+
+### 20.1 工作项（I1–I7，预估约 1 周）
+
+| # | 工作项 | 内容 | 预估 |
+|---|--------|------|------|
+| **I1** | 域 5 reopen 正式 gate 日志（E 遗留①，三度未取） | 冷启动新宿主实例 + Initial Wizard 模态 watcher（P12-E 已验证 WM_CLOSE 配方，模块化入 `automation/`）+ end-wait 轮询后取 `p12e_reopen_e2e.log` 官方 gate | 0.5d |
+| **I2** | 遗留③挂起表征 + 批量自愈基建 | hang watchdog（超时→进程转储+宿主重启+断点续跑）、modal auto-closer 复用模块、批量编排器统一接入；挂起表征表（工程大小/会话年龄/时序） | 1–2d |
+| **I3** | Restore Closed Volume Data 实战收口（域 10） | 构造声明场景（patch 导入 + Store and Open 再导入；F 已绿 patch e2e）→ 菜单解灰 → e2e err=0；场景内仍灰则钉死前置证据、边界维持 | 1d |
+| **I4** | Actran Acoustic 前置狩猎 | 宿主字符串/向导定位 Acoustic Session 构成 → 可构造则 `CreateActranFiles` 业务复验（现 retval=False）；不可构造则前置检查点证据入册 | 0.5–1d |
+| **I5** | 求解链数值等价对拍（域 12 深度+） | 同案例双跑（官方样例 pph vs 本仓写端 pph）→ `ExecuteSolver` ×2 → FPH/FLD/iFLD 逐变量容差表（max/mean delta）→ 把「跑通+非空」升级为「数值容差等价」证据 | 2d |
+| **I6** | 三向对齐样本扩容（E 遗留②） | 官方库再取 2–3 大样本（含 moving/overset 八叉树）进 `tests/test_oct_tri_alignment.py`，不变量三样本精确 → 五样本 | 0.5d |
+| **I7** | 可选 backlog（不在本冲刺验收内） | CATIA 样本再全机扫描 + Datakit 独立转换器写向盘点；集群作业推送（§9.6-4 部署层，明确豁免） | — |
+
+### 20.2 依赖与顺序
+
+I1 → I2（I1 的 modal watcher/watchdog 即 I2 基建首件）；I3/I4/I6 相互
+独立可并行；I5 依赖 I2 自愈基建保障双跑窗口（solver 单跑 10 min 级，
+挂起风险敞口最大）。I5 容差口径：先记录后判定——首版只入册 delta
+表不设通过线，第二轮再按数据定容差（避免拍脑袋阈值）。
+
+### 20.3 风险
+
+1. **I1/I2 依赖宿主行为**：遗留③未定因，watchdog 只能兜底不能根除；
+   若新实例仍 100% 复现挂起，改走「每次批量独占新宿主」为硬约定并
+   记录成本。
+2. **I3 场景前置可能不可构造**（patch 来源格式受限）——按 §9.1
+   「灰显 + 理由」口径如实回册，不硬凑。
+3. **I5 双跑环境噪声**：同一宿主会话连跑两求解可能互相污染（内存/
+   许可），须隔离会话；delta 表如实含噪声项。
+
+### 20.4 验收句（冲刺 I）
+
+- I1：域 5 reopen 官方 gate PASS 日志入册（E 遗留①关账）。
+- I2：连续 2 轮批量 0 人工干预通过（modal/hang 全自动处置）。
+- I3：Restore Closed Volume Data 在可构造场景 e2e err=0，或前置
+  不可构造证据入册。
+- I4：`CreateActranFiles` 业务 retval=True（前置构造成功），或
+  Acoustic Session 前置构成钉死入册。
+- I5：同案例双跑 FPH/FLD/iFLD 逐变量 delta 表入册（首版 recorded-only）。
+- I6：`test_oct_tri_alignment` ≥5 样本全绿入回归。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*
