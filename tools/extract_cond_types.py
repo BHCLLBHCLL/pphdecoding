@@ -316,6 +316,15 @@ def local_sample_types() -> dict[str, int]:
     return counts
 
 
+def carry_dispositions(path: Path) -> dict:
+    """H4 对账收束：再生成时保留既有 dispositions（对账账本不因重扫清零）。"""
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get(
+            "dispositions", {})
+    except (OSError, ValueError):
+        return {}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--programs", type=Path, default=DEFAULT_PROGRAMS)
@@ -354,6 +363,15 @@ def main(argv: list[str] | None = None) -> int:
             "aliases": _ALIASES,
             "types": types,
         }
+        dispositions = carry_dispositions(OUT)
+        if dispositions:
+            # 版本号沿用既有账本（H4 对账口径），不被重扫降级
+            try:
+                prev = json.loads(OUT.read_text(encoding="utf-8"))
+                payload["version"] = prev.get("version", 1)
+            except (OSError, ValueError):
+                pass
+            payload["dispositions"] = dispositions
         OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
                        encoding="utf-8")
         print(f"written: {OUT}")

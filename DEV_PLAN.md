@@ -2222,5 +2222,44 @@ False 系探针名不匹配（探 `P12h3FMIVariable`、实建
 会话注册链路可用。臂日志全 err=0（6/6 open/dirty/save），验收
 「6 类逐类有归属（键 / 别名 / 边界声明）」达成。
 
+### 19.7 H4 执行记录（2026-09-03，165/165 对账收束 0 未归类）
+
+**对账收束机 `tools/_p12h_reconcile.py`**（纯离线、确定性、幂等）：
+输入全部为在册实测证据（`schemas/cond_types.json` 宇宙 165 /
+`schemas/merged.json` 161 官方案例库实样 / `p12c_registry_report.json`
+75 缺口五分类 / `p12h_wizard_report.json` H2 27 族 batch /
+`p12h_special6_report.json` H3 处置），逐类归属 + 硬检查闭包
+（桶划分 / 别名目标注册且为 exact_key / member_locus 键形态 /
+90 键类逐类有实样证据 / C 轮 aliased 无遗留），不新增实测。
+
+**对账结果（`p12h_registry_report.json`，验收口径三类桶）**：
+
+| 桶 | 数量 | kind 构成 |
+|---|---|---|
+| exact_key 精确键 | 92 | registry_key 90（官方案例库逐类实样）+ member_locus 2（WaterLevel/FMIVariable 内联真实键） |
+| alias 别名 | 1 | CondBoundaryHumidity → CondHumidity（H3 复验钉死） |
+| boundary 边界 | 72 | wizard_session_state 71（68 no_com_creator + CondCoSim + FpDEM/Repulsion 向导唯一路径族）+ poison_isolated 1（BatteryARC 隔离声明） |
+
+**unclassified = 0**；`cond_types.json` dispositions 全量入册
+（version 7：165 类 + Thermoregulation 族级注记保留，kind 词汇表
+扩至 registry_key / wizard_session_state）。Thermoregulation 不在
+165 宇宙内（族级账面注记，H3 并轨口径不变）。
+
+**收束配套**：①`extract_cond_types.py` 再生成保留既有 dispositions
+（`carry_dispositions`，版本不因重扫降级——对账账本不因 DLL 重扫
+清零）；②H2 batch 报告 `p12h_wizard_report.json` 由 31 个
+out_*.pph 工件离线重建为 27 族完整裁决（25 session_state +
+Electric current keys_projected + Thermoregulation not_run，与
+§19.5 记录一致）；③FpDEM/Repulsion 账本自描述：实测 kind=
+create_returns_nothing 保留在 evidence 串，账面归属
+wizard_session_state。
+
+**测试扩面**：`tests/test_p12h_reconcile.py`（21 用例：闭包 /
+词汇表 / 证据一致 / 幂等 round-trip / carry_dispositions）；
+`tests/test_p12h_special6.py` 三处适配（覆盖断言改超集、词汇表扩
+容、report 一致性映射 H4 再归属）。全量回归 **921 passed /
+4 skipped / 0 failed**（406.85s）。验收「165/165 对账报告 0 未归
+类」达成。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

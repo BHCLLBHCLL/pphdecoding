@@ -1340,3 +1340,35 @@ Thermoregulation = wizard_session_state_gated（H2 并轨）。
 create_returns_nothing。H4 对账口径随之更新：165 类中
 create_returns_nothing 族 3 类（CoSIM/FpDEM/Repulsion）与 68 类
 同归属候选。
+
+### 10.13 Sprint H4 实录（2026-09-03）：165/165 对账收束 0 未归类
+
+**对账收束机 `tools/_p12h_reconcile.py`**（DEV_PLAN §19.7）：纯离
+线确定性归并，不新增实测——输入 = cond_types.json 宇宙 165 +
+merged.json 161 官方案例库实样 + p12c_registry_report 75 缺口五
+分类 + p12h_wizard_report 27 族 batch（离线重建）+
+p12h_special6_report H3 处置。硬检查闭包：桶划分 92/1/72、别名
+目标注册且为 exact_key、member_locus 键形态 `main.xml:`、90 键
+类逐类有实样证据、C 轮 aliased 无遗留。产出
+`p12h_registry_report.json`：
+
+- **exact_key 92** = registry_key 90 + member_locus 2（WaterLevel/
+  FMIVariable 内联真实键）
+- **alias 1** = CondBoundaryHumidity → CondHumidity
+- **boundary 72** = wizard_session_state 71（68 no_com_creator +
+  CoSIM/FpDEM/Repulsion 向导唯一路径族）+ poison_isolated 1
+- **unclassified = 0**（验收达成）
+
+**账本收束**：cond_types.json dispositions 全量入册（version 7 =
+165 类 + Thermoregulation 族级注记）；`extract_cond_types.py` 重扫
+保留 dispositions（`carry_dispositions`）；FpDEM/Repulsion 实测
+kind=create_returns_nothing 保留在 evidence，账面归属
+wizard_session_state。测试 `tests/test_p12h_reconcile.py`（21 用
+例）+ H3 三处适配；全量回归 921 passed / 4 skipped / 0 failed。
+
+**域 8 记分含义**：165 类逐类三类归属有账（键/别名/边界），域 8
+完整度具备 100% 口径条件（wizard_session_state 71 类按 §19.3-1
+域 8 口径重估 = pph_gui 面板覆盖对齐实现，H5 统一入册声明）。
+域 4 尾 6 分产品边界裁决（§18.8 G3）与 Actran/CATIA/Restore
+Closed Volume Data 边界项登记转 H5（`docs/NYI_INVENTORY.md`）。
+

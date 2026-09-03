@@ -147,12 +147,15 @@ class TestRegistryConsistency(unittest.TestCase):
         dispositions = COND_TYPES["dispositions"]
         universes = {spec["universe"] for spec in h.ARMS.values()}
         universes |= set(h.STATIC_DISPOSITIONS)
-        self.assertEqual(set(dispositions), universes)
+        # H4 全量入册（165 类 + 族级注记）：H3 六类仍是子集
+        self.assertTrue(universes <= set(dispositions))
 
     def test_kinds_in_vocabulary(self):
         allowed = {"exact_key", "alias", "aliased_to_known", "member_locus",
                    "not_serialized", "create_returns_nothing",
-                   "poison_isolated", "wizard_session_state_gated"}
+                   "poison_isolated", "wizard_session_state_gated",
+                   # H4 对账收束新增（165 类全量入册）
+                   "registry_key", "wizard_session_state"}
         for name, d in COND_TYPES["dispositions"].items():
             self.assertIn(d["kind"], allowed, name)
 
@@ -170,8 +173,14 @@ class TestRegistryConsistency(unittest.TestCase):
     def test_report_and_cond_types_agree(self):
         for name, d in REPORT["dispositions"].items():
             same = COND_TYPES["dispositions"][name]
-            self.assertEqual(d["kind"], same["kind"], name)
-            self.assertEqual(d.get("target"), same.get("target"), name)
+            if d["kind"] == "create_returns_nothing":
+                # H4 收束：实测形态入证据串，账面归属向导唯一路径族
+                self.assertEqual(same["kind"], "wizard_session_state", name)
+                self.assertIn("create_returns_nothing",
+                              same.get("evidence", ""), name)
+            else:
+                self.assertEqual(d["kind"], same["kind"], name)
+                self.assertEqual(d.get("target"), same.get("target"), name)
 
     def test_fmi_arm_facts_measured(self):
         arm = REPORT["arms"]["fmi_param"]
