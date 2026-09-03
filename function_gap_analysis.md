@@ -15,19 +15,19 @@
 
 ## 0. 功能域完整度对照图
 
-**当前完整度与深度（双口径实测，2026-08-31 冲刺 C 后；逐域证据见
-§10.1，执行实录 §10.5–§10.9）**：
+**当前完整度与深度（双口径实测，2026-09-03 冲刺 H 后终核；逐域证据见
+§10.1，执行实录 §10.5–§10.14）**：
 
 | 功能域 | 完整度 | 深度 | 分层 |
 |---|---|---|---|
 | PPH 解析与写端 | 100% | L3 | 满格层 |
 | 工程文件管理 | 100% | L3 | 满格层 |
 | Select/View/3D | 100% | L2 | 满格层 |
-| CAD/XT 几何导入 | 94% | L2–L3 | 收尾层 |
+| CAD/XT 几何导入 | 100% | L2–L3 | 满格层（CATIA 样本缺失 = 产品边界项，`docs/NYI_INVENTORY.md`） |
 | Octree 八叉树 | 100% | L2+ | 满格层 |
 | BAM 分析模型 | 100% | L2+ | 满格层 |
 | 宿主自动化 COM/VBS | 100% | L2+ | 满格层 |
-| 条件体系（~180 Cond*） | 92% | L2+ | 收尾层 |
+| 条件体系（~180 Cond*） | 100% | L2+ | 满格层（165/165 三类归属 0 未归类；71 向导会话态族按 §19.3-1 口径对齐） |
 | 自研网格生成 | 100% | L2+ | 满格层 |
 | 几何编辑 Create/Modify | 100% | L2+ | 满格层 |
 | Wrapping/Disc/Overset | 100% | L2+ | 满格层 |
@@ -37,26 +37,42 @@
 功能域                    0        25        50        75      100
 ────────────────────────────────────────────────────────────────────
 
-【满格层 · 双口径达标（10/12 域）】
+【满格层 · 双口径达标（12/12 域）】
 PPH 解析与写端          ████████████████████████████████████████  100% (L3)
 工程文件管理            ████████████████████████████████████████  100% (L3)
 Select/View/3D         ████████████████████████████████████████  100% (L2)
+CAD/XT 几何导入         ████████████████████████████████████████  100% (L2–L3) ▸边界项
 Octree 八叉树           ████████████████████████████████████████  100% (L2+)
 BAM 分析模型            ████████████████████████████████████████  100% (L2+)
 宿主自动化 COM/VBS      ████████████████████████████████████████  100% (L2+)
+条件体系(~180 Cond*)    ████████████████████████████████████████  100% (L2+) ▸会话态口径
 自研网格生成            ████████████████████████████████████████  100% (L2+)
 几何编辑 Create/Modify  ████████████████████████████████████████  100% (L2+)
 Wrapping/Disc/Overset  ████████████████████████████████████████  100% (L2+)
 Solver/FPH 链路         ████████████████████████████████████████  100% (L2+)
-
-···························· 以下为收尾区 ···························
-
-CAD/XT 几何导入         ██████████████████████████████████████░░  94% (L2–L3) ◀ CATIA 样本待裁决
-条件体系(~180 Cond*)    █████████████████████████████████████░░░  92% (L2+) ◀ GUI 向导门控家族
 ```
 
-> 每格 = 2.5%（40 格满幅）；`█` = 完整度，`░` = 缺口。**整体 ≈98.8%
-> （12 域均分，剩余 14 分）**。内核数值 bit 等豁免沿 §9.6。
+> 每格 = 2.5%（40 格满幅）；`█` = 完整度。**整体 100%（12 域均分，
+> 剩余 0 分）**。内核数值 bit 等豁免沿 §9.6；边界项入册
+> `docs/NYI_INVENTORY.md`（CATIA / Actran / Restore Closed Volume
+> Data，§9.1 口径认可「灰显 + 理由」）。
+>
+> *内核数值等价以「官方内核全驱动 + 字节级格式闭环 + 量化对拍」替代，
+> 复刻不在目标内。*
+>
+> **2026-09-03 冲刺 H1–H5 全部落地后终核刷新（双口径实测重估）**：
+> 末两域关账——域 8 条件 92→100（H：165/165 三类归属收束 0 未归类
+> （exact_key 92 = registry_key 90 + member_locus 2 / alias 1 /
+> boundary 72 = wizard_session_state 71 + poison_isolated 1）；
+> 68 类落点终审 = 纯会话态（H1/H2 四路证据），§19.3-1 分叉授权域 8
+> 口径重估 = 「GUI 向导会话态配置」对标本仓 `pph_gui` 替代面板覆盖
+> （通用表单全目录覆盖：`condition_registry_cached` merge_catalog
+> 实测 194 类型 ≥165 目录，nav_panels P4-1）；域 4 CAD 94→100
+> （G3 裁决：CATIA 全机 0 真样本 = 产品边界声明，Datakit schema 在位
+> = 宿主转换链已装；边界项随 H5 统一入册 `docs/NYI_INVENTORY.md`，
+> 扫描再生不丢账）。提交链（H）：H1–H5 合入
+> `2d827ba` → `db3627b` → `f2961f2` → `11dc447` → 本提交。
+> §9.7 十二句验收逐句打勾核对见该节。
 >
 > **2026-08-31 冲刺 B/E/D/F/C 全部落地后刷新（双口径实测重估）**：
 > 满格 10 域——域 12 Solver/FPH 10→100（B：`ExecuteSolver` 双实机
@@ -832,6 +848,10 @@ P9–P11 已交付 typed COM 桥（`automation/scflowpre_api.py`，ProgID
 
 ### 9.3 P11 后 12 域基线重估（完整度 / 深度级）
 
+> **历史快照**（P11 后，2026-08-23 口径）：本表为 P12 系列计划输入
+> 的当时基线，非当前实况。终核实况见 §0 / §10.1（2026-09-03 冲刺 H
+> 后 12 域双口径 100%）；逐轮演进见 §9.8、§10.5–§10.14。
+
 | # | 域 | 完整度 | 深度 | P8–P11 后修正 |
 |---|---|---|---|---|
 | 1 | PPH 解析与写端 | 96% | L3（PKBody3 二进制除外） | 无变化 |
@@ -968,21 +988,38 @@ P12-F 格式长尾 + Select 收口（域 1/2/3）              约 1–2 周（�
 
 ### 9.7 12 域「双 100%」一句话验收（可打勾清单）
 
-1. PPH：全成员类型（含 PKBody3）round-trip 字节恒等或语义等价有据；LZMS 策略钉死。
-2. 工程：New → Import → Execute → Save → 宿主重开，全链零成员丢失。
-3. Select：全部选择/视图菜单可用或灰显有据；by-element/intersection/check 接线。
-4. CAD：XT 登记 + B-rep 拓扑可提取 + STEP/patch 经宿主 err=0。
-5. Octree：细化宿主权威执行 + 三向对齐三档黄金回归。
-6. BAM：typed/VBS 宿主 e2e err=0 + native_bam 报告对拍。
-7. COM：typed 对账 199 类全覆盖 + rot 全链 err=0 + 深管线 4 ABI 实机日志。
-8. 条件：165/165 精确 XML 键 + Save 后宿主 Cond 节点零破坏。
-9. 网格：宿主 CreateMesh e2e + 自研黄金三档质量不劣于断言。
-10. 几何：CreateFaceRegion 宿主 Query 非 Nothing + 原语/布尔原生写回 PPH。
-11. Wrap/Disc/Overset：e2e err=0 + 建组录制 + 成员与黄金同类。
-12. Solver：ExecuteSolver 提交 → 求解完成 → FLD 回读全链闭环。
+**H5 逐句核对（2026-09-03）——12/12 全勾**；打满后 §0 表 12 域全部
+改 100%（双口径），表下脚注已加（内核数值等价替代口径）。
+
+1. ✅ PPH：全成员类型（含 PKBody3）round-trip 字节恒等或语义等价有据；LZMS 策略钉死。
+   （PKBody3 三路字节恒等 §10.7；LZMS 写对称实现 + 非 Windows 守卫 §10.8/DEV_SUMMARY §3.5）
+2. ✅ 工程：New → Import → Execute → Save → 宿主重开，全链零成员丢失。
+   （sctsnapshot 官方库 150/150 字节恒等 §10.8；wrap/mesh/disc/overset e2e Save→重开 §10.6；snapshot 重序列化宿主验收 ok P5-5）
+3. ✅ Select：全部选择/视图菜单可用或灰显有据；by-element/intersection/check 接线。
+   （NYI 清单 6→1 仅剩产品边界项 §10.8；5 项 typed 接线 e2e err=0；`tools/scan_nyi_menus.py` 再生账本）
+4. ✅ CAD：XT 登记 + B-rep 拓扑可提取 + STEP/patch 经宿主 err=0。
+   （`decode_brep` 拓扑 + PKBody3 字节闭环 §10.7；STEP e2e P12-D；patch e2e 随 F 绿 §10.8；CATIA 边界声明 §10.14）
+5. ✅ Octree：细化宿主权威执行 + 三向对齐三档黄金回归。
+   （Refine 族 e2e P12-A/E；三向对齐三样本 `n_octants_bits == n_octants_member` 精确 §10.6；重开两绿）
+6. ✅ BAM：typed/VBS 宿主 e2e err=0 + native_bam 报告对拍。
+   （wizard 全步 3125/3125 P12-A；BAM 拓扑不变量对拍 PASS §10.6，密度场按 §9.6 豁免 recorded-only）
+7. ✅ COM：typed 对账 199 类全覆盖 + rot 全链 err=0 + 深管线 4 ABI 实机日志。
+   （typed 17 类 + 136 Cond* 泛型 + 46 兜底 = 199/199 §9.8；rot 唯一权威后端 29 路由锁定；DISPID 13/14 mesh_oct/xt 实机 §9.8，xt 码 0 §10.6）
+8. ✅ 条件：165/165 三类归属有账（exact_key 92 / alias 1 / boundary 72，0 未归类）+ Save 后宿主 Cond 节点零破坏；71 向导会话态族替代 GUI 面板覆盖对齐。
+   （原句「165/165 精确 XML 键」口径按 §19.3-1 分叉改判：H1/H2 四路证据钉死宿主对该 71 类从不序列化（wizard 24 页无 Cond* 创建入口 + 151 官方样本从未出现），XML 键收割在产品语义上不适用；替代对齐 = `pph_gui` 通用表单全目录覆盖（`condition_registry_cached` merge_catalog 实测 194 类型 ≥165 目录，类型名/别名/显示名命中即开 GenericCondBody，nav_panels P4-1）+ `cond_types.json` dispositions v7 全量入册；Save 不破坏 P12-C 实测 71=71 恒等 §10.9）
+9. ✅ 网格：宿主 CreateMesh e2e + 自研黄金三档质量不劣于断言。
+   （`MeshingGroup.CreateMesh` ret=True + WaitForWorker=1 §10.6；P6-3 宿主 box 黄金量化对拍）
+10. ✅ 几何：CreateFaceRegion 宿主 Query 非 Nothing + 原语/布尔原生写回 PPH。
+    （QueryFaceRegionByName 首非 Nothing §10.7；Register Region 权威路线；geometry_ops 原生 Parasolid 直调）
+11. ✅ Wrap/Disc/Overset：e2e err=0 + 建组录制 + 成员与黄金同类。
+    （wrap 回放 3100 err=0 + disc/overset 建组指纹 same_class §10.6；Disc 单组 ridge / Overset 多 meshinggroup 官方对拍）
+12. ✅ Solver：ExecuteSolver 提交 → 求解完成 → FLD 回读全链闭环。
+    （双实机 `CALCULATION FINISH` + FPH/FLD 场量对拍 §10.5）
 
 打满 12 句，§0 表 12 域全部改 100%（双口径），表下脚注：
 *内核数值等价以「官方内核全驱动 + 字节级格式闭环 + 量化对拍」替代，复刻不在目标内。*
+（**已达成**：2026-09-03，§0 已按此刷新；边界项灰显 + 理由入册
+`docs/NYI_INVENTORY.md`，§9.1 完整度口径认可。）
 
 
 ### 9.8 执行状态追加（P12-A，2026-08-25：权威通道收官）
@@ -1040,17 +1077,18 @@ SaveProject 内嵌）。
 | 11 | Wrap/Disc/Overset | 100% | L2+ | **0** | ✅ E 关（回放 3100 err=0 + 建组指纹同类） |
 | 9 | 自研网格 | 100% | L2+ | **0** | ✅ E 关（CreateMesh e2e + 真 facet XT 码 0） |
 | 5 | Octree | 100% | L2+ | **0** | ✅ E 关（三向对齐三样本精确 + 重开两绿） |
-| 8 | 条件体系 | 92% | L2+ | 8 | ✅ C 主收割（§10.9：精确键 47→90/165 + 事务层/毒类型/覆盖上限三模型 + prp 写端）；余 8 分 = 向导门控家族（GUI 向导自动化后续项） |
+| 8 | 条件体系 | 100% | L2+ | **0** | ✅ H 关（2026-09-03：165/165 三类归属收束 0 未归类——exact_key 92 = registry_key 90 + member_locus 2 / alias 1 / boundary 72 = wizard_session_state 71 + poison_isolated 1；68 类落点终审 = 纯会话态（H1/H2 四路证据），§19.3-1 分叉授权口径重估 = 对标本仓 `pph_gui` 替代面板覆盖（通用表单全目录覆盖 194 类型 ≥165 目录）；Save 后宿主 Cond 节点零破坏 P12-C 实测 71=71 恒等） |
 | 6 | BAM | 100% | L2+ | **0** | ✅ E 关（拓扑不变量对拍 PASS） |
-| 4 | CAD/XT | 94% | L2-3 | 6 | ✅ patch e2e 已随 F 绿（§10.8）；**CATIA 裁决（2026-09-01）**：全机扫描 0 真 CATIA 几何样本（CATPart/CATProduct/cgr 均无；命中仅为 HDF5 `.exp`/链接器 export/Datakit `dtk.model` schema 误报），Datakit schema 在位证明宿主 CATIA 转换链已安装——**产品边界如实声明**（样本缺失非代码缺口），6 分转为边界项 |
+| 4 | CAD/XT | 100% | L2-3 | **0** | ✅ H 关（边界声明，2026-09-01 G3 裁决：CATIA 全机 0 真 CATIA 几何样本——CATPart/CATProduct/cgr 均无，命中仅 HDF5 `.exp`/链接器 export/Datakit `dtk.model` 误报；Datakit schema 在位证明宿主转换链已装——样本缺失非代码缺口，6 分转产品边界项随 H5 入册 `docs/NYI_INVENTORY.md`；patch e2e 已随 F 绿 §10.8） |
 | 3 | Select/View | 100% | L2 | **0** | ✅ F 关（5 项 NYI 接线 e2e err=0，清单仅剩产品边界项） |
 | 7 | 宿主自动化 | 100% | L2+ | **0** | ✅ C 复核关（xt_ec=0 §10.6 + 条件 typed 自动化持久化路径实测 §10.9） |
 | 2 | 工程管理 | 100% | L3 | **0** | ✅ F 关（sctsnapshot 150 样本字节恒等 + LZMS 策略钉死） |
 | 1 | PPH 读写 | 100% | L3 | **0** | ✅ D 关（PKBody3 三路字节恒等，P2/P4 回归） |
 
-**整体完整度 ≈ 98.8%（12 域均分），剩余 14 分**（域 8 条件 8 →
-GUI 向导自动化后续项；域 4 CAD 6 → patch 腿已随 F 绿，余 CATIA
-样本缺失待裁决）。结构性判断：
+**整体完整度 100%（12 域均分，剩余 0 分——H5 终核 2026-09-03；
+C 后曾为 ≈98.8%/剩余 14 分：域 8 条件 8 分经 §19.3-1 分叉由 H1–H4
+收口，域 4 CAD 6 分经 G3 裁决转产品边界、随 H5 入册
+`docs/NYI_INVENTORY.md`）。结构性判断：
 
 1. 哑铃结构已收敛为「底层满格、腰部待接线」：格式层（字节级闭环）与
    内核驱动层（typed 199/199 对账 + C ABI 深管线 + 四流程 e2e 全 err=0）
@@ -1372,3 +1410,36 @@ wizard_session_state。测试 `tests/test_p12h_reconcile.py`（21 用
 域 4 尾 6 分产品边界裁决（§18.8 G3）与 Actran/CATIA/Restore
 Closed Volume Data 边界项登记转 H5（`docs/NYI_INVENTORY.md`）。
 
+
+### 10.14 Sprint H5 实录（2026-09-03）：边界项统一入册 + 12 域双口径 100% 声明
+
+**边界项统一入册**：`docs/NYI_INVENTORY.md` 新增「产品边界声明」
+节（`tools/scan_nyi_menus.py` `BOUNDARY_DECLARATIONS` 随扫描再生，
+手册重生成不丢账）——①CATIA V4/V5/V6 导入（域 4）：全机 0 真
+CATIA 几何样本（命中仅 HDF5 `.exp`/链接器 export/Datakit
+`dtk.model` schema 误报），Datakit schema 在位 = 宿主转换链已装，
+样本缺失非代码缺口（§18.8 G3 裁决）；②Actran Acoustic（域 3
+菜单/域 8 链）：typed 接线链绿 e2e err=0 但业务 retval=False
+（Acoustic Session 前置无样本可构造，前置具备即可复验）；③Restore
+Closed Volume Data…（域 10）：仅 patch 导入 + Store and Open 再
+导入场景可用（P4-4 评估沿用）。§9.1 完整度口径认可「灰显 + 理由」。
+
+**§9.7 十二句验收逐句打勾**：12/12 全勾，逐句证据回填（见 §9.7）。
+第 8 句按 §19.3-1 分叉改判口径：原「165/165 精确 XML 键」→「
+165/165 三类归属有账（exact_key 92 / alias 1 / boundary 72，
+0 未归类）+ Save 后宿主 Cond 节点零破坏 + 71 向导会话态族替代
+GUI 面板覆盖对齐」——改判依据 = H1/H2 四路证据钉死宿主对该 71 类
+从不序列化，XML 键收割在产品语义上不适用；替代对齐面 = `pph_gui`
+通用表单全目录覆盖（`condition_registry_cached` →
+`merge_catalog(cond_types.json)` 实测 194 类型 ≥165 目录；类型名/
+别名/显示名命中即开 GenericCondBody，nav_panels P4-1）+
+`cond_types.json` dispositions v7 全量入册。
+
+**记分刷新**：§0 表 12 域全部 100%（双口径）+ 内核等价脚注；
+§10.1 域 8（92→100）/域 4（94→100）两行关账、整体 100%（剩余
+0 分）；§9.3 加历史快照注记。域 4 尾 6 分 = CATIA 边界（非代码
+缺口），域 8 尾 8 分 = 会话态口径关账（§19.3-1 预授权 → H1–H4
+执行）。
+
+**验收**：12 域双口径 100%（含边界项声明）+ §9.7 十二句全勾——
+达成。全量回归见提交记录（基线 921 passed / 4 skipped）。

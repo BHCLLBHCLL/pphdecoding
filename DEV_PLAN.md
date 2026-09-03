@@ -2261,5 +2261,36 @@ wizard_session_state。
 4 skipped / 0 failed**（406.85s）。验收「165/165 对账报告 0 未归
 类」达成。
 
+### 19.8 H5 执行记录（2026-09-03，边界项统一入册 + 12 域双口径 100% 声明）
+
+**边界项统一入册**：`tools/scan_nyi_menus.py` 扩 `BOUNDARY_
+DECLARATIONS`（随扫描再生，重生成不丢账）→
+`docs/NYI_INVENTORY.md` 新增「产品边界声明」节：①CATIA V4/V5/V6
+导入（域 4）——全机 0 真 CATIA 几何样本（命中仅 HDF5 `.exp`/
+链接器 export/Datakit `dtk.model` schema 误报），Datakit schema
+在位 = 宿主转换链已装，样本缺失非代码缺口（§18.8 G3 裁决）；
+②Actran Acoustic（域 3 菜单/域 8 链）——typed 接线链绿 e2e
+err=0 但业务 retval=False（Acoustic Session 前置无样本可构造，
+前置具备即可复验）；③Restore Closed Volume Data…（域 10）——
+仅 patch 导入 + Store and Open 再导入场景可用。§9.1 完整度口径
+认可「灰显 + 理由」。
+
+**§9.7 十二句验收逐句打勾核对（12/12 全勾）**：逐句证据回填见
+gap §9.7。第 8 句按 §19.3-1 分叉改判口径（原「165/165 精确
+XML 键」→「三类归属有账 + Save 零破坏 + 71 会话态族替代 GUI
+面板覆盖对齐」）——改判依据 = H1/H2 四路证据钉死宿主对该 71 类
+从不序列化，XML 键收割在产品语义上不适用；替代对齐面实测 =
+`pph_gui` 通用表单全目录覆盖（`condition_registry_cached` →
+`merge_catalog(cond_types.json)`，194 类型 ≥165 目录；类型名/
+别名/显示名命中即开 GenericCondBody，nav_panels P4-1）。
+
+**记分刷新（gap 文档）**：§0 表 12 域全部 100%（双口径）+ 内核
+等价脚注 + H 终核刷新注记；§10.1 域 8（92→100）/域 4（94→100）
+关账、整体 100%（剩余 0 分）；§9.3 加历史快照注记；§10.14 H5
+实录入册。
+
+**验收「12 域双口径 100%（含边界项声明）+ 12 句验收全勾」达成；
+全量回归见提交记录。**
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

@@ -97,6 +97,24 @@ EVALUATIONS: dict[str, str] = {
         "**产品边界**：仅 patch 导入 + Store and Open 再导入场景可用。",
 }
 
+# Sprint H5 边界项统一入册（DEV_PLAN §19.2 H5 / gap §10.14）。
+# 非菜单 NYI，而是跨域产品边界声明：随扫描清单一并再生，保证
+# 手册重生成不丢账。
+BOUNDARY_DECLARATIONS: list[tuple[str, str]] = [
+    ("CATIA V4/V5/V6 导入（域 4）",
+     "**产品边界**：全机 0 真 CATIA 几何样本（CATPart/CATProduct/cgr "
+     "均无；命中仅为 HDF5 `.exp`/链接器 export/Datakit `dtk.model` "
+     "schema 误报）；Datakit schema 在位证明宿主 CATIA 转换链已装。"
+     "样本缺失非代码缺口（§18.8 G3 裁决，2026-09-01）。"),
+    ("Actran Acoustic（域 3 菜单 / 域 8 链）",
+     "**产品边界**：typed 接线链绿（`CreateActranFiles` e2e err=0）但"
+     "业务 retval=False——Acoustic Session 前置在本机无样本可构造；"
+     "菜单已接线，前置具备即可复验（P12-F §10.8 如实记录）。"),
+    ("Restore Closed Volume Data…（域 10）",
+     "**产品边界**：仅 patch 导入 + Store and Open 再导入场景可用"
+     "（P4-4 评估沿用）。"),
+]
+
 
 def render_md(items: list[tuple[str, str]]) -> str:
     lines = [
@@ -117,6 +135,12 @@ def render_md(items: list[tuple[str, str]]) -> str:
         note = EVALUATIONS.get(label)
         lines.append(f"- {label}"
                      + (f" — {note}" if note else ""))
+    lines += ["", "## 产品边界声明（Sprint H5 统一入册）", ""]
+    for title, note in BOUNDARY_DECLARATIONS:
+        lines.append(f"### {title}")
+        lines.append("")
+        lines.append(note)
+        lines.append("")
     lines.append("")
     return "\n".join(lines)
 
