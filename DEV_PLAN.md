@@ -2341,5 +2341,26 @@ I1 → I2（I1 的 modal watcher/watchdog 即 I2 基建首件）；I3/I4/I6 相�
 - I5：同案例双跑 FPH/FLD/iFLD 逐变量 delta 表入册（首版 recorded-only）。
 - I6：`test_oct_tri_alignment` ≥5 样本全绿入回归。
 
+### 20.5 I1 执行记录（2026-09-03，域 5 reopen 正式 gate 落地）
+
+**交付**：`automation/modal_watch.py`（模态看守模块化：纯 ctypes
+枚举可见 ``#32770`` + ``WM_CLOSE`` 投递 + :class:`ModalWatcher`
+后台看守线程；探针全可注入，离线单测 6 项
+`tests/test_modal_watch.py`，`git add -f` 入库）+
+`tools/_p12i_i1_run.py`（I1 驱动：杀残留宿主 → Kicker 冷启动
+（复用 P12-E boot 配方）→ 看守下复用 P12-E 编排器跑 reopen）。
+
+**实机 gate（rot 权威通道，`p12e_reopen_e2e.log`）**：冷启动新宿主
+pid 55324，**[reopen] GATE: PASS**——10 检查全 err=0，
+`mg_`/`octree_` alive 全 True，`has_end=true`；全程 126.3 s，
+看守期模态关闭数 0。E 遗留①（三度未取成）**关账**。
+
+**遗留③表征新数据点**：宿主冷启动即弹 Initial Wizard 模态
+（boot 配方 `close_modals` 处置一次）；此后 OpenProject 至
+post-Refine 八叉树工程**一次通过、无模态、无挂起**——与 §18.4
+「挂起集中于脏会话（曾挂过的会话内同文件重开）」表征一致，
+「挂起即换宿主实例」配方获正向证据；流程期 watcher 0 动作
+（boot 期已处置），批量前置一次丢弃式冷启动的约定继续有效。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*
