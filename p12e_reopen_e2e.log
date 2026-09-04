@@ -6,7 +6,20 @@ s003=0
 doc__alive=True err=0
 s004=0
 s005=0
-mg__alive=True err=0
 s006=0
-octree__alive=True err=0
+s007=0
+s008=0
+s009=0
+mg__alive=True err=0
+s010=0
+octree__alive=False err=0
+s011=0
+s012=0
+s013=0
+s014=0
+s015=0
+s016=0
+s017=0
+s018=0
+s019=0
 end

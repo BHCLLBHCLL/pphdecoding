@@ -4,11 +4,3 @@ app__alive=True err=0
 s002=0
 s003=0
 doc__alive=True err=0
-s004=0
-s005=0
-conditions__alive=True err=0
-s006=0
-s007=0
-mg2__alive=True err=0
-s008=0
-end

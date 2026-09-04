@@ -1,0 +1,12 @@
+{
+ "done": {
+  "r1:bam": "fail",
+  "r1:wrap": "fail",
+  "r1:mesh": "pass",
+  "r1:disc": "fail",
+  "r1:overset": "pass",
+  "r1:reopen": "fail",
+  "r1:xt": "pass",
+  "r2:bam": "fail"
+ }
+}

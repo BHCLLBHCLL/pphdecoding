@@ -78,9 +78,28 @@ def find_visible_dialogs(pid: int | None = None,
         if _cls(hwnd) != DIALOG_CLASS:
             return True
         title = _text(hwnd)
+        if not title:
+            return True
         if title_contains is not None and title_contains not in title:
             return True
         hits.append({"hwnd": hwnd, "title": title})
+        return True
+
+    _enum(cb)
+    return hits
+
+
+def visible_windows(pid: int, *, _enum=_enum_top_windows,
+                    _text=_window_text, _cls=_class_name,
+                    _wpid=_window_pid, _vis=_is_visible) -> list[dict]:
+    """枚举进程全部可见顶层窗口（class+title，诊断用，不限 #32770）。"""
+    hits: list[dict] = []
+
+    def cb(hwnd, _lparam):
+        if _wpid(hwnd) != pid or not _vis(hwnd):
+            return True
+        hits.append({"hwnd": hwnd, "cls": _cls(hwnd),
+                     "title": _text(hwnd)})
         return True
 
     _enum(cb)

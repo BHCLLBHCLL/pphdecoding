@@ -2362,5 +2362,81 @@ post-Refine 八叉树工程**一次通过、无模态、无挂起**——与 §1
 「挂起即换宿主实例」配方获正向证据；流程期 watcher 0 动作
 （boot 期已处置），批量前置一次丢弃式冷启动的约定继续有效。
 
+### 20.6 I2 执行记录（2026-09-04，遗留③表征分类学 + 自愈基建；验收部分达成）
+
+**交付（全部入回归，`git add -f`）**：
+1. `automation/host_watchdog.py`（自愈执行器）：worker 线程 + 主线程
+   **日志活性监视**（idle≥limit 判挂；宿主消失 60+30s 提前判）；
+   挂起处置 = 表征台账（jsonl，含窗口/线程画像/MiniDump）→ 杀宿主
+   （单 pid 失败按映像名兜底 `kill_all_hosts`，仍存活记 `zombie`）
+   → `cold_boot` 重建 → 重试；**error-无 end**（宿主忙拒绝/
+   ExecuteVBSWithFile False、日志不完整）重试 3 次（第 2 次起冷
+   启动；`retry_with_boot` 流级参数供 OpenCadFile 流强制冷启动）。
+   离线单测 11 项（worker/dump/kill/boot/host 全探针注入）。
+2. `automation/host_boot.py`：P12-E boot 配方模块化 + **冷启动前置
+   清场**（`kill_all_hosts` 按映像名杀光宿主，防僵尸宿主留 ROT 被
+   rot 附着错选——I2 级联挂起根因）+ **VBS 可达性健康检查**
+   （`_vbs_ready_probe`：wizard 未弹出/初始化未完的宿主对一切
+   ExecuteVBSWithFile 恒 ~5s False，探测不过整体重试一次 boot）。
+3. `automation/modal_watch.py`（I1 已立）+ 流前模态清扫（晚弹
+   Initial Wizard 处置）；wrap/bam 流 watch_modals=False（其
+   wizard 由录制动作自管）。
+4. `tools/_p12e_e2e_run.py`：六流统一 `flow()`（idle_limit 流级：
+   wrap 1200s / mesh 900s——**实证 420s 惰性判挂会误杀可自恢复的
+   长暂停**：r2 wrap 判挂后 15min 完整跑完出 4.7MB 产物）；bam 流
+   入编（见下）；`wait_out_stable`（前流 SaveProject 落盘未完时
+   OpenProject 会被宿主整体中止——disc 三连 77B 截断实证）；reopen
+   octree 指数退避重查（15→25→45s 窗口 4 次查询）+ gate fail 重跑
+   一次；`_write_ansi_vbs` 去 `\r\r\n`（write_bytes）+ 写入重试
+   （AV 瞬时锁 Errno 22）。
+5. `tools/_p12i_i2_run.py`：两轮批量驱动 + 断点续跑台账
+   （`_p12i/i2_batch_state.json`，**只跳 pass**，fail 重跑）；
+   FLOWS 扩为 bam→wrap→mesh→disc→overset→reopen→xt。
+
+**遗留③表征分类学（台账 `hang_characterization.jsonl`，两轮批量
+~40 数据点 + 6 MiniDump 归档 `_p12i/dumps_i2r0{1,2}/`）**：
+- **③-a 停摆-自恢复**：大录制流执行中途日志惰性数分钟~十余分钟
+  （停点漂移 s085→s814，纯 VB 赋值区也停 = 主线程级），随后自行
+  恢复跑完（r2 wrap 判挂后 15min 完整落盘；宿主 Responding=True、
+  CPU≈0、无模态——非死锁非 busy）；420s idle 窗口误判挂起，放宽
+  后一次通过。
+- **③-b 中止**：同一长脚本执行到一半宿主放弃（ExecuteVBSWithFile
+  返回 False、日志截断、无 end），同宿主重跑必复发。
+- **③-c 宿主忙拒绝**：前流 SaveProject 落盘未完时下一流被拒
+  （disc 77B×3）——`wait_out_stable` 修。
+- **③-d 初始化依赖拒**：冷启动宿主若 Initial Wizard 未弹出
+  （初始化未走完）对**一切** ExecuteVBSWithFile 恒 ~5s False（含
+  一行 probe）；wizard 正常弹出并处置过的宿主一切可达。
+  `cold_boot` 健康检查即为此设。
+- **③-e（新入册）宿主 VBS 执行能力时变**：同宿主版本、同文件，
+  08:00–10:16 大录制（553–608KB）能完整执行（wrap 三次全量 +
+  bam 前缀二分至 8910 行全 True），10:23 起系统性拒绝（大文件
+  RPC_E_SERVERCALL_REJECTED / False，至 12:35 连 2KB 脚本皆拒，
+  仅 boot 后 probe 瞬间可达）。磁盘充足、Defender 无拦截记录、
+  编码/续行/块配对均排除——疑似宿主许可/会话侧耗尽，超出黑盒
+  可修范围，如实入册 `docs/NYI_INVENTORY.md`（遗留④）。
+
+**wrap 424 根因钉死（修复待④解除后复验）**：wrap replay 的
+`MeshingGroup_.GetMDL()` / `QueryRegionByName("ClosedVolume1")`
+依赖**会话内已建 MDL**——8/30 全 0 的成功依赖当时宿主会话残留的
+P12-A BAM 状态（不可复现）；真清场后 11×424 + 产物缺
+meshinggroup1.gph/.oct，reopen 级联 octree__alive=False。修复 =
+bam 流入编前置（`build_bam_groups` 回放 box_scflow_mdl.vbs，
+产物重定向 `p12e_bam_e2e_*` 不覆盖 P12-A 历史证据；xt 流仍用
+`p12a_bam_e2e_part.mdl` 不变）；编码通道同时钉死（wrap 走
+UTF-16+BOM——与 8/30 全 0 版 md5 一致；wizard 段在 ANSI 下静默
+失败）。
+
+**实机 gate（2026-09-04，rot 权威通道）**：五小流 0 人工干预自愈
+多次全过（mesh 22 检查 create_ret=True/wait_ret=1；disc/overset
+指纹 same_class；reopen octree 缺陷随 wrap 修复待复验；xt 18 检查
+ec=0）。wrap/bam 大录制流受 ③-e 阻塞——I2 验收句「连续 2 轮批量
+0 人工干预通过」**部分达成**：自愈机制建成并实证（挂起→dump→杀→
+清场→重建→重试全链自动化、断点续跑台账工作），全过 gate 待宿主
+VBS 执行能力恢复（宿主机重启/次日首跑）后复验。
+
+回归 938 passed / 4 skipped / 0 failed（基线 927 + watchdog
+新 11 项；488s）。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*
