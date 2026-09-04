@@ -2502,5 +2502,117 @@ BM_CLICK「是」——`WM_CLOSE` 等价「否」不可用；4 项离线单测�
 宿主 VBS 能力恢复窗口；基建已就绪（bam 流重放配方 + watchdog +
 confirm 看守），复验按 §20.1 I3 第二分支证据为基线。
 
+### 20.8 I4 执行记录（2026-09-04，Actran Acoustic 前置狩猎；验收第二分支达成）
+
+**验收句**：`CreateActranFiles` 业务 retval=True（前置构造成功），
+**或** Acoustic Session 前置构成钉死入册——**第二分支达成**
+（条件面全构造 err=0 后 monitor 仍 retval=False，前置构成实测
+钉死 = 求解器侧 scFLOW2Actran 输出开关 + CFD 瞬态数据流，纯
+前处理 COM 面不可达；域 3/域 8 边界维持并升级为实测证据）。
+
+**交付（入回归）**：`tools/_p12j_i4_run.py`（构造复验单流：BAM
+网格工程 + `GetCondActranAnalysisControl` + 5 条件族构造 +
+`CreateActranFilesMonitor` 业务复验 + SaveProject XML 落键检查，
+rot 权威 + watchdog 接入，业务结果先记录后判定）；
+`tests/test_p12j_i4_generators.py`（10 项离线单测）。
+
+**狩猎证据链（离线面）**：
+
+1. **官方样本库全扫**（2025.2 Example_a）：无 Acoustic 命名样本；
+   Actran 痕迹在多数 .pph 内——main.xml **etco 段**
+   `<actran_acoustic_analysis_name><filename>scFLOW2Actran</filename>
+   <output>false</output>`（求解器输出配置，缺省关）+ main.prp
+   材料属性 `actran_sound_speed`（343.6）。
+2. **宿主二进制字符串**（scFLOWpreGUI/Cmd_Bx64net.dll）：
+   `CConditionWizardAcoustic`（GUI 条件向导类）、
+   `TaskSaveActranAcousticFiles`/`TaskSaveActranAcousticCmb`/
+   `TaskSaveActranFluidCmb`（CreateActranFilesMonitor 的任务本体）、
+   `WriteAcousticSolution@AcFileManager`、
+   `BEGININFO_SCFLOW2ACTRAN`、CondActran*Com 的
+   `DoesConflictWithAnalysisType`（条件↔分析类型冲突检查器）。
+3. **catalog 自文档**：`CondActranAnalysisControl` = "analysis
+   condition for **the acoustic session of scFLOW2Actran**"——
+   Acoustic Session = scFLOW2Actran 耦合会话的官方定义。
+
+**实测钉死（三轮实机 r1–r3，rot 权威 + watchdog，证据
+`p12j_actran_e2e.{vbs,log}` + `p12j_actran_e2e_out.pph` +
+`_p12j_e2e/`）**：
+
+1. **条件面可构造**：BAM 网格工程上
+   `GetCondActranAnalysisControl` alive、`GetParam
+   ("cfd_analysis_type")` 读回 `transient`（键↔XML 键对应）；
+   `CreateCondActranSource/OutputSolution/
+   BoundaryNonReflection/Absorption/PointSource` 5/5 err=0；
+   SaveProject 后 main.xml 落 `actran_analysis_control` +
+   `actran_acoustic_analysis_name` + 5 条件名——C3 收割期
+   「remaining_missing」的 Actran 条件族实为可经 COM 构造。
+2. **业务面仍拒**：`CreateActranFilesMonitor(folder)`
+   （目录预存在，r2 修 VBS `IIf` 两分支皆求值 Err 76 后判定
+   干净）**retval=False、0 文件**，条件全在场不改变结果——
+   P12-F 的 retval=False 与条件缺席无关，是更深前置的确定性
+   拒绝。
+3. **前置构成钉死**：scFLOW2Actran = CFD 瞬态结果 → Actran
+   声学源的**单向耦合导出**（actran_analysis_control 的
+   `cfd_analysis_type=transient`/`check_cfd_files_type=wait`/
+   `delete_source_time_files_type` 键族同向印证；源条件族
+   Source/RingDipole/PointSource 全部以 CFD 场数据为源）。
+   完整前置 = **求解器侧输出开关**（etco
+   `actran_acoustic_analysis_name.output`，官方样本缺省 false）
+   + CFD 瞬态求解数据流；etco 开关无 COM API（catalog 无对应
+   Set 接口），纯前处理 COM 面不可达。retval=False = 产品在
+   「无 CFD 数据流」下的确定性拒绝，非缺陷。
+
+**边界声明（NYI_INVENTORY 同步升级）**：域 3「Create Actran
+Files」菜单/域 8 Actran 链维持灰显边界，理由从「P12-F §10.8
+如实记录」升级为本节实测证据链（条件面可构造 + monitor 拒绝
++ 前置构成钉死）。
+
+**回归面**：I4 生成器 10 项离线单测（verify 口径与 P12-E 对齐：
+unparsed 行入 problems 不入 total）。
+
+### 20.9 I5 执行记录（2026-09-05，求解链数值等价双跑；验收达成——recorded-only 首版 delta 表入册）
+
+**验收句**：同案例双跑 FPH/FLD/iFLD 逐变量 delta 表入册（首版
+recorded-only 不设通过线，§20.2）——**达成**。交付
+`solver_delta.py`（FPH 逐变量对拍 / FLD 结构对拍 / iFLD 目录对拍
+/ sph 指纹 / markdown 表 CLI）+ `tools/_p12k_i5_run.py`（冷启动
+→ 双副本 → run_solve×2 → delta 表装配，10 项离线单测）+
+`tests/test_solver_delta.py`（6 项，真实 Sprint B 产物自对拍
+全零 / 交叉对拍非零校准）。
+
+**官方样例 exA36-3 双跑先试后弃（如实入册）**：a1 腿 8 个 MPI
+rank 于 692s 全体 BAD TERMINATION（exit -1；与全量回归并发窗口
+重叠、回归套件无真实杀进程调用已查证，疑似资源干扰未定因）；a2
+腿实测 ~27 s/周期 × TM_CYCLE=1000 瞬态 ≈ 7.5 h，超出会话窗口，
+~48 周期处主动中止。两腿证据归档 `_p12k_i5/exA36_attempt_a1/`
+（`_0.fph` + BAD TERMINATION 日志）与 `exA36_attempt_a2/`（部分
+.l；a2 目录 `scFLOWpre.l` 被残留句柄锁定，以副本为准）。
+**操作纪律**：回归与实机求解此后不并发。转 backlog。
+
+**box 双跑（达成主体）**：源 = `_p12a_e2e/box.pph`（Sprint B
+已验证可解、2025.2 宿主自存无版本模态），双副本 box_b1/box_b2
+独立工作目录顺序双跑（同宿主会话，§20.3 风险 3 口径）：
+
+- b1：`box_b1_400.fph`（1335130 B），wait 2329.8s，verify=True，
+  求解日志 ERROR LOG 空节干净收尾；
+- b2：`box_b2_400.fph`（1335130 B），wait 1715.6s，verify=True；
+- **FPH 逐变量 delta 表（13 场量，11 点对齐 8000 单元）：
+  delta_max/delta_mean/delta_rel 全 0**——同机同输入顺序双跑
+  完全确定性复现；FC_Scalar:USTR/YPLS 空数组（n=0，本工况壁面
+  函数未激活）如实记录；fld/ifld 产物缺席如实记录（链路产物为
+  FPH/RPH/L/CSLN）；
+- **跨天旁证**：b1 与 Sprint B 8/30 `scratch/solve_b/box_400.fph`
+  逐变量比对亦全 0——三次独立求解（8/30、今日 b1/b2）场量逐位
+  一致，求解器数值重复性基线极干净；
+- sph 指纹：双腿导出 sph 同尺寸（1648 B）不同 md5（头部
+  `% Date` 时间戳），输入面字节级非确定性与结果面逐位确定性
+  并存，如实记录。
+
+表落 `_p12k_i5/delta_table.md/.json` + `i5_summary.json`。
+容差判定按 §20.2 留待第二轮数据；本表即首版基线（全零）。
+
+**回归**：979 passed / 4 skipped（I3 后 +26：I4 生成器 10 +
+I5 delta 工具 6 + I5 编排器 10）。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

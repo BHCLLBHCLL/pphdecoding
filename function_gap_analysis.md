@@ -1461,3 +1461,42 @@ patch 导入实为**组内换件**（条件保留、`<mdl>` 闭体积块重置�
 NYI_INVENTORY（复验窗口同遗留④）。配套基建：`modal_watch`
 `click_confirm_yes`（2023.2 CAB Confirm 模态 ③-f 处置）。
 详见 DEV_PLAN §20.7。
+
+### 10.16 Sprint I4 实录（2026-09-04）：Actran Acoustic 前置狩猎——条件面可构造，业务前置钉死
+
+I4 验收第二分支达成：官方库全扫（无 Acoustic 命名样本，etco 段
+`actran_acoustic_analysis_name` scFLOW2Actran/output=false 为求解器
+侧输出配置）+ 宿主二进制字符串（`CConditionWizardAcoustic`/
+`TaskSaveActranAcousticFiles`/`WriteAcousticSolution@AcFileManager`/
+`BEGININFO_SCFLOW2ACTRAN`）+ catalog 自文档（Acoustic Session =
+scFLOW2Actran 耦合会话）三路定位后，实机构造复验（rot 权威 +
+watchdog，`p12j_actran_e2e.*`）：BAM 网格工程上 `GetCond
+ActranAnalysisControl` alive、`GetParam("cfd_analysis_type")` 读回
+transient，5 条件族全建 err=0，XML 落键 `actran_analysis_control` +
+条件名 ×5——C3 收割期「remaining_missing」的 Actran 条件族实为可
+经 COM 构造；但 `CreateActranFilesMonitor`（目录预存在）仍
+retval=False、0 文件。前置构成钉死 = 求解器侧输出开关（etco
+output 键，无 COM Set 接口）+ CFD 瞬态数据流，纯前处理 COM 面不可
+构造完成态；retval=False 为产品闸门确定性拒绝，非缺陷。域 3/域 8
+边界维持（实测证据升级），NYI_INVENTORY 同步。详见 DEV_PLAN §20.8。
+
+### 10.17 Sprint I5 实录（2026-09-05）：求解链数值等价双跑——首版 delta 表入册（全零基线）
+
+I5 验收达成（recorded-only 首版，§20.2 不设通过线）：交付
+`solver_delta.py`（FPH 逐变量 / FLD 结构 / iFLD 目录三档对拍 +
+sph 指纹 + markdown 表 CLI）+ `tools/_p12k_i5_run.py` 双跑编排器
+（冷启动新宿主 → 同案例双副本 → run_solve×2 → delta 装配）+
+26 项离线单测。官方样例 exA36-3 双跑先试后弃（a1 腿 8 MPI rank
+692s 全体 BAD TERMINATION，与全量回归并发窗口重叠、疑似资源干扰
+未定因；a2 腿 TM_CYCLE=1000 瞬态实测 ~27 s/周期 ≈7.5 h 超会话
+窗口于 ~48 周期中止；证据归档 `_p12k_i5/exA36_attempt_*/`；
+操作纪律：回归与实机求解此后不并发），改以 Sprint B 已验证可解
+box 案例达成主体：box_b1/box_b2 双副本独立目录顺序双跑，
+`box_b1_400.fph` / `box_b2_400.fph` 终态落盘，13 场量逐变量
+delta 表 **delta_max/mean/rel 全 0**（11 点对齐 8000 单元；
+USTR/YPLS 空数组 n=0 如实记录；fld/ifld 产物缺席如实记录）；
+跨天旁证：b1 与 8/30 `scratch/solve_b/box_400.fph` 比对亦全 0——
+三次独立求解场量逐位一致，求解器数值重复性基线极干净。双腿导出
+sph 同尺寸不同 md5（头部时间戳），输入面字节非确定性与结果面
+逐位确定性并存如实记录。表落 `_p12k_i5/delta_table.md/.json`。
+详见 DEV_PLAN §20.9。

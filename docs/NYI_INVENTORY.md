@@ -17,7 +17,7 @@
 
 ### Actran Acoustic（域 3 菜单 / 域 8 链）
 
-**产品边界**：typed 接线链绿（`CreateActranFiles` e2e err=0）但业务 retval=False——Acoustic Session 前置在本机无样本可构造；菜单已接线，前置具备即可复验（P12-F §10.8 如实记录）。
+**产品边界**：typed 接线链绿（`CreateActranFiles` e2e err=0）但业务 retval=False；菜单已接线。I4 实测升级（DEV_PLAN §20.8 / gap §10.16）：**条件面可构造**——`GetCondActranAnalysisControl` + 5 条件族（Source/OutputSolution/BoundaryNonReflection/Absorption/PointSource）全建 err=0、XML 落键 `actran_analysis_control`/`actran_acoustic_analysis_name`；`CreateActranFilesMonitor`（目录预存在）仍 retval=False、0 文件。**前置构成钉死** = 求解器侧 scFLOW2Actran 输出开关（etco `actran_acoustic_analysis_name.output`，官方样本缺省 false，无 COM Set 接口）+ CFD 瞬态数据流——scFLOW2Actran 为 CFD→Actran 单向耦合导出，纯前处理 COM 面不可构造完成态；retval=False 是产品闸门的确定性拒绝。前置具备（求解器侧开关 + 瞬态解）即可复验。
 
 ### Restore Closed Volume Data…（域 10）
 
