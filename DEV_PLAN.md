@@ -2614,5 +2614,35 @@ rank 于 692s 全体 BAD TERMINATION（exit -1；与全量回归并发窗口
 **回归**：979 passed / 4 skipped（I3 后 +26：I4 生成器 10 +
 I5 delta 工具 6 + I5 编排器 10）。
 
+### 20.10 I6 执行记录（2026-09-05，三向对齐扩样；验收达成——三样本精确 → 五样本）
+
+**验收句**：`test_oct_tri_alignment` ≥5 样本全绿入回归（§20.4）——
+**达成**：精确三向（快照 bits ↔ .oct ↔ GPH）样本 3→5（box.pph、
+p12a_octant_e2e_out、cradle interference、官方 exPRE04-1、
+exPRE04-2）+ 两向变体 2（tr03 快照↔GPH；exB01 oct↔GPH，官方
+样本缺 main.sctsnapshot 成员，F3 已知 151 pph 中 1 缺快照），
+共 7 测试类全绿（2.46s），全量回归 982 passed / 4 skipped（+3）。
+
+**计划文本假设修正（全库扫描钉死）**：§20.1-I6「含 moving/
+overset 八叉树」的官方 2025.2 样本不存在——关键词全库扫描
+（overset/moving/mdo/rotor/rotat/fan/impeller/pump/gear/vim/ale）
+0 命中；含 .oct 成员的官方 pph 恰 3 个：exB01-1_intake_manifold、
+exPRE04-1、exPRE04-2。扩样以最大八叉树样本替代。
+
+**实测不变量（I6 探针 = 测试同机件，zipfile 成员 → 临时文件 →
+SctSnapshot.load / parse_oct / parse_mesh）**：
+
+- exPRE04-1（官方库最大八叉树）：312777 octants，bits 字节级
+  一致（尾填充 7），n_active 271768，GPH 531434 单元 / 585872
+  顶点全落根域；
+- exPRE04-2：307961 octants，bits 一致（尾填充 7），n_active
+  266214，GPH 187013 单元落域；
+- exB01 进气歧管：88233 octants（77204 leaves + 11029 internal）
+  层次自洽，GPH 92984 单元 / 230558 顶点落域，快照成员缺席按
+  两向口径断言。
+
+规模锚点随测试固化（exPRE04-1 >300k / exPRE04-2 >290k /
+exB01 >80k octants，防样本静默替换降级）。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

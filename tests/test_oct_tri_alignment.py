@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""三向对齐扩样（冲刺 E · 域 5）：.oct 成员 ↔ 快照八叉树 ↔ GPH 网格。
+"""三向对齐扩样（冲刺 E · 域 5；冲刺 I6 扩容 3→5 精确三向）：
+.oct 成员 ↔ 快照八叉树 ↔ GPH 网格。
 
 O3 链路三表述同一八叉树，不变量：
 
@@ -9,9 +10,17 @@ O3 链路三表述同一八叉树，不变量：
 3. **网格落域**：GPH 单元数 > 0 且全部顶点落在 ``.oct`` 根域
    ``[root_min, root_max]`` 内（网格由八叉树活跃域生成）。
 
-样本：本地 ``box.pph`` / ``p12a_octant_e2e_out.pph``（宿主 Refine 后
-产物，P12-A e2e 证据）+ 盘上黄金 ``interference``（有 .oct 成员）与
-``tr03``（无 .oct 成员 → 快照↔GPH 两向）。例程库缺失时相应跳过。
+样本（I6 后共 7 个）：三向精确 5 —— 本地 ``box.pph`` /
+``p12a_octant_e2e_out.pph``（宿主 Refine 后产物，P12-A e2e 证据）+
+盘上黄金 ``interference``（有 .oct 成员）+ 官方库
+``exPRE04-1`` / ``exPRE04-2``（全库最大八叉树，312777/307961
+octants）；两向变体 2 —— ``tr03``（无 .oct 成员 → 快照↔GPH）+
+官方 ``exB01`` 进气歧管（无 main.sctsnapshot 成员，F3 已知 151 pph
+中 1 缺快照 → oct↔GPH）。例程库缺失时相应跳过。
+
+⚠️ 官方 2025.2 库无 moving/overset 八叉树样本（§20.1-I6 计划文本
+假设不成立，全库扫描钉死——overset/moving 命名 0 命中；exPRE04
+为库内最大体量替代）。
 """
 
 from __future__ import annotations
@@ -33,6 +42,15 @@ import sctsnapshot  # noqa: E402
 from gphstats import parse_mesh  # noqa: E402
 
 CRADLE = Path(os.environ.get("PPH_CRADLE_ROOT", r"D:\training\cradle"))
+OFFICIAL = Path(os.environ.get(
+    "PPH_OFFICIAL_EXAMPLES",
+    str(CRADLE / "CradleCFD_2025.2_scFLOW_Example_a")))
+EX_PRE04_1 = (OFFICIAL / "Exercise" / "exPRE04" / "exPRE04-1" / "Org"
+              / "exPRE04-1.pph")
+EX_PRE04_2 = (OFFICIAL / "Exercise" / "exPRE04" / "exPRE04-2" / "Org"
+              / "exPRE04-2.pph")
+EX_B01 = (OFFICIAL / "Exercise" / "exB01" / "exB01-1" / "Org"
+          / "exB01-1_intake_manifold.pph")
 EPS = 1e-6
 
 
@@ -157,6 +175,56 @@ class TestTr03TwoWayAlignment(unittest.TestCase):
     def test_two_way_alignment(self):
         TriAlignmentCase(self, CRADLE / "tr03" / "tr03" / "tr03.pph",
                          False).run()
+
+
+@unittest.skipUnless(EX_PRE04_1.is_file(), "official exPRE04-1 missing")
+class TestExPRE04v1TriAlignment(unittest.TestCase):
+    """官方库最大八叉树样本（312777 octants，P12-K I6 实测）。"""
+
+    def test_tri_alignment(self):
+        TriAlignmentCase(self, EX_PRE04_1, True).run()
+        snap = _snapshot_of(EX_PRE04_1)
+        self.assertGreater(
+            1 + 8 * int(snap.octree_division_bits().sum()), 300_000)
+
+
+@unittest.skipUnless(EX_PRE04_2.is_file(), "official exPRE04-2 missing")
+class TestExPRE04v2TriAlignment(unittest.TestCase):
+    """官方库第二大八叉树样本（307961 octants，P12-K I6 实测）。"""
+
+    def test_tri_alignment(self):
+        TriAlignmentCase(self, EX_PRE04_2, True).run()
+        snap = _snapshot_of(EX_PRE04_2)
+        self.assertGreater(
+            1 + 8 * int(snap.octree_division_bits().sum()), 290_000)
+
+
+@unittest.skipUnless(EX_B01.is_file(),
+                     "official exB01 intake manifold missing")
+class TestExB01OctGphAlignment(unittest.TestCase):
+    """exB01 进气歧管：官方样本缺 main.sctsnapshot 成员（F3 已知
+    151 pph 中 1 缺快照）→ oct↔GPH 两向（层次自洽 + 网格落域）。"""
+
+    def test_oct_gph_alignment(self):
+        with zipfile.ZipFile(EX_B01) as z:
+            self.assertNotIn("main.sctsnapshot", z.namelist())
+        om = _oct_model_of(EX_B01)
+        self.assertIsNotNone(om)
+        self.assertEqual(int(om.n_leaves) + int(om.n_internal),
+                         int(om.n_octants))
+        gph = _gph_facts(EX_B01)
+        self.assertGreater(gph["n_cells"], 0)
+        root_min = np.asarray(om.root_min, dtype=float)
+        root_max = np.asarray(om.root_max, dtype=float)
+        self.assertTrue(
+            bool(np.all(gph["bbox_min"] >= root_min - EPS)),
+            f"gph bbox_min {gph['bbox_min']} < oct root {root_min}")
+        self.assertTrue(
+            bool(np.all(gph["bbox_max"] <= root_max + EPS)),
+            f"gph bbox_max {gph['bbox_max']} > oct root {root_max}")
+        # 规模锚点（P12-K I6 实测 88233 octants / 92984 cells）
+        self.assertGreater(int(om.n_octants), 80_000)
+        self.assertGreater(gph["n_cells"], 90_000)
 
 
 if __name__ == "__main__":
