@@ -1,0 +1,20 @@
+{
+ "flows": {
+  "cvstore": true,
+  "cvrestore": false
+ },
+ "business": {
+  "app__alive": "True",
+  "doc__alive": "True",
+  "sn6__alive": "True",
+  "mg1__alive": "True",
+  "md1__alive": "False",
+  "cvs1_ub": "NA",
+  "mg2__alive": "True",
+  "md2__alive": "False",
+  "md2_alive": "False",
+  "str2_ub": "NA",
+  "cur2_ub": "NA"
+ },
+ "restorable": -1
+}

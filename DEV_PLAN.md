@@ -2438,5 +2438,69 @@ VBS 执行能力恢复（宿主机重启/次日首跑）后复验。
 回归 938 passed / 4 skipped / 0 failed（基线 927 + watchdog
 新 11 项；488s）。
 
+### 20.7 I3 执行记录（2026-09-04，Restore Closed Volume Data 场景收口；验收第二分支达成）
+
+**验收句**：可构造场景 e2e err=0 **或**前置不可构造证据入册——
+**第二分支达成**（restorable=-1，前置不可构造证据 + 产品语义实测
+钉死，边界维持；域 10 分数不变，边界声明从「P4-4 评估沿用」升级
+为实测证据）。
+
+**交付（入回归）**：`tools/_p12i_i3_run.py`（两流场景驱动：cvstore
+场景构造 + cvrestore 再导入/恢复，rot 权威 + watchdog 接入，业务
+三态 restorable∈{1,0,-1} 先记录后判定）；`automation/modal_watch.py`
+新增 `find_confirm_yes`/`click_confirm_yes`（Yes/No Confirm 模态
+BM_CLICK「是」——`WM_CLOSE` 等价「否」不可用；4 项离线单测）；
+`tests/test_p12i_i3_generators.py`（10 项离线单测）。
+
+**宿主帮助页前置（原文，2025.2 安装
+`Scf_pre_Edit-Restore_Closed_Volume_Data.html`）**：仅限
+「patch 数据已导入 + **另一** patch 数据再导入且当时选
+[Store and Open]」场景可用。
+
+**实测钉死（三轮实机 r1–r3，rot 权威通道，证据
+`p12i_*.{vbs,log}` + `_p12i_e2e/`）**：
+
+1. **存储腿成立**：`MDL_.StoreClosedVolumes` + SaveProject →
+   `meshinggroup1_restore_cvol.his`（12825B 新产物）+ oct
+   101889→182857B；重开后 `GetStoredClosedVolumes(False)` 返回
+   1 项、`src_`/`dest_` 均 alive——存储闭体积数据跨 Save/Open
+   持久化成立。retval 实测为空 VARIANT（catalog 记 `retval=...`
+   与实测不符，副作用以 `.his`/`GetStoredClosedVolumes` 为准）。
+2. **再导入腿成立（新净宿主）**：`ImportPatchAsCAD(sample_cube.stl)`
+   retval 非 Nothing（r2/r3 两轮）；退化会话（宿主连跑 ~14h）上
+   同调用业务拒（retval Nothing、err 通道静默）甚至打断宿主进程
+   （RPC -2147023170）——遗留④同型时变。
+3. **产品语义钉死：`ImportPatchAsCAD` = 组内换件**——同文档、
+   分析条件保留，但 meshing group 内容被替换为 patch part 且
+   **`<mdl>` 闭体积块重置**（cv2b 的 main.xml 实证：`<mdl>` 消失、
+   `mesh_state=1→0`）；成员文件落盘滞后（SaveProject 紧随导入则
+   `meshinggroup1_*.mdl/.gph/.oct` 成员全缺，须 WaitForWorker）。
+4. **恢复腿受 MDL 重建前置阻塞**：换件后 `MeshingGroup.GetMDL`
+   返回 Nothing（r2 两处 + r3 两处、`RecognizeClosedVolume` 在
+   无 MDL 对象时为静默 no-op、重开 + 退避重查 + 换件后识别均无济
+   ）——MDL 对象 = 工程 `<mdl>` 块的运行时形态，须 **MDL Wizard
+   重放**（bam 流级、BeginMDLWizard 段、UTF-16 通道、wizard 模态
+   在场）方可重建；该重放当前受遗留③-e 宿主 VBS 能力时变约束。
+   不可构造根因 = **MDL Wizard 重放腿缺失**，非 restore API
+   本身缺陷。
+5. **恢复调用语义**（r1，MDL 在场时）：`av1=False` 时
+   `RestoreClosedVolumes(True, Pairs)` err=0 但 retval=False——
+   产品按 restorable 闸门拒绝；`CVolPairs` Dim+Set 对数组构造合法
+   （偶数位=恢复目标、奇数位=存储源）；
+   `GetRestorationCandidateOfClosedVolume(0,...)` 0-based 下标
+   424（1-based 待验）。
+6. **2023.2 CAB Confirm 模态（③-f 新表征）**：box.pph（2023.2
+   CAB 工程）`OpenProject` 弹标题 `Confirm` 的版本警告 Yes/No
+   模态，后续 COM 全部排在模态后（③ 同型挂起）；处置 =
+   `click_confirm_yes` 后台看守（r2 实测手动 BM_CLICK「是」解锁）。
+
+**回归面**：modal_watch 新 4 项 + I3 生成器 10 项（本轮实机后
+全量回归见提交记录）。
+
+**遗留⑤（新入 NYI_INVENTORY，复验窗口同遗留④）**：restore 全链
+可构造 = 追加「MDL Wizard 重放 ×2」（patch①/② 换件各一次）+
+宿主 VBS 能力恢复窗口；基建已就绪（bam 流重放配方 + watchdog +
+confirm 看守），复验按 §20.1 I3 第二分支证据为基线。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

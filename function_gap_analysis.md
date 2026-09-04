@@ -1443,3 +1443,21 @@ GUI 面板覆盖对齐」——改判依据 = H1/H2 四路证据钉死宿主对�
 
 **验收**：12 域双口径 100%（含边界项声明）+ §9.7 十二句全勾——
 达成。全量回归见提交记录（基线 921 passed / 4 skipped）。
+
+
+### 10.15 Sprint I3 实录（2026-09-04）：Restore Closed Volume Data 前置不可构造证据入册
+
+I3 验收第二分支达成（restorable=-1）：三轮实机（rot 权威 + watchdog）
+把「仅 patch 导入 + Store and Open 再导入场景可用」的 P4-4 口径升级
+为实测证据链——①存储腿成立：`StoreClosedVolumes`+Save 产出
+`meshinggroup1_restore_cvol.his`（12825B）且跨 Save/Open 持久化
+（重开后 GetStoredClosedVolumes 1 项）；②再导入腿成立（新净宿主
+`ImportPatchAsCAD` retval 非 Nothing）；③恢复腿阻塞根因钉死：
+patch 导入实为**组内换件**（条件保留、`<mdl>` 闭体积块重置、成员
+落盘滞后），换件后 `GetMDL`=Nothing，MDL 重建须 bam 级 MDL Wizard
+重放（受遗留③-e 宿主能力时变约束）；④MDL 在场时
+`RestoreClosedVolumes` err=0 但 restorable 闸门拒绝（retval=False）。
+域 10 分数不变（边界项如实维持灰显 + 实测理由），遗留⑤入
+NYI_INVENTORY（复验窗口同遗留④）。配套基建：`modal_watch`
+`click_confirm_yes`（2023.2 CAB Confirm 模态 ③-f 处置）。
+详见 DEV_PLAN §20.7。

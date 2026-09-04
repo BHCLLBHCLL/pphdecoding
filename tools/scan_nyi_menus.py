@@ -112,7 +112,11 @@ BOUNDARY_DECLARATIONS: list[tuple[str, str]] = [
      "菜单已接线，前置具备即可复验（P12-F §10.8 如实记录）。"),
     ("Restore Closed Volume Data…（域 10）",
      "**产品边界**：仅 patch 导入 + Store and Open 再导入场景可用"
-     "（P4-4 评估沿用）。"),
+     "（P4-4 评估沿用；P12-I I3 实测升级：帮助页前置原文钉死 + 存储腿"
+     "持久化成立 `meshinggroup1_restore_cvol.his` + 再导入腿成立；恢复"
+     "腿受 MDL Wizard 重放前置阻塞——patch 换件重置 `<mdl>` 块致 "
+     "`GetMDL` Nothing，重建须 bam 级向导重放，受遗留③-e 宿主能力"
+     "时变约束。前置不可构造证据入册 DEV_PLAN §20.7，遗留⑤待复验）。"),
 ]
 
 

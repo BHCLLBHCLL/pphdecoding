@@ -75,6 +75,68 @@ class TestCloseDialogs(unittest.TestCase):
         self.assertEqual(closed, [])
 
 
+class TestConfirmYes(unittest.TestCase):
+    """Confirm Yes/No 模态（2023.2 CAB 载入 / patch 导入确认）。"""
+
+    def _fake_children(self, buttons):
+        def run(cb, hwnd):
+            for hwnd_c, cls, title in buttons:
+                if not cb(hwnd_c, 0):
+                    break
+        return run
+
+    CONFIRM = [
+        (0x10, "#32770", "Confirm", 300, True),
+    ]
+    BUTTONS = [
+        (0x11, "Button", "是(&Y)"),
+        (0x12, "Button", "否(&N)"),
+        (0x13, "Static", "Load a CAB file created on the older version"),
+    ]
+
+    def test_finds_confirm_and_yes_button(self):
+        texts = {0x10: "Confirm", 0x11: "是(&Y)", 0x12: "否(&N)",
+                 0x13: "Load a CAB file"}
+        clss = {0x10: "#32770", 0x11: "Button", 0x12: "Button",
+                0x13: "Static"}
+        found = modal_watch.find_confirm_yes(
+            pid=300, _enum=fake_enum(self.CONFIRM),
+            _text=lambda h: texts.get(h, ""), _cls=lambda h: clss.get(h, ""),
+            _wpid=lambda h: 300, _vis=lambda h: True,
+            _children=self._fake_children(self.BUTTONS))
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["yes_hwnd"], 0x11)
+
+    def test_clicks_yes_not_no(self):
+        posted = []
+        clicked = modal_watch.click_confirm_yes(
+            _find=lambda p: [{"hwnd": 0x10, "title": "Confirm",
+                              "yes_hwnd": 0x11}],
+            _click=lambda h: posted.append(h) or True)
+        self.assertEqual(posted, [0x11])
+        self.assertEqual(clicked, [{"hwnd": 0x10, "title": "Confirm",
+                                    "yes_hwnd": 0x11}])
+
+    def test_no_button_no_click(self):
+        clicked = modal_watch.click_confirm_yes(
+            _find=lambda p: [{"hwnd": 0x10, "title": "Confirm",
+                              "yes_hwnd": None}],
+            _click=lambda h: self.fail("should not click"))
+        self.assertEqual(clicked, [])
+
+    def test_non_confirm_dialog_ignored(self):
+        wins = [(0x20, "#32770", "Confirm", 300, True),
+                (0x21, "#32770", "Save changes?", 300, True)]
+        texts = {w[0]: w[2] for w in wins}
+        clss = {w[0]: w[1] for w in wins}
+        found = modal_watch.find_confirm_yes(
+            pid=300, _enum=fake_enum(wins),
+            _text=lambda h: texts.get(h, ""), _cls=lambda h: clss.get(h, ""),
+            _wpid=lambda h: 300, _vis=lambda h: True,
+            _children=self._fake_children(self.BUTTONS))
+        self.assertEqual([f["hwnd"] for f in found], [0x20])
+
+
 class TestModalWatcher(unittest.TestCase):
     def test_watch_once_records_closures(self):
         hits = [{"hwnd": 0x7, "title": "Initial Wizard"}]

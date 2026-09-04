@@ -19,10 +19,13 @@ from ctypes import wintypes
 import ctypes
 
 WM_CLOSE = 0x0010
+BM_CLICK = 0x00F5
 DIALOG_CLASS = "#32770"
 
 user32 = ctypes.windll.user32
 EnumWindowsProc = ctypes.WINFUNCTYPE(
+    wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+EnumChildProc = ctypes.WINFUNCTYPE(
     wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
 
@@ -117,6 +120,62 @@ def close_dialogs(pid: int | None = None,
         if post(dlg["hwnd"]):
             closed.append(dlg)
     return closed
+
+
+def _enum_child_windows(cb, hwnd: int, *, _enum=None) -> None:
+    user32.EnumChildWindows(hwnd, EnumChildProc(cb), 0)
+
+
+def find_confirm_yes(pid: int | None = None, *,
+                     _enum=_enum_top_windows, _text=_window_text,
+                     _cls=_class_name, _wpid=_window_pid,
+                     _vis=_is_visible,
+                     _children=_enum_child_windows) -> list[dict]:
+    """定位标题 ``Confirm`` 的 Yes/No 模态及其「是/Y」按钮。
+
+    实测（2026-09-04 I3）：2023.2 CAB 工程载入（OpenProject box.pph）
+    与 patch 导入路径会弹标题 ``Confirm`` 的 Yes/No 模态，后续 COM
+    调用全部排在模态之后——``WM_CLOSE`` 等价「否」，须 BM_CLICK
+    「是」按钮才继续。返回 ``[{"hwnd", "title", "yes_hwnd"}]``。
+    """
+    hits: list[dict] = []
+
+    def cb(hwnd, _lparam):
+        if pid is not None and _wpid(hwnd) != pid:
+            return True
+        if not _vis(hwnd) or _cls(hwnd) != DIALOG_CLASS:
+            return True
+        if _text(hwnd) != "Confirm":
+            return True
+        state = {"yes_hwnd": None}
+
+        def child(ch, _lp):
+            if state["yes_hwnd"] is None and _cls(ch) == "Button":
+                t = _text(ch)
+                if "是" in t or "&Y" in t or t.strip() == "Y(&Y)":
+                    state["yes_hwnd"] = ch
+                    return False
+            return True
+
+        _children(child, hwnd)
+        hits.append({"hwnd": hwnd, "title": _text(hwnd),
+                     "yes_hwnd": state["yes_hwnd"]})
+        return True
+
+    _enum(cb)
+    return hits
+
+
+def click_confirm_yes(pid: int | None = None, *,
+                      _find=find_confirm_yes, _click=None) -> list[dict]:
+    """对 Confirm 模态点「是」，返回点击列表（无按钮则跳过）。"""
+    click = _click or (lambda hwnd: bool(
+        user32.PostMessageW(hwnd, BM_CLICK, 0, 0)))
+    clicked = []
+    for dlg in _find(pid):
+        if dlg.get("yes_hwnd") and click(dlg["yes_hwnd"]):
+            clicked.append(dlg)
+    return clicked
 
 
 class ModalWatcher:
