@@ -106,3 +106,6 @@
 {"ts": "2026-09-05T00:05:07", "flow": "actran", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "p12j_actran_e2e.log", "log_bytes": 505, "idle_s": 0.0, "elapsed_s": 30.1, "vbs_bytes": 4148}
 {"ts": "2026-09-05T00:07:58", "flow": "actran", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "p12j_actran_e2e.log", "log_bytes": 523, "idle_s": 0.0, "elapsed_s": 30.0, "vbs_bytes": 4181}
 {"ts": "2026-09-05T00:09:13", "flow": "actran", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "p12j_actran_e2e.log", "log_bytes": 523, "idle_s": 0.0, "elapsed_s": 30.1, "vbs_bytes": 4181}
+{"ts": "2026-09-05T10:15:27", "flow": "catia_open", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "p12l_catia_open_e2e.log", "log_bytes": 218, "idle_s": 0.0, "elapsed_s": 15.0, "vbs_bytes": 1918}
+{"ts": "2026-09-05T10:16:33", "flow": "catia_facet", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "p12l_catia_facet_e2e.log", "log_bytes": 203, "idle_s": 0.0, "elapsed_s": 15.0, "vbs_bytes": 1856}
+{"ts": "2026-09-05T10:18:08", "flow": "facet_xt", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "p12l_facet_xt_e2e.log", "log_bytes": 203, "idle_s": 0.0, "elapsed_s": 15.0, "vbs_bytes": 1821}
