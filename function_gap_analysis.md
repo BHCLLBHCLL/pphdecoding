@@ -1517,3 +1517,34 @@ tr03 维持快照↔GPH 两向。共 7 测试类全绿。
 .oct 成员的官方 pph 恰 3 个（exB01-1、exPRE04-1、exPRE04-2）。
 规模锚点随测试固化（>300k / >290k / >80k octants）。详见
 DEV_PLAN §20.10。
+
+### 10.19 Sprint I7 实录（2026-09-05）：CATIA 全机再扫推翻 G3 前置 + Datakit 写向盘点 + 集群豁免入册
+
+**① 再扫（`tools/_p12l_i7_scan.py`，魔数分类器 + 11 项离线单测）**：
+8 根全机扫描 623 候选——**15 个真 CATIA V5**（魔数 `V5_CFV2`，
+10 CATPart + 5 CATProduct，`D:\training\starccm\...\starcat5\data\`
+STAR-CCM+ 教程数据，§18.8-G3 扫描漏网）；2 个 `dtk.model` = Datakit
+CATIA V4 schema 件（误报族）；606 suspect = 链接器 `.exp`/HDF5
+测试件（逐魔数甄别）。
+
+**② 实机三流探针（`tools/_p12l_i7_run.py`，三冷启动，全 err=0
+gate PASS）**：`OpenCadFile(真 CATPart)` → retval Nothing 但
+`QuerySNodeByName("Part")` **alive=True**——CATIA V5 读链（Datakit）
+接纳真样本，与 P12-D STEP 流「retval 不可靠、Query 真信号」同型；
+`ImportCADAsFacet` retval=False，但 **XT 对照腿同 False**——非
+CATIA 特异拒绝（P12-D/F gate 口径本为 err=0 + 组 alive）。**裁决：
+域 4 CATIA V5 导入边界解除**（V4/V6 样本仍缺）；NYI_INVENTORY
+CATIA 条目升级（BOUNDARY_DECLARATIONS 源头再生）。
+
+**③ Datakit 写向盘点**：许可特性矩阵（二进制串，2023/2025.2
+一致）= 9 家 CAD 读向、唯 CATIA V5 带 R/RW 双变体；官方手册
+`howtoexport.html` 钉死写向 = `[File]-[Save Parts/Assemblies]`
+导出 ACIS SAT（InterOp 许可）/ CATIA V5（V5 R/W 许可）/ IGES
+（IGES R/W 许可）+ Save MDL as XT；读向 = `OpenXtFile` 接
+XT/CT3/STEP/STL/MDL/PRE/FLD（`Cth_CreateMdl90.vbs` 官方注释），
+prime 流三库选择 datakit/InterOp/CoreTechnologie
+（`CadDatakit_prime.vbs`）。
+
+**④ 集群作业推送**：§9.6-4 部署层豁免维持，豁免口径与未来复验
+入口（I5 run_solve 骨架平移远程派发壳）入册 DEV_PLAN §20.11。
+详见 DEV_PLAN §20.11。

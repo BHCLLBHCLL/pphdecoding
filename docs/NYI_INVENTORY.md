@@ -13,11 +13,11 @@
 
 ### CATIA V4/V5/V6 导入（域 4）
 
-**产品边界**：全机 0 真 CATIA 几何样本（CATPart/CATProduct/cgr 均无；命中仅为 HDF5 `.exp`/链接器 export/Datakit `dtk.model` schema 误报）；Datakit schema 在位证明宿主 CATIA 转换链已装。样本缺失非代码缺口（§18.8 G3 裁决，2026-09-01）。
+**I7 实测升级（2026-09-05，DEV_PLAN §20.11 / gap §10.19）**：全机再扫推翻 G3「0 真样本」前提——`starcat5` 教程数据 15 个真 CATIA V5 文件（魔数 `V5_CFV2`，10 CATPart + 5 CATProduct）在位；宿主读链 e2e 绿（`OpenCadFile` 真样本 → SNode "Part" 落地 + 全步 err=0，与 P12-D STEP 同型；`ImportCADAsFacet` 对 CATPart 与 XT 对照同 retval=False——非 CATIA 特异拒绝）。**V5 导入边界解除**；余边界：V4/V6 样本仍全机缺失；原生存写向（CATIA V5 / SAT / IGES）为许可门控的 CADthru 导出面，非域 4 导入缺口。Datakit 转换器许可特性矩阵（二进制串级）：9 家 CAD 读向，唯 CATIA V5 带 R/RW 双变体。
 
 ### Actran Acoustic（域 3 菜单 / 域 8 链）
 
-**产品边界**：typed 接线链绿（`CreateActranFiles` e2e err=0）但业务 retval=False；菜单已接线。I4 实测升级（DEV_PLAN §20.8 / gap §10.16）：**条件面可构造**——`GetCondActranAnalysisControl` + 5 条件族（Source/OutputSolution/BoundaryNonReflection/Absorption/PointSource）全建 err=0、XML 落键 `actran_analysis_control`/`actran_acoustic_analysis_name`；`CreateActranFilesMonitor`（目录预存在）仍 retval=False、0 文件。**前置构成钉死** = 求解器侧 scFLOW2Actran 输出开关（etco `actran_acoustic_analysis_name.output`，官方样本缺省 false，无 COM Set 接口）+ CFD 瞬态数据流——scFLOW2Actran 为 CFD→Actran 单向耦合导出，纯前处理 COM 面不可构造完成态；retval=False 是产品闸门的确定性拒绝。前置具备（求解器侧开关 + 瞬态解）即可复验。
+**产品边界**：typed 接线链绿（`CreateActranFiles` e2e err=0）但业务 retval=False——Acoustic Session 前置在本机无样本可构造；菜单已接线，前置具备即可复验（P12-F §10.8 如实记录）。
 
 ### Restore Closed Volume Data…（域 10）
 

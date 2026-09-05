@@ -2644,5 +2644,66 @@ SctSnapshot.load / parse_oct / parse_mesh）**：
 规模锚点随测试固化（exPRE04-1 >300k / exPRE04-2 >290k /
 exB01 >80k octants，防样本静默替换降级）。
 
+### 20.11 I7 执行记录（2026-09-05，可选 backlog；两件实测 + 一件豁免文档化）
+
+**① CATIA 全机再扫——推翻 G3「0 真样本」前提（域 4 边界项实测
+升级）**。`tools/_p12l_i7_scan.py`（魔数分类器 + 11 项离线单测）
+扫 8 根（Cradle 安装树 ×2 / training / work / others / packages /
+用户三目录），623 个 CATIA 家族扩展名候选：
+
+- **15 个真 CATIA V5**（魔数 `V5_CFV2`，10 CATPart + 5 CATProduct）
+  ——`D:\training\starccm\startutorialsdata\starcat5\data\`
+  （STAR-CCM+ 教程数据；G3 扫描漏网）；
+- 2 个 `dtk.model` = Datakit CATIA V4 **schema 定义件**（G3 误报
+  族，非几何）；606 个 suspect = 链接器 `.exp` / HDF5 测试件
+  误报（逐个魔数甄别）。
+
+**② 实机导入探针（`tools/_p12l_i7_run.py`，三流三冷启动）**：
+
+- **catia_open**：`OpenCadFile(PorousMiddle.CATPart)` → 全步
+  err=0，retval Nothing 但 `QuerySNodeByName("Part")` **alive=True**
+  ——SNode 真实落文档，CATIA V5 读链（Datakit）**接纳真样本**；
+  与 P12-D STEP 流「retval 不可靠、Query 才是真信号」完全同型
+  （P12-D 同样 retval Nothing + Query alive，彼流经 CreateMDL
+  产物闭环）。无许可模态。
+- **catia_facet**：`ImportCADAsFacet(CATPart, MG)` retval=False
+  （err=0）；
+- **facet_xt 对照**：同一流对 `tests/box/box.x_t`（P12-D/F 已验
+  err=0 的对照件）retval 亦 False（err=0）——**False 非 CATIA
+  特异拒绝**，两格式行为完全同型；P12-D/F 的 gate 口径本就是
+  err=0 + 组 alive（未捕 retval），本探针补上了 retval 记录。
+
+**裁决**：域 4「CATIA V5 导入」边界**解除**（样本在位 + 读链
+e2e 绿）；余边界：V4/V6 样本仍全机缺失。NYI_INVENTORY CATIA 条目
+已升级（`scan_nyi_menus.py` BOUNDARY_DECLARATIONS 源头更新再生）。
+后续可选：P12-D snode 腿全套（MDL Wizard 重放）对 CATPart 复用
+即得产物级闭环。
+
+**③ Datakit 独立转换器写向盘点（串级 + 手册 + 脚本三路）**：
+
+- 许可特性矩阵（`CADthru_Bx64net.exe` 串，2023/2025.2 两版一致）：
+  `CAD Translator -` ACIS SAT / CATIA V4 / **CATIA V5 R** /
+  **CATIA V5 RW** / IGES / Inventor / PRO/Engineer / SolidWorks /
+  Unigraphics——9 家读向，唯 CATIA V5 有 RW（读+写）双变体；
+- 写向（官方手册 `HTML_CADthru_eng/howtoexport.html` 钉死）：
+  `[File]-[Save Parts/Assemblies]` 导出 **ACIS SAT**（需 InterOp
+  许可）/ **CATIA V5**（需 V5 R/W 许可）/ **IGES**（需 IGES R/W
+  许可）；另有 Save MDL as XT（`savemdlasxt.html`）；
+- 读向（`Cth_CreateMdl90.vbs` 官方注释）：`OpenXtFile` 接
+  XT/CT3/STEP/STL/MDL/PRE/FLD → `CreateMDL` → `SaveMDLFile`；
+  SCRYU_TETRA prime 流（`CadDatakit_prime.vbs`）经
+  `INT_CADIMPORTLIBRARYPRIORITY` 三库选择（datakit/InterOp/
+  CoreTechnologie）。
+
+**④ 集群作业推送（§9.6-4 部署层豁免）——维持豁免，口径入册**：
+本地 `ExecuteSolver`（rot 驱动、I5 已证 bit 级可重复）即产品
+闭环；集群推送属部署编排层（sph + 工程件分发 → 多节点
+`JobLauncher_Bx64.exe`/mpiexec → 许可服务可达），不在双 100%
+口径内，本冲刺不实现。复验入口若未来需要：I5 编排器
+`_p12k_i5_run.py` 的 run_solve 骨架可平移为远程派发壳。
+
+**回归**：993 passed / 4 skipped（I6 后 +11：I7 扫描器/探针生成器
+离线单测；全量回归与实机探针不并发纪律维持）。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*
