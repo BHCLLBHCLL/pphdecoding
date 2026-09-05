@@ -2752,5 +2752,64 @@ J1 时窗敏感先跑（宿主 2026-09-05 已被 I7 冷启 3 次，Wizard 能力
   成因钉死或如实记录 + 第 2 案例双跑 delta 表。
 - J4：GUI 驱动路径带自愈通过 1 次批量（0 人工干预）。
 
+### 21.5 J1 执行记录（2026-09-05）：域 10 全链实测——前三腿打通，恢复闸门产品级维持
+
+驱动 `tools/_p12m_j1_run.py`（离线生成器 19 项单测
+`tests/test_p12m_j1_generators.py`；证据 `_p12m_j1/`）。七轮实测
+r1–r7，验收句走第二分支：**时窗复验证据入册，域 10 边界维持口径
+如实**（恢复腿 err=0 跑通但业务 retval=False，restorable=-1）。
+
+**① r1/r2——ImportPatchAsCAD 面片规模病态（2/2 复现）**：由
+part.mdl 提取的 60492 三角同几何 STL 使换件在工作进程
+（`scFLOWpre_Bx64net`）内单线程满核空转不返回——r1 叠加冷启动
+盲区（`kill_all_hosts` 只杀 `STpre_Bx64net`，上午残留僵死工作
+进程 14220 单线程 3h 累计 1800.9s CPU，我方导入线程仅 8.3s 即
+永久排队；watchdog 13:26 判挂杀 STpre，重试继承同一僵死），
+r2 换净进程同型挂死。**基建修复：`host_boot.kill_all_hosts` 增
+`WORK_IMAGE=scFLOWpre_Bx64net` 双镜像清场**（转储
+`scflowpre_wedged_1420_dump.dmp` + 线程画像证据
+`p12m_r1_wedge_evidence.json`）。
+
+**② 几何翻案（流形分析）**：part.mdl 60492 三角 = 6 面 ×
+71×71 网格 ×2、顶点 30248 = 6·70²+12·70+8 精确、法线 6 轴各
+10082 且 |cos|=1.0、顶点全在 bbox 平面——**闭体积就是
+[0,0.01]³ 全立方体，无腔体**（推翻 I3 期「test_cube 无腔不符」
+判定）。patch② 改 12 三角同区域立方体（.his 100 采样点全部
+内部、≥1e-5 边距）→ 换件秒级成立。
+
+**③ r3——wizard 全段 424 教训 + 换件存储会话内存活**：
+WIZARD_CORE 沿用录制变量名 `MeshingGroup_` 而流程只赋值 `MGW_`
+→ BeginMDLWizard 起 Object required 污染整段静默失败（GetMDL
+返回的是 cv1b 原有 MDL）。同轮钉死两事实：换件后**会话内**
+`GetStoredClosedVolumes`=1（存储注册表存活）；落盘容器丢
+`.his`（丢失发生在 Save 而非换件）。修复：`Set MeshingGroup_
+= MGW_` 别名行。
+
+**④ r4——MDL Wizard 重放全绿（遗留⑤向导腿解除）**：151/151
+err=0、11 个存活探针全 True、GATE PASS；模型状态 1.8MB
+main.sctsnapshot 内嵌（p12a 实证形态复现）。重建 MDL 仍 60k
+（box.x_t 主 patch 在组内重分面，闭体积区域不变）。**遗留④未
+复现**：重载日（当日已 5+ 次冷启动）午后向导段正常执行，
+③-e 时窗约束未出现。
+
+**⑤ r5→r6——容器写回的装载开关钉死**：只注入 `.his` 成员时
+重开 `GetStoredClosedVolumes`=-1（空）；diff cv1b vs 注入容器
+main.xml 发现 `<mdl><storedclosedvolumes>` 声明块——cv1b 有
+`<closedvolume><name>ClosedVolume1</name>`，换件产物为空元素
+`<storedclosedvolumes/>`（I3「换件重置 `<mdl>` 块」的精确元素
+级落点）。**成对注入（成员 + 声明）→ 重开存储项=1**——P12
+容器写回面首次实现跨会话存储数据移植。
+
+**⑥ r7——恢复腿完整实测（GATE PASS，业务 -1 如实）**：全链
+err=0（含候选查询修复——catalog 钉死其返回 VARIANT 数组，
+Set 接收必 424）。业务终态：`av1=False`、`cand_ub=-1`（无任何
+候选）、`RestoreClosedVolumes err=0 retval=False`、dest_/src_
+双活（合法 CV 对象对）——**恢复可用性闸门在重开场景产品级
+关闭**，与 I3 r3（cv1b 原生存储路径）两独立场景一致。域 10
+边界声明升级入 NYI_INVENTORY（源头 `scan_nyi_menus.py` 再生）；
+GUI [Store and Open] 对话钮仍无 COM 等价物，前置具备即可复验。
+
+详见 gap §10.20。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

@@ -23,6 +23,11 @@ KICKER = (r"C:\Program Files\Cradle\CradleCFD2025.2\Programs_x64"
 KICKER_DIR = r"C:\Program Files\Cradle\CradleCFD2025.2\Programs_x64"
 BUTTON = "STPRE"
 HOST_IMAGE = "STpre_Bx64net"
+# J1 r1 教训（2026-09-05）：STpre 把 CAD 导入/分面派给独立工作进程
+# scFLOWpre_Bx64net，其生命周期不随宿主——只杀 STpre 的冷启动留下
+# 上午僵死工作进程（单线程满核空转 3h），后续 COM 导入在其后永久
+# 排队、日志惰性判挂、重试继承同一僵死。冷启动必须双镜像清场。
+WORK_IMAGE = "scFLOWpre_Bx64net"
 
 
 def _pids_via_ps(name: str) -> list[int]:
@@ -30,7 +35,7 @@ def _pids_via_ps(name: str) -> list[int]:
 
 
 def kill_all_hosts(host_image: str = HOST_IMAGE) -> list[int]:
-    """强杀全部宿主实例并返回仍未消失的 pid（空 = 清场干净）。
+    """强杀全部宿主与工作进程实例并返回仍未消失的 pid（空 = 清场干净）。
 
     I2 批量教训：挂起处置只杀单个 pid 可能留下僵尸宿主，僵尸与新
     宿主并存时 rot 附着会选到僵尸（其内 VBS 仍在跑），后续 flow 的
@@ -38,15 +43,16 @@ def kill_all_hosts(host_image: str = HOST_IMAGE) -> list[int]:
     """
     import time as _t
     stuck: list[int] = []
-    for pid in _pids_via_ps(host_image):
-        subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+    for image in (host_image, WORK_IMAGE):
+        for pid in _pids_via_ps(image):
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+                           capture_output=True, text=True, timeout=15)
+        # 按映像名兜底（/T 可能漏杀重父进程下的实例）
+        subprocess.run(["taskkill", "/F", "/IM", image + ".exe"],
                        capture_output=True, text=True, timeout=15)
-    # 按映像名兜底（/T 可能漏杀重父进程下的实例）
-    subprocess.run(["taskkill", "/F", "/IM", host_image + ".exe"],
-                   capture_output=True, text=True, timeout=15)
     deadline = _t.time() + 15.0
     while _t.time() < deadline:
-        left = _pids_via_ps(host_image)
+        left = _pids_via_ps(host_image) + _pids_via_ps(WORK_IMAGE)
         if not left:
             return []
         stuck = left

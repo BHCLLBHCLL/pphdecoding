@@ -1548,3 +1548,48 @@ prime 流三库选择 datakit/InterOp/CoreTechnologie
 **④ 集群作业推送**：§9.6-4 部署层豁免维持，豁免口径与未来复验
 入口（I5 run_solve 骨架平移远程派发壳）入册 DEV_PLAN §20.11。
 详见 DEV_PLAN §20.11。
+
+### 10.20 Sprint J1 实录（2026-09-05）：域 10 全链实测——前三腿打通，恢复闸门产品级维持
+
+**① ImportPatchAsCAD 面片规模病态（r1/r2，2/2 复现）+ 基建修复**：
+由 part.mdl 提取的 60492 三角同几何 STL 使换件在工作进程
+（`scFLOWpre_Bx64net`）内单线程满核空转不返回——工作进程独立
+生命周期，STpre 冷启动不清（r1 叠加冷启动盲区：上午残留僵死工作
+进程 14220 单线程 3h 累计 1800.9s CPU，导入线程 8.3s 即永久排队）。
+**`host_boot.kill_all_hosts` 增 `WORK_IMAGE` 双镜像清场**（转储 +
+线程画像证据 `_p12m_j1/p12m_r1_wedge_evidence.json`）。
+
+**② 几何翻案（流形分析）**：part.mdl 60492 三角 = 6 面 × 71×71
+网格 ×2、顶点 30248 = 6·70²+12·70+8 精确、法线 6 轴各 10082 且
+|cos|=1.0、顶点全在 bbox 平面——**闭体积就是 [0,0.01]³ 全立方体，
+无腔体**（推翻 I3 期「test_cube 无腔不符」判定）。patch② 改
+12 三角同区域立方体（.his 100 采样点全部内部、≥1e-5 边距）→
+换件秒级成立。
+
+**③ r3——wizard 全段 424 教训 + 换件存储会话内存活**：复放段沿用
+录制变量名 `MeshingGroup_` 而流程只赋值 `MGW_` → BeginMDLWizard
+起 Object required 污染整段静默失败；同轮钉死换件后**会话内**
+`GetStoredClosedVolumes`=1、落盘容器丢 `.his`（丢失发生在 Save
+而非换件）。修复：别名行 + 回归测试钉住。
+
+**④ r4——MDL Wizard 重放全绿（遗留⑤向导腿解除）**：151/151
+err=0、11 个存活探针全 True、1.8MB main.sctsnapshot 内嵌（p12a
+实证形态复现）。**遗留④（③-e 宿主 VBS 能力时变）未复现**：重载日
+午后向导段正常执行。
+
+**⑤ r5→r6——容器写回的装载开关钉死**：只注入 `.his` 成员重开
+不装载（str_ub=-1）；容器 diff 钉死 main.xml
+`<mdl><storedclosedvolumes>` 声明块是装载开关——换件产物为空元素
+`<storedclosedvolumes/>`（I3「换件重置 `<mdl>` 块」的精确元素级
+落点），`.his` 成员本身不被 main.xml/js/xenv 按名引用（约定式
+装载）。**成对注入（成员 + 声明块）→ 重开存储项=1**——P12 容器
+写回面首次实现跨会话 stored-CVol 数据移植。
+
+**⑥ r7——恢复腿完整实测（GATE PASS，业务 -1 如实）**：全链
+err=0（含候选查询修复——catalog 钉死
+`GetRestorationCandidateOfClosedVolume` 返回 VARIANT 数组，Set
+接收必 424，改普通赋值 + _ubound_guard）。业务终态：`av1=False`、
+`cand_ub=-1`（无任何候选）、`RestoreClosedVolumes err=0
+retval=False`、dest_/src_ 双活——**恢复可用性闸门在重开场景
+产品级关闭**，与 I3 r3 两独立场景一致，restorable=-1。域 10
+边界声明升级入 NYI_INVENTORY。详见 DEV_PLAN §21.5。
