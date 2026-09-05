@@ -2863,5 +2863,128 @@ catia_mdl 链 ×2 + facet 五变体 ×4 + cadmatrix 四格式 ×5 + 基底
 一对，事件日志为证），-v 重跑同窗后一次全绿，未复现）。详见 gap
 §10.21。
 
+### 21.7 J3 执行记录（2026-09-05）：I5 第二轮收口——gate 定线入册 + 成因钉死 + a1 隔离复验同签名复发 + 第 2 案例双跑
+
+**① gate 模式（solver_delta，纯离线已完成）**：`solver_delta.py`
+新增 `gate_fph()` + CLI `--gate [--tol-max --tol-rel]`（仅 fph；
+退出码：compare 失败 1 / gate FAIL 2 / 全过 0）+ markdown 判定列与
+汇总行。**定线依据**（§20.2「第二轮按数据定容差」）= I5 全零基线
+（box 双跑 13 场量 + 跨天旁证，三次独立求解 delta 全 0）→ 默认
+容差 `tol_max=0 / tol_rel=0` = 逐位复现线。判定规则：pointwise
+字段须 delta_max≤tol_max 且 delta_rel≤tol_rel；shape_mismatch /
+同名字段仅一侧有值（n_a≠n_b）判 FAIL；**双侧 n=0 空数组宽免并
+标注 empty_on_both**（box 无壁面 BC → USTR/YPLS 的物理空——宽免
+但不当数值等价证据）；only_a/only_b 判总体 FAIL。实机基线复核：
+`box_b1_400.fph` vs `box_b2_400.fph` gate **PASS（13 pass / 0 fail
+/ 2 empty-both = USTR、YPLS）**；跨案例对拍（p12b_solve vs dp50，
+非零 delta 在位）exit=2 正确拒。离线单测 `tests/test_solver_delta.py`
+6→20 项全绿（判定/容差边界含等号/双轴独立/形状与单侧缺失 FAIL/
+双侧空 PASS/失败报告透传/带 gate markdown）。全量回归 **1044
+passed / 4 skipped**（522.51s；J3-① +14）。执行注记：首轮 nohup
+回归于 ~93% 进度被静默击杀（22:07，无 WER/无 summary 行；同秒
+另一项目 flowviewer 的 pytest 启动——疑似其清场连坐杀残留
+pytest），无代码关联，立即重跑一次全绿 1044/4。
+
+**③ 成因钉死（证据闭环）：fld/ifld 缺席 + USTR/YPLS 空 + cadence
+修正**。
+
+* (a) **fld/ifld = 后处理侧格式，非求解链产物**：2025.2 官方库
+  全树扫描 `.fld=14`、`.iFLD=8`，**Exercise（求解案例）树内 0 个**
+  ——全部位于 Postprocessor（FLD/iFLD、AR 样例）、
+  Tools\scConverter\Mapping（HTRC/PRES/TEMP 字段映射源）、
+  VB_Samples\scFLOWpost（后处理脚本样例）。scFLOW ExecuteSolver
+  链（FPH/RPH/ETCO/CSLN）**不产出 fld/iFLD**；box 求解目录缺席 =
+  正常非异常（I5 首版「缺席如实记录」升级为成因钉死）。旁证注记：
+  2023.2 旧库 Exercise 树另有 exA01-1/Org 单例 .fld 伴生（该库
+  15 例中 1，其余全在后处理侧），不翻转结论。
+* (b) **USTR/YPLS = 壁面单元量，box 空因无壁面 BC**：官方成品
+  exPRE04-1_37.fph（531434 单元）中 FC_Scalar:USTR/YPLS 各三数组
+  等长 **86180**（fph 模块 kind 标注：USTR 三 values、YPLS
+  ids/flags/values；对照边界量 HTFX 188756）→ 壁面剪切应力/y+ 类
+  壁面子集量。box 终态 FPH 13 场中 USTR/YPLS **字段声明在位
+  （target: USTR/YPLS）但 arrays 为空列表**（n=0）——box sph 边界
+  仅有 BC_FLOWIO Flux（压力出口）+ open + BC_STRESS @DefaultStressBC
+  （自适应/ALE 默认），**无任何壁面 BC → 无壁面量可算 = 空数组成因
+  物理钉死**（非解析缺陷）。对照 exA36-3（ELEC 电热路径）FPH 26 场
+  中无 USTR/YPLS 字段——该物理路径不产生壁面湍流量。
+* (c) **exA36-3 cadence 修正（I5「~27 s/周期」估时误）+ 网格量级钉死**：
+  日志线级证据——a1（原始，并发期）死于 CYCLE 1 内（CYCLE 2 头未
+  出现），`TIME(solver) = 692.097 sec`（11 m 32 s），BAD
+  TERMINATION 块 RANK 1–7（EXIT STATUS -1/ffffffff）+ mpiexec
+  「Unknown error / Exitcode = -1」；a2 会话中止（无 ERROR LOG/BAD
+  TERMINATION），日志尾部位于 **CYCLE 2** 的 BATTERY ELEC 收敛
+  （5.71E-08(1)）后进入 MATRIX STATUS 前，窗口 ~21.6 min ≈ 1.3
+  周期 → **单周期 ≈ 10–16 min 量级**；隔离复验（a1r）资源轨迹精化：
+  289-cell 级网格（L 日志 `cell PART 289` / `@PartSurface_cell FACE
+  669`）下 CYCLE 1 实测 **≈ 556 s**（t 75→631 s 跨 CYCLE 1 完成）
+  ——单周期成本由 **ELEC 电池内环迭代主导而非网格规模**（289 cell
+  仍需 ~9–16 min/周期 = 每周期数千次内环/微时间步，MATRIX 设置含
+  5.00E-06 级步长限）；TM_CYCLE=1000 ≈ 一周级，**全量双跑不可行
+  维持**。附注：④ 的同族对照 —— exA36-2（5918 单元 + BATTERY
+  p2d 电化学内模，EQUA ENERGY-only）单周期实测 3.74 s 且
+  探测腿于 **cycle 247 被外部 instruction 优雅停**（TABLE 脚本
+  (0,3)/(200,0)/(300,3) 在 t=300 才结束，247 处于 rest phase
+  t=200–300 = 外部代理截停非脚本自然终止；~974 s ≈ 16.2 min/腿）
+  ——见 ④ 实录 + `_p12o_j3/interrupt_forensics.md`；**原「a1 崩溃
+  = ELEC/FVF 长内环相位特异」归因已撤回**（② 补遗）。
+
+**② a1 隔离复验 = 同签名复发（风险 3 预案触发，记录即收口）**：
+a1r 腿（独占宿主冷启动 + ResourceSampler 15 s 采样 64 行，
+`_p12o_j3/a1r/`）——`TIME(solver) = 952.1 sec`（15 m 52 s，越过
+原始 692 s 死亡点 ~260 s），**同签名复发**：BAD TERMINATION 块
+RANK 1–7（EXIT STATUS -1/ffffffff）+ mpiexec「Unknown error /
+Exitcode = -1」7 rank 报告。**死亡上下文差异**：两次击杀均出自
+`monitor_termination::killProcess` 但谓词不同——a1（原始）=
+「Since the monalive file is no longer detected」（scFLOWpre.sph.
+monalive = 26 B ASCII 时间戳，mtime = 死亡时刻），a1r（隔离）=
+「Since the terminate file was detected」；mpiexec 两行均为被杀
+rank 的记账报告而非根因。资源轨迹平稳（719→768 MB 无泄漏、无
+饥饿、CPU 累计线性）→ 排除资源耗尽。**结论**：并发干扰假设大幅
+削弱（独占下仍复发）；两触发皆路由 monitor 杀进程 = 求解器侧
+monitor-liveness 契约被违——a1r 死于 CYCLE 2 的 ELEC 电池内环
+期（CYCLE 1 = 556 s 完成、CYCLE 2 进入 ~320 s 被杀），指向该
+BATTERY ELEC/FVF 长内环相位与宿主/monitor 交互的求解器内部缺陷
+（289-cell 级微时间步 5E-06 刚性问题），非本机自动化可再诊断
+（需 vendor 侧日志）→ 沿 §21.3 风险 3「隔离复现即记录即收口」
+入册关闭。判定文件 `_p12o_j3/a1r/a1r_verdict.json` verdict =
+`CRASH_RECURRED_SAME_SIGNATURE_952s_ISOLATED`。执行注记：死亡点
+从 CYCLE 1（692 s）漂移至 CYCLE 2（952 s）= 隔离提速 ~20% 后
+相位后移，非确定性定时器。
+
+**② 补遗（J3-④ 实证后撤回 ELEC/FVF 相位归因）**：④ 的 c2 腿
+（exA36-2 P2D 路径，**非 ELEC/FVF**）于 1009 s 被同机制
+（`monitor_termination::killProcess` + terminate 文件检出）以同签名
+BAD TERMINATION RANK 1–7 击杀（证据 `_p12o_j3/c2/scFLOWpre.l`）→
+「ELEC/FVF 长内环相位特异」归因**不成立**。修正：a1/a1r/c2 的
+BAD TERMINATION = 外部作业控制代理写 terminate 文件 → 求解器
+monitor_termination 强杀（**非求解器内部缺陷**）；a1 的 monalive
+变体 = 同一外部代理的另一种干预模式。资源轨迹平稳 + 独占下仍复发
+→ 并发/资源耗尽排除（与 ② 一致）。全表征入册 `_p12o_j3/
+interrupt_forensics.md`。
+
+**④ 第 2 案例双跑（外部中断代理截停 → 等时不可达，诚实入册）**：
+候选裁决三连——exB05-1 探测腿（`_p12o_j3/probe_exb05/`）=
+**license 硬门**：FlexNet -97,121 vendor daemon down（LWSR REACTION
+模块二次 checkout 失败，68.6 s 死亡）→ 本机不可解弃用；exA07-1
+（100 cycle 共轭传热）备选未启用。exA36-2 探测腿（`_p12o_j3/
+probe_exa36_2/`，5918 单元 + BATTERY p2d，EQUA ENERGY-only）
+**关键发现 = 外部 instruction 优雅停**：外部代理于 cycle 247
+（rest phase t=200–300 内）写入 `scFLOWpre.sph.instruction`
+（cycle=-2, lapse_time=0 = 立即停）→ INTERRUPT FILE WAS FOUND +
+CALCULATION FINISH（非脚本自然终止；TABLE (0,3)/(200,0)/(300,3)
+在 t=300 才结束），TIME(solver)=974.3 s ≈ 16.2 min/腿。
+
+双跑 c1/c2（`_p12o_j3/c1/` `c2/`）+ 探测腿 = 三腿全被外部
+作业控制中断代理在**任意 sim-time** 截停（probe instruction@247、
+c1 instruction@166、c2 terminate@70 BAD TERMINATION RANK 1–7）→
+**等时终态双跑本夜不可达**。交付三件：① t=0 初始保存三腿跨冷
+启动**逐位一致 gate PASS**（11/11 场，0 fail）=  genuine 复现点
+（案例泛化，非 box 专属）；② c1@166 vs c2@0 不等时比较 gate FAIL
+归因（5/11 FAIL = 纯演化量，6/11 PASS = 脚本/BC 常量场旁证物理
+同一性；表 3 演化对照验证 delta 一致）；③ 中断机制全表征入册
+`_p12o_j3/interrupt_forensics.md`（两种机制 instruction/terminate
++ writer-hunt negatives + a1 系列归因修正）。verdict =
+`PARTIAL_BY_DESIGN`（`j3_summary.json`）。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

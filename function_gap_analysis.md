@@ -1630,3 +1630,78 @@ batch-1 控制台静默死亡一次（exit=127、缓冲输出丢失、无 WER
 记录），`-u` 重跑 4/4 GATE PASS 稳定复现，各流独立冷启动不受
 影响；宿主 AV（mfc140u.dll）在 r2 尾段/重跑窗各见一次，selfheal
 兜住。详见 DEV_PLAN §21.6。
+
+### 10.22 Sprint J3 实录（2026-09-05）：I5 第二轮收口——gate 定线入册 + 成因钉死 + a1 隔离复验同签名复发 + 第 2 案例双跑
+
+J3 四项验收（§21.4）分两档落地：①/③ 纯离线先完成（gate 模式
+入回归 + 成因钉死落档），② 独占宿主窗口隔离复验，④ 官方短瞬态
+第二案例双跑（license 硬门 → 外部中断代理截停 → 等时不可达
+诚实入册）。驱动 `tools/_p12o_j3_run.py`（a1-rerun/probe/dual 三子
+命令 + ResourceSampler + 日志线级扫描），证据 `_p12o_j3/`。
+
+**① gate 模式（solver_delta，+14 测试）**：`gate_fph(rep,
+tol_max=0, tol_rel=0)` 定线（依据 §20.2 = box 双跑 + 跨天三次
+独立求解 delta 全零 → 逐位复现线）：pointwise 须双容差同时
+≤；shape_mismatch / n_a≠n_b 单侧缺失判 FAIL；**双侧 n=0 空数组
+宽免**（box USTR/YPLS 物理空——宽免但不作数值等价证据）；
+only_a/only_b 总体 FAIL。实机复核：box b1/b2 gate PASS（13
+pass/0 fail/2 empty-both）；跨案例（p12b vs dp50 非零 delta）
+exit=2 正确拒。markdown 判定列 + 汇总行 + CLI --gate（compare
+失败 1 / gate FAIL 2 / 全过 0）。全量回归 **1044 passed /
+4 skipped**（522.51s；J3-① +14）。执行注记：首轮 nohup 回归
+于 ~93% 进度被静默击杀（22:07 无 WER；同秒另一项目 flowviewer
+pytest 启动 = 疑似清场连坐杀残留 pytest），无代码关联，重跑
+一次全绿。
+
+**② a1 隔离复验 = 同签名复发（§21.3 风险 3「隔离复现即记录即
+收口」触发）**：a1r 腿独占宿主冷启动 + ResourceSampler 15 s×64
+行（`_p12o_j3/a1r/`），`TIME(solver)=952.1 sec` 越过原始 692 s
+死亡点后**同签名复发**（BAD TERMINATION RANK 1–7 + mpiexec
+exit -1 记账）。两次击杀均路由 `monitor_termination::killProcess`
+但谓词不同：a1 = monalive 文件失联（26 B ASCII 时间戳，
+mtime=死亡时刻），a1r = terminate 文件检出。资源轨迹平稳
+（719→768 MB 无泄漏无饥饿）→ 并发/资源耗尽假设排除；死亡点
+CYCLE 1（692 s）→ CYCLE 2（952 s）漂移 = 隔离提速后相位后移，
+非确定性定时器。根因指向 exA36-3 特有 BATTERY ELEC/FVF 长内环
+相位与 monitor-liveness 契约的求解器内部交互（289-cell 级网格
+仍 ~556 s/周期 = 内环迭代主导非网格规模；MATRIX 设置含 5E-06
+级微步长），超出本机自动化可诊断面（需 vendor 日志）→ 入册
+关闭。判定文件 `a1r_verdict.json` verdict =
+`CRASH_RECURRED_SAME_SIGNATURE_952s_ISOLATED`。**② 补遗**（④ 实证
+后）：c2（exA36-2 P2D 路径，非 ELEC/FVF）同被 terminate 机制以同
+签名 BAD TERMINATION RANK 1–7 击杀 → 「ELEC/FVF 相位特异」归因
+**撤回**，修正为外部作业控制中断代理（详见 ④ + `_p12o_j3/
+interrupt_forensics.md`）。
+
+**③ 成因钉死（fld/iFLD 缺席 + USTR/YPLS 空 + cadence 修正）**：
+(a) fld/ifld = 后处理侧格式非求解链产物——2025.2 库全树 .fld=14/
+.iFLD=8 且 **Exercise 树内 0 个**（全在 Postprocessor/scConverter/
+VB_Samples），ExecuteSolver 链（FPH/RPH/ETCO/CSLN）不产出
+（2023.2 旧库 exA01-1 单例外不翻转结论）；(b) USTR/YPLS = 壁面
+单元量——官方 exPRE04-1_37.fph（531434 单元）三数组等长 86180
+= 壁面子集量；box 字段在位但 arrays=[] 因 sph **无任何壁面 BC**
+（仅 Flux 出口 + open + DefaultStressBC）= 物理空非解析缺陷；
+(c) exA36-3 cadence 修正 + 网格量级钉死：I5「~27 s/周期」误，
+实测单周期 ≈ 556 s（隔离资源轨迹 t 75→631 s 跨 CYCLE 1），
+TM_CYCLE=1000 ≈ 一周级，全量双跑不可行维持。
+
+**④ 官方短瞬态第二案例双跑（外部中断代理截停 → 等时不可达，
+诚实入册）**：exB05-1 探测腿（`_p12o_j3/probe_exb05/`）=
+**license 硬门**：FlexNet -97,121 vendor daemon down（LWSR REACTION
+模块二次 checkout 失败，68.6 s 死亡）→ 本机不可解弃用；exA07-1
+（100 cycle 共轭传热）备选未启用。exA36-2 探测腿（`_p12o_j3/
+probe_exa36_2/`，5918 单元 + BATTERY p2d，EQUA ENERGY-only）=
+**外部 instruction 优雅停**：外部代理于 cycle 247（rest phase
+t=200–300）写入 `scFLOWpre.sph.instruction`（cycle=-2, lapse_time
+=0）→ INTERRUPT FILE WAS FOUND + CALCULATION FINISH（非脚本自然
+终止；TABLE (0,3)/(200,0)/(300,3) 在 t=300 才结束），TIME(solver)
+=974.3 s ≈ 16.2 min/腿。双跑 c1/c2 + 探测腿 = 三腿全被外部
+作业控制中断代理在任意 sim-time 截停（probe instruction@247、
+c1 instruction@166、c2 terminate@70 BAD TERMINATION RANK 1–7）→
+**等时终态双跑本夜不可达**。交付三件：① t=0 初始保存三腿跨
+冷启动逐位一致 gate PASS（11/11 场）=  genuine 复现点（案例
+泛化，非 box 专属）；② c1@166 vs c2@0 不等时比较 gate FAIL
+归因（5/11 FAIL = 纯演化量，6/11 PASS = 脚本/BC 常量场旁证；
+表 3 演化对照验证 delta 一致）；③ 中断机制全表征入册 `_p12o_j3/
+interrupt_forensics.md`。verdict = `PARTIAL_BY_DESIGN`（`j3_
+summary.json`）。

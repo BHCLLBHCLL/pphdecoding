@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""P12-K Sprint I5：FPH/FLD/iFLD 数值等价对拍（首版 recorded-only）。
+"""P12-K Sprint I5：FPH/FLD/iFLD 数值等价对拍（recorded-only + J3 gate）。
 
 口径（DEV_PLAN §20.1-I5 / §20.2）：同案例双跑的逐变量容差表——
-``max/mean delta`` 先记录后判定，首版只入册不设通过线。
+``max/mean delta`` 先记录后判定，首版只入册不设通过线；J3-① 按
+已记录全零基线定线（box 双跑 + 跨天旁证 delta=0 → 默认容差 0 =
+逐位复现线），:func:`gate_fph` 逐字段 PASS/FAIL（n=0 空数组宽免
+标注、结构差异判 FAIL），CLI ``--gate [--tol-max --tol-rel]``。
 
 * FPH ↔ FPH：:func:`compare_fph` 按 fields 键对齐逐变量对拍；
   同 shape 逐点 ``max|a-b|`` / ``mean|a-b|``，shape 不齐只记分布级
@@ -117,6 +120,57 @@ def compare_fph(path_a: str | Path, path_b: str | Path) -> dict:
     return rep
 
 
+def gate_fph(rep: dict, tol_max: float = 0.0,
+             tol_rel: float = 0.0) -> dict:
+    """对 :func:`compare_fph` 报告做容差验收判定（J3-① gate 模式）。
+
+    定线依据（§20.2「第二轮按数据定容差」）：I5 记录 = box 双跑 +
+    跨天旁证三次独立求解全部 delta=0 → 默认容差 0 = 逐位复现线。
+
+    * pointwise 字段：``delta_max <= tol_max`` 且 ``delta_rel <=
+      tol_rel`` 判 PASS；
+    * ``shape_mismatch`` / 同名字段仅一侧有值（n_a != n_b）判 FAIL；
+    * 双侧 n=0 空数组判 PASS 并标 ``empty_on_both``（box 无壁面 BC
+      → USTR/YPLS 空的物理成因，宽免但不误当数值等价证据）；
+    * only_a / only_b 判总体 FAIL。
+    """
+    verdicts: dict = {}
+    n_pass = n_fail = n_empty = 0
+    if not rep.get("fields"):
+        return {"ok": False, "reason": rep.get("reason")
+                or "no fields to gate", "fields": verdicts,
+                "tol_max": tol_max, "tol_rel": tol_rel}
+    for name, e in rep["fields"].items():
+        if e.get("pointwise"):
+            dmx, drl = e.get("delta_max", 0.0), e.get("delta_rel", 0.0)
+            ok = dmx <= tol_max and drl <= tol_rel
+            note = None if ok else (f"delta_max {dmx:.6g} > tol_max "
+                                    f"{tol_max:.6g}" if dmx > tol_max
+                                    else f"delta_rel {drl:.6g} > "
+                                         f"tol_rel {tol_rel:.6g}")
+        elif e.get("shape_mismatch"):
+            ok, note = False, f"shape mismatch {e['shape_mismatch']}"
+        elif e.get("n_a") == e.get("n_b") == 0:
+            ok, note = True, "empty on both sides"
+            n_empty += 1
+        elif e.get("n_a") != e.get("n_b"):
+            ok = False
+            note = f"n mismatch {e.get('n_a')} vs {e.get('n_b')}"
+        else:
+            ok, note = False, "uncomparable"
+        verdicts[name] = {"verdict": "PASS" if ok else "FAIL",
+                          "note": note}
+        n_pass += ok
+        n_fail += not ok
+    only_a = rep.get("only_a", [])
+    only_b = rep.get("only_b", [])
+    ok = n_fail == 0 and not only_a and not only_b
+    return {"ok": bool(ok), "tol_max": tol_max, "tol_rel": tol_rel,
+            "fields": verdicts, "only_a": only_a, "only_b": only_b,
+            "n_pass": n_pass, "n_fail": n_fail,
+            "n_empty_both": n_empty, "n_fields": len(rep["fields"])}
+
+
 def compare_fld(path_a: str | Path, path_b: str | Path) -> dict:
     """FLD 结构级对拍（fldstats 摘要差；recorded-only）。"""
     import fldstats
@@ -167,8 +221,13 @@ def sph_fingerprint(path: str | Path) -> dict:
             "md5": hashlib.md5(data).hexdigest()}
 
 
-def delta_table_markdown(rep: dict, title: str = "FPH delta table") -> str:
-    """对拍报告 → markdown 逐变量表（recorded-only，无通过线）。"""
+def delta_table_markdown(rep: dict, title: str = "FPH delta table",
+                         gate: dict | None = None) -> str:
+    """对拍报告 → markdown 逐变量表。
+
+    ``gate`` 给定（:func:`gate_fph` 返回）时追加判定列与汇总行
+    （J3-① 容差验收线）；否则与首版 recorded-only 输出一致。
+    """
     lines = [f"## {title}", ""]
     lines.append(f"- a: `{rep.get('a')}` ({rep.get('a_size')} B)")
     lines.append(f"- b: `{rep.get('b')}` ({rep.get('b_size')} B)")
@@ -177,20 +236,46 @@ def delta_table_markdown(rep: dict, title: str = "FPH delta table") -> str:
     if rep.get("only_b"):
         lines.append(f"- only in b: {', '.join(rep['only_b'])}")
     lines.append("")
-    lines.append("| field | n_a | n_b | pointwise | delta_max | "
-                 "delta_mean | delta_rel | a_mean | b_mean |")
-    lines.append("|---|---|---|---|---|---|---|---|---|")
+    if gate:
+        lines.append("| field | n_a | n_b | pointwise | delta_max | "
+                     "delta_mean | delta_rel | a_mean | b_mean | gate |")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|")
+    else:
+        lines.append("| field | n_a | n_b | pointwise | delta_max | "
+                     "delta_mean | delta_rel | a_mean | b_mean |")
+        lines.append("|---|---|---|---|---|---|---|---|---|")
     for name, e in rep.get("fields", {}).items():
-        lines.append(
-            "| {f} | {na} | {nb} | {pw} | {dmx} | {dmn} | {drl} "
-            "| {am} | {bm} |".format(
-                f=name, na=e.get("n_a"), nb=e.get("n_b"),
-                pw=str(e.get("pointwise")),
-                dmx=_fmt(e.get("delta_max")),
-                dmn=_fmt(e.get("delta_mean")),
-                drl=_fmt(e.get("delta_rel")),
-                am=_fmt(e.get("a_mean")), bm=_fmt(e.get("b_mean"))))
+        row = ("| {f} | {na} | {nb} | {pw} | {dmx} | {dmn} | {drl} "
+               "| {am} | {bm} |".format(
+                   f=name, na=e.get("n_a"), nb=e.get("n_b"),
+                   pw=str(e.get("pointwise")),
+                   dmx=_fmt(e.get("delta_max")),
+                   dmn=_fmt(e.get("delta_mean")),
+                   drl=_fmt(e.get("delta_rel")),
+                   am=_fmt(e.get("a_mean")), bm=_fmt(e.get("b_mean"))))
+        if gate:
+            v = (gate.get("fields") or {}).get(name) or {}
+            verdict = v.get("verdict", "n/a")
+            note = v.get("note")
+            if note == "empty on both sides":
+                note = "empty both"
+            if verdict == "FAIL" and note:
+                row = row[:-1] + f" {verdict} — {note} |"
+            elif verdict == "PASS" and note:
+                row = row[:-1] + f" {verdict} ({note}) |"
+            else:
+                row = row[:-1] + f" {verdict} |"
+        lines.append(row)
     lines.append("")
+    if gate:
+        lines.append(f"**Gate（J3-① 容差验收线：tol_max="
+                     f"{gate.get('tol_max')}, tol_rel="
+                     f"{gate.get('tol_rel')}）: "
+                     f"{'PASS' if gate.get('ok') else 'FAIL'}** — "
+                     f"{gate.get('n_pass')} pass / {gate.get('n_fail')}"
+                     f" fail / {gate.get('n_empty_both')} empty-both, "
+                     f"{gate.get('n_fields')} fields")
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -208,20 +293,41 @@ def main(argv=None) -> int:
                     default="fph")
     ap.add_argument("--json", default=None)
     ap.add_argument("--md", default=None)
+    ap.add_argument("--gate", action="store_true",
+                    help="J3-① 容差验收判定（仅 fph）")
+    ap.add_argument("--tol-max", type=float, default=0.0,
+                    help="delta_max 容差（默认 0 = 逐位复现线）")
+    ap.add_argument("--tol-rel", type=float, default=0.0,
+                    help="delta_rel 容差（默认 0）")
     args = ap.parse_args(argv)
+    if args.gate and args.kind != "fph":
+        ap.error("--gate 仅适用于 --kind fph")
     fn = {"fph": compare_fph, "fld": compare_fld,
           "ifld": compare_ifld}[args.kind]
     rep = fn(args.a, args.b)
-    print(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
-    if args.kind == "fph":
-        if args.md:
-            Path(args.md).write_text(
-                delta_table_markdown(rep), encoding="utf-8")
+    gate = None
+    if args.gate:
+        if args.kind == "fph" and rep.get("ok"):
+            gate = gate_fph(rep, tol_max=args.tol_max,
+                            tol_rel=args.tol_rel)
+        else:
+            gate = gate_fph(rep)
+    out = dict(rep)
+    if gate:
+        out["gate"] = gate
+    print(json.dumps(out, ensure_ascii=False, indent=1, default=str))
+    if args.md:
+        Path(args.md).write_text(
+            delta_table_markdown(rep, gate=gate), encoding="utf-8")
     if args.json:
         Path(args.json).write_text(
-            json.dumps(rep, ensure_ascii=False, indent=1, default=str),
+            json.dumps(out, ensure_ascii=False, indent=1, default=str),
             encoding="utf-8")
-    return 0 if rep.get("ok") else 1
+    if not rep.get("ok"):
+        return 1
+    if gate and not gate.get("ok"):
+        return 2
+    return 0
 
 
 if __name__ == "__main__":
