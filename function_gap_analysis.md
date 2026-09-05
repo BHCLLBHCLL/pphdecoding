@@ -1593,3 +1593,40 @@ err=0（含候选查询修复——catalog 钉死
 retval=False`、dest_/src_ 双活——**恢复可用性闸门在重开场景
 产品级关闭**，与 I3 r3 两独立场景一致，restorable=-1。域 10
 边界声明升级入 NYI_INVENTORY。详见 DEV_PLAN §21.5。
+
+### 10.21 Sprint J2 实录（2026-09-05）：域 4 CATIA 边界实测重注册——facet 前置钉死 + I7 翻案 + 三格式矩阵
+
+驱动 `tools/_p12n_j2_run.py`（离线生成器 18 项单测
+`tests/test_p12n_j2_generators.py`；证据 `_p12n_j2/` + `p12n_*_e2e.log`
+根部 + `p12n_j2_summary_r2r3.json` 两轮汇总）。J2 验收句走第二分支：
+**facet 前置钉死入册 + 域 4 重评落记录；①MDL 产物级闭环不可达的
+前置证据入册**（沿 §21.3 风险 2 预案口径）。
+
+**① facet 前置狩猎（r2 五变体矩阵，裁决 = 输入格式为面片格式）**：
+`ImportCADAsFacet` STL 两变体（±AF 前置）`f_ret=True` 且容器落
+`meshinggroup2_part.mdl` 新成员；XT/CATPart（±AF、带工程/裸空文档）
+全 `False` err=0 干净业务拒。手册对照钉死：GUI Patch 导入族 =
+DXF/NASTRAN/STL/MDL（无 "CAD as Facet" 菜单），CAD kernel 格式
+（XT/CATPart/STEP）归 `OpenCadFile` 链——**前置 = 面片格式，
+非许可门、非 AF 前置、非空文档**。
+
+**② I7 翻案（容器差分）**：`_p12l_i7/c1_out.pph` vs `c1.pph`
+差分仅 date/project-name/species 乱序，**零 CATPart 几何落地**——
+I7 的 `sn2__alive=True` 实为 box.pph 自带 "Part" 节点（box.x_t
+顶节点名即 Part）。「V5 导入边界解除」撤回，重新入册为实测边界。
+
+**③ r3 三格式矩阵（4 冷启动、几何级探针，全部 29/29 err=0）**：
+裸宿主 `OpenCadFile` → ping 后两轮 `GetSParts` + `GetAllPartsBoundingBox`
++ SaveProject。XT 控制：SNode alive、1 零件、bbox [0, 0.01]；
+STEP（`FunDeskFan/base v7.step`，P12-A 弱证据本轮升级几何级）：
+SNode alive、2 零件、真实 bbox [-82.2, 36]——**Datakit 链在 COM
+面活着**；CATPart ×2（PorousMiddle/wingSkin）：零 SNode、`GetSParts`
+空（早/晚两轮一致 = 非异步慢导入）、bbox = ±DBL_MAX 空指纹
+（零零件初始界未收缩）= **静默零几何 no-op**。根因 = CATIA 特异
+性（同链 XT/STEP 均落地）：指向本机 CADthru CATIA V5 读特性未
+授权（许可矩阵唯 CATIA V5 带 R/RW 双变体）或转换器 headless
+no-op；复验前置 = 特性授权或 GUI 导入路线对照判别。执行注记：
+batch-1 控制台静默死亡一次（exit=127、缓冲输出丢失、无 WER
+记录），`-u` 重跑 4/4 GATE PASS 稳定复现，各流独立冷启动不受
+影响；宿主 AV（mfc140u.dll）在 r2 尾段/重跑窗各见一次，selfheal
+兜住。详见 DEV_PLAN §21.6。

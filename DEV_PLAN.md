@@ -2813,3 +2813,55 @@ GUI [Store and Open] 对话钮仍无 COM 等价物，前置具备即可复验。
 
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*
+
+### 21.6 J2 执行记录（2026-09-05）：域 4 CATIA 边界实测重注册——facet 前置钉死、I7 翻案、三格式矩阵
+
+驱动 `tools/_p12n_j2_run.py`（离线生成器 18 项单测
+`tests/test_p12n_j2_generators.py`：catia_mdl 链 ×2 + facet 五变体
+×4 + cadmatrix 四格式 ×5；证据 `_p12n_j2/p12n_j2_summary_r2r3.json`
+两轮汇总 + `p12n_*_e2e.log` 根部 11 流 + `p12n_cm_*_out.pph`
+容器）。三轮实测 r1–r3，验收句走第二分支：**facet 前置钉死 +
+域 4 重评落记录；①MDL 产物级闭环的前置不可达证据如实入册**
+（沿 §21.3 风险 2 预案「license 硬门 → 入册许可边界」的形态，
+但实测修正了硬门的位置）。
+
+**① facet 前置狩猎（r2 五变体矩阵）**：STL ±AF 前置 `f_ret=True`
++ 容器落 `meshinggroup2_part.mdl`；XT/CATPart ×（±AF、带工程/裸
+空文档）全 `False` err=0。手册对照：Patch 导入族 = DXF/NASTRAN/
+STL/MDL、无 "CAD as Facet" GUI 菜单；CAD kernel 格式归
+`OpenCadFile` 链。**前置钉死 = 输入格式面片格式**——非许可门
+（§21.3 风险 2 的许可假说被证伪为格式假说）。
+
+**② I7 翻案**：`_p12l_i7/c1_out.pph` 容器差分零 CATPart 几何
+（date/name/species 乱序）——I7 的 sn2__alive=True 是 box.pph
+自带 "Part" 节点混淆（box.x_t 顶节点名即 Part）。§20.11 的
+「V5 导入边界解除」**撤回**，BOUNDARY_DECLARATIONS 源头改写
++ NYI_INVENTORY 再生（推翻-再入册链完整）。
+
+**③ r3 三格式矩阵（几何级探针，4 冷启动 × 29/29 err=0）**：
+XT 1 零件 bbox [0,0.01]；STEP（P12-A err=0 弱证据升级）2 零件
+bbox [-82.2, 36]——**Datakit 链 COM 面活着**；CATPart ×2 零 SNode
++ `GetSParts` 空（两轮 = 非异步）+ bbox ±DBL_MAX 空指纹 = 静默
+零几何 no-op（end-to-end 无错误无模态）。**根因 = CATIA 特异性**：
+指向本机 CADthru CATIA V5 读特性未授权（许可矩阵唯 CATIA V5
+R/RW 双变体 = 独立特性）或 Datakit CATIA 转换器 headless no-op。
+复验前置入册：特性授权（或 GUI 导入路线判别 license vs COM 特异
+——J4 GUI 基建就绪后可补）。**①裁决**：P12-D snode 全链配方在
+CATPart 上复放 err=0（137 checks）但上游零几何 → 空组上无
+MDL/VMDL → VMDL.Save 产物级闭环在本机 COM 面不可达。
+
+**域 4 复议**：尾 6 分（G3 扣分项）结论 = 100% 口径维持（边界
+声明从「样本缺失非代码缺口」改为「样本在位但宿主 COM 读链对
+CATPart 静默零几何，复验前置 = CATIA 读特性授权」——分数口径
+= 已实现面 + 如实边界声明，不因边界理由变更而动分）。执行注记：
+batch-1 控制台静默死亡一次（exit=127 无 WER 记录），-u 重跑
+4/4 稳定全绿；宿主 AV（mfc140u.dll）r2 尾段/重跑窗各一，selfheal
+兜住。回归基线 **1030 passed / 4 skipped**（681.14s，J2 +18：
+catia_mdl 链 ×2 + facet 五变体 ×4 + cadmatrix 四格式 ×5 + 基底
+增量；两轮 -q 全量回归死于 ~25% 进度 exit=127 无 WER——GPU
+驱动不稳瞬态（nvcontainer/nvapi64 崩溃循环 20:35–20:56 每 ~1min
+一对，事件日志为证），-v 重跑同窗后一次全绿，未复现）。详见 gap
+§10.21。
+
+---
+*本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*
