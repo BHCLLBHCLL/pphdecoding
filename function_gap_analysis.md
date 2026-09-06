@@ -1705,3 +1705,22 @@ c1 instruction@166、c2 terminate@70 BAD TERMINATION RANK 1–7）→
 表 3 演化对照验证 delta 一致）；③ 中断机制全表征入册 `_p12o_j3/
 interrupt_forensics.md`。verdict = `PARTIAL_BY_DESIGN`（`j3_
 summary.json`）。
+
+### 10.23 Sprint J4 实录（2026-09-06）：自愈基建产品化——GUI 三路径接入 FlowExecutor + ModalWatcher
+
+J4 将 `pph_gui.py` 中三条裸跑 VBS 执行路径全部接入 I2 自愈基建：
+
+* **Path A `_start_api_execute_thread`**（BAM pipeline / facet /
+  submesh / ridge / octant 共用）：原 `run_vbs_authoritative` →
+  FlowExecutor 包裹（`_selfheal_execute` 辅助方法），挂起检测 +
+  模态关闭 + 冷启动自愈全链；6 处既有调用签名兼容。
+* **Path B `_try_host_vbs`**（region 注册 / nav 向导 / OpenCadFile）：
+  原 `run_vbs_if_ready` → ModalWatcher 守护（start/stop 包络
+  try/finally）；不接 FlowExecutor 避免快速操作过度激进。
+* **Path C `_vbs_execute_file`**（用户手动选 VBS）：原
+  `run_vbs_authoritative` → 委托 Path A（`name="user_vbs"`）。
+
+**测试 +4**（`tests/test_gui.py`）：mock FlowExecutor /
+ModalWatcher / host_pipeline 验证参数传递、后台线程委托、watcher
+启停、日志记录。全绿。实机批量验收需宿主在线，接线层已具备
+0 人工干预能力。

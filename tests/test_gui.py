@@ -742,6 +742,186 @@ def test_gui_binary_details(monkeypatch):
     win.close()
 
 
+# ── J4 自愈基建产品化 ──────────────────────────────────────────────────────
+
+
+def test_selfheal_execute_creates_flow_executor(monkeypatch):
+    """_selfheal_execute 以正确参数构造 FlowExecutor 并返回 execute() 结果。"""
+    import shutil
+    import tempfile
+    from PyQt5.QtWidgets import QApplication
+    import pph_gui
+
+    app = QApplication.instance() or QApplication([])
+    win = pph_gui.PphViewer()
+
+    fake_result = {"ok": True, "outcome": "ok", "attempts": [{}]}
+    created = {}
+
+    class FakeFlowExecutor:
+        def __init__(self, vbs_path, log_path, **kw):
+            created["vbs"] = vbs_path
+            created["log"] = log_path
+            created.update(kw)
+
+        def execute(self):
+            return fake_result
+
+    import automation.host_watchdog as hw
+    monkeypatch.setattr(hw, "FlowExecutor", FakeFlowExecutor)
+
+    tmp = Path(tempfile.mkdtemp(prefix="_j4_test_"))
+    try:
+        vbs = tmp / "test.vbs"
+        vbs.write_text("' test\r\n", encoding="mbcs")
+        result = win._selfheal_execute(vbs, name="test_flow", idle_limit=30.0)
+
+        assert result == fake_result
+        assert created["vbs"] == vbs
+        assert created["log"] == vbs.with_suffix(".selfheal.log")
+        assert created["name"] == "test_flow"
+        assert created["idle_limit"] == 30.0
+        assert created["watch_modals"] is True
+    finally:
+        win.close()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_start_api_execute_thread_calls_selfheal(monkeypatch):
+    """_start_api_execute_thread 后台调用 _selfheal_execute 并记录日志。"""
+    import shutil
+    import tempfile
+    import time
+    from PyQt5.QtWidgets import QApplication
+    import pph_gui
+
+    app = QApplication.instance() or QApplication([])
+    win = pph_gui.PphViewer()
+
+    tmp = Path(tempfile.mkdtemp(prefix="_j4_test_"))
+    try:
+        vbs = tmp / "action.vbs"
+        vbs.write_text("' action\r\n", encoding="mbcs")
+
+        captured = {}
+
+        def fake_selfheal(v, name="gui", **kw):
+            captured["vbs"] = v
+            captured["name"] = name
+            captured["kw"] = kw
+            return {"ok": True, "outcome": "ok", "attempts": [{}]}
+
+        monkeypatch.setattr(win, "_selfheal_execute", fake_selfheal)
+        logs = []
+        monkeypatch.setattr(win, "log", lambda msg, *a: logs.append(msg))
+
+        win._start_api_execute_thread(vbs, name="bam_pipeline")
+
+        for _ in range(50):
+            if captured:
+                break
+            time.sleep(0.05)
+
+        assert captured["vbs"] == vbs
+        assert captured["name"] == "bam_pipeline"
+        time.sleep(0.2)
+        assert any("执行完成" in m for m in logs)
+    finally:
+        win.close()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_try_host_vbs_uses_modal_watcher(monkeypatch):
+    """_try_host_vbs 启停 ModalWatcher 并调用 run_vbs_if_ready。"""
+    import shutil
+    import tempfile
+    import time
+    from PyQt5.QtWidgets import QApplication
+    import pph_gui
+
+    app = QApplication.instance() or QApplication([])
+    win = pph_gui.PphViewer()
+
+    tmp = Path(tempfile.mkdtemp(prefix="_j4_test_"))
+    try:
+        vbs = tmp / "quick.vbs"
+        vbs.write_text("' quick\r\n", encoding="mbcs")
+
+        watcher_state = {"started": False, "stopped": False}
+
+        class FakeModalWatcher:
+            def start(self):
+                watcher_state["started"] = True
+
+            def stop(self):
+                watcher_state["stopped"] = True
+
+        import automation.modal_watch as mw
+        monkeypatch.setattr(mw, "ModalWatcher", FakeModalWatcher)
+
+        called = {}
+
+        def fake_run_vbs_if_ready(v):
+            called["vbs"] = v
+            return {"ok": True, "backend": "fake"}
+
+        import automation.host_pipeline as hp
+        monkeypatch.setattr(hp, "run_vbs_if_ready", fake_run_vbs_if_ready)
+
+        logs = []
+        monkeypatch.setattr(win, "log", lambda msg, *a: logs.append(msg))
+
+        win._try_host_vbs(vbs)
+
+        for _ in range(50):
+            if called:
+                break
+            time.sleep(0.05)
+
+        assert called["vbs"] == vbs
+        assert watcher_state["started"]
+        assert watcher_state["stopped"]
+        assert any("宿主执行" in m for m in logs)
+    finally:
+        win.close()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_vbs_execute_file_delegates(monkeypatch):
+    """_vbs_execute_file 将用户选择的 VBS 转交 _start_api_execute_thread。"""
+    import shutil
+    import tempfile
+    from PyQt5.QtWidgets import QApplication
+    import pph_gui
+    from unittest.mock import patch
+
+    app = QApplication.instance() or QApplication([])
+    win = pph_gui.PphViewer()
+
+    tmp = Path(tempfile.mkdtemp(prefix="_j4_test_"))
+    try:
+        vbs = tmp / "user.vbs"
+        vbs.write_text("' user\r\n", encoding="mbcs")
+
+        captured = {}
+
+        def fake_thread(v, name="gui", **kw):
+            captured["vbs"] = v
+            captured["name"] = name
+
+        monkeypatch.setattr(win, "_start_api_execute_thread", fake_thread)
+
+        with patch.object(pph_gui.QFileDialog, "getOpenFileName",
+                          return_value=(str(vbs), "VBScript (*.vbs)")):
+            win._vbs_execute_file()
+
+        assert captured["vbs"] == vbs
+        assert captured["name"] == "user_vbs"
+    finally:
+        win.close()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     import unittest
     unittest.main()

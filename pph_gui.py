@@ -5791,10 +5791,8 @@ class PphViewer(QMainWindow):
             "VBScript (*.vbs);;All files (*)")
         if not path:
             return
-        from automation import host_pipeline
-        self.log(f"Executing VBS via rot (authoritative): {path}")
-        result = host_pipeline.run_vbs_authoritative(path)
-        self.log(f"Execute VBScript 返回: {result}")
+        self.log(f"Executing VBS via selfheal: {path}")
+        self._start_api_execute_thread(Path(path), name="user_vbs")
 
     def _focus_status(self, focus: str) -> None:
         groups = sorted(getattr(self.model_tree, "_info", {}) or {})
@@ -6988,23 +6986,56 @@ class PphViewer(QMainWindow):
             QTimer.singleShot(2000, poll)
         QTimer.singleShot(2000, poll)
 
-    def _start_api_execute_thread(self, vbs: Path) -> None:
-        """后台调用宿主 COM API 执行 VBS；失败时回退为手动提示。"""
+    def _selfheal_execute(self, vbs: Path, name: str = "gui",
+                          **kwargs) -> dict:
+        """FlowExecutor 包装：挂起检测 + 模态关闭 + 冷启动自愈。"""
+        from automation.host_watchdog import FlowExecutor
+        log = vbs.with_suffix(".selfheal.log")
+        ex = FlowExecutor(
+            vbs, log, name=name,
+            idle_limit=kwargs.pop("idle_limit", 600.0),
+            timeout=kwargs.pop("timeout", 900.0),
+            attempts=kwargs.pop("attempts", 2),
+            watch_modals=kwargs.pop("watch_modals", True),
+            **kwargs,
+        )
+        return ex.execute()
+
+    def _start_api_execute_thread(self, vbs: Path, name: str = "gui",
+                                  **selfheal_kw) -> None:
+        """后台调用宿主 COM API 执行 VBS；FlowExecutor 自愈包裹。"""
         def worker() -> None:
             try:
-                from automation import host_pipeline
-                result = host_pipeline.run_vbs_authoritative(vbs)
-                self.log(f"scFLOWpre API 执行返回: {result}")
+                ex_res = self._selfheal_execute(vbs, name=name,
+                                                **selfheal_kw)
+                outcome = ex_res.get("outcome", "unknown")
+                n_attempts = len(ex_res.get("attempts", []))
+                ok = ex_res.get("ok", False)
+                if ok:
+                    self.log(
+                        f"scFLOWpre API 执行完成 ({name}, "
+                        f"outcome={outcome}, attempts={n_attempts})")
+                else:
+                    self.log(
+                        f"scFLOWpre API 自愈执行失败 ({name}, "
+                        f"outcome={outcome}, attempts={n_attempts})",
+                        "WARN")
+                    self.log(
+                        f"请手动在 scFLOWpre 中 File → Execute "
+                        f"VBScript 执行 {vbs}", "WARN")
             except Exception as exc:  # noqa: BLE001
                 self.log(f"scFLOWpre API 自动执行失败: {exc}", "WARN")
                 self.log(
-                    f"请手动在 scFLOWpre 中 File → Execute VBScript 执行 "
-                    f"{vbs}", "WARN")
+                    f"请手动在 scFLOWpre 中 File → Execute VBScript "
+                    f"执行 {vbs}", "WARN")
         threading.Thread(target=worker, daemon=True).start()
 
     def _try_host_vbs(self, vbs: Path) -> None:
-        """gui_ready 时后台执行 VBS；否则只留草稿（不拉起裸 scFLOWpre）。"""
+        """gui_ready 时后台执行 VBS；ModalWatcher 守护模态弹窗。"""
         def worker() -> None:
+            from automation.modal_watch import ModalWatcher
+            watcher = ModalWatcher()
+            watcher.start()
             try:
                 from automation import host_pipeline
                 res = host_pipeline.run_vbs_if_ready(vbs)
@@ -7016,6 +7047,8 @@ class PphViewer(QMainWindow):
                     self.log(f"宿主执行 {vbs.name}: {res}")
             except Exception as exc:  # noqa: BLE001
                 self.log(f"宿主执行失败 {vbs.name}: {exc}", "WARN")
+            finally:
+                watcher.stop()
         threading.Thread(target=worker, daemon=True).start()
 
     def reload(self) -> None:

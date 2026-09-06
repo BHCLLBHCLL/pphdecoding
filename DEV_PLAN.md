@@ -2986,5 +2986,32 @@ c1 instruction@166、c2 terminate@70 BAD TERMINATION RANK 1–7）→
 + writer-hunt negatives + a1 系列归因修正）。verdict =
 `PARTIAL_BY_DESIGN`（`j3_summary.json`）。
 
+### 21.8 J4 执行记录（2026-09-06）：自愈基建产品化——GUI 三路径接入 FlowExecutor + ModalWatcher
+
+**改动（`pph_gui.py`，3 方法 + 1 辅助）**：
+
+* **`_selfheal_execute(vbs, name, **kw)`**（新增）：FlowExecutor
+  包装，默认 `idle_limit=600 / timeout=900 / attempts=2 /
+  watch_modals=True`，日志路径 = `vbs.with_suffix(".selfheal.log")`。
+* **`_start_api_execute_thread`**（重写）：原裸调 `run_vbs_authoritative`
+  → 改为后台 daemon 线程调 `_selfheal_execute`，挂起检测 + 模态
+  关闭 + 冷启动自愈全链；成功/失败均 log outcome + attempts。
+  6 处既有调用签名兼容（`name` 默认 `"gui"`）。
+* **`_try_host_vbs`**（重写）：原裸调 `run_vbs_if_ready` → 加
+  ModalWatcher 守护（start/stop 包络 `try/finally`），快速操作
+  （region 注册 / nav 向导 / OpenCadFile）不过度激进（不接
+  FlowExecutor 冷启动自愈）。
+* **`_vbs_execute_file`**（重写）：原裸调 `run_vbs_authoritative`
+  → 委托 `_start_api_execute_thread(path, name="user_vbs")`。
+
+**测试（`tests/test_gui.py` +4）**：mock FlowExecutor /
+ModalWatcher / host_pipeline 验证三路径接线正确性——参数传递、
+后台线程委托、watcher 启停、日志记录。全绿。
+
+**验收口径**：§21.4「GUI 驱动路径带自愈通过 1 次批量（0 人工
+干预）」——代码接线完成（GUI 触发的 VBS 全路径经 FlowExecutor
+或 ModalWatcher 守护），mock 测试 4/4 通过；实机批量验收需宿主
+在线（本机宿主当前不可用），接线层已具备 0 人工干预能力。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

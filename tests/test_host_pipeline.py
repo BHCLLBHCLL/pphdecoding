@@ -350,15 +350,17 @@ class TestBackendConvergence(unittest.TestCase):
         com.assert_not_called()
 
     def test_gui_uses_authoritative_channel(self):
-        """pph_gui 的两处执行调用点必须走 run_vbs_authoritative。
+        """pph_gui 的执行调用点走 FlowExecutor 或 run_vbs_if_ready。
 
         P12-A 验收「测试锁定路由」：GUI 不再直接指定 com 后端。
+        J4 自愈基建产品化：主路径经 FlowExecutor（内部调
+        run_vbs_authoritative），快速路径经 run_vbs_if_ready。
         """
         src = Path("pph_gui.py").read_text(encoding="utf-8")
         self.assertNotIn('run_in_host(path, backend="com")', src)
         self.assertNotIn('run_in_host(vbs, backend="com")', src)
-        self.assertIn("host_pipeline.run_vbs_authoritative(path)", src)
-        self.assertIn("host_pipeline.run_vbs_authoritative(vbs)", src)
+        self.assertIn("FlowExecutor", src)
+        self.assertIn("host_pipeline.run_vbs_if_ready", src)
 
 
 class TestBackendConvergence(unittest.TestCase):
@@ -412,15 +414,17 @@ class TestBackendConvergence(unittest.TestCase):
         com.assert_not_called()
 
     def test_gui_uses_authoritative_channel(self):
-        """pph_gui 的两处执行调用点必须走 run_vbs_authoritative。
+        """pph_gui 的执行调用点走 FlowExecutor 或 run_vbs_if_ready。
 
         P12-A 验收「测试锁定路由」：GUI 不再直接指定 com 后端。
+        J4 自愈基建产品化：主路径经 FlowExecutor（内部调
+        run_vbs_authoritative），快速路径经 run_vbs_if_ready。
         """
         src = Path("pph_gui.py").read_text(encoding="utf-8")
         self.assertNotIn('run_in_host(path, backend="com")', src)
         self.assertNotIn('run_in_host(vbs, backend="com")', src)
-        self.assertIn("host_pipeline.run_vbs_authoritative(path)", src)
-        self.assertIn("host_pipeline.run_vbs_authoritative(vbs)", src)
+        self.assertIn("FlowExecutor", src)
+        self.assertIn("host_pipeline.run_vbs_if_ready", src)
 
 
 class TestBackendConvergence(unittest.TestCase):
@@ -474,15 +478,17 @@ class TestBackendConvergence(unittest.TestCase):
         com.assert_not_called()
 
     def test_gui_uses_authoritative_channel(self):
-        """pph_gui 的两处执行调用点必须走 run_vbs_authoritative。
+        """pph_gui 的执行调用点走 FlowExecutor 或 run_vbs_if_ready。
 
         P12-A 验收「测试锁定路由」：GUI 不再直接指定 com 后端。
+        J4 自愈基建产品化：主路径经 FlowExecutor（内部调
+        run_vbs_authoritative），快速路径经 run_vbs_if_ready。
         """
         src = Path("pph_gui.py").read_text(encoding="utf-8")
         self.assertNotIn('run_in_host(path, backend="com")', src)
         self.assertNotIn('run_in_host(vbs, backend="com")', src)
-        self.assertIn("host_pipeline.run_vbs_authoritative(path)", src)
-        self.assertIn("host_pipeline.run_vbs_authoritative(vbs)", src)
+        self.assertIn("FlowExecutor", src)
+        self.assertIn("host_pipeline.run_vbs_if_ready", src)
 
 
 class TestBackendConvergence(unittest.TestCase):
@@ -536,15 +542,17 @@ class TestBackendConvergence(unittest.TestCase):
         com.assert_not_called()
 
     def test_gui_uses_authoritative_channel(self):
-        """pph_gui 的两处执行调用点必须走 run_vbs_authoritative。
+        """pph_gui 的执行调用点走 FlowExecutor 或 run_vbs_if_ready。
 
         P12-A 验收「测试锁定路由」：GUI 不再直接指定 com 后端。
+        J4 自愈基建产品化：主路径经 FlowExecutor（内部调
+        run_vbs_authoritative），快速路径经 run_vbs_if_ready。
         """
         src = Path("pph_gui.py").read_text(encoding="utf-8")
         self.assertNotIn('run_in_host(path, backend="com")', src)
         self.assertNotIn('run_in_host(vbs, backend="com")', src)
-        self.assertIn("host_pipeline.run_vbs_authoritative(path)", src)
-        self.assertIn("host_pipeline.run_vbs_authoritative(vbs)", src)
+        self.assertIn("FlowExecutor", src)
+        self.assertIn("host_pipeline.run_vbs_if_ready", src)
 
 
 class TestHostStatus(unittest.TestCase):
