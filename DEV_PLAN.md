@@ -3013,5 +3013,33 @@ ModalWatcher / host_pipeline 验证三路径接线正确性——参数传递、
 或 ModalWatcher 守护），mock 测试 4/4 通过；实机批量验收需宿主
 在线（本机宿主当前不可用），接线层已具备 0 人工干预能力。
 
+### 21.9 J5 执行记录（2026-09-06）：集群派发壳 CLI——骨架抽象 + 本地端到端
+
+**模块 `automation/cluster_dispatch.py`**（5 数据类 + 3 传输 + Dispatcher）：
+
+* **ClusterConfig**：JSON 集群配置加载（`from_dict` / `from_file` /
+  `to_dict`），校验 nodes 非空 + name/work_dir 必填 + transport ∈
+  {local, ssh}。
+* **Transport 接口** + **LocalTransport**（DI `solve_fn` 注入，包装
+  `solver_run.run_solve`，同步执行 + 状态追踪）+ **SSHTransport**
+  （stub，三方法均 `NotImplementedError("§9.6-4 deployment layer
+  exemption")`）。
+* **Dispatcher**：round-robin 腿分配 → dispatch → poll_all →
+  collect_all（产物收集 + j5_summary.json）。
+* **build_legs_from_i5**：I5 桥接（复制 .pph 到 per-tag 子目录 →
+  Leg 列表），复用 `_p12k_i5_run.make_work_copies` 模式。
+
+**CLI `tools/_p12p_j5_run.py`**（5 子命令）：validate / submit /
+status / collect / run（本地一站式）。argparse + subparsers 模式
+沿用 `solver_run.py` 惯例。
+
+**测试 `tests/test_cluster_dispatch.py`（+29）**：Config 校验 8 +
+LocalTransport mock 6 + SSHTransport stub 4 + Dispatcher 4 +
+build_legs_from_i5 2 + make_transport 2 + CLI 3。全离线 mock。
+
+**§9.6-4 豁免维持**：骨架价值 = 定义抽象（Transport 接口 +
+ClusterConfig 格式），未来集群可用时仅需实现 SSHTransport 三方法。
+不引入 paramiko/SSH 依赖。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

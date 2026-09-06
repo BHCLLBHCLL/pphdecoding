@@ -1724,3 +1724,20 @@ J4 将 `pph_gui.py` 中三条裸跑 VBS 执行路径全部接入 I2 自愈基建
 ModalWatcher / host_pipeline 验证参数传递、后台线程委托、watcher
 启停、日志记录。全绿。实机批量验收需宿主在线，接线层已具备
 0 人工干预能力。
+
+### 10.24 Sprint J5 实录（2026-09-06）：集群派发壳——骨架抽象 + 本地端到端
+
+J5 骨架集群派发抽象（§9.6-4 部署层豁免维持）：
+
+* `automation/cluster_dispatch.py`：5 数据类（ClusterConfig /
+  NodeConfig / DefaultsConfig / Leg / JobRecord）+ 3 传输（Transport
+  基类 + LocalTransport DI 包装 solver_run.run_solve + SSHTransport
+  stub 三方法 NotImplementedError）+ Dispatcher（round-robin 腿
+  分配 + dispatch/poll_all/collect_all）+ build_legs_from_i5 I5 桥接。
+* `tools/_p12p_j5_run.py`：CLI 5 子命令（validate / submit /
+  status / collect / run），argparse + subparsers 模式。
+* 测试 +29（`tests/test_cluster_dispatch.py`）：Config 校验 8 +
+  LocalTransport mock 6 + SSHTransport stub 4 + Dispatcher 4 +
+  build_legs_from_i5 2 + make_transport 2 + CLI 3。全离线 mock。
+* §9.6-4 豁免维持不变。骨架不引入 paramiko/SSH 依赖；未来集群
+  可用时仅需实现 SSHTransport 三方法即可接入。
