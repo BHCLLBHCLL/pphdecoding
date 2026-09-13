@@ -1392,6 +1392,26 @@ R27-1（51/51 err=0）新增 3 条实测键：`FACET.SOLID_BASE_MINIMUM_ANGLE` /
 | 宿主键 | ✅ 13 条实测（R27-1） |
 | x_t schema | ✅ 误判已纠正 + 可选降版（R14-1） |
 
+
+---
+
+## 42. R28 更新（2026-09-14）—— 宿主键支线收口 + **第二次收敛判定**
+
+三轮独立探查（`tools/_r28_probe.py`，各自冷启动）：
+
+| 轮 | 内容 | 结果 |
+|---|---|---|
+| A | OCT_MESH 段（`SetVoxelOctRefineType` / `SetFacetLengthFactor` / `SetFacetAngle`） | `err0=45/47`、**xenv 零变化** → **无可用写入口** |
+| B | 单变量 `SetAFFaceterLengthFactor` | 仅 `FACET.SOLID_BASE_LENGTH_FACTOR` 变（0.05→0），`USE_SIMPLE_SETTING` **未变** |
+| C | 单变量 `SetIntersectionDetectionDepth` | 仅 `FACET.INTERSECTION_DETECTION_DEPTH` 变（12→0），`USE_SIMPLE_SETTING` **未变** |
+
+**归因**：R26/R27 的 `USE_SIMPLE_SETTING` true→false 只在「同改 ≥3 setter」的组合场景出现，
+**非单变量效应**（宿主一致性重算）。
+
+### ★ 收敛判定（第二次）
+
+R27 遗留的两件收尾均以否证/归因收口 → 七面全部「已修复 / 已定性」、宿主键 13 条实测 + 2 条否证、
+**无新的可验证条目** → 按目标约定（至 R40 或不再有可验证的新 R* 条目）**终止**。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。
