@@ -1354,6 +1354,23 @@ R19-1 遗留的「产物可得性」应改走 `fldutil`/scPOST 从求解结果�
 **面板线结论**：17 个纯 UI 类 / **16 个已落盘** / 3 个只读 / **0 个只写内存面板**。
 `tests/test_panel_persist_r64.py` 新增口径测试；`test_panel_persist_r53.py` 的旧断言同步改写。
 
+
+---
+
+## 40. R26 更新（2026-09-14）—— 宿主键 10 条；`OCT_MESH` 段仅部分核实
+
+R26-1（51/51 err=0）新增 2 条实测键：
+
+| setter | xenv 键 | 观测 |
+|---|---|---|
+| `SetAFFaceterLengthFactor` | `FACET.SOLID_BASE_LENGTH_FACTOR` | 0.05 → 0（数值 setter 归一化） |
+| `SetIntersectionDetectionDepth` | `FACET.INTERSECTION_DETECTION_DEPTH` | 12 → 0（同上） |
+| `SetCompleteParallelFlag` | （无变化） | **否证**：该 setter 不写 xenv |
+
+实测键累计 **10 条**。观察项：本轮差分中 `FACET.USE_SIMPLE_SETTING` 由 true → false，疑为上述 setter 的
+宿主联动，本轮不足以定罪 → R27-2 归因。
+
+**尚未满足收敛判据**（`OCT_MESH` 段 4+ 键未核实）→ R27-1。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

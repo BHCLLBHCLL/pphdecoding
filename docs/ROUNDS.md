@@ -1822,7 +1822,7 @@ not_a_panel        = ['CondTypeCatalogDialog']   # 对话框（模态子窗）�
 
 ---
 
-## R26 —— 提案（2026-09-14，≈0.5 人日）—— **收敛判定轮**
+## R26 —— 宿主键再铺一批（2026-09-14）
 
 ### 依据
 
@@ -1842,10 +1842,64 @@ not_a_panel        = ['CondTypeCatalogDialog']   # 对话框（模态子窗）�
 （宿主 mesh worker 崩溃 / FLD 生成需 GUI / CADthru 控版不必要 / 条件体系 92 键封顶 / STEP 扫描无意义），
 **不再存在可验证的新 R\* 条目** → 按目标约定终止并写明理由。
 
+### 执行记录（2026-09-14）
+
+#### R26-1 ⚠️ 部分成 —— 新增 2 条实测键 + 1 条否证（未达「≥3」）
+
+`tools/xenv_key_probe.py`（宿主改项 → xenv 差分），51/51 err=0：
+
+| setter | 变化键 | 观测 |
+|---|---|---|
+| `SetAFFaceterLengthFactor 0.06` | **`FACET.SOLID_BASE_LENGTH_FACTOR`** | 0.05 → 0（数值 setter 依旧被归一化） |
+| `SetIntersectionDetectionDepth 7` | **`FACET.INTERSECTION_DETECTION_DEPTH`** | 12 → 0（同上） |
+| `SetCompleteParallelFlag True` | **（无变化）** | **未证实** → 不能写 |
+
+**实测键累计 10 条**（R6-5/R7-4 五条 + R10-3 三条 + 本轮两条）。
+
+**顺带观察（未定性）**：本次差分里 `FACET.USE_SIMPLE_SETTING` 由 true → false —— 上述两个 setter 之一
+可能触发宿主联动改写简易设置；本轮**不足以定罪**，如实记为观察项（R27 可顺手复核）。
+
+按验收句「新增 ≥3 键 或 给出无 setter 的确切依据」：本轮**两项都只做到一半**（2 键 + 1 否证），
+故记为部分成，并据此**判定尚未收敛**（`OCT_MESH` 段还有 4 个键未核实）→ R27-1。
+
+#### 回归
+
+全量回归 **1217 passed / 4 skipped / 0 failed**（550.33 s；与 R25 持平 —— 本轮为实机核实，未改代码）。
+
 ### 明确不做（R26 内）
 
 * 其余 CAD 格式、内核/求解器复刻、条件收割、STEP 参数扫描、宿主 mesh worker 崩溃、FLD 生成；
 * 不再重复数值等价探索（R17 收口、R18 固化、R23 四段同源）。
+
+---
+
+---
+
+## R27 —— 提案（2026-09-14，≈1 人日）
+
+### 依据
+
+* R26-1 只完成一半（2 键 + 1 否证）→ **尚未满足收敛判据**；
+* `OCT_MESH` 段仍有关键未核实：`FACET_LENGTH_FACTOR` / `FACET_ANGLE` / `FACET_MAX_WIDTH_FACTOR` /
+  `FACET_SPECIFY_EACH_REGION` / `COMPLETE_PARALLEL` / `VOXEL_OCT_REFINE_TYPE`；
+* 成本已实测：每次探查 51/51 err=0、约 1–2 min（符合排期纪律）。
+
+### 条目
+
+| # | 条目 | 做法 | 验收句 | 人日 |
+|---|---|---|---|---|
+| **R27-1（主项）** | **`OCT_MESH` 段键核实收尾** | 用录制里确认存在的 setter（`SetVoxelOctRefineType` / `SetSolidFacetSpecifyEachRegionFlag` / `SetAFFaceterMinimumAngle` / `SetAFFaceterLengthFactorForOctree`）再跑一轮差分 | `OCT_MESH` 段 ≥3 键有实测映射，或逐个给出否证依据 | 0.5 |
+| **R27-2** | **复核 `USE_SIMPLE_SETTING` 联动观察** | 单独改 `SetAFFaceterLengthFactor` 与单独改 `SetIntersectionDetectionDepth`，看谁触发联动 | 联动归因明确 | 0.5 |
+
+### 收敛判据（R27 之后判定）
+
+若 R27-1 完成 `OCT_MESH` 段（≥3 键实测或全部否证）、R27-2 给出联动归因，则**宿主键这条支线也封顶**；
+届时所有已知面均「已修复」或「已定性」，**不再有可验证的新 R\* 条目** → 终止并写明理由。
+
+### 明确不做（R27 内）
+
+* 其余 CAD 格式、内核/求解器复刻、条件收割、STEP 参数扫描、宿主 mesh worker 崩溃、FLD 生成；
+* 不再重复数值等价探索。
 
 ---
 
