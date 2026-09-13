@@ -31,13 +31,25 @@ console_utf8.enable()
 
 import ps_facet2_nodes as ps  # noqa: E402
 
+#: 宿主接收端的主版本（`SCH_3400153_34001` → Parasolid 34）；同主版本的不同
+#: build（如 `SCH_3400000_340010` = 标准 34.0 发布）也应被宿主接受，故按主版本判定。
+TARGET_MAJOR = "34"
 TARGET_SCH = "SCH_3400153_34001"
 
 
+VERSION_RE = re.compile(r"modeller version (\d+)\s+(SCH_\d+_\d+)")
+
+
 def sch_of(data: bytes):
+    """两种头部形态都认：**PART2 段里的 SCH= 行，以及首行 modeller version 串。"""
+    if not data:
+        return None
     head = data[:1200].decode("latin-1")
     m = re.search(r"SCH=([^;\r\n]+);", head)
-    return m.group(1) if m else None
+    if m:
+        return m.group(1)
+    m = VERSION_RE.search(head)
+    return m.group(2) if m else None
 
 
 def main(argv=None) -> int:
@@ -45,6 +57,10 @@ def main(argv=None) -> int:
     ap.add_argument("--src", type=Path,
                     default=ROOT / "_p12u_gate" / "r8_3_keyv2.x_t")
     ap.add_argument("--values", default="0,1,34,100,1000,2025")
+    ap.add_argument("--o-t-version", type=int, default=4,
+                    help="V37 正确取值 = 4（guide §11.5；1/2/3 为旧布局）")
+    ap.add_argument("--format", type=int, default=18220,
+                    help="18220=text / 18221=binary（非 0..5）")
     ap.add_argument("--json", type=Path, default=None)
     args = ap.parse_args(argv)
     src = args.src.resolve()
@@ -60,14 +76,18 @@ def main(argv=None) -> int:
     for v in values:
         rec = {"nw_version": v}
         try:
-            data = ps.transmit_xt(raw, nw_version=v)
+            data = ps.transmit_xt(raw, nw_version=v,
+                                  o_t_version=args.o_t_version,
+                                  transmit_format=args.format)
             rec["bytes"] = len(data or b"")
             rec["sch"] = sch_of(data or b"")
             dst = ROOT / "_p12u_gate" / ("r12_1_nw%d.x_t" % v)
             if data:
                 dst.write_bytes(data)
                 rec["dst"] = str(dst)
-            rec["ok"] = bool(data) and rec["sch"] == TARGET_SCH
+            sch = rec["sch"] or ""
+            rec["same_major"] = sch.startswith("SCH_%s" % TARGET_MAJOR)
+            rec["ok"] = bool(data) and rec["same_major"]
         except Exception as exc:  # noqa: BLE001
             rec["error"] = type(exc).__name__ + ": " + str(exc)
             rec["ok"] = False

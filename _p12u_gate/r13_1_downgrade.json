@@ -1,0 +1,24 @@
+{
+  "src": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r8_3_keyv2.x_t",
+  "src_sch": "SCH_3701153_37102",
+  "target_sch": "SCH_3400153_34001",
+  "attempts": [
+    {
+      "nw_version": 340,
+      "bytes": 5553,
+      "sch": "SCH_3400000_340010",
+      "dst": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r12_1_nw340.x_t",
+      "same_major": true,
+      "ok": true
+    }
+  ],
+  "hit": {
+    "nw_version": 340,
+    "bytes": 5553,
+    "sch": "SCH_3400000_340010",
+    "dst": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r12_1_nw340.x_t",
+    "same_major": true,
+    "ok": true
+  },
+  "passed": true
+}

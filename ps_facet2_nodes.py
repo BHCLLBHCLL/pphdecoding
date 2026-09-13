@@ -861,7 +861,8 @@ class _PsSession:
 
     # -- part transmit（编码：PK_PART → 文本 .x_t）-----------------------
     def transmit_part(self, tag: int, path: str = "",
-                      nw_version: int = 0) -> bytes:
+                      nw_version: int = 0, o_t_version: int = 1,
+                      transmit_format: int = 0) -> bytes:
         """把 PK_PART 编码写回文本 .x_t（PK_PART_transmit，写文件经 frustrum）。
 
         R12-1：``nw_version`` 写进 ``_TRANSMIT.transmit_nw_version``（此前一直为 0，
@@ -873,8 +874,11 @@ class _PsSession:
         arr = (c_int * len(parts))(*parts)
         opts = _TRANSMIT()
         memset(byref(opts), 0, sizeof(opts))
-        opts.o_t_version = 1
-        opts.transmit_format = 0  # 0 = text
+        # V37 的正确取值见 docs/pskernel_user_guide.md §11.5：o_t_version=4 才
+        # 直接透传（1/2/3 是旧布局），格式枚举 = 18220 text / 18221 binary
+        # （不是 0..5）。默认仍走历史路径（1/0）以免改动既有 golden 行为。
+        opts.o_t_version = int(o_t_version)
+        opts.transmit_format = int(transmit_format)
         opts.transmit_nw_version = int(nw_version)
         pk.PK_PART_transmit.restype = c_int
         pk.PK_PART_transmit.argtypes = [
@@ -1720,7 +1724,8 @@ def tessellate_xt_file(path: str | Path, **kw) -> list[TessPart]:
 
 
 def transmit_xt(xt_bytes: bytes, tag: Optional[int] = None,
-                nw_version: int = 0) -> bytes:
+                nw_version: int = 0, o_t_version: int = 1,
+                transmit_format: int = 0) -> bytes:
     """接收文本 .x_t，把首个（或指定）body 编码写回文本 .x_t 字节。
 
     这是 :meth:`_PsSession.receive_xt` + PK_PART_transmit 的编码 round-trip
@@ -1731,7 +1736,9 @@ def transmit_xt(xt_bytes: bytes, tag: Optional[int] = None,
     if not tags:
         raise RuntimeError("transmit_xt: no bodies received")
     t = tags[0] if tag is None else int(tag)
-    return sess.transmit_part(t, "out", nw_version=nw_version)
+    return sess.transmit_part(t, "out", nw_version=nw_version,
+                              o_t_version=o_t_version,
+                              transmit_format=transmit_format)
 
 
 def decode_brep(xt_bytes: bytes) -> dict:

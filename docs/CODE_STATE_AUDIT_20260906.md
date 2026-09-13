@@ -1145,6 +1145,32 @@ FLD/iFLD 可得性：读取器齐备（`fldstats`/`ifld`/`solver_delta --kind fl
 SCH_3701153_37102_1300` —— R9-2 的 `SCH=` 判据对这类文件不适用，需读版本串（工具已改）。
 
 → R13-1 从 `pskernel.dll` 导出表找真正的版本入口并核对 o_t 真实偏移。
+
+---
+
+## 28. R13 更新（2026-09-14）—— **x_t 离线降版成功**，宿主可读（R8-3/R9-2 断链修复）
+
+### 28.1 根因：结构版本用错（R12 负结果的真相）
+
+`docs/pskernel_user_guide.md` §11.5：V37 的 `PK_PART_transmit_o_t` 需 **`o_t_version=4`**
+（1/2/3 为旧布局）、格式枚举 **`18220=text`**（不是 0..5）。本仓一直传 `1`/`0`，
+选项转换器因此丢弃版本字段 —— 这就是 `transmit_nw_version` 看似无效的原因。
+
+### 28.2 取值编码（Q-Solid 官方文档）
+
+字段 `transmit_version`（V37 名 `transmit_nw_version`）= **主版本×10 + 次版本**：101 = Parasolid 10.1、
+90 = 9.0；最早 7.0，当前版本亦允许。宿主接收端是 v34 → **`340`**。
+
+### 28.3 实测闭环
+
+| 步骤 | 结果 |
+|---|---|
+| 离线降版（`transmit_version=340`） | **5553 B，`SCH_3400000_340010`（v34）** |
+| 宿主 `OpenCadFile` 该产物 | **`snode_alive=True`**、`ret_bam=True`、`vmdl_alive=True` |
+| 宿主整体 | **28/28 err=0** + `SaveProject` 成功 |
+
+→ **STEP → CADthru(v37) → 本仓离线降版(v34) → 宿主可读 → BAM** 全链自有化，
+§23.2/§24.1 的「宿主静默零几何」至此闭环修复。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。
