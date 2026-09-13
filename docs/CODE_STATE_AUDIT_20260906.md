@@ -1290,6 +1290,19 @@ FC_Vector:VEL]`、`gate_ok=true` —— 两次独立求解下主变量逐点一�
 **结论**：读取器齐备（`fldstats`/`ifld`/`solver_delta --kind fld|ifld`/`fldutil_bridge`），
 但默认求解链不产出 FLD/iFLD（与 J3 期记录一致，本轮独立复现）。要拿到需在求解器输出设置显式开启，
 具体开关未定位 → R20-1（查手册/设置界面，而非猜 sph 键名）。
+
+---
+
+## 35. R20 更新（2026-09-14）—— FLD/iFLD 的**归属被纠正**：不是 scFLOWpre 输出项
+
+检索手册树（`Manuals\{CADthru,Common,scFLOW,scPOST,SCT,ST}`）：
+
+* scFLOWpre 手册（`scFLOW\HTML\Pre_eng`）里 `FLD / iFLD / FLD output` **0 命中**；
+* 全树只有 **ST_FE103–FE113** 一类**读取侧错误码**提到 FLD/FLDI（"READ INVALID DATA. Data in FLD-file is
+  invalid"、"CANNOT FIND VARIABLE(nnnn) IN FLDI(ffff)" …）。
+
+**结论**：FLD/iFLD 是 **STpre / scPOST 侧的映射与读取格式**，不是 scFLOWpre 求解器的输出选项；
+R19-1 遗留的「产物可得性」应改走 `fldutil`/scPOST 从求解结果生成（本仓 `fldutil_bridge.py` 即此链路）→ R21-1。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

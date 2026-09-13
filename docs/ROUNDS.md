@@ -1530,7 +1530,7 @@ FLD/iFLD 可得性（需一腿开 FLD 输出）与「排期纪律入册」顺延
 
 ---
 
-## R20 —— 提案（2026-09-14，≈1.5 人日）
+## R20 —— FLD 开关定位：**方向被纠正**（2026-09-14）
 
 ### 依据
 
@@ -1546,7 +1546,58 @@ FLD/iFLD 可得性（需一腿开 FLD 输出）与「排期纪律入册」顺延
 | **R20-2** | `leg-ours` 并入 `solver_dual_run` | 新阶段复用 `solver_leg_ours.build_ours` | 一条命令三段跑完 | 0.5 |
 | **R20-3** | R17 结论入 NYI/优先级口径 | 两处口径与审计 §32 一致 | 口径一致 | 0.5 |
 
+### 执行记录（2026-09-14）
+
+#### R20-1 ✅ 已成（结论纠正方向）—— FLD/iFLD 不是 scFLOWpre 的输出项
+
+按 R19-1 的结论去手册里找「求解器 FLD 输出开关」，结果**推翻了那个方向**：
+
+| 检索 | 结果 |
+|---|---|
+| `Manuals\scFLOW\HTML\Pre_eng` 里 `FLD / iFLD / FLD output` | **0 命中** |
+| 全手册树（CADthru / Common / scFLOW / scPOST / SCT / ST） | 仅 **ST_FE103–FE113** 一类**读取侧错误码**提到 FLD/FLDI（"READ INVALID DATA. Data in FLD-file is invalid"、"CANNOT FIND VARIABLE(nnnn) IN FLDI(ffff)" 等） |
+
+**结论**：FLD/iFLD 是 **STpre / scPOST 侧的映射与读取格式**（手册只定义读入时的错误语义），
+**不是 scFLOWpre 求解器的输出选项** —— 所以「去 scFLOWpre 输出设置里找 FLD 开关」这个方向本身不成立。
+本仓的 `fldutil_bridge.py`（及 `.gitignore` 里的 `FLDUTIL.log`）正对应这条工具链：
+**iFLD 应由 fldutil / scPOST 从求解结果生成**，而不是等求解器直接写出来。
+
+→ R21-1：改用 `fldutil_bridge` 从**我们已有的 FPH**生成 FLD/iFLD，并用 `fldstats` / `ifld` 读通。
+这样 R19-1 悬着的那半边（产物可得性）就有了可执行的入口。
+
+#### R20-2 / R20-3 ❌ 未执行
+
+`leg-ours` 并入双跑驱动、R17 结论入口径行，顺延 R21（各 ≤0.5 人日）。
+
+#### 回归
+
+全量回归 **1215 passed / 4 skipped / 0 failed**（552.79 s；与 R19 持平 —— 本轮为手册取证，未改代码）。
 ### 明确不做（R20 内）
+
+* 其余 CAD 格式、内核/求解器复刻、条件收割、STEP 参数扫描、宿主 mesh worker 崩溃（外部缺陷）；
+* 不再重复数值等价探索（R17 收口、R18 固化）。
+
+---
+
+---
+
+## R21 —— 提案（2026-09-14，≈2 人日）
+
+### 依据
+
+* R20-1 纠正了方向：FLD/iFLD 属 **scPOST/STpre 侧的映射格式**，应由 `fldutil` 类工具从结果生成；
+* 本仓已有 `fldutil_bridge.py` 与读取器（`fldstats`/`ifld`），且已有 exA06-2 的 FPH 产物；
+* R20-2/R20-3 是两件 ≤0.5 人日的收尾。
+
+### 条目
+
+| # | 条目 | 做法 | 验收句 | 人日 |
+|---|---|---|---|---|
+| **R21-1（主项）** | **用 fldutil 从 FPH 生成 FLD/iFLD** | 调 `fldutil_bridge`（或直接 `FLDUTIL`）把 exA06-2 的 FPH 转成 FLD/iFLD，再用 `fldstats`/`ifld` 读 | 产出 `.fld` 或 `.ifld` 且被本仓读取器读通；否则给出 fldutil 侧的确切阻塞（缺许可/缺输入格式） | 1 |
+| **R21-2** | `leg-ours` 并入 `solver_dual_run` | 复用 `solver_leg_ours.build_ours` | 一条命令三段跑完 | 0.5 |
+| **R21-3** | R17 结论入 NYI/优先级口径 | 两处口径与审计 §32 一致 | 口径一致 | 0.5 |
+
+### 明确不做（R21 内）
 
 * 其余 CAD 格式、内核/求解器复刻、条件收割、STEP 参数扫描、宿主 mesh worker 崩溃（外部缺陷）；
 * 不再重复数值等价探索（R17 收口、R18 固化）。
