@@ -1276,6 +1276,20 @@ FC_Vector:VEL]`、`gate_ok=true` —— 两次独立求解下主变量逐点一�
 ### 33.3 FLD/iFLD
 
 仍未回答（读取器齐备、磁盘产物缺席）→ R19-1 主项，实测单腿 57–187 s，排得进一轮。
+
+---
+
+## 34. R19 更新（2026-09-14）—— FLD/iFLD 可得性：工具可得、默认产物不可得
+
+用 R16/R17 已有的 exA06-2 **两腿独立求解**产物做零成本取证：
+
+* 产物类型：`.fph .rph .ccdt .csln .gph .sph .l .log`；
+* `.fld` / `.ifld` 全树计数 **0**；
+* sph 明文键搜索不可靠（**不作为证据**，如实标注）。
+
+**结论**：读取器齐备（`fldstats`/`ifld`/`solver_delta --kind fld|ifld`/`fldutil_bridge`），
+但默认求解链不产出 FLD/iFLD（与 J3 期记录一致，本轮独立复现）。要拿到需在求解器输出设置显式开启，
+具体开关未定位 → R20-1（查手册/设置界面，而非猜 sph 键名）。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。
