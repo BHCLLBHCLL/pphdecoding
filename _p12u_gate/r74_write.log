@@ -17,11 +17,11 @@ s010=0
 oct__alive=True err=0
 s011=0
 mgs__alive=True err=0
-read_SIMPLE_MAX_ANGLE=8 err=0
+read_USE_SIMPLE_SETTING=False err=0
 s012=0
-read_SIMPLE_MAX_WIDTH=9 err=0
+read_MDL_METHOD=0 err=0
 s013=0
-read_USE_DETAIL_MAX_WIDTH=False err=0
+read_SIMPLE_MAX_ANGLE=8 err=0
 s014=0
 mesh_exists=True err=0
 s015=0

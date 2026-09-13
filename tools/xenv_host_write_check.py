@@ -40,11 +40,12 @@ WORK = ROOT / "_p12u_gate"
 BASE = ROOT / "box.pph"
 
 #: (xenv 键, 写入值, getter, 说明) —— 键名全部来自 R6-5 实测
+#: R10-3：新一批已实测键（setter 侧已由 xenv_key_probe 核实）
 WRITES = [
+    ("USE_SIMPLE_SETTING", "false", "GetFacetUseSimpleSetting",
+     "简单设置=off"),
+    ("MDL_METHOD", "0", "GetMDLMethod", "MDL 方法=0"),
     ("SIMPLE_MAX_ANGLE", "8", "GetFacetSimpleMaxAngle", "角度=8"),
-    ("SIMPLE_MAX_WIDTH", "9", "GetFacetSimpleMaxWidth", "最大宽度=9"),
-    ("USE_DETAIL_MAX_WIDTH", "false", "GetFacetUseDetailMaxWidth",
-     "细节最大宽度=off"),
 ]
 SECTION = "FACET"
 

@@ -1076,6 +1076,32 @@ host-gone 行带 WER 报告时同时置 **`host_crash=True`**，可直接断言�
 
 `tools/cond_ledger.py` 常量 + 校验：宇宙 **165 = 精确键 92（90+2）+ 别名 1 + 边界 72（71+1）**；
 `Thermoregulation` 为宇宙外族级注记，单独记账。再生若改账目 → 立即红。
+
+---
+
+## 25. R10 更新（2026-09-14）—— 零流场判据落地 + CADthru 控版否证 + 宿主键 8 条
+
+### 25.1 §5-O3「零流场 delta」从指控变成代码判据（R10-1 前提部分）
+
+`solver_delta.zero_field_report()`：判据取**主变量**（`VEL` / `PRES`）而非「所有场为零」——
+湍流辅助量（`EVIS`/`TURK`/`TEPS`）在零流场里天然非零，用它们判会漏报。真数据验证：
+I5 `b1/box_b1_400.fph` vs `b2/box_b2_400.fph` → **`zero_field=True`、`primary_nonzero=[]`、
+`auxiliary_nonzero_count>0`**。即那张「delta_max=0」的表只说明**两边都是零**。
+
+FLD/iFLD 可得性：读取器齐备（`fldstats`/`ifld`/`solver_delta --kind fld|ifld`/`fldutil_bridge`），
+但磁盘上已解算产物**全是 `.fph`**、无 `.fld`/`.ifld` → 「工具可得、产物不可得」。
+50 Pa 双跑未执行（单腿 1000–1500 s）→ R11-1 唯一主项。
+
+### 25.2 CADthru 无法控版（R10-2，否证）
+
+`SaveXTFile(asm, path)` 固定产出 `SCH_3701153_37102`（v37）；任何 3 参调用 → COM
+`无效的参数数目 (-2147352562)`；类型信息内省不可用。→ R9-2 的「v37 > 宿主 v34」是**硬约束**，
+替代路线是**宿主自身导出 x_t**（→ R11-2）。
+
+### 25.3 宿主键累计 8 条，三段证据齐（R10-3）
+
+新增 `FACET.USE_SIMPLE_SETTING`（true→false）、`FACET.MDL_METHOD`（1→0）、
+`FACET.DETAIL_CHORD_ANGLE`（10→0，数值 setter 再次归一化）；写回+回读 3/3、27/27 err=0。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

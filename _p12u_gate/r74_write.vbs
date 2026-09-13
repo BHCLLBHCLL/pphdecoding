@@ -53,13 +53,13 @@ out_.WriteLine "s011=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "mgs__alive=" & CStr(Not (MGS_ Is Nothing)) & " err=" & CStr(Err.Number)
 Err.Clear
-out_.WriteLine "read_SIMPLE_MAX_ANGLE=" & CStr(MGS_.GetFacetSimpleMaxAngle) & " err=" & CStr(Err.Number)
+out_.WriteLine "read_USE_SIMPLE_SETTING=" & CStr(MGS_.GetFacetUseSimpleSetting) & " err=" & CStr(Err.Number)
 out_.WriteLine "s012=" & CStr(Err.Number)
 Err.Clear
-out_.WriteLine "read_SIMPLE_MAX_WIDTH=" & CStr(MGS_.GetFacetSimpleMaxWidth) & " err=" & CStr(Err.Number)
+out_.WriteLine "read_MDL_METHOD=" & CStr(MGS_.GetMDLMethod) & " err=" & CStr(Err.Number)
 out_.WriteLine "s013=" & CStr(Err.Number)
 Err.Clear
-out_.WriteLine "read_USE_DETAIL_MAX_WIDTH=" & CStr(MGS_.GetFacetUseDetailMaxWidth) & " err=" & CStr(Err.Number)
+out_.WriteLine "read_SIMPLE_MAX_ANGLE=" & CStr(MGS_.GetFacetSimpleMaxAngle) & " err=" & CStr(Err.Number)
 out_.WriteLine "s014=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "mesh_exists=" & CStr(MG_.DoesMeshExist) & " err=" & CStr(Err.Number)

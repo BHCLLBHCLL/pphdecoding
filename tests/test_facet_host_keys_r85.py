@@ -68,13 +68,13 @@ class TestFacetKeysMatchHost(unittest.TestCase):
         float(width)
 
     def test_verified_writes_are_covered_by_panel_contract(self):
+        # 不变量（单调）：**每一个**已实测键都必须是面板真的写出的键名；
+        # 具体集合随轮次增长（R8-5 两条 → R10-3 三条 → …），故不写死。
         verified = {key for key, _v, _g, _l in self.check.WRITES}
-        self.assertEqual(
-            verified,
-            {"SIMPLE_MAX_ANGLE", "SIMPLE_MAX_WIDTH", "USE_DETAIL_MAX_WIDTH"})
+        self.assertGreaterEqual(len(verified), 3)
         src = (ROOT / "nav_panels.py").read_text(encoding="utf-8")
-        for key in ("SIMPLE_MAX_ANGLE", "SIMPLE_MAX_WIDTH"):
-            self.assertIn(key, src)
+        for key in sorted(verified):
+            self.assertIn(key, src, key)
         # 写宿主键的调用必须走 pphxml.set_xenv_value（写通道唯一入口）
         self.assertIn("set_xenv_value(", src)
 

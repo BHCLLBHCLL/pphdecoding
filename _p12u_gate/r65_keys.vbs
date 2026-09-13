@@ -56,28 +56,28 @@ Err.Clear
 out_.WriteLine "detailw_before=" & CStr(MGS_.GetFacetUseDetailMaxWidth) & " err=" & CStr(Err.Number)
 out_.WriteLine "s014=" & CStr(Err.Number)
 Err.Clear
-P00_ = 9.0
+P00_ = False
 out_.WriteLine "s015=" & CStr(Err.Number)
 Err.Clear
-MGS_.SetFacetSimpleMaxWidth P00
+MGS_.SetFacetUseSimpleSetting P00
 out_.WriteLine "s016=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "edit0_err=" & CStr(Err.Number) & " err=" & CStr(Err.Number)
 out_.WriteLine "s017=" & CStr(Err.Number)
 Err.Clear
-P10_ = False
+P10_ = 0
 out_.WriteLine "s018=" & CStr(Err.Number)
 Err.Clear
-MGS_.SetFacetUseDetailMaxWidth P10
+MGS_.SetMDLMethod P10
 out_.WriteLine "s019=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "edit1_err=" & CStr(Err.Number) & " err=" & CStr(Err.Number)
 out_.WriteLine "s020=" & CStr(Err.Number)
 Err.Clear
-P20_ = 8.0
+P20_ = 20.0
 out_.WriteLine "s021=" & CStr(Err.Number)
 Err.Clear
-MGS_.SetFacetSimpleMaxAngle P20
+MGS_.SetFacetDetailChordAngle P20
 out_.WriteLine "s022=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "edit2_err=" & CStr(Err.Number) & " err=" & CStr(Err.Number)

@@ -63,6 +63,38 @@ def _load_fph_fields(path: str | Path) -> dict:
     return out
 
 
+def zero_field_report(rep: dict, eps: float = 1e-12) -> dict:
+    """R10-1：判定这份 delta 是否建立在**零流场**上。
+
+    背景（审计 §5-O3）：I5 的 b1/b2 delta 看着「逐点相等、delta_max=0」，
+    实际是两个**零流场**（`FC_Vector:VEL` / `FC_Scalar:PRES` 均值都是 0）——
+    把「都一样」当成等价证据是假阳性。这里给 delta 报告加一个显式判据。
+
+    判据取**主变量**（名字含 VEL / PRES 的场）而不是「所有场都为零」：
+    湍流辅助量（EVIS / TURK / TEPS）在零流场里也天然非零，用它们判会漏报。
+    """
+    fields = rep.get("fields") or {}
+    primary, nonzero_primary, aux_nonzero = [], [], []
+    for name, e in fields.items():
+        try:
+            a = abs(float(e.get("a_mean") or 0.0))
+            b = abs(float(e.get("b_mean") or 0.0))
+        except (TypeError, ValueError):
+            continue
+        key = name.upper()
+        if ("VEL" in key) or ("PRES" in key):
+            primary.append(name)
+            if a > eps or b > eps:
+                nonzero_primary.append(name)
+        elif a > eps or b > eps:
+            aux_nonzero.append(name)
+    return {"zero_field": bool(primary) and not nonzero_primary,
+            "primary_fields": sorted(primary)[:12],
+            "primary_nonzero": sorted(nonzero_primary)[:12],
+            "auxiliary_nonzero_count": len(aux_nonzero),
+            "field_count": len(fields)}
+
+
 def compare_fph(path_a: str | Path, path_b: str | Path) -> dict:
     """FPH 逐变量对拍（先记录后判定：不设通过线）。"""
     pa, pb = Path(path_a), Path(path_b)
@@ -117,6 +149,8 @@ def compare_fph(path_a: str | Path, path_b: str | Path) -> dict:
         elif va is not None and vb is not None:
             entry["shape_mismatch"] = [list(va.shape), list(vb.shape)]
         rep["fields"][name] = entry
+    # R10-1：报告自带零流场判据（防止把「都为零」当成等价证据）
+    rep.update(zero_field_report(rep))
     return rep
 
 

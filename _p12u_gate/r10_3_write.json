@@ -1,0 +1,62 @@
+{
+  "base": "D:\\training\\cgns\\pphdecoding\\box.pph",
+  "writes": [
+    {
+      "key": "USE_SIMPLE_SETTING",
+      "value": "false",
+      "getter": "GetFacetUseSimpleSetting"
+    },
+    {
+      "key": "MDL_METHOD",
+      "value": "0",
+      "getter": "GetMDLMethod"
+    },
+    {
+      "key": "SIMPLE_MAX_ANGLE",
+      "value": "8",
+      "getter": "GetFacetSimpleMaxAngle"
+    }
+  ],
+  "offline": {
+    "ok": true,
+    "before": {
+      "USE_SIMPLE_SETTING": "true",
+      "MDL_METHOD": "1",
+      "SIMPLE_MAX_ANGLE": "5"
+    },
+    "written": {
+      "USE_SIMPLE_SETTING": "false",
+      "MDL_METHOD": "0",
+      "SIMPLE_MAX_ANGLE": "8"
+    },
+    "stored": {
+      "USE_SIMPLE_SETTING": "false",
+      "MDL_METHOD": "0",
+      "SIMPLE_MAX_ANGLE": "8"
+    },
+    "pph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r7_4_written.pph"
+  },
+  "host": {
+    "error": null,
+    "err0": 27,
+    "total": 27,
+    "alive": {
+      "app_": "True",
+      "doc_": "True",
+      "sn_": "True",
+      "mg_": "True",
+      "mdl_": "True",
+      "oct_": "True",
+      "mgs_": "True"
+    },
+    "reads": {
+      "USE_SIMPLE_SETTING": "False",
+      "MDL_METHOD": "0",
+      "SIMPLE_MAX_ANGLE": "8"
+    }
+  },
+  "hits": 3,
+  "host_ok": true,
+  "seconds": 49.6,
+  "passed": true
+}

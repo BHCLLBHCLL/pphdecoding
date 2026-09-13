@@ -41,10 +41,11 @@ WORK = ROOT / "_p12u_gate"
 BASE = ROOT / "box.pph"
 
 #: (setter 名, 参数, 新值, 说明) —— 只改 facet 数值项，不动网格器选择
+#: R10-3：新一批待核实键（前一批 5 条已在 R6-5/R7-4 定谳）
 EDITS = [
-    ("SetFacetSimpleMaxWidth", [9.0], "SimpleMaxWidth=9"),
-    ("SetFacetUseDetailMaxWidth", [False], "UseDetailMaxWidth=false"),
-    ("SetFacetSimpleMaxAngle", [8.0], "SimpleMaxAngle=8"),
+    ("SetFacetUseSimpleSetting", [False], "UseSimpleSetting=false"),
+    ("SetMDLMethod", [0], "MDLMethod=0"),
+    ("SetFacetDetailChordAngle", [20.0], "DetailChordAngle=20"),
 ]
 
 

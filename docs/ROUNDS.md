@@ -904,7 +904,7 @@ R8-5 已闭环 2 键（面板→xenv→宿主回读三段齐）；其余键仍�
 
 ---
 
-## R10 —— 提案（2026-09-14，≈5.5 人日）
+## R10 —— 数值等价的**前提**修复 + x_t 控版否证 + 宿主键铺开（2026-09-14，执行记录）
 
 ### 依据
 
@@ -921,12 +921,97 @@ R8-5 已闭环 2 键（面板→xenv→宿主回读三段齐）；其余键仍�
 | **R10-2** | **x_t schema 降版导出** | 按 R9-2 判据尝试让 CADthru 导出 v34 schema：先探测 `SaveXTFile` 是否接受版本/schema 参数，不通则查是否有环境变量/配置控制导出 schema | 得到宿主可读的 CADthru x_t（`OpenCadFile` 出 SNode），或给出「无法控版」的确切证据 | 1.5 |
 | **R10-3** | **宿主键写通道铺开** | 用 R6-5 式（宿主改项 → xenv 差分）核实新一批键（`USE_SIMPLE_SETTING` / `MDL_METHOD` / `DETAIL_*` / `OCT_MESH.FACET_*`），再用 R8-5 式写回并回读 | ≥3 个新键具备「面板→xenv→宿主回读」三段证据 | 1.5 |
 
+### 执行记录（2026-09-14）
+
+#### R10-1 ⚠️ 部分成（主项，如实）—— 把「零流场假阳性」变成代码判据；双跑仍未做
+
+**做了什么**（这部分是本项的前提，缺了后面全是假证据）：
+
+* `solver_delta.zero_field_report()`：delta 报告自带显式判据，且**判据取主变量**（名字含
+  `VEL` / `PRES` 的场），因为湍流辅助量（`EVIS` / `TURK` / `TEPS`）在零流场里天然非零 ——
+  用「所有场都为零」判会漏报；
+* `compare_fph()` 的返回值自动带上 `zero_field` / `primary_nonzero` / `auxiliary_nonzero_count`；
+* **真数据验证**（`tests/test_zero_field_r101.py`）：I5 的 `b1/box_b1_400.fph` vs `b2/box_b2_400.fph`
+  被判为 **`zero_field=True`、`primary_nonzero=[]`、`auxiliary_nonzero_count>0`** ——
+  审计 §5-O3 的「delta 建立在零流场」从**文字指控**变成**可复现数值事实**：
+  那张表里 `FC_Vector:VEL` / `FC_Scalar:PRES` 均值都是 0，逐点相等只说明「都是零」。
+
+**FLD / iFLD 可得性（本项验收的另一半）**：
+
+* 读取器齐备：`fldstats.py` / `ifld.py` / `solver_delta.py`（`--kind fld|ifld`）/ `fldutil_bridge.py`；
+* 但**磁盘上的已解算产物全部是 `.fph`**（b1/b2、exA36 三腿、probe 各件），没有 `.fld` / `.ifld` ——
+  即「可得性」目前是**工具可得、产物不可得**：需要求解器按 FLD 输出跑一次，或从 FPH 导出。
+
+**未完成**：50 Pa 变体双跑。按 §21.7 的实测时长，单腿 1000–1500 s（含冷启动/收敛），两腿加前置
+准备 ~40 min 实机；本轮预算已用于上述前提修复与 R10-2/R10-3。→ **R11-1 唯一主项（已锁定，不接新项）**。
+
+#### R10-2 ✅ 已成（负结果，验收第二分支）—— CADthru **无法控版**
+
+`tools/xt_schema_probe`（临时探针）实测：
+
+| 调用 | 结果 |
+|---|---|
+| `doc.SaveXTFile(asm, path)` | ret=1，产物 `SCH=SCH_3701153_37102`（v37） |
+| `doc.SaveXTFile(asm, path, 34 / 3400153 / "SCH_..." / 0 / True)` | 全部 `com_error 无效的参数数目 (-2147352562)` |
+| 类型信息内省 `GetTypeInfo` | `无效索引`（不可用） |
+
+**结论：CADthru 的 XT 导出固定 v37，COM 面无法指定 schema** —— 验收句走「给出无法控版的
+确切证据」分支。R9-2 的判据（写入端 v37 > 宿主接收端 v34）因此是**硬约束**。
+备选路线（→ R11-2）：用**宿主自身**导出 x_t（宿主 Parasolid 即 v34）作为 CADthru 的替代。
+
+#### R10-3 ✅ 已成 —— 宿主键写通道铺开（累计 8 条实测键）
+
+新一轮核实（宿主改项 → xenv 差分）：
+
+| 新键 | 观测 |
+|---|---|
+| `FACET.USE_SIMPLE_SETTING` | true → **false** ✓ |
+| `FACET.MDL_METHOD` | 1 → **0** ✓ |
+| `FACET.DETAIL_CHORD_ANGLE` | 10 → **0**（数值 setter 再次归一化；键映射成立） |
+
+写回 + 宿主回读（`xenv_host_write_check`）：`USE_SIMPLE_SETTING=false` / `MDL_METHOD=0` /
+`SIMPLE_MAX_ANGLE=8` → 宿主 getter 回读 **False / 0 / 8**，**27/27 err=0**、`sn_/mg_/mdl_/oct_/mgs_=True`。
+面板侧离线断言（R8-5）已证 Faceter 面板写的正是这些键名 → **三段证据齐**（面板→xenv→宿主回读）。
+
+#### 回归
+
+全量回归 **1205 passed / 4 skipped / 0 failed**（582.25 s；R9 末为 1201 —— 本轮净增 4 项：
+`tests/test_zero_field_r101.py`）。
 ### 明确不做（R10 内）
 
 * CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
 * 内核 / 求解器 / scPOST 复刻；
 * 不做条件收割（R8-1 封顶）、不做 STEP 直导网格参数扫描（R7-1 定性为宿主崩溃）；
 * **R10-1 期间不接新的实机排查**（要接必须显式记账为「主项让位」）。
+
+---
+
+---
+
+## R11 —— 提案（2026-09-14，≈4.5 人日）
+
+### 依据
+
+* R10-1 已把「零流场假阳性」变成代码判据（真数据验证通过），数值等价的**前提**已经干净，
+  只剩实机双跑这一下；
+* R10-2 否证了 CADthru 控版 → 需要换一条能得到**宿主可读 x_t** 的路（宿主自身导出 v34）；
+* R10-3 把实测键扩到 8 条且三段证据齐 → 键通道已可复用；
+* 数值等价已连续六轮顺延：R11 **只保留它做主项**，并继续锁定「不接新实机项」。
+
+### 条目
+
+| # | 条目 | 做法 | 验收句 | 人日 |
+|---|---|---|---|---|
+| **R11-1（唯一主项，锁定预算，预留 ≥1 h 实机）** | **50 Pa 变体双跑 + FLD/iFLD** | 同一 50 Pa 算例跑两腿（宿主原生工程 vs 本仓重写成员的工程），比 FPH 主变量；顺带取一腿开 FLD 输出以回答「iFLD 可得性」 | **非零场** delta 表入册（`zero_field=False`）；FLD/iFLD 结论明确 | 2.5 |
+| **R11-2** | **宿主侧 x_t 导出（v34）** | 用宿主 `ScFlowpreDoc.SaveXTFile` 把导入的 STEP 导成 x_t，比对 `SCH=` 是否 v34 且宿主可再次打开 | 得到宿主可读的 x_t（`OpenCadFile` 出 SNode），或证伪该路线 | 1.5 |
+| **R11-3** | **零流场判据接入 gate** | `solver_delta --gate` 时 `zero_field=True` 直接判不通过并给显式理由 | 构造零流场对拍时 gate 必须 FAIL 且理由可读 | 0.5 |
+
+### 明确不做（R11 内）
+
+* CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
+* 内核 / 求解器 / scPOST 复刻；
+* 条件收割（R8-1 封顶）、STEP 直导网格参数扫描（R7-1 定性为宿主崩溃）；
+* **R11-1 期间不接新的实机排查**。
 
 ---
 

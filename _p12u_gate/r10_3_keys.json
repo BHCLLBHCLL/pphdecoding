@@ -1,0 +1,69 @@
+{
+  "base": "D:\\training\\cgns\\pphdecoding\\box.pph",
+  "edits": [
+    {
+      "setter": "SetFacetUseSimpleSetting",
+      "params": [
+        false
+      ],
+      "label": "UseSimpleSetting=false"
+    },
+    {
+      "setter": "SetMDLMethod",
+      "params": [
+        0
+      ],
+      "label": "MDLMethod=0"
+    },
+    {
+      "setter": "SetFacetDetailChordAngle",
+      "params": [
+        20.0
+      ],
+      "label": "DetailChordAngle=20"
+    }
+  ],
+  "host": {
+    "error": null,
+    "err0": 47,
+    "total": 47,
+    "alive": {
+      "app_": "True",
+      "doc_": "True",
+      "mg_": "True",
+      "mgs_": "True",
+      "mgs2_": "True"
+    },
+    "seconds": 73.2
+  },
+  "chord_before": "1",
+  "chord_after": "1",
+  "angle_before": "5",
+  "angle_after": "5",
+  "width_before": "5",
+  "width_after": "5",
+  "detailw_before": "True",
+  "detailw_after": "True",
+  "mesher_before": "oct",
+  "surf_before": "facet_base",
+  "xenv_diff": {
+    "changed": {
+      "FACET.USE_SIMPLE_SETTING": {
+        "before": "true",
+        "after": "false"
+      },
+      "FACET.DETAIL_CHORD_ANGLE": {
+        "before": "10",
+        "after": "0"
+      },
+      "FACET.MDL_METHOD": {
+        "before": "1",
+        "after": "0"
+      }
+    },
+    "changed_count": 3,
+    "missing_count": 0,
+    "missing_sample": {}
+  },
+  "passed": true
+}
