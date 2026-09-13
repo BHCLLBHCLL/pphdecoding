@@ -440,7 +440,7 @@ watchdog 只能按日志静默判活；(b) 崩溃前抓 STpre 的 WS/私有字�
 
 ---
 
-## R5 —— 提案（2026-09-14，≈6 人日）
+## R5 —— 网格进度信号 + 面板落盘再切 2 页（2026-09-14，执行记录）
 
 ### 依据
 
@@ -460,11 +460,94 @@ watchdog 只能按日志静默判活；(b) 崩溃前抓 STpre 的 WS/私有字�
 | **R5-4** | **条件体系补深（原 R3-3）** | 宿主批量收割 43 个未落键 `CreateCond*`（毒类型单进程隔离） | 精确键 90 → **≥140 / 165** | 3 |
 | **R5-5** | **数值等价（原 R3-5）** | 50 Pa 变体双跑出非零场 delta 表 | delta 表入册且非零场；FLD/iFLD 结论明确 | 2 |
 
+### 执行记录（2026-09-14）
+
+#### R5-1 ✅ 已成 —— CPU 进度信号 + 宿主内存取证
+
+问题：x_t 网格 170 s、STEP 网格 25 min **都不写日志**，只按日志静默判活会误杀正常计算；
+而「宿主已死 + 工作进程空转」又必须照旧判 host_gone —— 两条判据互相拉扯。
+
+修法（`automation/modal_watch.py` + `automation/host_watchdog.py`）：
+
+* 新增纯 ctypes 探针：`process_memory`（WS / 峰值 WS / 提交）、`process_cpu_seconds`
+  （GetProcessTimes，内核+用户）、`total_cpu_seconds`、`host_and_worker_cpu`（宿主 + 工作进程，
+  **网格算在工作进程里**）；
+* `FlowExecutor` 新增 `cpu_fn` / `mem_fn` / `cpu_progress_delta`（默认 2 s）与 `_cpu_progress_ok()`：
+  **仅当宿主曾探到在场**（`_host_seen_alive`）时，CPU 推进才重置惰性计时 —— 这条守卫保证
+  「宿主消失 + 工作进程空转」仍然判 host_gone（R3-1/R4-1 的形态不会被掩盖）；
+* 台账新增 `cpu_progress_events` 与 `last_seen_memory`（内存在**宿主还在时**采样，消失后就问不到了）。
+
+测试 `tests/test_progress_signal_r51.py`（6 项）：真实进程内存/CPU 探针；**CPU 推进时日志静默不得判 hung**
+（同一场景去掉进度信号会写出一条 log_idle 行）；host_gone 优先于 CPU 推进且带内存画像；未探到宿主时
+进度通道禁用。
+
+#### R5-3 ✅ 已成 —— 面板落盘再切 2 页（memory_only 6 → 4）
+
+新增 JSON 变体 `panel_json_get` / `panel_json_set`（嵌套结构经 main.xenv 落盘）：
+
+| 面板 | 段 | 内容 |
+|---|---|---|
+| `MeshParamBody` | `PANEL_MESH_PARAM` | 棱柱层厚系数/层数、分配法、Other 类型、明细与零件分配（JSON） |
+| `NonSolidBody` | `PANEL_NON_SOLID` | 三张**登记列表** group / coord / sheet（JSON） |
+
+审计随之变化：**persisted 11 → 13，memory_only 6 → 4**（余 `_PartsControlFollowupBody` /
+`CreatePartsBody` / `ExecuteBody` / `CondTypeCatalogDialog`）。测试 `tests/test_panel_persist_r53.py`（7 项）。
+
+宿主零破坏（`_p12u_gate/r5_3_xenv.json`）：工程带 **3 个**额外 xenv 段（OPTION_NAV / PANEL_MESH_PARAM /
+PANEL_NON_SOLID）→ OpenProject **25/25 err=0**、`sn_/mg_/mdl_/oct_=True`、`mesh_exists=True`。
+
+> **如实说明**：`MeshParamBody` 的字段与宿主 `MESH`/`MESH_COMMON`/`OCT_MESH` 段的键（`MESHER`、
+> `SURF_MESHER`、`FACET_*`…）**不是 1:1**。在逐键核实之前**不写宿主键** —— 写错会真的改变宿主的
+> 网格行为，代价远高于「本工具自己存一份」。逐键映射核实列为 R6-5。
+
+#### R5-2 ⏳ 未执行，但已被解锁 → R6-1
+
+STEP 参数阶梯此前卡在「长网格会被误判 log-idle 杀掉」；R5-1 的 CPU 进度信号正好解除这个死结。
+余下成本是每档最长 ~25 min 的实机时间，本轮预算不足，顺延一轮（工具侧 `--target-num` / `--min-size`
+在 R4-1 已就绪）。
+
+#### R5-4 / R5-5 ❌ 未执行 → R6-2 / R6-3
+
+条件体系补深（多轮批量收割 + 毒类型隔离）与数值等价（需跑求解器）都超出本轮预算，如实顺延。
+
+#### 回归
+
+全量回归 **1179 passed / 4 skipped / 0 failed**（580.29 s；R4 末为 1167 —— 本轮净增 12 项：
+`tests/test_progress_signal_r51.py` 6 项 + `tests/test_panel_persist_r53.py` 6 项）。
 ### 明确不做（R5 内）
 
 * CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
 * 内核 / 求解器 / scPOST 复刻；
 * R5-3 每轮最多 2 页，不做机械摊开。
+
+---
+
+---
+
+## R6 —— 提案（2026-09-14，≈10 人日）
+
+### 依据
+
+* R5-1 的进度信号解除了「长网格被误判 log-idle」的死结 → STEP 阶梯（R6-1）现在可跑；
+* R5-3 把 memory_only 压到 4，且证明了「多段 xenv 不破坏宿主」→ 剩余 4 页可继续按证据推进；
+* `MeshParamBody` 已能落盘，但字段与宿主网格键仍未映射（写错会改坏宿主行为）→ 需要逐键核实方法；
+* R5-4 / R5-5 两项连续两轮顺延，需要各自一块完整预算。
+
+### 条目
+
+| # | 条目 | 做法 | 验收句 | 人日 |
+|---|---|---|---|---|
+| **R6-1** | **STEP 网格参数阶梯（原 R5-2）** | 以 bbox 为基准粗→细扫 `TARGETNUMBER`/`BASESIZE.MIN`，每档 ≤1 次尝试；靠 R5-1 的进度信号不再误杀 | 给出「成功档 + 首崩档」两条参数与各自 `mesh_exists`、宿主存活时长、内存峰值 | 2.5 |
+| **R6-2** | **条件体系补深（原 R5-4）** | 宿主批量收割 43 个未落键 `CreateCond*`，毒类型单进程隔离、旧版工程先做版本转换 | 精确键 90 → **≥140 / 165**；写盘条件宿主零破坏 | 3 |
+| **R6-3** | **数值等价（原 R5-5）** | 50 Pa 变体双跑出非零场 delta 表 | delta 表入册且非零场；FLD/iFLD 可得性明确 | 2 |
+| **R6-4** | **面板落盘最后 2 页** | 用同一通道接 `CreatePartsBody` 与 `ExecuteBody` | memory_only 4 → **2**；宿主零破坏 | 1.5 |
+| **R6-5** | **MeshParam → 宿主键映射核实** | 在宿主里改一项、对 xenv 做差分定位其真实键；核实一个写一个 | ≥3 个字段写入宿主键且宿主行为符合预期 | 2 |
+
+### 明确不做（R6 内）
+
+* CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
+* 内核 / 求解器 / scPOST 复刻；
+* 不把未核实的 MeshParam 字段写进宿主键（宁可多留一轮）。
 
 ---
 

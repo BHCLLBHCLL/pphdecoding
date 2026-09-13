@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import functools
+import json
 import math
 import os
 from pathlib import Path
@@ -3706,9 +3707,18 @@ class NonSolidBody(_Body):
             lst.clear()
             lst.addItems(regs)
 
+    #: R5-3：落盘段。本面板的用户态是三类**登记列表**（group/coord/sheet），
+    #: 其余显示均从 main.xml / xenv 派生；列表以 JSON 落 main.xenv。
+    XENV_SECTION = "PANEL_NON_SOLID"
+
     def load(self, ctx: dict) -> None:
         self._ctx = ctx
-        self._sess()  # ensure
+        sess = self._sess()  # ensure
+        # R5-3：xenv 优先（重启保留），session 兜底
+        for key in ("group_parts", "coord_parts", "sheet_parts"):
+            disk = panel_json_get(ctx, self.XENV_SECTION, key, None)
+            if isinstance(disk, list) and disk:
+                sess[key] = disk
         draft = ctx.setdefault("session", {}).get("non_solid") or {}
         tab = draft.get("tab")
         if tab:
@@ -3728,6 +3738,11 @@ class NonSolidBody(_Body):
         sess.setdefault("group_parts", [])
         sess.setdefault("coord_parts", [])
         sess.setdefault("sheet_parts", [])
+        # R5-3：登记列表落 main.xenv（JSON），重启保留
+        sess["non_solid_persisted"] = panel_json_set(
+            ctx, self.XENV_SECTION,
+            {k: sess[k] for k in ("group_parts", "coord_parts",
+                                  "sheet_parts")})
         return True
 
     def _rename_list(self, tree: QTreeWidget, key: str, field: str) -> None:
@@ -14022,9 +14037,19 @@ class MeshParamBody(_Body):
         self.btn_set_stable.setEnabled(detailed)
         self.btn_set_shape.setEnabled(detailed)
 
+    #: R5-3：落盘段（本工具自用）。宿主 xenv 的 MESH/MESH_COMMON/OCT_MESH 段
+    #: 存的是**宿主语义**的网格器参数（MESHER/SURF_MESHER/FACET_* 等），与本
+    #: 面板字段不是 1:1；在逐键核实之前不写宿主键，避免改坏宿主行为。
+    XENV_SECTION = "PANEL_MESH_PARAM"
+
     def load(self, ctx: dict) -> None:
         self._ctx = ctx
         sess = ctx.setdefault("session", {}).setdefault("mesh_param", {})
+        # R5-3：xenv 落盘值优先（重启保留），session 兜底
+        disk = panel_json_get(ctx, self.XENV_SECTION, "state", None)
+        if isinstance(disk, dict):
+            sess = dict(disk)
+            ctx["session"]["mesh_param"] = sess
         if "prism_t" in sess:
             self.sp_prism_t.setValue(float(sess["prism_t"]))
         if "prism_n" in sess:
@@ -14131,7 +14156,7 @@ class MeshParamBody(_Body):
         other = ("Stability-oriented" if self.rb_stable.isChecked()
                  else "Model shape-oriented" if self.rb_shape.isChecked()
                  else "Detailed setting")
-        ctx.setdefault("session", {})["mesh_param"] = {
+        state = {
             "prism_t": self.sp_prism_t.value(),
             "prism_n": self.sp_prism_n.value(),
             "prism_detail": dict(self._prism_detail),
@@ -14140,6 +14165,10 @@ class MeshParamBody(_Body):
             "other_type": other,
             "other": self._other_values,
         }
+        sess = ctx.setdefault("session", {})
+        sess["mesh_param"] = state            # 运行时镜像
+        sess["mesh_param_persisted"] = panel_json_set(
+            ctx, self.XENV_SECTION, {"state": state})
         return True
 
 
@@ -14260,6 +14289,24 @@ def panel_xenv_set(ctx: dict, section: str, values: dict) -> bool:
         pphxml.set_xenv_value(xenv, section, key, str(val))
     ctx["xenv_dirty"] = True
     return True
+
+
+def panel_json_get(ctx: dict, section: str, key: str, default):
+    """读 JSON 编码的面板状态（R5-3：嵌套结构经 xenv 落盘）。"""
+    raw = panel_xenv_get(ctx, section, key, "")
+    if not raw:
+        return default
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def panel_json_set(ctx: dict, section: str, values: dict) -> bool:
+    """把嵌套结构 JSON 编码后写入 xenv（``sort_keys`` 保证可比对）。"""
+    return panel_xenv_set(ctx, section, {
+        k: json.dumps(v, ensure_ascii=False, sort_keys=True)
+        for k, v in values.items()})
 
 
 def panel_bool(text) -> bool:

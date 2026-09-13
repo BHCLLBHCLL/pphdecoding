@@ -56,7 +56,8 @@ STORES: dict[str, tuple[list[str], list[str]]] = {
         [r"xenv"],
         # panel_xenv_set 是 R4-4 的统一落盘口：面板自身不出现 xenv_dirty，
         # 但语义上就是写 main.xenv（否则审计会把落盘后的面板仍判 memory_only）。
-        [r"xenv_dirty", r"panel_xenv_set", r'\["xenv"\]\s*='],
+        [r"xenv_dirty", r"panel_xenv_set", r"panel_json_set",
+         r'\["xenv"\]\s*='],
     ),
     "prp": (
         [r"\bprp\b"],

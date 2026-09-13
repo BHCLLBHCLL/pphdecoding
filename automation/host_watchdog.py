@@ -160,7 +160,9 @@ class FlowExecutor:
                  gone_check_after: float = 60.0,
                  gone_confirm: float = 30.0,
                  kill_all_fn=None, error_retry_delay: float = 20.0,
-                 kill_settle: float = 2.0, retry_with_boot: bool = False):
+                 kill_settle: float = 2.0, retry_with_boot: bool = False,
+                 cpu_fn=None, mem_fn=None,
+                 cpu_progress_delta: float = 2.0):
         self.vbs_path = Path(vbs_path)
         self.log_path = Path(log_path)
         self.name = name
@@ -191,6 +193,17 @@ class FlowExecutor:
         # R4-2：最后一次**探到**的宿主 pid。宿主消失后就再也问不到 pid 了，
         # 归因要靠这份快照（外加日志最后一行 / VBS 路径）。
         self._last_seen_hosts: list[int] = []
+        # R5-1：进度信号。网格计算期间日志必然长时间不动（x_t 170 s、STEP 25 min），
+        # 只按日志静默判活会误杀正常计算；CPU 在推进 = 还在干活。但**仅在宿主
+        # 在场时才算数** —— 否则「宿主已死 + 工作进程空转」会被误判成健康
+        # （R3-1/R4-1 的 host_gone 形态）。
+        self._cpu_fn = cpu_fn or modal_watch.host_and_worker_cpu
+        self._mem_fn = mem_fn or modal_watch.process_memory
+        self.cpu_progress_delta = cpu_progress_delta
+        self._last_cpu: float | None = None
+        self._cpu_progress = 0
+        self._host_seen_alive = False
+        self._last_seen_mem: list[dict] = []
 
     def _kill_all(self) -> None:
         if self._kill_all_fn is not None:
@@ -225,9 +238,31 @@ class FlowExecutor:
         重网格计算的健康宿主（``_p12u_gate/hang_characterization.jsonl``
         的 step_mesh 行即此误判）。"""
         try:
-            return self._host_fn()
+            alive = self._host_fn()
         except Exception:  # noqa: BLE001
             return None
+        if alive:
+            # R5-1：宿主还在时采样内存 —— 它一消失就再也问不到了
+            self._host_seen_alive = True
+            mem = [m for m in (self._mem_fn(p) for p in alive) if m]
+            if mem:
+                self._last_seen_mem = mem
+        return alive
+
+    def _cpu_progress_ok(self) -> bool:
+        """R5-1：CPU 在推进 **且** 宿主在场 → 视为活性（重置日志惰性计时）。"""
+        if not self._host_seen_alive:
+            return False
+        try:
+            cpu = self._cpu_fn()
+        except Exception:  # noqa: BLE001
+            return False
+        if cpu is None:
+            return False
+        prev, self._last_cpu = self._last_cpu, cpu
+        if prev is None:
+            return False
+        return (cpu - prev) >= self.cpu_progress_delta
 
     def _characterize(self, attempt: int, outcome: str, reason: str,
                       idle_s: float, t_start: float,
@@ -248,6 +283,8 @@ class FlowExecutor:
             row["windows"] = [{k: w[k] for k in ("cls", "title")}
                               for h in hosts
                               for w in modal_watch.visible_windows(h)]
+            if self._cpu_progress:
+                row["cpu_progress_events"] = self._cpu_progress
             if reason_kind == "host_gone":
                 # R4-2：宿主已经没了 —— 现查 pid 必然为空，归因靠「最后一次
                 # 探到的 pid」+ 日志最后一行 + VBS 路径（三个都是判因线索）。
@@ -257,6 +294,9 @@ class FlowExecutor:
                                          for p in self._last_seen_hosts]
                 row["vbs"] = self.vbs_path.name
                 row["log_last_line"] = log_last_line(self.log_path)
+                if self._last_seen_mem:
+                    # R5-1：最后采到的内存画像（判 OOM 用）
+                    row["last_seen_memory"] = self._last_seen_mem
             if outcome == "hung":
                 dump = self.work_dir / (self.name + "_hang_" +
                                         time.strftime("%H%M%S") + ".dmp")
@@ -337,6 +377,12 @@ class FlowExecutor:
                 checked_hosts = False
                 continue
             idle = time.time() - last_change
+            if hosts_gone_since is None and self._cpu_progress_ok():
+                # R5-1：日志不动但 CPU 在涨 → 计算还在走，重置惰性计时
+                last_change = time.time()
+                self._cpu_progress += 1
+                checked_hosts = False
+                continue
             if idle > self.gone_check_after and not checked_hosts:
                 checked_hosts = True
                 alive = self._hosts_safe()

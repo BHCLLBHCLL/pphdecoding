@@ -46,6 +46,16 @@ SECTION = "OPTION_NAV"
 VALUES = {"always_show_wizard": True, "show_bam_item": False,
           "show_mesher_item": True}
 
+#: R5-3：另两个落盘面板（JSON 变体）。同一次宿主重开一起验证 —— 多段不破坏。
+EXTRA_SECTIONS = {
+    "PANEL_MESH_PARAM": {
+        "state": '{"assign": "Wrapping", "prism_n": 4, "prism_t": 3.5}',
+    },
+    "PANEL_NON_SOLID": {
+        "group_parts": '[{"name": "grp1", "parts": ["Part"]}]',
+    },
+}
+
 
 def _load(name: str, path: Path):
     spec = importlib.util.spec_from_file_location(name, str(path))
@@ -71,6 +81,10 @@ def offline_roundtrip(base: Path, out_pph: Path) -> dict:
     wrote = nav_panels.panel_xenv_set(
         ctx, SECTION,
         {k: nav_panels.panel_bool_str(v) for k, v in VALUES.items()})
+    extra_ok = True
+    for sec, kv in EXTRA_SECTIONS.items():
+        if not nav_panels.panel_xenv_set(ctx, sec, kv):
+            extra_ok = False
     data = pphxml.serialize_xenv(xenv)
     pphwriter.clone_pph(str(base), str(out_pph), {"main.xenv": data})
     # 离线「重启」：重新打开容器、重新解析 xenv
@@ -81,9 +95,17 @@ def offline_roundtrip(base: Path, out_pph: Path) -> dict:
     ctx2 = {"xenv": xenv2, "session": {}}
     read_back = {k: nav_panels.panel_xenv_get(ctx2, SECTION, k, "<missing>")
                  for k in VALUES}
-    return {"ok": bool(wrote) and got == want and read_back == want,
+    extra_back = {}
+    if xenv2 is not None:
+        for sec, kv in EXTRA_SECTIONS.items():
+            extra_back[sec] = {k: xenv2.get(sec, k) for k in kv}
+    extra_ok = extra_ok and all(extra_back.get(sec, {}) == kv
+                                for sec, kv in EXTRA_SECTIONS.items())
+    return {"ok": bool(wrote) and got == want and read_back == want
+                   and extra_ok,
             "wrote": wrote, "xenv_dirty": bool(ctx.get("xenv_dirty")),
             "written": want, "reparsed": got, "panel_readback": read_back,
+            "extra_sections": extra_back,
             "pph": str(out_pph), "xenv_bytes": len(data)}
 
 

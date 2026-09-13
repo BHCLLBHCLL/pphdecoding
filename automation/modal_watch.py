@@ -74,6 +74,105 @@ def _kernel32():
     return k
 
 
+#: R5-1：进程活性/资源探针（同样是纯 ctypes）。网格计算期间日志必然长时间
+#: 不动，只按日志静默判活会误杀正常计算；CPU 在推进是唯一可靠的"还在干活"
+#: 信号。内存在宿主消失后问不到，必须在**它还在**的时候采样。
+PROCESS_QUERY_INFORMATION = 0x0400
+MEM_COMMIT = 0x00000008
+
+
+class _FILETIME(ctypes.Structure):
+    _fields_ = [("dwLowDateTime", wintypes.DWORD),
+                ("dwHighDateTime", wintypes.DWORD)]
+
+
+class _PROCESS_MEMORY_COUNTERS(ctypes.Structure):
+    _fields_ = [("cb", wintypes.DWORD),
+                ("PageFaultCount", wintypes.DWORD),
+                ("PeakWorkingSetSize", ctypes.c_size_t),
+                ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t),
+                ("PeakPagefileUsage", ctypes.c_size_t)]
+
+
+def process_memory(pid: int) -> dict | None:
+    """进程内存画像（WS / 峰值 WS / 提交），失败返回 None。"""
+    try:
+        k = _kernel32()
+        h = k.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+        if not h:
+            return None
+        try:
+            psapi = ctypes.WinDLL("psapi", use_last_error=True)
+            psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+            psapi.GetProcessMemoryInfo.argtypes = [
+                ctypes.c_void_p, ctypes.POINTER(_PROCESS_MEMORY_COUNTERS),
+                wintypes.DWORD]
+            c = _PROCESS_MEMORY_COUNTERS()
+            c.cb = ctypes.sizeof(_PROCESS_MEMORY_COUNTERS)
+            if not psapi.GetProcessMemoryInfo(h, ctypes.byref(c), c.cb):
+                return None
+            mb = 1048576.0
+            return {"pid": int(pid),
+                    "ws_mb": round(c.WorkingSetSize / mb, 1),
+                    "peak_ws_mb": round(c.PeakWorkingSetSize / mb, 1),
+                    "pagefile_mb": round(c.PagefileUsage / mb, 1)}
+        finally:
+            k.CloseHandle(h)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def process_cpu_seconds(pid: int) -> float | None:
+    """进程累计 CPU 秒数（kernel+user），失败返回 None。"""
+    try:
+        k = _kernel32()
+        k.GetProcessTimes.restype = wintypes.BOOL
+        k.GetProcessTimes.argtypes = [ctypes.c_void_p,
+                                      ctypes.POINTER(_FILETIME),
+                                      ctypes.POINTER(_FILETIME),
+                                      ctypes.POINTER(_FILETIME),
+                                      ctypes.POINTER(_FILETIME)]
+        h = k.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+        if not h:
+            return None
+        try:
+            c_, e_, kern, usr = _FILETIME(), _FILETIME(), _FILETIME(), _FILETIME()
+            if not k.GetProcessTimes(h, ctypes.byref(c_), ctypes.byref(e_),
+                                     ctypes.byref(kern), ctypes.byref(usr)):
+                return None
+            def _secs(ft) -> float:
+                return ((ft.dwHighDateTime << 32) | ft.dwLowDateTime) / 1e7
+            return _secs(kern) + _secs(usr)
+        finally:
+            k.CloseHandle(h)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def total_cpu_seconds(pids) -> float | None:
+    """一组进程的 CPU 秒数之和；一个都问不到时返回 None（未知）。"""
+    vals = [process_cpu_seconds(p) for p in pids]
+    got = [v for v in vals if v is not None]
+    if not got:
+        return None
+    return float(sum(got))
+
+
+def host_and_worker_cpu(host_image: str = "STpre_Bx64net",
+                        work_image: str = "scFLOWpre_Bx64net") -> float | None:
+    """宿主 + 工作进程的 CPU 秒数（网格计算跑在工作进程里）。"""
+    try:
+        pids = host_pids(host_image) + host_pids(work_image)
+    except Exception:  # noqa: BLE001
+        return None
+    return total_cpu_seconds(pids)
+
+
 def host_pids_toolhelp(image_name: str = "STpre_Bx64net") -> list[int]:
     """按映像名枚举 pid（Toolhelp32 快照；不区分扩展名，同 Get-Process 语义）。"""
     k = _kernel32()

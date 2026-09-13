@@ -48,11 +48,13 @@ class TestPanelStoreAudit(unittest.TestCase):
         cls.audit = _load("panel_audit_r4", AUDIT)
 
     def test_classifies_memory_only_panels(self):
+        # R5-3 之后 MeshParam/NonSolid 已落盘，memory_only 只剩这 4 个
         data = self.audit.build()
         by = {p["panel"]: p for p in data["panels"]}
-        for name in ("MeshParamBody", "NonSolidBody"):
-            self.assertIn(name, by)
-            self.assertEqual(by[name]["persistence"], "memory_only", name)
+        mem = sorted(n for n, p in by.items()
+                     if p["persistence"] == "memory_only")
+        self.assertEqual(mem, ["CondTypeCatalogDialog", "CreatePartsBody",
+                               "ExecuteBody", "_PartsControlFollowupBody"])
         self.assertGreaterEqual(len(data["panels"]), 30)
 
     def test_option_nav_is_persisted_after_r44(self):

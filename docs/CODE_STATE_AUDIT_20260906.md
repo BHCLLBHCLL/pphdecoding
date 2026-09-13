@@ -946,6 +946,30 @@ TOLERANCE/UNIT/…），**无** OPTION 类段 —— 宿主把同名开关放在
 
 `hang_characterization.jsonl` 新增 `reason_kind`（`host_gone` / `log_idle`）、`host_gone`、
 `last_seen_hosts`/`last_seen_diag`、`log_last_line`、`vbs` —— R4-1 的 Run A 行已实际带全字段。
+
+---
+
+## 20. R5 更新（2026-09-14）—— 进度信号 + 面板落盘再切 2 页
+
+### 20.1 进度信号：CPU 活性取代「纯日志静默」判活（R5-1）
+
+`modal_watch` 新增纯 ctypes 探针 `process_memory` / `process_cpu_seconds` / `total_cpu_seconds` /
+`host_and_worker_cpu`（网格算在**工作进程** `scFLOWpre_Bx64net` 里，必须一并计入）；
+`FlowExecutor._cpu_progress_ok()` 在**宿主曾探到在场**的前提下，用 CPU 推进重置日志惰性计时。
+该守卫是关键：否则「宿主已死 + 工作进程空转」（R3-1/R4-1 的失败形态）会被误判成健康。
+台账新增 `cpu_progress_events` / `last_seen_memory`（内存在宿主存活时采样）。
+
+### 20.2 面板落盘：memory_only 6 → 4（R5-3）
+
+`panel_json_get/set` 提供 JSON 变体；`MeshParamBody` → `main.xenv [PANEL_MESH_PARAM]`、
+`NonSolidBody` → `[PANEL_NON_SOLID]`。审计随之 **persisted 11 → 13 / memory_only 6 → 4**
+（余 `_PartsControlFollowupBody` / `CreatePartsBody` / `ExecuteBody` / `CondTypeCatalogDialog`）。
+带 3 个额外 xenv 段的工程宿主重开 **25/25 err=0**、`mesh_exists=True`。
+
+### 20.3 未执行项（如实记账）
+
+* R5-2 STEP 参数阶梯：**已被 R5-1 解锁**（长网格不再被误杀），但每档最长 ~25 min → R6-1；
+* R5-4 条件补深、R5-5 数值等价：各自需要一整块预算 → R6-2 / R6-3。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。
