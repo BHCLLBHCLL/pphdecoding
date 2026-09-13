@@ -36,6 +36,10 @@ import console_utf8  # noqa: E402
 console_utf8.enable()
 
 NAV = ROOT / "nav_panels.py"
+
+#: R24-1：**对话框不计入面板账**（它们是模态子窗，不是 Navigation/Detailed 页）。
+#: 因此 memory_only 的「面板」口径 = 排除本集合后的计数。
+NOT_A_PANEL = {"CondTypeCatalogDialog"}
 OUT_MD = ROOT / "docs" / "PANEL_STORE_MAP.md"
 OUT_JSON = ROOT / "schemas" / "panel_store_map.json"
 
@@ -165,6 +169,8 @@ def build() -> dict:
         rec = audit_class(b)
         rec["page_keys"] = sorted(keymap.get(rec["panel"], []))
         panels.append(rec)
+    for p in panels:
+        p["is_panel"] = p["panel"] not in NOT_A_PANEL
     counts: dict[str, int] = {}
     for p in panels:
         head = p["persistence"].split(":")[0]
