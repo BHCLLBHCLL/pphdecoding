@@ -909,6 +909,43 @@ max/min）不符，且对只拥有 0–2 个面的单元退化。改为文档口
 ### 18.4 §3「快照从不回写」的精确化
 
 格式层**并非**缺失：`sctsnapshot.SctSnapshot.serialize()` + `SnapRecord.serialize()` 已存在，且 `tests/test_snapshot_reserialize.py` 证明对真实快照 `snap.serialize(raw) == raw`（逐字节）。缺口在 **GUI 侧从未调用**（`pph_gui.py` 只 `SctSnapshot.load` 供展示）。故落盘化的前置不是「写通道」，而是**逐面板状态存储审计**（R4-3）。
+
+---
+
+## 19. R4 更新（2026-09-14）—— 面板落盘通道 + 条件写盘零破坏 + STEP 网格定性
+
+### 19.1 面板存储映射（R4-3，可再生）
+
+`tools/panel_store_audit.py` → `docs/PANEL_STORE_MAP.md` + `schemas/panel_store_map.json`，
+37 个面板类逐条带 file:line 证据：**persisted 11 / memory_only 6 / read_only 3 / none 17**。
+memory_only 剩 `_PartsControlFollowupBody` / `CreatePartsBody` / `NonSolidBody` / `MeshParamBody` /
+`ExecuteBody` / `CondTypeCatalogDialog`。
+
+### 19.2 落盘通道打通（R4-4）
+
+`panel_xenv_get` / `panel_xenv_set` / `panel_bool`：面板状态写 `main.xenv` Section/Key 并置
+`xenv_dirty`；**无 xenv 时如实返回 False**。首个切片 `OptionNavBody` → `[OPTION_NAV]`，
+重启保留（容器重写后回读一致）且宿主 OpenProject **25/25 err=0**、`mesh_exists=True`（多一段
+不破坏宿主）。注意：宿主 xenv 现有 13 段（CAD/FACET/MESH/MESH_COMMON/OCT_MESH/RIDGE/TINYFACE/
+TOLERANCE/UNIT/…），**无** OPTION 类段 —— 宿主把同名开关放在用户设置里。
+
+### 19.3 条件写盘零破坏（R4-5）
+
+`p12c_cond_harvest_out.pph`（49 条条件）逐条走去壳同路径原地重写 **24** 条：离线 **0 diff**、
+宿主 **71/71 err=0**、`GetConditions().QueryConditionByName` **12/12 回读成功**。
+
+### 19.4 STEP 网格：宿主退出是参数/时间驱动的（R4-1）
+
+`cad_pipeline_gate` 新增 `--target-num` / `--min-size`（透传到录制参数表）。粗档
+（50000 / 0.002，录制值 100000 / 0.00021875）下宿主存活 **1502 s**（vs 录制参数 ~90 s），
+但最终仍 `host_gone`（`last_seen_hosts=[2136]`，worker `scFLOWpre_Bx64net` 继续空转）。
+即：**宿主进程 STpre 在持续重网格中自行退出**，对参数敏感 → 指向宿主侧资源/超时；尚无成功档，
+也没有内存量证据（R5-1/R5-2 承接）。
+
+### 19.5 宿主消失事件独立归因（R4-2）
+
+`hang_characterization.jsonl` 新增 `reason_kind`（`host_gone` / `log_idle`）、`host_gone`、
+`last_seen_hosts`/`last_seen_diag`、`log_last_line`、`vbs` —— R4-1 的 Run A 行已实际带全字段。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

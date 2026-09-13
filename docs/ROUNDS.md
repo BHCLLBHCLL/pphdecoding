@@ -311,7 +311,7 @@ STEP 复核归 **R3-1**。
 
 ---
 
-## R4 —— 提案（2026-09-14，≈7 人日）
+## R4 —— 面板落盘 + 条件写盘零破坏 + STEP 网格标定（2026-09-14，执行记录）
 
 ### 依据
 
@@ -330,11 +330,141 @@ STEP 复核归 **R3-1**。
 | **R4-4** | **面板落盘切片** | 按 R4-3 映射选 **1 个**纯 xml 面板做端到端（改 → 存 → 重启 → 保留 → 宿主可开） | 1 个面板设置经重启保留且宿主零破坏 | 2 |
 | **R4-5** | **条件写盘零破坏回归** | 用 R3-2 的通用入口批量改条件后宿主重开 | ≥20 条条件经去壳编辑后宿主 `err=0` 且条件可读 | 1.5 |
 
+### 执行记录（2026-09-14）
+
+#### R4-2 ✅ 已成 —— 宿主消失事件独立归因
+
+旧实现里 host-gone 只能读到一句 reason 文本：pid 拿不到（进程已消失）、最后跑到哪也拿不到。
+现在 ``host_watchdog`` 增三类字段：
+
+* ``reason_kind``：``host_gone`` / ``log_idle``（两类挂起从此可分流统计）；
+* ``host_gone=True`` + ``last_seen_hosts`` / ``last_seen_diag``：**最后一次探到的** pid 与诊断
+  （``_monitor`` 在探针成功时缓存，消失后才不会只剩空数组）；
+* ``log_last_line`` + ``vbs``：日志最后一行与脚本名，直接给出「死在哪个 VBS 行」。
+
+测试 ``tests/test_host_gone_r42.py``（5 项）：状态化 host_fn 先给 pid 再给空 → 断言字段齐备；
+log-idle 路径带 ``reason_kind=log_idle`` 且不含 host_gone；探针异常不得被当成 host_gone。
+
+#### R4-3 ✅ 已成 —— 面板状态存储审计（可再生）
+
+`tools/panel_store_audit.py`（静态扫描，逐条 file:line 证据）→ `docs/PANEL_STORE_MAP.md` +
+`schemas/panel_store_map.json`。37 个面板类判类：
+
+| 分类 | 数量 | 说明 |
+|---|---|---|
+| persisted | 11 | 写 main.xml / main.xenv（含 R4-4 之后的 OptionNav） |
+| memory_only | **6** | 只写 ``ctx["session"]``，重启即失 |
+| read_only | 3 | 只读 |
+| none | 17 | 纯 UI/无存储 |
+
+memory_only 现存 6 个：`_PartsControlFollowupBody` / `CreatePartsBody` / `NonSolidBody` /
+`MeshParamBody` / `ExecuteBody` / `CondTypeCatalogDialog`。
+
+扫描器修了两个自身缺陷（都已入测）：类块边界必须止于下一个顶层 ``class/def/赋值``（曾把
+模块级 `condition_registry_cached` 吞进来 → OptionNav 误判 persisted:xml）；xml 写标记用本仓
+约定 ``xml_dirty``/``ET.SubElement``（泛化的 ``.append(`` 会把布局代码误判为写 xml）。
+
+#### R4-4 ✅ 已成 —— 面板落盘切片（OptionNav → main.xenv，宿主零破坏）
+
+新增落盘通道 ``panel_xenv_get`` / ``panel_xenv_set`` / ``panel_bool``（nav_panels.py）：写
+``main.xenv`` 的 Section/Key 并置 ``xenv_dirty``；无 xenv 时**如实返回 False**（不再假装保存成功）。
+
+首个切片 ``OptionNavBody``（原 memory_only）落到 ``main.xenv [OPTION_NAV]``，session 退化为
+运行时镜像 + 旧工程兜底。证据 ``_p12u_gate/r4_4_xenv.json``（`tools/panel_persist_check.py`）：
+
+* 离线闭环：写入 → ``pphwriter.clone_pph`` 重写容器 → 重新解析 → 三项值原样回来（等价「重启保留」）；
+* 宿主闭环：OpenProject **25/25 err=0**、`sn_/mg_/mdl_/oct_=True`、`mesh_exists=True` —— 多出的
+  xenv 段**不破坏宿主读工程**。
+
+> 说明：宿主 xenv 现有 13 段（CAD/FACET/MESH/…/UNIT），**没有** OPTION 类段 —— 宿主把同名开关
+> 放在自己的用户设置里。故 ``[OPTION_NAV]`` 是「本工具的 UI 选项」；本条验收口径 = 本工具重启
+> 保留 + 宿主零破坏，两者均已量化。
+
+#### R4-1 ⚠️ 部分成 —— STEP 网格：宿主崩溃是**参数/时间驱动**，不是脚本瞬时硬失败
+
+`tools/cad_pipeline_gate.py` 新增刻度入口：`--target-num` / `--min-size`（并把覆盖透传到录制参数表
+`_recorded_oct_param_lines(target_num, min_size)` 的 `TARGETNUMBER` / `BASESIZE.MIN`），
+使八叉树参数可按模型尺度标定，而不是把 0.01 立方的录制值硬套到 82 mm 的风扇上。
+
+**Run A**（STEP，`--target-num 50000 --min-size 0.002`；录制值 100000 / 0.00021875）证据
+`_p12u_gate/r4_1_step_A.json`：
+
+| 量 | 录制参数（R3-1） | Run A（粗档） |
+|---|---|---|
+| 宿主存活时长（网格计算中） | ~90 s | **1502 s（25 min）** |
+| 结束方式 | `host process gone` | `host process gone`（`reason_kind=host_gone`） |
+| 结束前 worker CPU | — | `scFLOWpre_Bx64net` ≈1379 s |
+
+台账原文（R4-2 新字段在生产环境生效）：`{"flow": "step_mesh", "reason_kind": "host_gone",
+"host_gone": true, "last_seen_hosts": [2136], "vbs": "r13_step_mesh.vbs", "log_last_line": "s141=0"}`。
+
+**结论（本轮钉死）**：
+
+1. 失败形态是 **宿主进程 STpre 自行退出**，而它的工作进程 `scFLOWpre_Bx64net` 继续空转 ——
+   与 J1 记录的「工作进程生命周期不随宿主」一致；消费端 COM worker 因此永久阻塞；
+2. 该退出**对参数敏感**：录制参数下 ~90 s 就退，粗档下撑到 1500 s+ → 指向宿主侧资源/超时，
+   而不是我们的脚本（脚本在长调用之前 141 步全 err=0，`ret_oct=True`）；
+3. 未达成验收（仍无「`mesh_exists=True` 的 STEP 参数组」）。阶梯在 Run A 后停止：attempt 2
+   会重演 ~25 min。
+
+**R5-1 承接**：(a) 给长网格调用加**进度信号**（周期写日志或轮询 `MG_.GetOctInfo`），否则
+watchdog 只能按日志静默判活；(b) 崩溃前抓 STpre 的 WS/私有字节（本轮 `last_seen_diag` 只有 pid，
+内存量没抓到）以验证 OOM 假说；(c) 以 bbox 为基准做小步长阶梯，定位崩溃阈值。
+
+#### R4-5 ✅ 已成 —— 条件写盘零破坏（24 条去壳改写 + 宿主回读）
+
+`tools/cond_write_check.py`：对条件最多的宿主工程 `p12c_cond_harvest_out.pph`（49 条条件）逐条
+执行 **R3-2 去壳同路径**（`_condition_to_initial` → `write_condition_to_xml(replace_el=el)`），
+再重写 `main.xml` 并交宿主。证据 `_p12u_gate/r4_5_cond.json`：
+
+| 环节 | 结果 |
+|---|---|
+| 改写条数 | **24**（≥20 验收线） |
+| 离线幂等 | 条件数 49 → 49，逐条 (type/name/regions/区域标签/字段值) **diff_count=0** |
+| 宿主重开 | **71/71 err=0**、`sn_/mg_/mdl_/oct_/conds_=True`、`mesh_exists=True` |
+| 条件回读 | `Doc_.GetConditions().QueryConditionByName(name)` **12/12 全 True** |
+
+即：批量去壳编辑后，宿主不但能打开工程，还能**逐条读回**这些条件。
+
+#### 回归
+
+全量回归 **1167 passed / 4 skipped / 0 failed**（568.55 s；R3 末为 1155 —— 本轮净增 12 项：
+`tests/test_host_gone_r42.py` 5 项 + `tests/test_panel_persist_r44.py` 7 项）。
 ### 明确不做（R4 内）
 
 * CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
 * 内核 / 求解器 / scPOST 复刻；
 * 条件体系补深（原 R3-3）与数值等价（原 R3-5）继续延后，不摊入本轮。
+
+---
+
+---
+
+## R5 —— 提案（2026-09-14，≈6 人日）
+
+### 依据
+
+* R4-1 把 STEP 网格失败定性为「宿主在持续重网格计算中自行退出」，且**对参数敏感**（90 s → 1500 s+），
+  但尚无进度信号与内存证据；
+* R4-3 审计把 memory_only 面板从 7 个降到 6 个，且给出逐面板 store 证据 → 落盘化可继续按证据推进；
+* R4-4 打通了 `main.xenv` 落盘通道并证明「多一段不破坏宿主」，通道可复用；
+* R4-5 证明去壳写入的批量零破坏，条件体系可以放心加大写入面。
+
+### 条目
+
+| # | 条目 | 做法 | 验收句 | 人日 |
+|---|---|---|---|---|
+| **R5-1** | **网格进度信号 + 宿主崩溃取证** | 长网格调用期间周期落一行日志（或轮询 `MG_.GetOctInfo` 写进度）；host-gone 行补抓 STpre 的 WS/私有字节 | 宿主存活期间不再被判 log-idle；host-gone 行带内存量，可判 OOM | 1.5 |
+| **R5-2** | **STEP 网格参数阶梯** | 以 bbox 为基准小步长扫 `TARGETNUMBER`/`BASESIZE.MIN`，定位崩溃阈值 | 给出「成功档 + 首崩档」两条参数与对应 `mesh_exists` | 2 |
+| **R5-3** | **面板落盘再切 2 页** | 用 R4-4 通道接 `NonSolidBody` 与 `MeshParamBody`（后者落 `main.xenv` 既有的 MESH/MESH_COMMON/OCT_MESH 段） | 2 个面板重启保留 + 宿主零破坏；memory_only 降到 4 | 2 |
+| **R5-4** | **条件体系补深（原 R3-3）** | 宿主批量收割 43 个未落键 `CreateCond*`（毒类型单进程隔离） | 精确键 90 → **≥140 / 165** | 3 |
+| **R5-5** | **数值等价（原 R3-5）** | 50 Pa 变体双跑出非零场 delta 表 | delta 表入册且非零场；FLD/iFLD 结论明确 | 2 |
+
+### 明确不做（R5 内）
+
+* CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
+* 内核 / 求解器 / scPOST 复刻；
+* R5-3 每轮最多 2 页，不做机械摊开。
 
 ---
 

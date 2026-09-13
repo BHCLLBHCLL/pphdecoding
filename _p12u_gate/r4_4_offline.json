@@ -1,0 +1,33 @@
+{
+  "base": "D:\\training\\cgns\\pphdecoding\\box.pph",
+  "section": "OPTION_NAV",
+  "values": {
+    "always_show_wizard": "true",
+    "show_bam_item": "false",
+    "show_mesher_item": "true"
+  },
+  "offline": {
+    "ok": true,
+    "wrote": true,
+    "xenv_dirty": true,
+    "written": {
+      "always_show_wizard": "true",
+      "show_bam_item": "false",
+      "show_mesher_item": "true"
+    },
+    "reparsed": {
+      "always_show_wizard": "true",
+      "show_bam_item": "false",
+      "show_mesher_item": "true"
+    },
+    "panel_readback": {
+      "always_show_wizard": "true",
+      "show_bam_item": "false",
+      "show_mesher_item": "true"
+    },
+    "pph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r4_4_xenv.pph",
+    "xenv_bytes": 18281
+  },
+  "seconds": 0.3,
+  "passed": true
+}

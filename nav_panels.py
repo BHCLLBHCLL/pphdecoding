@@ -14229,11 +14229,61 @@ class ExecuteBody(_Body):
         return True
 
 
+# ---------------------------------------------------------------------------
+# R4-4：面板状态落盘通道（main.xenv）
+#
+# R4-3 审计结论：NonSolid / MeshParam / OptionNav / _PartsControlFollowup /
+# CreateParts / Execute / CondTypeCatalog 这 7 个面板只写 ctx["session"]，
+# 重启即失。本通道给它们一个统一落盘口：main.xenv 的 Section/Key。
+# ---------------------------------------------------------------------------
+
+
+def panel_xenv_get(ctx: dict, section: str, key: str, default: str = "") -> str:
+    """读面板在 main.xenv 的持久值；无 xenv / 无键时返回 default。"""
+    xenv = ctx.get("xenv")
+    if xenv is None:
+        return default
+    val = xenv.get(section, key, None)
+    return default if val is None else str(val)
+
+
+def panel_xenv_set(ctx: dict, section: str, values: dict) -> bool:
+    """把面板状态写进 main.xenv 并置 xenv_dirty。
+
+    返回 False 表示**没有可落盘的 xenv** —— 调用方据此如实记账，
+    而不是假装保存成功（这正是 R4-3 审计里 memory_only 面板的病根）。
+    """
+    xenv = ctx.get("xenv")
+    if xenv is None:
+        return False
+    for key, val in values.items():
+        pphxml.set_xenv_value(xenv, section, key, str(val))
+    ctx["xenv_dirty"] = True
+    return True
+
+
+def panel_bool(text) -> bool:
+    """xenv 里的布尔约定：宿主写 "true"/"false"，读端宽松。"""
+    return str(text).strip().lower() in ("1", "true", "yes", "on")
+
+
+def panel_bool_str(flag) -> str:
+    return "true" if flag else "false"
+
+
 class OptionNavBody(_Body):
-    """Option → Navigation：Analysis Model Wizard 与导航项显隐。"""
+    """Option → Navigation：Analysis Model Wizard 与导航项显隐。
+
+    R4-4：状态落 ``main.xenv`` 的 ``[OPTION_NAV]`` 段（此前只写内存
+    session，重启即失）；``session`` 退化为运行时镜像 + 旧工程兜底。
+    """
 
     title = "Option - Navigation"
     min_size = (480, 240)
+    #: main.xenv 段名。宿主当前工程里没有该段（其同名开关住在宿主自己的
+    #: 用户设置里），故本段是「本工具的 UI 选项」；宿主保存时按原样回写/
+    #: 忽略，不参与其读工程（R4-4 已用宿主重开验证零破坏）。
+    XENV_SECTION = "OPTION_NAV"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -14254,17 +14304,32 @@ class OptionNavBody(_Body):
 
     def load(self, ctx: dict) -> None:
         sess = ctx.setdefault("session", {}).setdefault("option_nav", {})
-        self.chk_always.setChecked(bool(sess.get("always_show_wizard", False)))
-        self.chk_show_bam.setChecked(bool(sess.get("show_bam_item", True)))
-        self.chk_show_mesher.setChecked(
-            bool(sess.get("show_mesher_item", True)))
+
+        def pick(key: str, default):
+            # R4-4：xenv 落盘值优先，session 兜底（旧工程/无 xenv）
+            return panel_xenv_get(ctx, self.XENV_SECTION, key,
+                                  sess.get(key, default))
+
+        self.chk_always.setChecked(panel_bool(
+            pick("always_show_wizard", False)))
+        self.chk_show_bam.setChecked(panel_bool(pick("show_bam_item", True)))
+        self.chk_show_mesher.setChecked(panel_bool(
+            pick("show_mesher_item", True)))
 
     def apply(self, ctx: dict) -> bool:
-        ctx.setdefault("session", {})["option_nav"] = {
+        values = {
             "always_show_wizard": self.chk_always.isChecked(),
             "show_bam_item": self.chk_show_bam.isChecked(),
             "show_mesher_item": self.chk_show_mesher.isChecked(),
         }
+        sess = ctx.setdefault("session", {})
+        sess["option_nav"] = dict(values)     # 运行时镜像：本会话立即生效
+        persisted = panel_xenv_set(
+            ctx, self.XENV_SECTION,
+            {k: panel_bool_str(v) for k, v in values.items()})
+        sess["option_nav_persisted"] = persisted
+        # 无 xenv 时无可落盘处（纯内存工程），如实记账但仍返回 True：
+        # 本次会话已生效，不是失败。
         return True
 
 

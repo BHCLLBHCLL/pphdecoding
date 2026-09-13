@@ -1,0 +1,1090 @@
+{
+  "source": "nav_panels.py",
+  "panels": [
+    {
+      "panel": "_Body",
+      "bases": "QWidget",
+      "lines": [
+        119,
+        131
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": []
+    },
+    {
+      "panel": "PartsControlBody",
+      "bases": "_Body",
+      "lines": [
+        240,
+        333
+      ],
+      "stores_read": [
+        "session",
+        "xml"
+      ],
+      "stores_written": [
+        "session",
+        "xml"
+      ],
+      "persistence": "persisted:xml",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 304,
+          "text": "pc = ctx.setdefault(\"session\", {}).setdefault(\"parts_control\", {})"
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 304,
+          "text": "pc = ctx.setdefault(\"session\", {}).setdefault(\"parts_control\", {})"
+        },
+        {
+          "store": "xml",
+          "mode": "write",
+          "line": 330,
+          "text": "ctx[\"xml_dirty\"] = True"
+        },
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 322,
+          "text": "xml = ctx.get(\"xml\")"
+        }
+      ],
+      "page_keys": [
+        "parts_control"
+      ]
+    },
+    {
+      "panel": "_PartsControlFollowupBody",
+      "bases": "_Body",
+      "lines": [
+        334,
+        367
+      ],
+      "stores_read": [
+        "session"
+      ],
+      "stores_written": [
+        "session"
+      ],
+      "persistence": "memory_only",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 361,
+          "text": "ctx.setdefault(\"session\", {})[\"pending_vbs\"] = {"
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 337,
+          "text": "OK 时写出宿主 VBS 草稿（``session['pending_vbs']``），由 GUI 落盘。"
+        }
+      ],
+      "page_keys": []
+    },
+    {
+      "panel": "SpecifyDiscontinuousPartsBody",
+      "bases": "_PartsControlFollowupBody",
+      "lines": [
+        368,
+        375
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": [
+        "specify_disc"
+      ]
+    },
+    {
+      "panel": "OversetMeshBody",
+      "bases": "_PartsControlFollowupBody",
+      "lines": [
+        376,
+        383
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": [
+        "overset_mesh"
+      ]
+    },
+    {
+      "panel": "WrappingOctreeParamBody",
+      "bases": "_PartsControlFollowupBody",
+      "lines": [
+        384,
+        391
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": [
+        "wrap_octree"
+      ]
+    },
+    {
+      "panel": "WrappingParamBody",
+      "bases": "_PartsControlFollowupBody",
+      "lines": [
+        392,
+        399
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": [
+        "wrap_param"
+      ]
+    },
+    {
+      "panel": "BeginWrappingBody",
+      "bases": "_PartsControlFollowupBody",
+      "lines": [
+        400,
+        407
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": [
+        "begin_wrap"
+      ]
+    },
+    {
+      "panel": "CancelWrappingBody",
+      "bases": "_PartsControlFollowupBody",
+      "lines": [
+        408,
+        413
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": [
+        "cancel_wrap"
+      ]
+    },
+    {
+      "panel": "ExecuteWrappingBody",
+      "bases": "_PartsControlFollowupBody",
+      "lines": [
+        414,
+        421
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": [
+        "exec_wrap"
+      ]
+    },
+    {
+      "panel": "RetryWrappingBody",
+      "bases": "_PartsControlFollowupBody",
+      "lines": [
+        422,
+        429
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": [
+        "retry_wrap"
+      ]
+    },
+    {
+      "panel": "ImportPartBody",
+      "bases": "_Body",
+      "lines": [
+        495,
+        743
+      ],
+      "stores_read": [
+        "session",
+        "xenv",
+        "xml"
+      ],
+      "stores_written": [
+        "session",
+        "xenv"
+      ],
+      "persistence": "persisted:xenv",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 682,
+          "text": "sess = ctx.setdefault(\"session\", {}).setdefault(\"import_part\", {})"
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 682,
+          "text": "sess = ctx.setdefault(\"session\", {}).setdefault(\"import_part\", {})"
+        },
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 709,
+          "text": "pphxml.set_xenv_value("
+        },
+        {
+          "store": "xenv",
+          "mode": "write",
+          "line": 740,
+          "text": "ctx[\"xenv_dirty\"] = True"
+        },
+        {
+          "store": "xenv",
+          "mode": "read",
+          "line": 606,
+          "text": "# 手册截图未展示、但 xenv 仍有的项"
+        }
+      ],
+      "page_keys": [
+        "import_part"
+      ]
+    },
+    {
+      "panel": "CreatePartsBody",
+      "bases": "_Body",
+      "lines": [
+        770,
+        1153
+      ],
+      "stores_read": [
+        "session",
+        "xenv",
+        "xml"
+      ],
+      "stores_written": [
+        "session"
+      ],
+      "persistence": "memory_only",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 1025,
+          "text": "draft = ctx.setdefault(\"session\", {}).get(\"create_parts\") or {}"
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 1025,
+          "text": "draft = ctx.setdefault(\"session\", {}).get(\"create_parts\") or {}"
+        },
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 1080,
+          "text": "xml = ctx.get(\"xml\")"
+        },
+        {
+          "store": "xenv",
+          "mode": "read",
+          "line": 977,
+          "text": "xenv = ctx.get(\"xenv\")"
+        }
+      ],
+      "page_keys": [
+        "create_parts"
+      ]
+    },
+    {
+      "panel": "ModifyPartsBody",
+      "bases": "_Body",
+      "lines": [
+        1641,
+        1854
+      ],
+      "stores_read": [
+        "session",
+        "xenv",
+        "xml"
+      ],
+      "stores_written": [
+        "session",
+        "xenv"
+      ],
+      "persistence": "persisted:xenv",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 1746,
+          "text": "sess = self._ctx.setdefault(\"session\", {}).setdefault(\"modify_parts\", {})"
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 1746,
+          "text": "sess = self._ctx.setdefault(\"session\", {}).setdefault(\"modify_parts\", {})"
+        },
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 1766,
+          "text": "xml = ctx.get(\"xml\")"
+        },
+        {
+          "store": "xenv",
+          "mode": "write",
+          "line": 1851,
+          "text": "ctx[\"xenv_dirty\"] = True"
+        },
+        {
+          "store": "xenv",
+          "mode": "read",
+          "line": 1690,
+          "text": "# 工程级容差（xenv），折叠在底部以免干扰主 UI"
+        }
+      ],
+      "page_keys": [
+        "modify_parts"
+      ]
+    },
+    {
+      "panel": "MesherFaceterBody",
+      "bases": "_Body",
+      "lines": [
+        1863,
+        2395
+      ],
+      "stores_read": [
+        "session",
+        "xenv",
+        "xml"
+      ],
+      "stores_written": [
+        "session",
+        "xenv"
+      ],
+      "persistence": "persisted:xenv",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 2388,
+          "text": "ctx.setdefault(\"session\", {})[\"mesher_faceter\"] = {"
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 2388,
+          "text": "ctx.setdefault(\"session\", {})[\"mesher_faceter\"] = {"
+        },
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 2317,
+          "text": "pphxml.set_xenv_value("
+        },
+        {
+          "store": "xenv",
+          "mode": "write",
+          "line": 2387,
+          "text": "ctx[\"xenv_dirty\"] = True"
+        },
+        {
+          "store": "xenv",
+          "mode": "read",
+          "line": 2236,
+          "text": "xenv = ctx.get(\"xenv\")"
+        }
+      ],
+      "page_keys": [
+        "mesher_faceter"
+      ]
+    },
+    {
+      "panel": "RegisterRegionBody",
+      "bases": "_Body",
+      "lines": [
+        2456,
+        3271
+      ],
+      "stores_read": [
+        "session",
+        "xml"
+      ],
+      "stores_written": [
+        "session",
+        "xml"
+      ],
+      "persistence": "persisted:xml",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 2997,
+          "text": "draft = ctx.setdefault(\"session\", {}).get(\"register_region\") or {}"
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 2922,
+          "text": "# Interface — special_face or session"
+        },
+        {
+          "store": "xml",
+          "mode": "write",
+          "line": 3064,
+          "text": "self._ctx[\"xml_dirty\"] = True"
+        },
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 2883,
+          "text": "xml = self._ctx.get(\"xml\")"
+        }
+      ],
+      "page_keys": [
+        "regions"
+      ]
+    },
+    {
+      "panel": "_CoordSpecifiedPartDialog",
+      "bases": "QDialog",
+      "lines": [
+        3272,
+        3365
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": []
+    },
+    {
+      "panel": "NonSolidBody",
+      "bases": "_Body",
+      "lines": [
+        3366,
+        3932
+      ],
+      "stores_read": [
+        "session",
+        "xenv",
+        "xml"
+      ],
+      "stores_written": [
+        "session"
+      ],
+      "persistence": "memory_only",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 3640,
+          "text": "return self._ctx.setdefault(\"session\", {}).setdefault(\"non_solid\", {})"
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 3640,
+          "text": "return self._ctx.setdefault(\"session\", {}).setdefault(\"non_solid\", {})"
+        },
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 3667,
+          "text": "# sheet — session + xml"
+        },
+        {
+          "store": "xenv",
+          "mode": "read",
+          "line": 3643,
+          "text": "xenv = self._ctx.get(\"xenv\")"
+        }
+      ],
+      "page_keys": [
+        "non_solid"
+      ]
+    },
+    {
+      "panel": "_MaterialOptionsDialog",
+      "bases": "QDialog",
+      "lines": [
+        4085,
+        4123
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": []
+    },
+    {
+      "panel": "_ContactThicknessDialog",
+      "bases": "QDialog",
+      "lines": [
+        4124,
+        4206
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": []
+    },
+    {
+      "panel": "PartMaterialBody",
+      "bases": "_Body",
+      "lines": [
+        4207,
+        4756
+      ],
+      "stores_read": [
+        "prp",
+        "session",
+        "xml"
+      ],
+      "stores_written": [
+        "session",
+        "xml"
+      ],
+      "persistence": "persisted:xml",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 4644,
+          "text": "sess = self._ctx.setdefault(\"session\", {})"
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 4567,
+          "text": "self._sync_session()"
+        },
+        {
+          "store": "xml",
+          "mode": "write",
+          "line": 4630,
+          "text": "self._ctx[\"xml_dirty\"] = True"
+        },
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 4592,
+          "text": "xml = self._ctx.get(\"xml\")"
+        },
+        {
+          "store": "prp",
+          "mode": "read",
+          "line": 4219,
+          "text": "self._mat_index: dict[str, str] = {}  # material key → prp type"
+        }
+      ],
+      "page_keys": [
+        "part_material"
+      ]
+    },
+    {
+      "panel": "SolverSettingsDialog",
+      "bases": "QDialog",
+      "lines": [
+        6140,
+        6319
+      ],
+      "stores_read": [
+        "xml"
+      ],
+      "stores_written": [
+        "xml"
+      ],
+      "persistence": "persisted:xml",
+      "evidence": [
+        {
+          "store": "xml",
+          "mode": "write",
+          "line": 6147,
+          "text": "OK 后置 ``xml_dirty``。条件型 section 按实例（type=name）切换。"
+        },
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 6143,
+          "text": "数据来自厂商 ``scflow_main.xml`` 解析出的"
+        }
+      ],
+      "page_keys": []
+    },
+    {
+      "panel": "ConditionsBody",
+      "bases": "_Body",
+      "lines": [
+        6320,
+        11481
+      ],
+      "stores_read": [
+        "session",
+        "xml"
+      ],
+      "stores_written": [
+        "session",
+        "xml"
+      ],
+      "persistence": "persisted:xml",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 7075,
+          "text": "sess = self._ctx.setdefault(\"session\", {}).setdefault("
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 7075,
+          "text": "sess = self._ctx.setdefault(\"session\", {}).setdefault("
+        },
+        {
+          "store": "xml",
+          "mode": "write",
+          "line": 7118,
+          "text": "self._ctx[\"xml_dirty\"] = True"
+        },
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 6980,
+          "text": "xml = self._ctx.get(\"xml\")"
+        }
+      ],
+      "page_keys": [
+        "conditions"
+      ]
+    },
+    {
+      "panel": "_FacetAccuracyEditDialog",
+      "bases": "QDialog",
+      "lines": [
+        11515,
+        11554
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": []
+    },
+    {
+      "panel": "AnalysisModelWizardBody",
+      "bases": "_Body",
+      "lines": [
+        11555,
+        12778
+      ],
+      "stores_read": [
+        "session",
+        "snapshot",
+        "xenv",
+        "xml"
+      ],
+      "stores_written": [
+        "session",
+        "xenv"
+      ],
+      "persistence": "persisted:xenv",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 12225,
+          "text": "data = self._ctx.setdefault(\"session\", {}).setdefault("
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 12225,
+          "text": "data = self._ctx.setdefault(\"session\", {}).setdefault("
+        },
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 12530,
+          "text": "xml = ctx.get(\"xml\")"
+        },
+        {
+          "store": "xenv",
+          "mode": "write",
+          "line": 12775,
+          "text": "ctx[\"xenv_dirty\"] = True"
+        },
+        {
+          "store": "xenv",
+          "mode": "read",
+          "line": 12579,
+          "text": "xenv = ctx.get(\"xenv\")"
+        },
+        {
+          "store": "snapshot",
+          "mode": "read",
+          "line": 12679,
+          "text": "# part/region accuracy snapshot"
+        }
+      ],
+      "page_keys": [
+        "build_am_detailed"
+      ]
+    },
+    {
+      "panel": "OctreeDetailDialog",
+      "bases": "QDialog",
+      "lines": [
+        12825,
+        13335
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": []
+    },
+    {
+      "panel": "OctreeParamBody",
+      "bases": "_Body",
+      "lines": [
+        13355,
+        13504
+      ],
+      "stores_read": [
+        "session",
+        "xenv",
+        "xml"
+      ],
+      "stores_written": [
+        "session",
+        "xenv"
+      ],
+      "persistence": "persisted:xenv",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 13415,
+          "text": "sess = ctx.setdefault(\"session\", {}).setdefault(\"octree_param\", {})"
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 13415,
+          "text": "sess = ctx.setdefault(\"session\", {}).setdefault(\"octree_param\", {})"
+        },
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 13488,
+          "text": "pphxml.set_xenv_value(xenv, \"FACET\", \"OCT_LENGTH_PARAM_FLAG\", \"true\")"
+        },
+        {
+          "store": "xenv",
+          "mode": "write",
+          "line": 13501,
+          "text": "ctx[\"xenv_dirty\"] = True"
+        },
+        {
+          "store": "xenv",
+          "mode": "read",
+          "line": 13436,
+          "text": "# xenv：OCT_LENGTH_PARAM_* 反映密度模式"
+        }
+      ],
+      "page_keys": [
+        "oct_param"
+      ]
+    },
+    {
+      "panel": "_MeshSubDialog",
+      "bases": "QDialog",
+      "lines": [
+        13575,
+        13624
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": []
+    },
+    {
+      "panel": "PrismLayerDetailDialog",
+      "bases": "QDialog",
+      "lines": [
+        13668,
+        13911
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": []
+    },
+    {
+      "panel": "MeshParamBody",
+      "bases": "_Body",
+      "lines": [
+        13912,
+        14145
+      ],
+      "stores_read": [
+        "session",
+        "xml"
+      ],
+      "stores_written": [
+        "session"
+      ],
+      "persistence": "memory_only",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 14027,
+          "text": "sess = ctx.setdefault(\"session\", {}).setdefault(\"mesh_param\", {})"
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 14027,
+          "text": "sess = ctx.setdefault(\"session\", {}).setdefault(\"mesh_param\", {})"
+        },
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 14092,
+          "text": "for p in info.get(\"xml_parts\") or []:"
+        }
+      ],
+      "page_keys": [
+        "mesh_param"
+      ]
+    },
+    {
+      "panel": "ExecuteBody",
+      "bases": "_Body",
+      "lines": [
+        14146,
+        14240
+      ],
+      "stores_read": [
+        "session",
+        "xenv"
+      ],
+      "stores_written": [
+        "session"
+      ],
+      "persistence": "memory_only",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 14189,
+          "text": "ex = ctx.setdefault(\"session\", {}).setdefault(\"execute\", {})"
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 14189,
+          "text": "ex = ctx.setdefault(\"session\", {}).setdefault(\"execute\", {})"
+        },
+        {
+          "store": "xenv",
+          "mode": "read",
+          "line": 14233,
+          "text": "# R4-4：面板状态落盘通道（main.xenv）"
+        }
+      ],
+      "page_keys": [
+        "execute"
+      ]
+    },
+    {
+      "panel": "OptionNavBody",
+      "bases": "_Body",
+      "lines": [
+        14274,
+        14338
+      ],
+      "stores_read": [
+        "session",
+        "xenv"
+      ],
+      "stores_written": [
+        "session",
+        "xenv"
+      ],
+      "persistence": "persisted:xenv",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 14306,
+          "text": "sess = ctx.setdefault(\"session\", {}).setdefault(\"option_nav\", {})"
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 14278,
+          "text": "session，重启即失）；``session`` 退化为运行时镜像 + 旧工程兜底。"
+        },
+        {
+          "store": "xenv",
+          "mode": "write",
+          "line": 14327,
+          "text": "persisted = panel_xenv_set("
+        },
+        {
+          "store": "xenv",
+          "mode": "read",
+          "line": 14277,
+          "text": "R4-4：状态落 ``main.xenv`` 的 ``[OPTION_NAV]`` 段（此前只写内存"
+        }
+      ],
+      "page_keys": [
+        "option_nav"
+      ]
+    },
+    {
+      "panel": "GenericCondBody",
+      "bases": "QDialog",
+      "lines": [
+        14461,
+        14659
+      ],
+      "stores_read": [
+        "xml"
+      ],
+      "stores_written": [],
+      "persistence": "read_only",
+      "evidence": [
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 14466,
+          "text": "与样本默认值。OK 后通过 :func:`write_condition_to_xml` 落 main.xml。"
+        }
+      ],
+      "page_keys": []
+    },
+    {
+      "panel": "CondTypeCatalogDialog",
+      "bases": "QDialog",
+      "lines": [
+        14698,
+        14866
+      ],
+      "stores_read": [
+        "session",
+        "xml"
+      ],
+      "stores_written": [
+        "session"
+      ],
+      "persistence": "memory_only",
+      "evidence": [
+        {
+          "store": "session",
+          "mode": "write",
+          "line": 14847,
+          "text": "sess = self._ctx.setdefault(\"session\", {}).setdefault("
+        },
+        {
+          "store": "session",
+          "mode": "read",
+          "line": 14847,
+          "text": "sess = self._ctx.setdefault(\"session\", {}).setdefault("
+        },
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 14846,
+          "text": "if write_condition_to_xml(self._ctx, ctype, data):"
+        }
+      ],
+      "page_keys": []
+    },
+    {
+      "panel": "HeatTransferPresetDialog",
+      "bases": "QDialog",
+      "lines": [
+        14867,
+        14909
+      ],
+      "stores_read": [
+        "xml"
+      ],
+      "stores_written": [],
+      "persistence": "read_only",
+      "evidence": [
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 14868,
+          "text": "\"\"\"换热系数预设选择器（P4-2，heattransfer_ENG.xml）。"
+        }
+      ],
+      "page_keys": []
+    },
+    {
+      "panel": "SolarSiteDialog",
+      "bases": "QDialog",
+      "lines": [
+        14910,
+        15010
+      ],
+      "stores_read": [
+        "xml"
+      ],
+      "stores_written": [],
+      "persistence": "read_only",
+      "evidence": [
+        {
+          "store": "xml",
+          "mode": "read",
+          "line": 14911,
+          "text": "\"\"\"太阳辐射站点选择器（P4-2：solar_ENG.xml + SolarNEDO11.xml）。"
+        }
+      ],
+      "page_keys": []
+    },
+    {
+      "panel": "NavParamDialog",
+      "bases": "QDialog",
+      "lines": [
+        15095,
+        15143
+      ],
+      "stores_read": [],
+      "stores_written": [],
+      "persistence": "none",
+      "evidence": [],
+      "page_keys": []
+    }
+  ],
+  "counts": {
+    "none": 17,
+    "persisted": 11,
+    "memory_only": 6,
+    "read_only": 3
+  }
+}

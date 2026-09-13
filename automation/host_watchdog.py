@@ -122,6 +122,17 @@ def log_size(log: Path) -> int:
         return 0
 
 
+def log_last_line(log: Path) -> str:
+    """日志最后一条非空行（R4-2：host-gone 归因用）。"""
+    try:
+        lines = [ln.strip() for ln in
+                 log.read_text(encoding="utf-8", errors="replace").splitlines()
+                 if ln.strip()]
+    except OSError:
+        return ""
+    return lines[-1][:200] if lines else ""
+
+
 def has_end_marker(log: Path) -> bool:
     try:
         return "end" in log.read_text(encoding="utf-8",
@@ -175,7 +186,11 @@ class FlowExecutor:
         self.kill_settle = kill_settle
         # OpenCadFile 流（bam/wrap）：中止重跑前必须冷启动——上次执行
         # 半途而废时宿主里工程开着，OpenCadFile 会挂（P12-A 铁律）。
+
         self.retry_with_boot = retry_with_boot
+        # R4-2：最后一次**探到**的宿主 pid。宿主消失后就再也问不到 pid 了，
+        # 归因要靠这份快照（外加日志最后一行 / VBS 路径）。
+        self._last_seen_hosts: list[int] = []
 
     def _kill_all(self) -> None:
         if self._kill_all_fn is not None:
@@ -215,7 +230,8 @@ class FlowExecutor:
             return None
 
     def _characterize(self, attempt: int, outcome: str, reason: str,
-                      idle_s: float, t_start: float) -> dict:
+                      idle_s: float, t_start: float,
+                      reason_kind: str = "") -> dict:
         row = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
                "flow": self.name, "attempt": attempt, "outcome": outcome,
                "reason": reason, "log": self.log_path.name,
@@ -223,6 +239,8 @@ class FlowExecutor:
                "idle_s": round(idle_s, 1), "elapsed_s":
                round(time.time() - t_start, 1),
                "vbs_bytes": self.vbs_path.stat().st_size}
+        if reason_kind:
+            row["reason_kind"] = reason_kind
         if outcome in ("hung", "completed_no_return"):
             hosts = self._hosts_safe() or []
             row["host_pids"] = hosts
@@ -230,6 +248,15 @@ class FlowExecutor:
             row["windows"] = [{k: w[k] for k in ("cls", "title")}
                               for h in hosts
                               for w in modal_watch.visible_windows(h)]
+            if reason_kind == "host_gone":
+                # R4-2：宿主已经没了 —— 现查 pid 必然为空，归因靠「最后一次
+                # 探到的 pid」+ 日志最后一行 + VBS 路径（三个都是判因线索）。
+                row["host_gone"] = True
+                row["last_seen_hosts"] = list(self._last_seen_hosts)
+                row["last_seen_diag"] = [self._diag_fn(p)
+                                         for p in self._last_seen_hosts]
+                row["vbs"] = self.vbs_path.name
+                row["log_last_line"] = log_last_line(self.log_path)
             if outcome == "hung":
                 dump = self.work_dir / (self.name + "_hang_" +
                                         time.strftime("%H%M%S") + ".dmp")
@@ -248,10 +275,11 @@ class FlowExecutor:
 
     def _hang_cleanup(self, attempt: int, reason: str, idle: float,
                       t_start: float, result: dict,
-                      log_complete: bool) -> str:
+                      log_complete: bool, reason_kind: str = "") -> str:
         """挂起处置：判类（completed_no_return/hung）→ 表征 → 杀宿主。"""
         outcome = "completed_no_return" if log_complete else "hung"
-        row = self._characterize(attempt, outcome, reason, idle, t_start)
+        row = self._characterize(attempt, outcome, reason, idle, t_start,
+                                 reason_kind)
         killed = {}
         for p in row.get("host_pids", []):
             killed[str(p)] = self._kill_fn(p)
@@ -319,6 +347,7 @@ class FlowExecutor:
                 elif not alive:
                     hosts_gone_since = hosts_gone_since or time.time()
                 else:
+                    self._last_seen_hosts = list(alive)   # R4-2
                     hosts_gone_since = None
                     checked_hosts = False
             if hosts_gone_since is not None and \
@@ -327,13 +356,15 @@ class FlowExecutor:
                     attempt, "host process gone while worker "
                     "blocked (idle " + str(round(idle, 1)) + "s)",
                     idle, t_start, result,
-                    log_complete=has_end_marker(self.log_path))
+                    log_complete=has_end_marker(self.log_path),
+                    reason_kind="host_gone")
                 return outcome
             if idle >= self.idle_limit:
                 outcome = self._hang_cleanup(
                     attempt, "log idle " + str(round(idle, 1)) + "s >= "
                     + str(self.idle_limit) + "s", idle, t_start, result,
-                    log_complete=has_end_marker(self.log_path))
+                    log_complete=has_end_marker(self.log_path),
+                    reason_kind="log_idle")
                 return outcome
 
     def _attempt(self, n: int) -> dict:

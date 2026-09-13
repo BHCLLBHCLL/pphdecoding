@@ -140,16 +140,26 @@ def _vbs_lit(v: str) -> str:
 OCT_PARAM_PAIRS: list[tuple[str, str]] = [["BALANCING","3"],["BASELEV.MAX","6"],["BASELEV.MIN","-1"],["BASELEV.ROOTFAC","1.3999999999999999"],["BASEMODE","2"],["BASENAME",""],["BASENELEM","0"],["BASEPOS","1"],["BASEPOS.X","0.0050000000000000001"],["BASEPOS.Y","0.0050000000000000001"],["BASEPOS.Z","0.0050000000000000001"],["BASESIZE.MAX","-1"],["BASESIZE.MIN","0.00021875"],["BASESIZEFORAUTOGEN","0"],["BOUNDARYRANGE","0"],["CHECKONLYFLUID","0"],["CSPCGROUPINGTYPE","0"],["IGNOREDRATIO","0.0001"],["INITIALIZED","0"],["NUMERICALREGION.N","0"],["OCTNAME",""],["PATCHEFFECTMODE","0"],["PROXIMITYITEM.N","0"],["REFMODEL.N","0"],["REFSECTITEM.N","0"],["REGNMODE","0"],["REGNNAME",""],["SECTAVOIDORDERDEPENDENCY","1"],["SECTGRP2","0"],["SECTITEM.N","1"],["SECTITEM[0].NAME","@PartSurface_Part"],["SECTITEM[0].NEIGHBOR","0"],["SECTITEM[0].SIZE","0.001"],["SECTTYPE","1"],["TARGETNUMBER","100000"]]
 
 
-def _recorded_oct_param_lines() -> list[str]:
+def _recorded_oct_param_lines(target_num: str | None = None,
+                              min_size: str | None = None) -> list[str]:
     """录制八叉树参数表 → ``OctParam.SetParams`` 动作行（R2-1）。
 
     这是与最小配方（SetOctType/SetMeshNum/SetMinSize 三件套）的**关键差异**：
     录制把 ``SECTITEM[0].NAME = @PartSurface_Part``、``SECTITEM[0].SIZE =
     0.001``、``TARGETNUMBER = 100000``、``BASESIZE.MIN = 0.00021875`` 等 35 对
     键值整体下发；最小配方里 ``SetMinSize 0`` 很可能就是 mesh error 的来源。
+
+    R4-1：``target_num`` / ``min_size`` 用于**按模型尺度标定**（录制值来自
+    0.01 立方；STEP 风扇 bbox ≈82 mm 直接套用会把宿主算崩，见 R3-1）。
     """
+    override = {}
+    if target_num is not None:
+        override["TARGETNUMBER"] = str(target_num)
+    if min_size is not None:
+        override["BASESIZE.MIN"] = str(min_size)
     out = ["Redim ArrayParam1_(" + str(2 * len(OCT_PARAM_PAIRS) - 1) + ")"]
     for i, (k, v) in enumerate(OCT_PARAM_PAIRS):
+        v = override.get(k, v)
         out.append("ArrayParam1_(" + str(2 * i) + ") = " + chr(34) + k
                    + chr(34))
         out.append("ArrayParam1_(" + str(2 * i + 1) + ") = " + _vbs_lit(v))
@@ -208,7 +218,9 @@ def _fluid_region_lines(part: str = "Part",
     ]
 
 
-def mesh_wizard_actions(cad: Path, out_pph: Path) -> list[str]:
+def mesh_wizard_actions(cad: Path, out_pph: Path,
+                        target_num: str | None = None,
+                        min_size: str | None = None) -> list[str]:
     """R2-1：录制配方（box_scflow_mdl.vbs :71-535 + :2600-2610）的网格段。
 
     关键差异（对齐录制，逐条有据）：
@@ -266,11 +278,11 @@ def mesh_wizard_actions(cad: Path, out_pph: Path) -> list[str]:
         "OctParam_.Initialize",
         "Param1_ = 3",
         "OctParam_.SetOctType Param1_",
-        "Param1_ = 100000",
+        "Param1_ = " + str(target_num or 100000),
         "OctParam_.SetMeshNum Param1_",
-        "Param1_ = 0.00021875",
+        "Param1_ = " + str(min_size or 0.00021875),
         "OctParam_.SetMinSize Param1_",
-    ] + _recorded_oct_param_lines() + [
+    ] + _recorded_oct_param_lines(target_num, min_size) + [
         "ret_oct_ = MG3_.CreateOctree",
         w("ret_oct", "ret_oct_"),
         "RetWW5_ = Doc_.WaitForWorker",
@@ -351,6 +363,10 @@ def main(argv=None) -> int:
     ap.add_argument("--cases", default="xt,step")
     ap.add_argument("--step", type=Path, default=STEP_DEFAULT)
     ap.add_argument("--json", type=Path, default=None)
+    ap.add_argument("--target-num", default=None,
+                    help="R4-1：覆盖八叉树 TARGETNUMBER（默认录制值 100000）")
+    ap.add_argument("--min-size", default=None,
+                    help="R4-1：覆盖八叉树 BASESIZE.MIN（默认 0.00021875）")
     ap.add_argument("--mesh-mode", choices=("wizard", "reopen"),
                     default="wizard", help="mesh 段配方（默认 R2-1 wizard 配方）")
     ap.add_argument("--skip-mesh", action="store_true",
@@ -378,7 +394,9 @@ def main(argv=None) -> int:
         if build.get("ok") and built.is_file():
             if args.mesh_mode == "wizard":
                 mesh = _run(p12e, f"{case}_mesh",
-                            mesh_wizard_actions(cad, meshed), WORK,
+                            mesh_wizard_actions(cad, meshed,
+                                                args.target_num,
+                                                args.min_size), WORK,
                             timeout=2700.0, utf16=True,
                             idle_limit=1500.0)
             else:
@@ -396,7 +414,10 @@ def main(argv=None) -> int:
             reo["mesh_exists_after_reopen"] = reo.get("info", {}).get("mesh_exists")
         else:
             reo.setdefault("ok", False)
-        results[case] = {"cad": str(cad), "build": build, "mesh": mesh,
+        results[case] = {"cad": str(cad), "oct_params": {
+            "target_num": args.target_num or "100000 (recorded)",
+            "min_size": args.min_size or "0.00021875 (recorded)"},
+            "build": build, "mesh": mesh,
                          "reopen": reo,
                          "built_pph": str(built) if built.is_file() else None,
                          "meshed_pph": str(meshed) if meshed.is_file() else None}
