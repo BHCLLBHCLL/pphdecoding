@@ -988,7 +988,7 @@ R8-5 已闭环 2 键（面板→xenv→宿主回读三段齐）；其余键仍�
 
 ---
 
-## R11 —— 提案（2026-09-14，≈4.5 人日）
+## R11 —— 零流场入 gate + 宿主侧导出否证 + 降版线索（2026-09-14，执行记录）
 
 ### 依据
 
@@ -1006,12 +1006,86 @@ R8-5 已闭环 2 键（面板→xenv→宿主回读三段齐）；其余键仍�
 | **R11-2** | **宿主侧 x_t 导出（v34）** | 用宿主 `ScFlowpreDoc.SaveXTFile` 把导入的 STEP 导成 x_t，比对 `SCH=` 是否 v34 且宿主可再次打开 | 得到宿主可读的 x_t（`OpenCadFile` 出 SNode），或证伪该路线 | 1.5 |
 | **R11-3** | **零流场判据接入 gate** | `solver_delta --gate` 时 `zero_field=True` 直接判不通过并给显式理由 | 构造零流场对拍时 gate 必须 FAIL 且理由可读 | 0.5 |
 
+### 执行记录（2026-09-14）
+
+#### R11-3 ✅ 已成 —— 零流场判据接入 gate
+
+`solver_delta.gate_fph`：`zero_field=True` **直接判不通过**，并在 `reason` 里点名主变量（实测输出：
+`zero field: 主变量(EC_Scalar:PRES,EC_Vector:VEL,FC_Scalar:PRES,FC_Vector:VEL) 两侧均值均为 0 ——
+delta=0 只说明都是零，不构成数值等价证据`）。CLI 实测对 I5 b1/b2 返回 **exit=2**。
+
+顺带修掉第三次踩到的同一个坑：`solver_delta.py` 打印含中文的报告时在 ANSI 控制台下抛
+`UnicodeEncodeError`（stdout 直接空、退出码非零，看起来像「gate 判失败」）→ 已在模块入口调
+`console_utf8.enable()`。测试扩到 **7 项**（含 CLI 级 exit≠0 与理由断言）。
+
+#### R11-2 ⚠️ 部分成（路线证伪）—— 宿主自己导出的也是 v37
+
+`tools/host_xt_export_check.py` 两腿实测（宿主原生 `box.pph` + 真 STEP）：
+
+| 产物 | `SCH=` |
+|---|---|
+| 宿主原生 `tests/box/box.x_t`（宿主**能读**） | `SCH_3400153_34001`（**v34**） |
+| CADthru 产出（R9-2） | `SCH_3701153_37102`（v37） |
+| **宿主 `Doc_.SaveXTFile` 导出** | **`SCH_3701153_37102`（v37）** |
+
+而且 `SaveXTFile` 返回 **False**（却写出了文件），随后 `OpenCadFile` 读自己刚写的文件 → `sn1_=False`，
+流程以 `com_error(-2147023170, 远程过程调用失败)` 挂起（自愈 2 次、729 s）。
+
+**结论：宿主内核本身就是 v37，它写出 v37、却读不了 v37**（只吃 v34）。所以「宿主侧导出」这条替代路线
+**证伪** —— 与 `Doc_.SaveXTFile` 返回 False 一并入册。
+
+**但本轮拿到了真正的修复线索**：`ps_facet2_nodes._TRANSMIT`（对齐 cabdecoding 的
+`PK_PART_transmit_o_t`，6 字段）里有一个当前**未使用**的字段 **`transmit_nw_version`** ——
+即 Parasolid 的输出 schema 版本控制项。我们本来就直调 `PK_PART_transmit` 写文本 x_t，
+**离线把 v37 重编码成 v34 是可达的** → R12-1（纯离线 + 一次宿主验证）。
+
+#### R11-1 ❌ 未执行（主项让位，如实记账）
+
+R11 预留了 ≥1 h 实机给 50 Pa 双跑，但 R11-2 的宿主挂起（729 s）+ 自愈重试吃掉了实机窗口，
+随后又需要收口（回归 582 s）。按 R10 立下的规矩，这里**显式记账为「主项让位」**而非默认顺延：
+让位原因 = R11-2 的宿主 RPC 挂起。R12 继续把它列为**唯一主项**。
+
+#### 回归
+
+全量回归 **1208 passed / 4 skipped / 0 failed**（551.67 s；R10 末为 1205 —— 本轮净增 3 项）。
+
+> 连带语义变更：旧测试 `test_self_compare_real_fph_passes_gate` 断言「自比必过」，
+> R11-3 之后**零流场自比必须 FAIL** —— 已按新语义改写为「逐场判定干净 + zero_field=True + gate FAIL」，
+> 避免把 R10/R11 立起来的判据又用旧断言推翻。
 ### 明确不做（R11 内）
 
 * CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
 * 内核 / 求解器 / scPOST 复刻；
 * 条件收割（R8-1 封顶）、STEP 直导网格参数扫描（R7-1 定性为宿主崩溃）；
 * **R11-1 期间不接新的实机排查**。
+
+---
+
+---
+
+## R12 —— 提案（2026-09-14，≈4 人日）
+
+### 依据
+
+* R11-2 证伪「宿主侧导出」，同时**找到真线索**：`_TRANSMIT.transmit_nw_version` 未使用 ——
+  我们已有 `PK_PART_transmit` 直调能力，离线降版（v37→v34）路径可达；
+* R11-3 让「零流场」再也无法冒充等价证据（gate 直接 FAIL）；
+* R11-1 因宿主挂起让位（已显式记账）→ R12 仍列为唯一主项。
+
+### 条目
+
+| # | 条目 | 做法 | 验收句 | 人日 |
+|---|---|---|---|---|
+| **R12-1（唯一主项，锁定预算）** | **x_t 离线降版（v37→v34）** | 给 `PK_PART_transmit` 传 `transmit_nw_version`（枚举若干取值）重编码 CADthru 产物，用 R9-2 的 `SCH=` 判据验证版本，再交宿主 `OpenCadFile` | 产出 `SCH_3400153_34001`（或宿主可读的等价版本）且 `OpenCadFile` 出 SNode；否则给出各版本取值的实测表 | 2 |
+| **R12-2（主项）** | **50 Pa 变体双跑 + FLD/iFLD** | 预留 ≥1 h 实机；两腿比 FPH 主变量；顺带一腿开 FLD 输出 | **非零场** delta 表（`zero_field=False`）；FLD/iFLD 结论明确 | 2 |
+| **R12-3** | **宿主挂起取证补一条** | R11-2 的 `com_error(-2147023170 远程过程调用失败)` 入册：区分「宿主进程消失」与「RPC 通道断」 | host-gone/挂起台账能区分这两类 | 0.5 |
+
+### 明确不做（R12 内）
+
+* CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
+* 内核 / 求解器 / scPOST 复刻；
+* 条件收割、STEP 直导网格参数扫描（均已定性）；
+* **R12-1/R12-2 期间不接新的实机排查**；若再让位，须再次显式记账。
 
 ---
 

@@ -179,13 +179,19 @@ class TestGateFph(unittest.TestCase):
         self.assertFalse(gate["ok"])
         self.assertEqual(gate["reason"], "missing file")
 
-    def test_self_compare_real_fph_passes_gate(self):
+    def test_self_compare_real_fph_field_verdicts_clean(self):
+        # R11-3 后语义变化：H2O 那对 FPH 是**零流场**，自比虽然逐点相等，
+        # gate 也会因 zero_field 判不通过（「都为零」不是等价证据）。
+        # 这里改为断言「逐场判定干净」，零流场结论交给下面的断言。
         if not _has(FPH_A):
             self.skipTest(f"{FPH_A.name} missing")
         rep = solver_delta.compare_fph(FPH_A, FPH_A)
         gate = solver_delta.gate_fph(rep)
-        self.assertTrue(gate["ok"])
         self.assertEqual(gate["n_fail"], 0)
+        self.assertTrue(rep.get("zero_field"),
+                        "该对 FPH 应为零流场（R10-1 判据）")
+        self.assertFalse(gate["ok"])
+        self.assertIn("zero field", gate["reason"])
 
     def test_cross_run_real_fph_fails_default_gate(self):
         if not (_has(FPH_A) and _has(FPH_B)):

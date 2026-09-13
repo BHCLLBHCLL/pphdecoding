@@ -29,6 +29,15 @@ from pathlib import Path
 
 import numpy as np
 
+# R11-3：CLI 会打印含中文的报告 —— ANSI 控制台下必须切 UTF-8，
+# 否则 print 直接抛 UnicodeEncodeError（第三次踩到同一个坑，见 console_utf8）。
+try:
+    import console_utf8
+
+    console_utf8.enable()
+except Exception:  # noqa: BLE001
+    pass
+
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -199,10 +208,21 @@ def gate_fph(rep: dict, tol_max: float = 0.0,
     only_a = rep.get("only_a", [])
     only_b = rep.get("only_b", [])
     ok = n_fail == 0 and not only_a and not only_b
+    # R11-3：零流场直接判不通过 —— 「逐点相等」在零流场上不是等价证据（审计 §5-O3）。
+    zero = rep.get("zero_field")
+    reason = None
+    if ok and zero:
+        ok = False
+        reason = ("zero field: 主变量(" +
+
+                  ",".join(rep.get("primary_fields") or []) +
+
+                  ") 两侧均值均为 0 —— delta=0 只说明都是零，不构成数值等价证据")
     return {"ok": bool(ok), "tol_max": tol_max, "tol_rel": tol_rel,
             "fields": verdicts, "only_a": only_a, "only_b": only_b,
             "n_pass": n_pass, "n_fail": n_fail,
-            "n_empty_both": n_empty, "n_fields": len(rep["fields"])}
+            "n_empty_both": n_empty, "n_fields": len(rep["fields"]),
+            "zero_field": bool(zero), "reason": reason}
 
 
 def compare_fld(path_a: str | Path, path_b: str | Path) -> dict:

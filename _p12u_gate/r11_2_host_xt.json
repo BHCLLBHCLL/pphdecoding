@@ -1,0 +1,24 @@
+{
+  "error": null,
+  "err0": 16,
+  "total": 16,
+  "alive": {
+    "app_": "True",
+    "doc_": "True",
+    "sn1_": "False"
+  },
+  "seconds": 729.5,
+  "ret_save_box": "False",
+  "ret_save_step": null,
+  "reopen_box_sn": "False",
+  "reopen_step_sn": null,
+  "schemas": {
+    "host_native_box_x_t": "SCH_3400153_34001",
+    "cadthru_keyv2": "SCH_3701153_37102",
+    "host_export_box": "SCH_3701153_37102",
+    "host_export_step": null,
+    "host_roundtrip_box": null,
+    "host_roundtrip_step": null
+  },
+  "passed": false
+}

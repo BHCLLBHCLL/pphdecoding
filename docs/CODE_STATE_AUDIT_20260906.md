@@ -1102,6 +1102,32 @@ FLD/iFLD 可得性：读取器齐备（`fldstats`/`ifld`/`solver_delta --kind fl
 
 新增 `FACET.USE_SIMPLE_SETTING`（true→false）、`FACET.MDL_METHOD`（1→0）、
 `FACET.DETAIL_CHORD_ANGLE`（10→0，数值 setter 再次归一化）；写回+回读 3/3、27/27 err=0。
+
+---
+
+## 26. R11 更新（2026-09-14）—— 零流场入 gate + 宿主侧导出否证 + 降版线索
+
+### 26.1 零流场判据接入 gate（R11-3）
+
+`gate_fph` 遇 `zero_field=True` **直接判不通过**并点名主变量；CLI 对 I5 b1/b2 实测 **exit=2**。
+旧断言「自比必过」按新语义改写（零流场自比必须 FAIL）。顺带修掉 `solver_delta.py` 在 ANSI 控制台下
+打印中文报告的 `UnicodeEncodeError`（第三次踩同一坑 → 统一走 `console_utf8`）。
+
+### 26.2 「宿主侧导出 v34」证伪（R11-2）
+
+| 产物 | `SCH=` |
+|---|---|
+| 宿主原生 `tests/box/box.x_t`（可读） | `SCH_3400153_34001`（v34） |
+| CADthru 产出 | `SCH_3701153_37102`（v37） |
+| **宿主 `Doc_.SaveXTFile` 导出** | **`SCH_3701153_37102`（v37）** |
+
+宿主内核即 v37：写得出 v37、读不了 v37（只吃 v34）；`SaveXTFile` 返回 False 但仍写文件，
+随后读自身产物即以 `com_error(-2147023170 远程过程调用失败)` 挂起（自愈 2 次 / 729 s）。
+
+### 26.3 离线降版线索（R12-1 的依据）
+
+`ps_facet2_nodes._TRANSMIT`（`PK_PART_transmit_o_t`）含**未使用**字段 **`transmit_nw_version`**，
+而本仓已直调 `PK_PART_transmit` 写文本 x_t → **离线把 v37 重编码为 v34 可达**（无需宿主参与）。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

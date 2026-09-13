@@ -54,5 +54,47 @@ class TestZeroFieldReport(unittest.TestCase):
         self.assertGreater(rep["auxiliary_nonzero_count"], 0)
 
 
+class TestGateRejectsZeroField(unittest.TestCase):
+    """R11-3：--gate 遇零流场必须 FAIL（否则「都为零」会被当成等价证据）。"""
+
+    def _rep(self, vel_a, vel_b):
+        return {"fields": {
+            "FC_Vector:VEL": {"pointwise": True, "n_a": 4, "n_b": 4,
+                               "delta_max": 0.0, "delta_rel": 0.0,
+                               "a_mean": vel_a, "b_mean": vel_b},
+        }, "only_a": [], "only_b": []}
+
+    def test_zero_field_fails_gate(self):
+        rep = self._rep(0.0, 0.0)
+        rep.update(solver_delta.zero_field_report(rep))
+        got = solver_delta.gate_fph(rep)
+        self.assertFalse(got["ok"])
+        self.assertTrue(got["zero_field"])
+        self.assertIn("zero field", got["reason"])
+
+    def test_nonzero_field_passes_gate(self):
+        rep = self._rep(12.5, 12.5)
+        rep.update(solver_delta.zero_field_report(rep))
+        got = solver_delta.gate_fph(rep)
+        self.assertTrue(got["ok"], got.get("reason"))
+        self.assertFalse(got["zero_field"])
+
+    def test_cli_gate_on_i5_pair_returns_nonzero(self):
+        import subprocess
+        a = ROOT / "_p12k_i5" / "b1" / "box_b1_400.fph"
+        b = ROOT / "_p12k_i5" / "b2" / "box_b2_400.fph"
+        if not (a.is_file() and b.is_file()):
+            self.skipTest("i5 fph artifacts missing")
+        proc = subprocess.run(
+            [sys.executable, str(ROOT / "solver_delta.py"), "--a", str(a),
+             "--b", str(b), "--kind", "fph", "--gate"],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace")
+        if "no fields parsed" in (proc.stdout or ""):
+            self.skipTest("fph parse unavailable")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("zero field", proc.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

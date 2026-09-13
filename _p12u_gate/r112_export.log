@@ -1,0 +1,17 @@
+start
+s001=0
+app__alive=True err=0
+s002=0
+s003=0
+doc__alive=True err=0
+s004=0
+s005=0
+s006=0
+s007=0
+ret_save_box=False err=0
+s008=0
+s009=0
+sn1__alive=False err=0
+s010=0
+reopen_box_sn=False err=0
+s011=0
