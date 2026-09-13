@@ -1,0 +1,49 @@
+start
+s001=0
+app__alive=True err=0
+s002=0
+s003=0
+doc__alive=True err=0
+s004=0
+s005=0
+s006=0
+s007=0
+mg__alive=True err=0
+s008=0
+mgs__alive=True err=0
+mesher_before=oct err=0
+s009=0
+surf_before=facet_base err=0
+s010=0
+chord_before=1 err=0
+s011=0
+angle_before=5 err=0
+s012=0
+width_before=5 err=0
+s013=0
+detailw_before=True err=0
+s014=0
+s015=0
+s016=0
+edit0_err=0 err=0
+s017=0
+s018=0
+s019=0
+edit1_err=0 err=0
+s020=0
+s021=0
+s022=0
+edit2_err=0 err=0
+s023=0
+s024=0
+mgs2__alive=True err=0
+chord_after=1 err=0
+s025=0
+angle_after=0 err=0
+s026=0
+width_after=0 err=0
+s027=0
+detailw_after=False err=0
+s028=0
+s029=0
+end

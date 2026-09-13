@@ -524,7 +524,7 @@ STEP 参数阶梯此前卡在「长网格会被误判 log-idle 杀掉」；R5-1 
 
 ---
 
-## R6 —— 提案（2026-09-14，≈10 人日）
+## R6 —— 宿主键映射 + 面板落盘收尾 + STEP 阶梯（2026-09-14，执行记录）
 
 ### 依据
 
@@ -543,11 +543,113 @@ STEP 参数阶梯此前卡在「长网格会被误判 log-idle 杀掉」；R5-1 
 | **R6-4** | **面板落盘最后 2 页** | 用同一通道接 `CreatePartsBody` 与 `ExecuteBody` | memory_only 4 → **2**；宿主零破坏 | 1.5 |
 | **R6-5** | **MeshParam → 宿主键映射核实** | 在宿主里改一项、对 xenv 做差分定位其真实键；核实一个写一个 | ≥3 个字段写入宿主键且宿主行为符合预期 | 2 |
 
+### 执行记录（2026-09-14）
+
+#### R6-5 ✅ 已成 —— MeshParam → 宿主键映射**实测**（不猜键名）
+
+`tools/xenv_key_probe.py`：宿主打开工程 → 用 COM 在 `MeshingGroupSetting` 上改设置 →
+`SaveProject` → **diff 两份 main.xenv**，值变了的键就是该设置的真实宿主键。两轮实测合起来钉死 5 条：
+
+| COM setter | main.xenv 键 | 观测 |
+|---|---|---|
+| `SetFacetSimpleChordTol` | `FACET.SIMPLE_CHORD_TOLERANCE` | 1 → 0 |
+| `SetFacetSimpleMaxAngle` | `FACET.SIMPLE_MAX_ANGLE` | 5 → 0 |
+| `SetFacetSimpleMaxWidth` | `FACET.SIMPLE_MAX_WIDTH` | 5 → 0 |
+| `SetFacetUseDetailMaxWidth` | `FACET.USE_DETAIL_MAX_WIDTH` | true → false |
+| `SetFacetUseAbsoluteValue` | （未变化） | 未证实，不采用 |
+
+证据 `_p12u_gate/r6_5_keys.json`（两轮宿主 err=0：43/43 与 47/47）。
+
+> **重要发现**：数值型 setter **不保证回读同一数值** —— 传 7/9/13 读回都是 **0**，而布尔 setter 精确生效。
+> 也就是说这些键在当前配置（`USE_SIMPLE_SETTING=true` / `USE_ABSOLUTE_VALUE=false`）下是「0=自动/默认」
+> 语义。**结论：将来写宿主键只能写经过实测确认的取值，不能假设数值往返。**
+
+#### R6-4 ✅ 已成 —— 面板落盘最后 2 页（memory_only 4 → 2）
+
+`ExecuteBody` → `main.xenv [PANEL_EXECUTE]`（执行管线勾选项 + mesh_mode，JSON）；
+`CreatePartsBody` → `[PANEL_CREATE_PARTS]`（Create Parts **表单草稿**持久化，重启不必重填；几何仍走
+`pending_vbs` → 宿主执行）。
+
+审计随之 **persisted 13 → 15 / memory_only 4 → 2**（余 `_PartsControlFollowupBody` 与
+`CondTypeCatalogDialog`——后者是对话框而非页面）。
+
+#### R6-1 ⚠️ 部分成 —— STEP 阶梯实测：宿主存活**非单调**，且**不是内存问题**
+
+粗档 rung（`--target-num 20000 --min-size 0.01`，比 R4-1 的 Run A 更粗）：宿主在网格计算
+**189.9 s** 后就消失（elapsed 315 s）—— **比 Run A（50000 / 0.002，撑到 1502 s）更早死**。
+
+| 档 | 参数（target / min-size） | 宿主存活（网格中） | 结束方式 |
+|---|---|---|---|
+| 录制值（R3-1） | 100000 / 0.00021875 | ~90 s | host_gone |
+| **R6-1 粗档** | **20000 / 0.01** | **189.9 s** | host_gone |
+| Run A（R4-1） | 50000 / 0.002 | 1502 s | host_gone |
+
+**结论（本轮推翻上一轮的假说）**：宿主存活时长**不是**八叉树细度的单调函数（更粗反而更早死），
+所以「越细越容易崩」的资源标定思路不成立；也没有得到成功档。
+
+**R5-1 的仪表同时给出了否证 OOM 的直接证据**（台账原文）：
+
+```
+"reason_kind": "host_gone", "cpu_progress_events": 3, "last_seen_hosts": [11756],
+"log_last_line": "s146=0",
+"last_seen_memory": [{"pid": 11756, "ws_mb": 87.7, "peak_ws_mb": 143.8, "pagefile_mb": 31.7}]
+```
+
+宿主消失前内存仅 **87.7 MB（峰值 143.8 MB）** —— 离内存天花板极远，**OOM 假说否证**。
+`cpu_progress_events=3` 说明 CPU 进度信号在生产环境确实生效（但宿主真的没了，`host_gone` 正确优先）。
+
+→ R7-1 换假设：查 STpre 是**优雅退出还是崩溃**（WER / Application 事件日志 / 退出码），以及是否存在
+宿主内部「工作进程无进度即自退」的超时。
+
+#### R6-2 ❌ 未执行（顺延 R7-2）
+
+条件补深需要多轮宿主批量收割（43 个未落键 `CreateCond*`，含已知毒类型隔离与旧版工程版本转换前置），
+本轮预算被 R6-1 的两档长实机（各 ~25 min 上限）占满，如实顺延。
+
+#### R6-3 ❌ 未执行（顺延 R7-3）
+
+数值等价需要跑求解器（50 Pa 变体双跑），本轮未动。
+
+#### 回归
+
+全量回归 **1184 passed / 5 skipped / 0 failed**（576.80 s；R5 末为 1179 —— 本轮净增 6 项：
+`tests/test_panel_persist_r64.py`（Execute / CreateParts 落盘）；另 1 项转为条件性 skip）。
 ### 明确不做（R6 内）
 
 * CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
 * 内核 / 求解器 / scPOST 复刻；
 * 不把未核实的 MeshParam 字段写进宿主键（宁可多留一轮）。
+
+---
+
+---
+
+## R7 —— 提案（2026-09-14，≈9 人日）
+
+### 依据
+
+* R6-1 推翻了「参数越细越崩」的假说（存活 90 / 190 / 1502 s 非单调），并用 R5-1 的内存探针**否证 OOM**
+  （宿主消失前仅 87.7 MB WS）→ 必须换假设：查它是优雅退出还是崩溃；
+* R6-5 拿到了 5 条**实测**宿主键映射，并发现数值 setter 不回读原值（7/9/13 → 0）→ 可以开始「反向写宿主键」，
+  但只能写实测确认过的取值；
+* R6-4 把 memory_only 压到 2 → 面板落盘这条线基本收尾；
+* R6-2 / R6-3 连续两轮顺延，各需一整块预算。
+
+### 条目
+
+| # | 条目 | 做法 | 验收句 | 人日 |
+|---|---|---|---|---|
+| **R7-1** | **宿主退出机理定性（换假设）** | 抓 STpre 退出前后的 WER 记录 / Application 事件日志 / 退出码；用轻量 COM 心跳探测宿主在网格期间是否仍响应 | 给出「优雅退出 / 崩溃 / 卡死被杀」之一的判定与证据；据此决定是否还有参数路径 | 2 |
+| **R7-2** | **条件体系补深（原 R6-2）** | 批量收割 43 个未落键 `CreateCond*`，毒类型单进程隔离 | 精确键 90 → **≥140 / 165** | 3 |
+| **R7-3** | **数值等价（原 R6-3）** | 50 Pa 变体双跑出非零场 delta 表 | delta 表入册且非零场；FLD/iFLD 结论明确 | 2 |
+| **R7-4** | **按实测键反向写宿主** | 用 R6-5 的 5 条映射，把 MeshParam 的 facet 项写进宿主 `FACET.*`（只写实测确认的取值），宿主重开验证 | ≥3 个字段写宿主键后宿主 err=0 且读回值符合预期 | 1.5 |
+| **R7-5** | **面板落盘收尾判定** | `_PartsControlFollowupBody` 接通道；判定 `CondTypeCatalogDialog`（对话框）是否计入面板账 | memory_only ≤1 且账目口径写清 | 0.5 |
+
+### 明确不做（R7 内）
+
+* CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
+* 内核 / 求解器 / scPOST 复刻；
+* 不写未实测确认的宿主键值（R6-5 已证明数值 setter 不回读原值）。
 
 ---
 

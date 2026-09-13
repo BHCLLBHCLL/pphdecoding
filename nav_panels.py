@@ -1020,10 +1020,19 @@ class CreatePartsBody(_Body):
             f"Preview “{name}” ({shape}).\n"
             "本查看器仅保存参数；几何预览请在 scFLOWpre 中执行。")
 
+    #: R6-4：落盘段（本工具自用）——把 Create Parts 的**表单草稿**持久化，
+    #: 重启后不必重填；真正的几何落盘仍走 pending_vbs → 宿主执行。
+    XENV_SECTION = "PANEL_CREATE_PARTS"
+
     def load(self, ctx: dict) -> None:
         self._ctx = ctx
         self._set_unit(ctx)
         draft = ctx.setdefault("session", {}).get("create_parts") or {}
+        if not draft:
+            disk = panel_json_get(ctx, self.XENV_SECTION, "draft", None)
+            if isinstance(disk, dict):
+                draft = disk
+                ctx["session"]["create_parts"] = dict(disk)
         shape = draft.get("shape", "Cuboid")
         idx = {"Cuboid": 0, "Cylinder": 1, "Sphere": 2, "Rectangle": 3}.get(
             shape, 0)
@@ -1140,6 +1149,9 @@ class CreatePartsBody(_Body):
                 "test_section": d["test"].isChecked(),
             })
         ctx.setdefault("session", {})["create_parts"] = data
+        # R6-4：草稿落盘（JSON 化；tuple 会被 json 转成 list，读回时按需转换）
+        ctx["session"]["create_parts_persisted"] = panel_json_set(
+            ctx, self.XENV_SECTION, {"draft": data})
         ctx.setdefault("session", {})["pending_vbs"] = {
             "op": "create_parts",
             "label": f"Create {shape}",
@@ -14214,8 +14226,16 @@ class ExecuteBody(_Body):
         v.addWidget(self.lab)
         v.addStretch(1)
 
+    #: R6-4：落盘段（本工具自用）。Execute 面板的勾选项是**本工具的执行管线**
+    #: 选择，与宿主无对应持久存储；宿主语义的"执行"是它自己的作业队列。
+    XENV_SECTION = "PANEL_EXECUTE"
+
     def load(self, ctx: dict) -> None:
         ex = ctx.setdefault("session", {}).setdefault("execute", {})
+        disk = panel_json_get(ctx, self.XENV_SECTION, "state", None)
+        if isinstance(disk, dict):
+            ex = dict(disk)
+            ctx["session"]["execute"] = ex
         self.chk_wrap.setChecked(ex.get("wrapping", False))
         self.chk_bam.setChecked(ex.get("bam", True))
         self.chk_oct.setChecked(ex.get("oct", True))
@@ -14244,7 +14264,7 @@ class ExecuteBody(_Body):
                 self, "Execute Solver",
                 "Execute Solver is not available in PPH viewer.\n"
                 "Use scFLOWsolver / scPOST separately.")
-        ctx.setdefault("session", {})["execute"] = {
+        state = {
             "wrapping": self.chk_wrap.isChecked(),
             "bam": self.chk_bam.isChecked(),
             "oct": self.chk_oct.isChecked(),
@@ -14255,6 +14275,11 @@ class ExecuteBody(_Body):
             "mesh_mode": self.cb_mesh_mode.currentText(),
             "use_api": self.chk_use_api.isChecked(),
         }
+        sess = ctx.setdefault("session", {})
+        sess["execute"] = state              # 运行时镜像
+        # R6-4：落盘（重启保留）
+        sess["execute_persisted"] = panel_json_set(
+            ctx, self.XENV_SECTION, {"state": state})
         return True
 
 

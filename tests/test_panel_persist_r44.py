@@ -53,8 +53,9 @@ class TestPanelStoreAudit(unittest.TestCase):
         by = {p["panel"]: p for p in data["panels"]}
         mem = sorted(n for n, p in by.items()
                      if p["persistence"] == "memory_only")
-        self.assertEqual(mem, ["CondTypeCatalogDialog", "CreatePartsBody",
-                               "ExecuteBody", "_PartsControlFollowupBody"])
+        # R6-4 之后只剩：一个写面板 + 一个对话框
+        self.assertEqual(mem, ["CondTypeCatalogDialog",
+                               "_PartsControlFollowupBody"])
         self.assertGreaterEqual(len(data["panels"]), 30)
 
     def test_option_nav_is_persisted_after_r44(self):

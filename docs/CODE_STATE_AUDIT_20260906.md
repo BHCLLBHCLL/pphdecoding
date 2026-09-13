@@ -970,6 +970,36 @@ TOLERANCE/UNIT/…），**无** OPTION 类段 —— 宿主把同名开关放在
 
 * R5-2 STEP 参数阶梯：**已被 R5-1 解锁**（长网格不再被误杀），但每档最长 ~25 min → R6-1；
 * R5-4 条件补深、R5-5 数值等价：各自需要一整块预算 → R6-2 / R6-3。
+
+---
+
+## 21. R6 更新（2026-09-14）—— 宿主键实测映射 + 面板落盘收尾 + STEP 宿主退出去参数化
+
+### 21.1 宿主键映射实测（R6-5）
+
+`tools/xenv_key_probe.py`：宿主改设置 → SaveProject → **diff main.xenv**，键名不靠猜。实测 5 条：
+
+| COM setter | main.xenv 键 | 观测 |
+|---|---|---|
+| SetFacetSimpleChordTol | FACET.SIMPLE_CHORD_TOLERANCE | 1 → 0 |
+| SetFacetSimpleMaxAngle | FACET.SIMPLE_MAX_ANGLE | 5 → 0 |
+| SetFacetSimpleMaxWidth | FACET.SIMPLE_MAX_WIDTH | 5 → 0 |
+| SetFacetUseDetailMaxWidth | FACET.USE_DETAIL_MAX_WIDTH | true → false |
+| SetFacetUseAbsoluteValue | （未变化） | 未证实 |
+
+**数值 setter 不回读原值**（7/9/13 全读回 0），布尔 setter 精确生效 → 写宿主键只能写实测确认过的取值。
+
+### 21.2 面板落盘收尾（R6-4）
+
+`ExecuteBody` → `PANEL_EXECUTE`、`CreatePartsBody` → `PANEL_CREATE_PARTS`；审计 **persisted 15 /
+memory_only 2**（余 `_PartsControlFollowupBody` 与对话框 `CondTypeCatalogDialog`）。
+
+### 21.3 STEP 宿主退出：参数假说被推翻，OOM 被否证（R6-1）
+
+三档实测宿主存活 **90 s / 189.9 s / 1502 s**（更粗的档反而更早死）→ 与八叉树细度**非单调**；
+台账 `last_seen_memory` 显示宿主消失前仅 **87.7 MB WS（峰值 143.8 MB）** → **OOM 否证**。
+`cpu_progress_events=3` 证明 R5-1 的进度信号在生产生效，且 `host_gone` 判据正确优先。
+→ 机理待定（优雅退出 / 崩溃 / 内部超时），R7-1 用 WER + Application 事件日志区分。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。
