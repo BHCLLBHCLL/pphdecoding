@@ -38,6 +38,8 @@ console_utf8.enable()
 INCLUDE = [
     "*.py",
     "*.md",
+    "*.json",
+    "*.jsonl",
     "automation/*.py",
     "tools/*.py",
     "tests/*.py",
@@ -67,7 +69,10 @@ MAX_BYTES = 1_000_000
 
 
 def _git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
+    # encoding 必须显式给：默认按 ANSI 代码页解码，git 输出里的 UTF-8
+    # 字节会抛 UnicodeDecodeError（读线程里的异常让 stdout 变 None）。
     return subprocess.run(["git", *args], cwd=str(ROOT), text=True,
+                          encoding="utf-8", errors="replace",
                           capture_output=True, check=check)
 
 

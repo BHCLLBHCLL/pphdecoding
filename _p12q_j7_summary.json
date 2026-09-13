@@ -1,0 +1,78 @@
+{
+  "passed": 3,
+  "total": 3,
+  "results": [
+    {
+      "name": "p12d_region",
+      "ok": true,
+      "run_ok": true,
+      "outcome": "ok",
+      "verdict": {
+        "total": 13,
+        "err0": 13,
+        "bad": 0,
+        "problems": [],
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "fr_": "True",
+          "qr_": "True",
+          "qn_": "False"
+        },
+        "info": {},
+        "has_end": true
+      }
+    },
+    {
+      "name": "p12e_mesh",
+      "ok": true,
+      "run_ok": true,
+      "outcome": "ok",
+      "verdict": {
+        "total": 23,
+        "err0": 23,
+        "bad": 0,
+        "problems": [],
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "mg_": "True",
+          "vmdl_": "True",
+          "vmdl": "True"
+        },
+        "info": {
+          "create_ret": "True",
+          "wait_ret": "1"
+        },
+        "has_end": true
+      }
+    },
+    {
+      "name": "p12m_wiz",
+      "ok": true,
+      "run_ok": true,
+      "outcome": "ok",
+      "verdict": {
+        "total": 151,
+        "err0": 151,
+        "bad": 0,
+        "problems": [],
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn6_": "True",
+          "mgw_": "True",
+          "meshinggroup_": "True",
+          "proj_": "True",
+          "mdlwizard_": "True",
+          "meshinggroupsetting_": "True",
+          "mdl2_": "True",
+          "mgo_": "True",
+          "mgm_": "True"
+        },
+        "info": {},
+        "has_end": true
+      }
+    }
+  ]
+}
