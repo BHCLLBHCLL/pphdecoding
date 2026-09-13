@@ -1,0 +1,56 @@
+{
+  "base": "D:\\training\\cgns\\pphdecoding\\box.pph",
+  "edits": [
+    {
+      "setter": "SetVoxelOctRefineType",
+      "params": [
+        "\"octree\""
+      ],
+      "label": "VoxelOctRefineType=octree"
+    },
+    {
+      "setter": "SetFacetLengthFactor",
+      "params": [
+        0.4
+      ],
+      "label": "FacetLengthFactor=0.4"
+    },
+    {
+      "setter": "SetFacetAngle",
+      "params": [
+        3.0
+      ],
+      "label": "FacetAngle=3"
+    }
+  ],
+  "host": {
+    "error": null,
+    "err0": 45,
+    "total": 47,
+    "alive": {
+      "app_": "True",
+      "doc_": "True",
+      "mg_": "True",
+      "mgs_": "True",
+      "mgs2_": "True"
+    },
+    "seconds": 43.3
+  },
+  "chord_before": "1",
+  "chord_after": "1",
+  "angle_before": "5",
+  "angle_after": "5",
+  "width_before": "5",
+  "width_after": "5",
+  "detailw_before": "True",
+  "detailw_after": "True",
+  "mesher_before": "oct",
+  "surf_before": "facet_base",
+  "xenv_diff": {
+    "changed": {},
+    "changed_count": 0,
+    "missing_count": 0,
+    "missing_sample": {}
+  },
+  "passed": false
+}

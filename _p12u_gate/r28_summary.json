@@ -1,0 +1,30 @@
+{
+  "A_oct_mesh": {
+    "exit": 1,
+    "changed": {},
+    "err0": 45,
+    "total": 47
+  },
+  "B_lengthfactor": {
+    "exit": 0,
+    "changed": {
+      "FACET.SOLID_BASE_LENGTH_FACTOR": {
+        "before": "0.050000000000000003",
+        "after": "0"
+      }
+    },
+    "err0": 39,
+    "total": 39
+  },
+  "C_intdepth": {
+    "exit": 0,
+    "changed": {
+      "FACET.INTERSECTION_DETECTION_DEPTH": {
+        "before": "12",
+        "after": "0"
+      }
+    },
+    "err0": 39,
+    "total": 39
+  }
+}

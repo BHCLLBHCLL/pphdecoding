@@ -28,26 +28,14 @@ s016=0
 edit0_err=0 err=0
 s017=0
 s018=0
-s019=0
-edit1_err=0 err=0
-s020=0
-s021=0
-s022=0
-edit2_err=0 err=0
-s023=0
-s024=0
-s025=0
-edit3_err=0 err=0
-s026=0
-s027=0
 mgs2__alive=True err=0
 chord_after=1 err=0
-s028=0
+s019=0
 angle_after=5 err=0
-s029=0
+s020=0
 width_after=5 err=0
-s030=0
+s021=0
 detailw_after=True err=0
-s031=0
-s032=0
+s022=0
+s023=0
 end

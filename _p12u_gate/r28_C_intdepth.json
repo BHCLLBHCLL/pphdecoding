@@ -1,0 +1,47 @@
+{
+  "base": "D:\\training\\cgns\\pphdecoding\\box.pph",
+  "edits": [
+    {
+      "setter": "SetIntersectionDetectionDepth",
+      "params": [
+        7
+      ],
+      "label": "IntersectionDetectionDepth=7"
+    }
+  ],
+  "host": {
+    "error": null,
+    "err0": 39,
+    "total": 39,
+    "alive": {
+      "app_": "True",
+      "doc_": "True",
+      "mg_": "True",
+      "mgs_": "True",
+      "mgs2_": "True"
+    },
+    "seconds": 47.4
+  },
+  "chord_before": "1",
+  "chord_after": "1",
+  "angle_before": "5",
+  "angle_after": "5",
+  "width_before": "5",
+  "width_after": "5",
+  "detailw_before": "True",
+  "detailw_after": "True",
+  "mesher_before": "oct",
+  "surf_before": "facet_base",
+  "xenv_diff": {
+    "changed": {
+      "FACET.INTERSECTION_DETECTION_DEPTH": {
+        "before": "12",
+        "after": "0"
+      }
+    },
+    "changed_count": 1,
+    "missing_count": 0,
+    "missing_sample": {}
+  },
+  "passed": true
+}

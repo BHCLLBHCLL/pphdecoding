@@ -56,61 +56,34 @@ Err.Clear
 out_.WriteLine "detailw_before=" & CStr(MGS_.GetFacetUseDetailMaxWidth) & " err=" & CStr(Err.Number)
 out_.WriteLine "s014=" & CStr(Err.Number)
 Err.Clear
-P00_ = False
+P00_ = 7
 out_.WriteLine "s015=" & CStr(Err.Number)
 Err.Clear
-MGS_.SetFacetUseSimpleSetting P00
+MGS_.SetIntersectionDetectionDepth P00
 out_.WriteLine "s016=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "edit0_err=" & CStr(Err.Number) & " err=" & CStr(Err.Number)
 out_.WriteLine "s017=" & CStr(Err.Number)
 Err.Clear
-P10_ = 12.0
-out_.WriteLine "s018=" & CStr(Err.Number)
-Err.Clear
-MGS_.SetAFFaceterMinimumAngle P10
-out_.WriteLine "s019=" & CStr(Err.Number)
-Err.Clear
-out_.WriteLine "edit1_err=" & CStr(Err.Number) & " err=" & CStr(Err.Number)
-out_.WriteLine "s020=" & CStr(Err.Number)
-Err.Clear
-P20_ = 0.3
-out_.WriteLine "s021=" & CStr(Err.Number)
-Err.Clear
-MGS_.SetAFFaceterLengthFactorForOctree P20
-out_.WriteLine "s022=" & CStr(Err.Number)
-Err.Clear
-out_.WriteLine "edit2_err=" & CStr(Err.Number) & " err=" & CStr(Err.Number)
-out_.WriteLine "s023=" & CStr(Err.Number)
-Err.Clear
-P30_ = 8.0
-out_.WriteLine "s024=" & CStr(Err.Number)
-Err.Clear
-MGS_.SetAFFaceterMinimumAngleForOctree P30
-out_.WriteLine "s025=" & CStr(Err.Number)
-Err.Clear
-out_.WriteLine "edit3_err=" & CStr(Err.Number) & " err=" & CStr(Err.Number)
-out_.WriteLine "s026=" & CStr(Err.Number)
-Err.Clear
 Set MGS2_ = MG_.GetMeshingGroupSetting
-out_.WriteLine "s027=" & CStr(Err.Number)
+out_.WriteLine "s018=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "mgs2__alive=" & CStr(Not (MGS2_ Is Nothing)) & " err=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "chord_after=" & CStr(MGS2_.GetFacetSimpleChordTol) & " err=" & CStr(Err.Number)
-out_.WriteLine "s028=" & CStr(Err.Number)
+out_.WriteLine "s019=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "angle_after=" & CStr(MGS2_.GetFacetSimpleMaxAngle) & " err=" & CStr(Err.Number)
-out_.WriteLine "s029=" & CStr(Err.Number)
+out_.WriteLine "s020=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "width_after=" & CStr(MGS2_.GetFacetSimpleMaxWidth) & " err=" & CStr(Err.Number)
-out_.WriteLine "s030=" & CStr(Err.Number)
+out_.WriteLine "s021=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "detailw_after=" & CStr(MGS2_.GetFacetUseDetailMaxWidth) & " err=" & CStr(Err.Number)
-out_.WriteLine "s031=" & CStr(Err.Number)
+out_.WriteLine "s022=" & CStr(Err.Number)
 Err.Clear
 Doc_.SaveProject "D:/training/cgns/pphdecoding/_p12u_gate/r6_5_keyprobe.pph"
-out_.WriteLine "s032=" & CStr(Err.Number)
+out_.WriteLine "s023=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "end"
 out_.Close

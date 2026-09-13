@@ -85,3 +85,6 @@
 {"ts": "2026-09-14T01:03:42", "flow": "r131_host", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r131_host.log", "log_bytes": 375, "idle_s": 0.0, "elapsed_s": 30.0, "vbs_bytes": 2834}
 {"ts": "2026-09-14T03:30:46", "flow": "r65_keys", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r65_keys.log", "log_bytes": 696, "idle_s": 0.0, "elapsed_s": 20.0, "vbs_bytes": 4478}
 {"ts": "2026-09-14T03:41:34", "flow": "r65_keys", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r65_keys.log", "log_bytes": 696, "idle_s": 0.0, "elapsed_s": 20.0, "vbs_bytes": 4493}
+{"ts": "2026-09-14T07:15:52", "flow": "r65_keys", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r65_keys.log", "log_bytes": 657, "idle_s": 0.0, "elapsed_s": 20.0, "vbs_bytes": 4173}
+{"ts": "2026-09-14T07:17:02", "flow": "r65_keys", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r65_keys.log", "log_bytes": 567, "idle_s": 0.0, "elapsed_s": 45.0, "vbs_bytes": 3615}
+{"ts": "2026-09-14T07:17:49", "flow": "r65_keys", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r65_keys.log", "log_bytes": 567, "idle_s": 0.0, "elapsed_s": 25.0, "vbs_bytes": 3617}

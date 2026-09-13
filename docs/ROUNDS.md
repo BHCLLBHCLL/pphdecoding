@@ -1942,6 +1942,42 @@ not_a_panel        = ['CondTypeCatalogDialog']   # 对话框（模态子窗）�
 
 ---
 
+---
+
+## R28 —— 宿主键支线收口：两条否证 + 联动归因（2026-09-14）
+
+### 执行记录
+
+用 `tools/_r28_probe.py` 跑三轮独立探查（各自冷启动）：
+
+| 轮 | 内容 | 结果 |
+|---|---|---|
+| A | OCT_MESH 段：`SetVoxelOctRefineType` / `SetFacetLengthFactor` / `SetFacetAngle` | **`err0=45/47`、xenv 零变化** → 这组 setter **不可用作写入口**（与 R26 的 `SetCompleteParallelFlag` 否证同类） |
+| B | 单变量：只 `SetAFFaceterLengthFactor` | 只改 `FACET.SOLID_BASE_LENGTH_FACTOR`（0.05→0），**`USE_SIMPLE_SETTING` 未变**（39/39） |
+| C | 单变量：只 `SetIntersectionDetectionDepth` | 只改 `FACET.INTERSECTION_DETECTION_DEPTH`（12→0），**`USE_SIMPLE_SETTING` 未变**（39/39） |
+
+**归因结论**：R26/R27 观察到的 `FACET.USE_SIMPLE_SETTING` true→false **不是单变量效应** ——
+只在「一次同改 ≥3 个 setter」的组合场景出现，属宿主内部一致性重算，非单个 setter 缺陷。
+
+**封闭结论**：`OCT_MESH` 段的键**没有可用写入口**（候选 setter 或不存在、或不写 xenv）→
+该段不再列为待办，而是**判为不可达**。
+
+### ★ 收敛判定（第二次，2026-09-14）
+
+R27 收敛判定后遗留的两件小收尾（OCT_MESH 段键、联动归因）在本轮**以否证/归因形式全部收口**：
+
+* 七个功能面：全部已修复或已定性为外部限制（见 R27 收敛表）；
+* 宿主键支线：13 条实测键入册 + 2 条否证（`CompleteParallelFlag`、OCT_MESH 段候选组）+ 联动归因完成；
+* 无新的可验证条目。
+
+→ 按目标约定（「至 R40 **或不再有可验证的新 R\* 条目**」）**到此终止**，目标标记完成。
+
+### 回归
+
+全量回归 **1217 passed / 4 skipped / 0 failed**（580.37 s；与 R27 持平 —— 本轮为实机探查，未改代码）。
+
+---
+
 ## R 轮次模板（后续轮次照此填写）
 
 ```
