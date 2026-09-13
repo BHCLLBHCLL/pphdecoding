@@ -122,6 +122,32 @@ def log_size(log: Path) -> int:
         return 0
 
 
+#: R8-4：WER 报告目录（崩溃取证用；只读目录，不查事件日志——后者需权限）
+WER_DIRS = (r"C:\ProgramData\Microsoft\Windows\WER\ReportArchive",
+            r"C:\ProgramData\Microsoft\Windows\WER\ReportQueue")
+
+
+def wer_reports(images=("scFLOWpre", "SCTpre", "STpre"),
+                limit: int = 6) -> list[str]:
+    """最近与本产品相关的 WER 报告目录名（R8-4；读不到就返回空表）。"""
+    hits: list[tuple[float, str]] = []
+    for d in WER_DIRS:
+        try:
+            entries = list(Path(d).iterdir())
+        except OSError:
+            continue
+        for e in entries:
+            name = e.name
+            if not any(img.lower() in name.lower() for img in images):
+                continue
+            try:
+                hits.append((e.stat().st_mtime, name))
+            except OSError:
+                continue
+    hits.sort(reverse=True)
+    return [n for _t, n in hits[:limit]]
+
+
 def log_last_line(log: Path) -> str:
     """日志最后一条非空行（R4-2：host-gone 归因用）。"""
     try:
@@ -162,7 +188,9 @@ class FlowExecutor:
                  kill_all_fn=None, error_retry_delay: float = 20.0,
                  kill_settle: float = 2.0, retry_with_boot: bool = False,
                  cpu_fn=None, mem_fn=None,
-                 cpu_progress_delta: float = 2.0):
+                 cpu_progress_delta: float = 2.0,
+                 worker_image: str = "scFLOWpre_Bx64net",
+                 worker_pids_fn=None, wer_fn=wer_reports):
         self.vbs_path = Path(vbs_path)
         self.log_path = Path(log_path)
         self.name = name
@@ -204,6 +232,14 @@ class FlowExecutor:
         self._cpu_progress = 0
         self._host_seen_alive = False
         self._last_seen_mem: list[dict] = []
+        # R8-4：R7-1 的教训 —— 真正崩的是**工作进程** scFLOWpre_Bx64net，而
+        # 探针与台账此前只盯 STpre，于是「工作进程崩溃」被记成「宿主消失」。
+        self.worker_image = worker_image
+        self._worker_pids_fn = worker_pids_fn or (
+            lambda: modal_watch.host_pids(worker_image))
+        self._wer_fn = wer_fn
+        self._last_seen_worker: list[int] = []
+        self._last_seen_worker_mem: list[dict] = []
 
     def _kill_all(self) -> None:
         if self._kill_all_fn is not None:
@@ -247,6 +283,16 @@ class FlowExecutor:
             mem = [m for m in (self._mem_fn(p) for p in alive) if m]
             if mem:
                 self._last_seen_mem = mem
+            # R8-4：工作进程同样要在它还在时采样（网格就跑在它里面）
+            try:
+                wpids = list(self._worker_pids_fn() or [])
+            except Exception:  # noqa: BLE001
+                wpids = []
+            if wpids:
+                self._last_seen_worker = wpids
+                wmem = [m for m in (self._mem_fn(p) for p in wpids) if m]
+                if wmem:
+                    self._last_seen_worker_mem = wmem
         return alive
 
     def _cpu_progress_ok(self) -> bool:
@@ -297,6 +343,19 @@ class FlowExecutor:
                 if self._last_seen_mem:
                     # R5-1：最后采到的内存画像（判 OOM 用）
                     row["last_seen_memory"] = self._last_seen_mem
+                # R8-4：工作进程画像 + WER 报告（R7-1 定性靠离线取证，这里
+                # 直接把线索落进台账，省掉事后翻日志）
+                row["worker_image"] = self.worker_image
+                row["last_seen_worker"] = list(self._last_seen_worker)
+                if self._last_seen_worker_mem:
+                    row["last_seen_worker_memory"] = \
+                        self._last_seen_worker_mem
+                try:
+                    wer = list(self._wer_fn() or [])
+                except Exception:  # noqa: BLE001
+                    wer = []
+                if wer:
+                    row["wer_reports"] = wer
             if outcome == "hung":
                 dump = self.work_dir / (self.name + "_hang_" +
                                         time.strftime("%H%M%S") + ".dmp")

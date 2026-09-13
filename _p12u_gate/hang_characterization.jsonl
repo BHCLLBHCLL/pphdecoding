@@ -59,3 +59,9 @@
 {"ts": "2026-09-13T21:47:42", "flow": "step_reopen", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r13_step_reopen.log", "log_bytes": 432, "idle_s": 0.0, "elapsed_s": 20.0, "vbs_bytes": 2748}
 {"ts": "2026-09-13T21:48:56", "flow": "r74_write", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r74_write.log", "log_bytes": 424, "idle_s": 0.0, "elapsed_s": 25.0, "vbs_bytes": 2847}
 {"ts": "2026-09-13T21:49:57", "flow": "r74_write", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r74_write.log", "log_bytes": 424, "idle_s": 0.0, "elapsed_s": 25.0, "vbs_bytes": 2847}
+{"ts": "2026-09-13T22:11:20", "flow": "step_build", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r13_step_build.log", "log_bytes": 612, "idle_s": 0.0, "elapsed_s": 15.0, "vbs_bytes": 4123}
+{"ts": "2026-09-13T22:11:30", "flow": "step_mesh", "attempt": 1, "outcome": "error", "reason": "worker returned", "log": "r13_step_mesh.log", "log_bytes": 777, "idle_s": 0.0, "elapsed_s": 10.0, "vbs_bytes": 31006}
+{"ts": "2026-09-13T22:12:00", "flow": "step_mesh", "attempt": 1, "outcome": "error", "reason": "worker returned", "log": "r13_step_mesh.log", "log_bytes": 777, "idle_s": 0.0, "elapsed_s": 10.0, "vbs_bytes": 31006}
+{"ts": "2026-09-13T22:12:55", "flow": "step_mesh", "attempt": 1, "outcome": "error", "reason": "worker returned", "log": "r13_step_mesh.log", "log_bytes": 777, "idle_s": 0.0, "elapsed_s": 10.0, "vbs_bytes": 31006}
+{"ts": "2026-09-13T22:13:25", "flow": "step_mesh", "attempt": 1, "outcome": "error", "reason": "worker returned", "log": "r13_step_mesh.log", "log_bytes": 777, "idle_s": 0.0, "elapsed_s": 10.0, "vbs_bytes": 31006}
+{"ts": "2026-09-13T22:16:40", "flow": "step_reopen", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r13_step_reopen.log", "log_bytes": 432, "idle_s": 0.0, "elapsed_s": 15.0, "vbs_bytes": 2748}

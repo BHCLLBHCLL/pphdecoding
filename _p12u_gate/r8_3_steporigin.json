@@ -1,0 +1,75 @@
+{
+  "cases": {
+    "step": {
+      "cad": "_p12u_gate\\r8_3_keyv2.x_t",
+      "oct_params": {
+        "target_num": "100000 (recorded)",
+        "min_size": "0.00021875 (recorded)"
+      },
+      "build": {
+        "ok": true,
+        "seconds": 15.0,
+        "err0": 42,
+        "total": 42,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "False",
+          "mg_": "True",
+          "mg2_": "True",
+          "vmdl_": "False",
+          "mdl_": "False",
+          "octparam_": "True",
+          "oct_": "False"
+        },
+        "info": {
+          "ret_bam": "False",
+          "ret_oct": "False"
+        }
+      },
+      "mesh": {
+        "ok": false,
+        "seconds": 304.7,
+        "err0": 65,
+        "total": 66,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "False",
+          "mg_": "True",
+          "mgs_": "True",
+          "proj_": "True",
+          "snode_": "False",
+          "fluidregion_": "True",
+          "fluid": "True",
+          "mg2_": "True",
+          "wiz_": "True"
+        },
+        "info": {},
+        "mesh_exists_in_session": null
+      },
+      "reopen": {
+        "ok": true,
+        "seconds": 15.0,
+        "err0": 25,
+        "total": 25,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "False",
+          "mg_": "True",
+          "mdl_": "False",
+          "vmdl_": "False",
+          "oct_": "False"
+        },
+        "info": {
+          "mesh_exists": "False"
+        },
+        "mesh_exists_after_reopen": "False"
+      },
+      "built_pph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\step_built.pph",
+      "meshed_pph": null
+    }
+  },
+  "passed": 0
+}

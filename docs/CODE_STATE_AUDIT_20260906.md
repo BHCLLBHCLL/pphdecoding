@@ -1025,6 +1025,31 @@ Windows Application 日志 / WER 取证：`Application Error` ID 1000 的出错�
 
 `_PartsControlFollowupBody` → `PANEL_FOLLOWUP`；审计 **persisted 16 / memory_only 1**（仅剩对话框
 `CondTypeCatalogDialog`）。同时把「审计精确计数」断言改为**单调不变量**，消除连续两轮的回归脆性。
+
+---
+
+## 23. R8 更新（2026-09-14）—— 条件线实测封顶 + STEP 绕行定位 + 取证/宿主键闭环
+
+### 23.1 条件体系：92 精确键 = 全部可落点类型（R8-1，负结果）
+
+完整批量收割 16 个未落键 creator（全部 `True`、`save_err=0`）后 `types_before == types_after == 115`、
+`new_in_universe=0`、`remaining_missing=75`。归属：`registry_key` **90** + `member_locus` **2** = **92**；
+`wizard_session_state` 71（+1 gated）、`alias` 1、`poison_isolated` 1（共 166 条）。
+**结论：≥140/165 的验收线前提有误**；有 XML 落点的类型已全部登记，其余为设计上无落点的向导态。
+
+### 23.2 STEP 绕行：拦路石在宿主摄取（R8-3）
+
+重跑转换（不用缓存）：9.9 s，产物离线 **1 body / 4358 三角 / bbox [-4,-4,0]–[4,4,3]** 完全正常；
+但宿主 `OpenCadFile` 得 `ret_bam=False`、**`sn_=False`**（无 SNode），与旧缓存产物同形。
+→ 拦路石 = **宿主对 CADthru x_t 的摄取**（宿主原生 x_t 同流程 `sn_=True`）→ R9-2 做格式差分。
+
+### 23.3 取证补全与宿主键闭环（R8-4 / R8-5）
+
+* `FlowExecutor` 台账 host-gone 行新增工作进程画像（`worker_image` / `last_seen_worker` /
+  `last_seen_worker_memory`）与 `wer_reports`（直读 WER 目录，免权限；本机实测列出
+  `AppCrash_scFLOWpre_Bx64ne_*`，与 R7-1 事件日志互证）；
+* **宿主键闭环成立**：Faceter 面板 `apply` 写出的 `FACET.SIMPLE_CHORD_TOLERANCE` / `SIMPLE_MAX_ANGLE`
+  **正是** R6-5/R7-4 实测键（离线断言），实机侧 R7-4 已证宿主回读一致、27/27 err=0。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

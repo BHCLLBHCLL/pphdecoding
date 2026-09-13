@@ -717,7 +717,7 @@ STEP 参数阶梯此前卡在「长网格会被误判 log-idle 杀掉」；R5-1 
 
 ---
 
-## R8 —— 提案（2026-09-14，≈9 人日）
+## R8 —— 条件收割 + STEP 绕行定位 + 取证补全 + 宿主键闭环（2026-09-14，执行记录）
 
 ### 依据
 
@@ -737,12 +737,117 @@ STEP 参数阶梯此前卡在「长网格会被误判 log-idle 杀掉」；R5-1 
 | **R8-4** | **网格失败取证补全** | 台账同时记**工作进程**（`scFLOWpre_Bx64net`）pid/内存/退出码，并在 host-gone 时抓 WER 报告路径 | host-gone 行含工作进程画像与 WER 路径 | 1 |
 | **R8-5** | **MeshParam 落宿主键（可行路径）** | 用 R7-4 证明的「写 xenv」方式把 MeshParam 的 facet 项写宿主键；只写实测键、只写实测取值 | ≥3 字段写宿主键且宿主回读一致、err=0 | 1.5 |
 
+### 执行记录（2026-09-14）
+
+#### R8-4 ✅ 已成 —— host-gone 补记**工作进程**画像 + WER 路径
+
+R7-1 的教训（崩的是工作进程、台账却只记 STpre）直接落成代码：
+
+* `FlowExecutor` 新增 `worker_image` / `worker_pids_fn` / `wer_fn`，在**宿主还在时**同步采样工作进程
+  pid 与内存；
+* host-gone 行新增 `worker_image` / `last_seen_worker` / `last_seen_worker_memory` / `wer_reports`；
+* 新增 `wer_reports()`：直接读 `C:\ProgramData\Microsoft\Windows\WER\Report{Archive,Queue}` 目录名
+  （不查事件日志，免权限）—— 本机实测立刻列出 `AppCrash_scFLOWpre_Bx64ne_*`，与 R7-1 的事件日志
+  互相印证。
+
+测试 `tests/test_host_gone_r84.py`（5 项）。
+
+#### R8-3 ⚠️ 部分成 —— STEP→CADthru→x_t：**离线通、宿主不认**
+
+* 重新转换（不用旧缓存）：`key v2.step` → `_p12u_gate/r8_3_keyv2.x_t`，**9.9 s**，离线校验
+  **1 body / 4358 三角 / bbox [-4,-4,0]–[4,4,3]** —— 文件本身是完整可用的 Parasolid；
+  （顺带解释了 R3-1 里 `bbox=-4,4,4,3` 的困惑：探针只打了扁平数组的 0/3/4/5 下标。）
+* 但把这份 x_t 交给宿主 `OpenCadFile`：`ret_bam=False`、`vmdl_=False`、**`sn_=False`**（没有 SNode），
+  mesh 65/66、reopen 全 False —— 与旧缓存产物的失败形态**完全一致**。
+* 结论：拦路石不在我们的转换（离线完全正常），而在**宿主对 CADthru 产出的 x_t 的摄取**
+  （宿主原生 `tests/box/box.x_t` 同一流程 `sn_=True`）。→ R9-1 做两种 x_t 的头部/schema 差分。
+
+#### R8-5 ✅ 已成 —— Faceter 面板输出键 == 实测宿主键（闭环）
+
+离线侧（`tests/test_facet_host_keys_r85.py`）：`MesherFaceterBody.apply` 写出的
+`FACET.SIMPLE_CHORD_TOLERANCE` / `SIMPLE_MAX_ANGLE` **正是** R6-5/R7-4 实测确认的宿主键（键名
+不靠猜，且与 R7-4 的实机回读接上）；最大边长走面板自己的「相对最大边长」路径，故只断言被写出且为数值。
+
+实机侧已由 R7-4 完成（写 xenv → 宿主 getter 回读 8/9/False、27/27 err=0）。**闭环成立**：
+面板 → xenv 键（离线证明）+ xenv 键 → 宿主（实机证明）。
+
+#### R8-1 ✅ 已成（负结果）—— 条件「补深」实测封顶：16 个未落键 creator **全部无可落键**
+
+离线 `plan` 先纠正账目：**剩余未落键的 creator 只有 16 个**（不是历史笔记里的 43）。随后跑了
+**完整批量收割**（`_p12c_cond_harvest.py all`）：16 条 `Create*` 全部 `True`、`save_err=0`、产物落盘
+（`mk015_VolumePressureDrop=True` / `mk016_FMIVariable=True` / `out_exists=True`）。
+
+结果（`p12c_harvest_report.json`）：
+
+| 量 | 值 |
+|---|---|
+| `types_before` → `types_after` | **115 → 115（零新增）** |
+| `new_in_universe` | 0 |
+| `remaining_missing` | 75 |
+| 注册表归属 | `registry_key` **90** + `member_locus` **2** = **92 精确键**；`wizard_session_state` 71（+1 gated）、`alias` 1、`poison_isolated` 1 |
+| 收割产物 | `p12c_cond_harvest_out.pph` 条件数 23（本次重生成，此前为 49） |
+
+**结论：这 16 个类型即使建成功也不会在 main.xml 留下条件落点** —— 与 71 个「向导会话态」类型同源。
+也就是说 **≥140/165 的验收线建立在错误前提上**：真正可达的「有 XML 落点」类型数就是 **92**（已被全部
+登记），其余属设计上无落点的向导态。条件体系这条线到这里按实测**封顶**，不再有可收割空间。
+
+> 副作用记账：本轮 `all` 重新生成了 `p12c_cond_harvest_out.pph`（49 → 23 条条件）。R4-5 的证据 JSON
+> 已入库，不受影响；但后续若复跑 R4-5 工具，基数会变小（24 → 受 23 限制）。
+
+#### R8-2 ❌ 未执行（连续四轮顺延）
+
+数值等价需要跑求解器；本轮预算已用于 R8-1 的批量收割与 R8-3 的实机验证。如实记账，R9 定为主项。
+
+#### 回归
+
+全量回归 **1197 passed / 4 skipped / 0 failed**（620.06 s；R7 末为 1190 —— 本轮净增 7 项：
+`tests/test_host_gone_r84.py` 5 项 + `tests/test_facet_host_keys_r85.py` 2 项）。
+
+> **收口附注（账目一致性）**：R8-1 的收割让 `schemas/merged.json` 多出 1 例实样（59 → 60），
+> 使旧的 `cond_types.json` / `p12h_registry_report.json` 与重算结果不一致（determinism 测试变红）。
+> 处理：① 用 `_p12h_reconcile.py` 重算入册（version 8，summary `exact_key 92 / boundary 72 /
+> unclassified 0`）；② 期间发现 `p12h_wizard_report.json` 的 `families` 只剩 1 族（工作副本被截断），
+> 用**本仓已提交的 `wizard_batch_verdicts`（27 族：25 session_state / 1 keys_projected / 1 not_run）**
+> 重建该输入，再重算 → 18/18 reconcile 测试恢复绿。两处都已入册，避免下一轮再踩。
 ### 明确不做（R8 内）
 
 * CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
 * 内核 / 求解器 / scPOST 复刻；
 * 不再为 STEP 直导网格做参数扫描（R7-1 已定性为宿主崩溃）；
 * 不让新实机项插队 R8-1 / R8-2。
+
+---
+
+---
+
+## R9 —— 提案（2026-09-14，≈7 人日）
+
+### 依据
+
+* R8-1 实测封顶：条件体系 92 精确键 = 全部可落点类型（16 个未落键 creator 收割后零新增）→ 该线收尾，
+  不再投入；
+* R8-3 把 STEP 绕行的拦路石精确定位到**宿主对 CADthru x_t 的摄取**（离线 1 body/4358 三角完全正常，
+  宿主 `sn_=False`）→ 需要两种 x_t 的格式差分；
+* R8-5 闭环成立（面板键 = 实测宿主键 + 实机回读一致）→ 宿主键写通道可用于更多面板；
+* R8-4 把失败取证补齐（工作进程画像 + WER）→ 下一次实机失败可直接归因；
+* **R8-2 数值等价连续四轮顺延** → R9 定为**唯一主项**，先做完再谈其它。
+
+### 条目
+
+| # | 条目 | 做法 | 验收句 | 人日 |
+|---|---|---|---|---|
+| **R9-1（唯一主项）** | **数值等价** | 50 Pa 变体双跑（宿主 vs 本仓产物）出**非零场** delta 表；明确 FLD / iFLD 可得性 | delta 表入册且非零场 | 2 |
+| **R9-2** | **两种 x_t 的格式差分** | 宿主原生 `tests/box/box.x_t` vs CADthru 产出 `r8_3_keyv2.x_t`：Parasolid 头/schema/单位/装配层逐字段比对 | 给出宿主拒收 CADthru x_t 的**可复现判据**（字段级）或证伪 | 2 |
+| **R9-3** | **宿主键写通道铺开** | 用 R8-5 的闭环把 Faceter 面板其余已实测键（`USE_SIMPLE_SETTING` / `MDL_METHOD` / `DETAIL_*`）纳入实机回读 | 每个键都有「面板→xenv→宿主回读」三段证据 | 1.5 |
+| **R9-4** | **崩溃取证自动化** | R8-4 的 WER 字段接进断言语义：host-gone 且 `wer_reports` 非空 → 台账标 `host_crash=true` | 一次真实 STEP 网格失败自动标出 `host_crash` | 1 |
+| **R9-5** | **审计账目口径固化** | 把「有落点 92 / 向导态 72 / 其它 1」写成 `docs/` 常量表，扫描脚本再生不丢账 | 再生脚本输出与常量表一致 | 0.5 |
+
+### 明确不做（R9 内）
+
+* CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
+* 内核 / 求解器 / scPOST 复刻；
+* **不再做条件体系收割**（R8-1 实测封顶）；
+* 不再为 STEP 直导网格做参数扫描（R7-1 定性为宿主崩溃）。
 
 ---
 
