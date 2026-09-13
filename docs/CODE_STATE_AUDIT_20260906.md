@@ -1000,6 +1000,31 @@ memory_only 2**（余 `_PartsControlFollowupBody` 与对话框 `CondTypeCatalogD
 台账 `last_seen_memory` 显示宿主消失前仅 **87.7 MB WS（峰值 143.8 MB）** → **OOM 否证**。
 `cpu_progress_events=3` 证明 R5-1 的进度信号在生产生效，且 `host_gone` 判据正确优先。
 → 机理待定（优雅退出 / 崩溃 / 内部超时），R7-1 用 WER + Application 事件日志区分。
+
+---
+
+## 22. R7 更新（2026-09-14）—— 宿主崩溃定性 + 反向写宿主键 + 面板落盘收尾
+
+### 22.1 宿主工作进程崩溃（R7-1）
+
+Windows Application 日志 / WER 取证：`Application Error` ID 1000 的出错应用是
+**`scFLOWpre_Bx64net.exe`**（工作进程），出错模块 **`mfc140u.dll`**；同秒 WER ID 1001 `APPCRASH`；
+另有 `RADAR_PRE_LEAK_64`（SCTpre 家族）。时间戳与 STEP 网格轮次一一对应。
+**判定：崩溃**（非优雅退出、非 OOM —— R6-1 已证 87.7 MB WS）。
+
+关键修正：探针与台账此前只盯 **STpre**，而崩的是**工作进程**；STpre 随后退出，表现为「宿主消失」。
+→ R8-4 补记工作进程画像与 WER 路径。
+
+### 22.2 反向写宿主键被尊重（R7-4）
+
+直接写 `main.xenv` 的 `FACET.SIMPLE_MAX_ANGLE=8` / `SIMPLE_MAX_WIDTH=9` / `USE_DETAIL_MAX_WIDTH=false`，
+宿主 getter 回读 **8 / 9 / False**，27/27 err=0、`sn_/mg_/mdl_/oct_/mgs_=True`。
+→ 修正 §21.1 的解读：数值不往返是 **setter 侧归一化**，不是存储限制；**写 xenv 是可行路径**。
+
+### 22.3 面板落盘收尾（R7-5）
+
+`_PartsControlFollowupBody` → `PANEL_FOLLOWUP`；审计 **persisted 16 / memory_only 1**（仅剩对话框
+`CondTypeCatalogDialog`）。同时把「审计精确计数」断言改为**单调不变量**，消除连续两轮的回归脆性。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

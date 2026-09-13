@@ -14,13 +14,13 @@ mg__alive=True err=0
 s009=0
 mdl__alive=False err=0
 s010=0
-vmdl__alive=True err=0
+vmdl__alive=False err=0
 s011=0
-oct__alive=True err=0
+oct__alive=False err=0
 mesh_exists=False err=0
 s012=0
 s013=0
-bbox=-4,4,4,3 err=0
+bbox=1.79769313486232E+308,-1.79769313486232E+308,-1.79769313486232E+308,-1.79769313486232E+308 err=0
 s014=0
 s015=0
 s016=0

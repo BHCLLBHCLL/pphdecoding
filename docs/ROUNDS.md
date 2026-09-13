@@ -624,7 +624,7 @@ STEP 参数阶梯此前卡在「长网格会被误判 log-idle 杀掉」；R5-1 
 
 ---
 
-## R7 —— 提案（2026-09-14，≈9 人日）
+## R7 —— 宿主退出机理定性 + 反向写宿主键 + 面板落盘收尾（2026-09-14，执行记录）
 
 ### 依据
 
@@ -645,11 +645,104 @@ STEP 参数阶梯此前卡在「长网格会被误判 log-idle 杀掉」；R5-1 
 | **R7-4** | **按实测键反向写宿主** | 用 R6-5 的 5 条映射，把 MeshParam 的 facet 项写进宿主 `FACET.*`（只写实测确认的取值），宿主重开验证 | ≥3 个字段写宿主键后宿主 err=0 且读回值符合预期 | 1.5 |
 | **R7-5** | **面板落盘收尾判定** | `_PartsControlFollowupBody` 接通道；判定 `CondTypeCatalogDialog`（对话框）是否计入面板账 | memory_only ≤1 且账目口径写清 | 0.5 |
 
+### 执行记录（2026-09-14）
+
+#### R7-1 ✅ 已成 —— 宿主侧**崩溃**定性（APPCRASH in mfc140u.dll）
+
+离线取证（Windows Application 日志 + WER），与 STEP 网格轮次时间戳一一对应：
+
+| 时间 | 事件 | 内容 |
+|---|---|---|
+| 20:52:19 / 21:11:15 / 21:24:58 / 21:34:55 | Application Error **ID 1000** | 出错应用 **`scFLOWpre_Bx64net.exe`**（版本 5225.20302.2025.1223），出错模块 **`mfc140u.dll`** |
+| 同上 +1 s | WER **ID 1001** | `Event Name: APPCRASH`，Problem signature P1 同上 |
+| 20:57:07 | WER **ID 1001** | `RADAR_PRE_LEAK_64`，P1 = `SCTpref_Dx64net.exe` |
+
+**判定：崩溃** —— 既不是优雅退出，也不是 OOM（R6-1 已证宿主消失前仅 87.7 MB WS）。
+
+**一处重要修正**：我们一直按 **STpre**（宿主）探活，但崩的是 **`scFLOWpre_Bx64net`（工作进程，
+真正做网格的那个）**；STpre 随后退出/被杀，所以我们看到的是「宿主消失」。台账 `last_seen_hosts`
+记的也是 STpre —— 这正是 R8-4 要补的（同时记工作进程 pid/内存/退出码 + WER 报告路径）。
+
+**意义**：STEP 直导网格的拦路石是**宿主产品在 MFC 层的崩溃**，不是我们的脚本或参数 → R6-1 的
+参数阶梯在这条路上没有继续价值（已如实停止）。
+
+**R7-1b 附注（绕行尝试）**：改试「STEP →（CADthru 离线）x_t → 网格」，用缓存产物
+`_p13_cache/key v2-e574e841c30cc3c2.x_t` 复跑：build `ret_bam=False`、`vmdl_=False`、**`sn_=False`**
+（根本没有 SNode），reopen 全 False → **该缓存 x_t 不是可用的完整模型**，绕行路线未成立（需重跑
+转换并核对产物完整性 → R8-1）。
+
+#### R7-4 ✅ 已成 —— 反向写宿主键：3/3 全中，且修正了 R6-5 的解读
+
+`tools/xenv_host_write_check.py`：直接把值写进宿主工程 `main.xenv` 的 `FACET.*` 键 → 克隆容器 →
+宿主 OpenProject → 用 `MeshingGroupSetting` getter 回读：
+
+| 键 | 写入 | 宿主回读 |
+|---|---|---|
+| `FACET.SIMPLE_MAX_ANGLE` | 8 | **8** |
+| `FACET.SIMPLE_MAX_WIDTH` | 9 | **9** |
+| `FACET.USE_DETAIL_MAX_WIDTH` | false | **False** |
+
+宿主 **27/27 err=0**、`sn_/mg_/mdl_/oct_/mgs_=True`。证据 `_p12u_gate/r7_4_write.json`。
+
+> **解读修正**：R6-5 观察到「数值 setter 传 7/9/13 读回 0」，本轮证明那是 **setter 侧归一化**，
+> 不是存储限制 —— **直接写 xenv 的键是被宿主尊重的**。也就是说 MeshParam 落宿主键这条路是通的，
+> 只是要用「写 xenv」而不是「调 setter」。
+
+#### R7-5 ✅ 已成 —— 面板落盘收尾（memory_only 1）
+
+`_PartsControlFollowupBody` → `main.xenv [PANEL_FOLLOWUP]`（勾选按 `_vbs_op` 分键，子类互不串）；
+审计 **persisted 16 / memory_only 1**（只剩对话框 `CondTypeCatalogDialog`）。测试
+`tests/test_panel_persist_r75.py`（5 项）。
+
+顺带修掉一个**连续两轮把回归弄红**的测试脆性：早期轮次把「审计精确计数」写死在自己的断言里，
+每次后续迁移都会打红。现改为**单调不变量**（早期轮次只断言各自迁移的面 + 只允许文档化残留），
+精确计数交给最新一轮的测试负责。
+
+#### R7-2 / R7-3 ❌ 未执行（已连续三轮顺延，如实记账）
+
+条件体系补深与数值等价各需一整块预算，三轮都被「当轮头号实机项」挤掉。**R8 把它们定为主项**，
+不再让任何新实机项插队。
+
+#### 回归
+
+全量回归 **1190 passed / 4 skipped / 0 failed**（627.33 s；R6 末为 1184 —— 本轮净增 6 项：
+`tests/test_panel_persist_r75.py` 5 项 + 1 项由条件性 skip 恢复为通过）。
 ### 明确不做（R7 内）
 
 * CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
 * 内核 / 求解器 / scPOST 复刻；
 * 不写未实测确认的宿主键值（R6-5 已证明数值 setter 不回读原值）。
+
+---
+
+---
+
+## R8 —— 提案（2026-09-14，≈9 人日）
+
+### 依据
+
+* R7-1 定性为**宿主工作进程崩溃**（APPCRASH / mfc140u.dll）→ STEP 直导网格不是我们能修的，绕行路线
+  （STEP→CADthru→x_t→网格）也未成立（缓存 x_t 无 SNode）→ 需要重跑转换并核对产物完整性；
+* R7-4 证明「写 xenv 键被宿主尊重」→ MeshParam 落宿主键可行，且不需要 setter；
+* R7-5 把 memory_only 压到 1（只剩对话框）→ 面板落盘这条线收尾；
+* **R7-2 / R7-3 已连续三轮顺延** → R8 定为**主项**，先做这两件，不再让新实机项插队。
+
+### 条目
+
+| # | 条目 | 做法 | 验收句 | 人日 |
+|---|---|---|---|---|
+| **R8-1（主项）** | **条件体系补深** | 宿主批量收割 43 个未落键 `CreateCond*`：毒类型 `CreateCondBatteryARCDataPreprocessing` 单进程隔离、旧版工程先做版本转换前置 | 精确键 90 → **≥140 / 165**；写盘条件宿主零破坏 | 3 |
+| **R8-2（主项）** | **数值等价** | 50 Pa 变体双跑（宿主 vs 本仓产物）出**非零场** delta 表；明确 FLD / iFLD 可得性 | delta 表入册且非零场 | 2 |
+| **R8-3** | **STEP 绕行路线重建** | 重新用 `cadthru_convert` 转换 `key v2.step`（不依赖旧缓存），核对产物含 SNode/可 BAM，再走 x_t 网格 gate | 得到「STEP 来源 + `mesh_exists=True`」的一条证据，或给出转换产物不可用的确切原因 | 1.5 |
+| **R8-4** | **网格失败取证补全** | 台账同时记**工作进程**（`scFLOWpre_Bx64net`）pid/内存/退出码，并在 host-gone 时抓 WER 报告路径 | host-gone 行含工作进程画像与 WER 路径 | 1 |
+| **R8-5** | **MeshParam 落宿主键（可行路径）** | 用 R7-4 证明的「写 xenv」方式把 MeshParam 的 facet 项写宿主键；只写实测键、只写实测取值 | ≥3 字段写宿主键且宿主回读一致、err=0 | 1.5 |
+
+### 明确不做（R8 内）
+
+* CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
+* 内核 / 求解器 / scPOST 复刻；
+* 不再为 STEP 直导网格做参数扫描（R7-1 已定性为宿主崩溃）；
+* 不让新实机项插队 R8-1 / R8-2。
 
 ---
 

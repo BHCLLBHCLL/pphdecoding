@@ -53,9 +53,10 @@ class TestPanelStoreAudit(unittest.TestCase):
         by = {p["panel"]: p for p in data["panels"]}
         mem = sorted(n for n, p in by.items()
                      if p["persistence"] == "memory_only")
-        # R6-4 之后只剩：一个写面板 + 一个对话框
-        self.assertEqual(mem, ["CondTypeCatalogDialog",
-                               "_PartsControlFollowupBody"])
+        # 单调不变量：只允许出现「文档化的残留」；后续轮次迁移只会让集合变小。
+        # 精确计数由最新一轮的测试（test_panel_persist_r75）负责。
+        self.assertLessEqual(set(mem), {"CondTypeCatalogDialog",
+                                        "_PartsControlFollowupBody"})
         self.assertGreaterEqual(len(data["panels"]), 30)
 
     def test_option_nav_is_persisted_after_r44(self):

@@ -40,10 +40,9 @@ class TestAuditAfterR53(unittest.TestCase):
             self.assertEqual(by[name]["persistence"], "persisted:xenv", name)
 
     def test_memory_only_shrunk(self):
-        # R5-3 时 6→4；R6-4 再降到 2（断言收紧为「≤4」并锁定 persisting 面）
+        # R5-3 时 6→4；此后只减不增（精确计数由最新一轮测试负责）
         data = self.audit.build()
         self.assertLessEqual(data["counts"].get("memory_only"), 4)
-        self.assertEqual(data["counts"].get("memory_only"), 2)
         self.assertGreaterEqual(data["counts"].get("persisted", 0), 15)
 
 

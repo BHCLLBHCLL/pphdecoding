@@ -354,12 +354,27 @@ class _PartsControlFollowupBody(_Body):
         v.addWidget(self.chk_write_vbs)
         v.addStretch(1)
 
+    #: R7-5：落盘段。本面板唯一的用户态是「是否写出 VBS 草稿」这一个勾选，
+    #: 子类共用本段，键按 ``_vbs_op`` 区分。
+    XENV_SECTION = "PANEL_FOLLOWUP"
+
+    def _xenv_key(self) -> str:
+        return "write_vbs_" + (self._vbs_op or "default")
+
     def load(self, ctx: dict) -> None:
+        # R7-5：优先 xenv（重启保留），缺省 True（与构造一致）
+        raw = panel_xenv_get(ctx, self.XENV_SECTION, self._xenv_key(), "")
+        if raw:
+            self.chk_write_vbs.setChecked(panel_bool(raw))
         return
 
     def apply(self, ctx: dict) -> bool:
+        sess = ctx.setdefault("session", {})
+        sess["followup_persisted"] = panel_xenv_set(
+            ctx, self.XENV_SECTION,
+            {self._xenv_key(): panel_bool_str(self.chk_write_vbs.isChecked())})
         if self.chk_write_vbs.isChecked() and self._vbs_op:
-            ctx.setdefault("session", {})["pending_vbs"] = {
+            sess["pending_vbs"] = {
                 "op": self._vbs_op,
                 "label": self.title,
             }
