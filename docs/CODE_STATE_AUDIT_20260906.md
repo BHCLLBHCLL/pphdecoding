@@ -1330,6 +1330,18 @@ R19-1 遗留的「产物可得性」应改走 `fldutil`/scPOST 从求解结果�
 两次按记忆中的文本改 `tools/solver_dual_run.py` 的 `stage` 行均**未命中**（文件实际内容与预期不符）。
 教训与 R16 的排期纪律同源：**改文件前先读文件**，不要凭记忆构造 old_string。→ R23-1。
 
+
+---
+
+## 38. R23 更新（2026-09-14）—— 数值等价线三段同源
+
+`solver_dual_run.py` 新增 `leg-ours` 分发（复用 `solver_leg_ours.build_ours` 重写网格成员后跑腿），
+与 `--member` 参数；测试扩到 4 项（choice / 分发分支 / 复用点三重契约）。
+
+至此该线四段同源：`leg1`（原生）/ `leg2`（原生复跑）/ `leg-ours`（本仓重写成员）/ `delta`（对拍）。
+**方法教训入册**：R22 的编辑失败源于「凭记忆构造 old_string」——R23 先读后改，一次命中（且发现 R22
+那批编辑其实已写入 half，缺的只是分发分支）。
+
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

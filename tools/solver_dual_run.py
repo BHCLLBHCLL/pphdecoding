@@ -136,6 +136,8 @@ def stage_delta() -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="R16-2 50 Pa 双跑分段驱动")
+    ap.add_argument("--member", default="meshinggroup1.gph",
+                    help="leg-ours：重写的网格成员")
     ap.add_argument("stage", choices=("leg1", "leg2", "leg-ours", "delta",
                                      "status"))
     ap.add_argument("--wait-timeout", type=float, default=1800.0)
@@ -147,7 +149,16 @@ def main(argv=None) -> int:
               "delta": (WORK / "delta.json").is_file()}
         print(json.dumps(st, ensure_ascii=False, indent=1))
         return 0
-    if args.stage in LEGS:
+    if args.stage == "leg-ours":
+        # R23-1：对照腿并入 —— 复用 tools/solver_leg_ours.build_ours
+        import solver_leg_ours
+        src = Path(args.pph) if args.pph else (case_pph() or Path("."))
+        work = WORK / "leg_ours"
+        work.mkdir(parents=True, exist_ok=True)
+        ours = solver_leg_ours.build_ours(src, args.member, work)
+        res = run_leg("leg_ours", wait_timeout=args.wait_timeout,
+                      vbs_timeout=args.vbs_timeout, pph_override=ours)
+    elif args.stage in LEGS:
         res = run_leg(args.stage, wait_timeout=args.wait_timeout,
                       vbs_timeout=args.vbs_timeout)
     else:

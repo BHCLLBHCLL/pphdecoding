@@ -43,5 +43,18 @@ class TestLegOursTool(unittest.TestCase):
         self.assertIn("compare_fph", src)
 
 
+class TestDualRunIntegration(unittest.TestCase):
+    """R23-1：leg-ours 已并入双跑驱动。"""
+
+    def test_dual_run_dispatches_leg_ours(self):
+        dual = ROOT / "tools" / "solver_dual_run.py"
+        if not dual.is_file():
+            self.skipTest("solver_dual_run missing")
+        src = dual.read_text(encoding="utf-8")
+        self.assertIn('"leg-ours"', src)
+        self.assertIn("solver_leg_ours.build_ours", src)
+        self.assertIn('args.stage == "leg-ours"', src)
+
+
 if __name__ == "__main__":
     unittest.main()
