@@ -12,7 +12,8 @@
       "stores_written": [],
       "persistence": "none",
       "evidence": [],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": true
     },
     {
       "panel": "PartsControlBody",
@@ -58,7 +59,8 @@
       ],
       "page_keys": [
         "parts_control"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "_PartsControlFollowupBody",
@@ -102,7 +104,8 @@
           "text": "def _xenv_key(self) -> str:"
         }
       ],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": true
     },
     {
       "panel": "SpecifyDiscontinuousPartsBody",
@@ -117,7 +120,8 @@
       "evidence": [],
       "page_keys": [
         "specify_disc"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "OversetMeshBody",
@@ -132,7 +136,8 @@
       "evidence": [],
       "page_keys": [
         "overset_mesh"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "WrappingOctreeParamBody",
@@ -147,7 +152,8 @@
       "evidence": [],
       "page_keys": [
         "wrap_octree"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "WrappingParamBody",
@@ -162,7 +168,8 @@
       "evidence": [],
       "page_keys": [
         "wrap_param"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "BeginWrappingBody",
@@ -177,7 +184,8 @@
       "evidence": [],
       "page_keys": [
         "begin_wrap"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "CancelWrappingBody",
@@ -192,7 +200,8 @@
       "evidence": [],
       "page_keys": [
         "cancel_wrap"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "ExecuteWrappingBody",
@@ -207,7 +216,8 @@
       "evidence": [],
       "page_keys": [
         "exec_wrap"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "RetryWrappingBody",
@@ -222,7 +232,8 @@
       "evidence": [],
       "page_keys": [
         "retry_wrap"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "ImportPartBody",
@@ -275,7 +286,8 @@
       ],
       "page_keys": [
         "import_part"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "CreatePartsBody",
@@ -328,7 +340,8 @@
       ],
       "page_keys": [
         "create_parts"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "ModifyPartsBody",
@@ -381,7 +394,8 @@
       ],
       "page_keys": [
         "modify_parts"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "MesherFaceterBody",
@@ -434,7 +448,8 @@
       ],
       "page_keys": [
         "mesher_faceter"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "RegisterRegionBody",
@@ -480,7 +495,8 @@
       ],
       "page_keys": [
         "regions"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "_CoordSpecifiedPartDialog",
@@ -493,7 +509,8 @@
       "stores_written": [],
       "persistence": "none",
       "evidence": [],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": true
     },
     {
       "panel": "NonSolidBody",
@@ -546,7 +563,8 @@
       ],
       "page_keys": [
         "non_solid"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "_MaterialOptionsDialog",
@@ -559,7 +577,8 @@
       "stores_written": [],
       "persistence": "none",
       "evidence": [],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": true
     },
     {
       "panel": "_ContactThicknessDialog",
@@ -572,7 +591,8 @@
       "stores_written": [],
       "persistence": "none",
       "evidence": [],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": true
     },
     {
       "panel": "PartMaterialBody",
@@ -625,7 +645,8 @@
       ],
       "page_keys": [
         "part_material"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "SolverSettingsDialog",
@@ -655,7 +676,8 @@
           "text": "数据来自厂商 ``scflow_main.xml`` 解析出的"
         }
       ],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": true
     },
     {
       "panel": "ConditionsBody",
@@ -701,7 +723,8 @@
       ],
       "page_keys": [
         "conditions"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "_FacetAccuracyEditDialog",
@@ -714,7 +737,8 @@
       "stores_written": [],
       "persistence": "none",
       "evidence": [],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": true
     },
     {
       "panel": "AnalysisModelWizardBody",
@@ -774,7 +798,8 @@
       ],
       "page_keys": [
         "build_am_detailed"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "OctreeDetailDialog",
@@ -787,7 +812,8 @@
       "stores_written": [],
       "persistence": "none",
       "evidence": [],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": true
     },
     {
       "panel": "OctreeParamBody",
@@ -840,7 +866,8 @@
       ],
       "page_keys": [
         "oct_param"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "_MeshSubDialog",
@@ -853,7 +880,8 @@
       "stores_written": [],
       "persistence": "none",
       "evidence": [],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": true
     },
     {
       "panel": "PrismLayerDetailDialog",
@@ -866,7 +894,8 @@
       "stores_written": [],
       "persistence": "none",
       "evidence": [],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": true
     },
     {
       "panel": "MeshParamBody",
@@ -919,7 +948,8 @@
       ],
       "page_keys": [
         "mesh_param"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "ExecuteBody",
@@ -965,7 +995,8 @@
       ],
       "page_keys": [
         "execute"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "OptionNavBody",
@@ -1011,7 +1042,8 @@
       ],
       "page_keys": [
         "option_nav"
-      ]
+      ],
+      "is_panel": true
     },
     {
       "panel": "GenericCondBody",
@@ -1033,7 +1065,8 @@
           "text": "与样本默认值。OK 后通过 :func:`write_condition_to_xml` 落 main.xml。"
         }
       ],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": true
     },
     {
       "panel": "CondTypeCatalogDialog",
@@ -1070,7 +1103,8 @@
           "text": "if write_condition_to_xml(self._ctx, ctype, data):"
         }
       ],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": false
     },
     {
       "panel": "HeatTransferPresetDialog",
@@ -1092,7 +1126,8 @@
           "text": "\"\"\"换热系数预设选择器（P4-2，heattransfer_ENG.xml）。"
         }
       ],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": true
     },
     {
       "panel": "SolarSiteDialog",
@@ -1114,7 +1149,8 @@
           "text": "\"\"\"太阳辐射站点选择器（P4-2：solar_ENG.xml + SolarNEDO11.xml）。"
         }
       ],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": true
     },
     {
       "panel": "NavParamDialog",
@@ -1127,13 +1163,17 @@
       "stores_written": [],
       "persistence": "none",
       "evidence": [],
-      "page_keys": []
+      "page_keys": [],
+      "is_panel": true
     }
   ],
   "counts": {
     "none": 17,
     "persisted": 16,
-    "read_only": 3,
-    "memory_only": 1
-  }
+    "read_only": 3
+  },
+  "memory_only_panels": [],
+  "not_a_panel": [
+    "CondTypeCatalogDialog"
+  ]
 }

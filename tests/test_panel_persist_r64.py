@@ -39,6 +39,12 @@ class TestAuditAfterR64(unittest.TestCase):
         for name in ("ExecuteBody", "CreatePartsBody"):
             self.assertEqual(by[name]["persistence"], "persisted:xenv", name)
 
+    def test_memory_only_panels_is_zero_after_r251(self):
+        # R25-1 口径：对话框不计入面板账 → memory_only 的「面板」数 = 0
+        data = self.audit.build()
+        self.assertEqual(data["memory_only_panels"], [])
+        self.assertEqual(data["not_a_panel"], ["CondTypeCatalogDialog"])
+
     def test_only_residual_panels_remain_memory_only(self):
         data = self.audit.build()
         mem = sorted(p["panel"] for p in data["panels"]

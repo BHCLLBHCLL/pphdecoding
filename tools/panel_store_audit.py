@@ -171,12 +171,22 @@ def build() -> dict:
         panels.append(rec)
     for p in panels:
         p["is_panel"] = p["panel"] not in NOT_A_PANEL
+    # R25-1：口径 —— 对话框不计入面板账（NOT_A_PANEL），单列 memory_only_panels
     counts: dict[str, int] = {}
     for p in panels:
+        if not p.get("is_panel", True):
+            continue
         head = p["persistence"].split(":")[0]
         counts[head] = counts.get(head, 0) + 1
+    mem_panels = [p["panel"] for p in panels
+                  if p.get("is_panel", True)
+                  and p["persistence"] == "memory_only"]
+    not_a_panel = sorted(p["panel"] for p in panels
+                         if not p.get("is_panel", True))
     return {"source": str(NAV.relative_to(ROOT)).replace(chr(92), "/"),
-            "panels": panels, "counts": counts}
+            "panels": panels, "counts": counts,
+            "memory_only_panels": sorted(mem_panels),
+            "not_a_panel": not_a_panel}
 
 
 def to_markdown(data: dict) -> str:

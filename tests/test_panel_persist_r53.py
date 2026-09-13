@@ -42,7 +42,8 @@ class TestAuditAfterR53(unittest.TestCase):
     def test_memory_only_shrunk(self):
         # R5-3 时 6→4；此后只减不增（精确计数由最新一轮测试负责）
         data = self.audit.build()
-        self.assertLessEqual(data["counts"].get("memory_only"), 4)
+        # R25-1 起口径改为「面板口径」：对话框不计入，memory_only 面板数 = 0
+        self.assertEqual(data.get("memory_only_panels"), [])
         self.assertGreaterEqual(data["counts"].get("persisted", 0), 15)
 
 

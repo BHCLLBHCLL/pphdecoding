@@ -1342,6 +1342,18 @@ R19-1 遗留的「产物可得性」应改走 `fldutil`/scPOST 从求解结果�
 **方法教训入册**：R22 的编辑失败源于「凭记忆构造 old_string」——R23 先读后改，一次命中（且发现 R22
 那批编辑其实已写入 half，缺的只是分发分支）。
 
+
+---
+
+## 39. R25 更新（2026-09-14）—— 面板落盘线封顶（memory_only 面板 = 0）
+
+`tools/panel_store_audit.py` 按 R24 定的口径改造：**跳过 `NOT_A_PANEL` 计数**并单列字段 ——
+`counts = {none:17, persisted:16, read_only:3}`（`memory_only` 不再出现）、`memory_only_panels = []`、
+`not_a_panel = ['CondTypeCatalogDialog']`。
+
+**面板线结论**：17 个纯 UI 类 / **16 个已落盘** / 3 个只读 / **0 个只写内存面板**。
+`tests/test_panel_persist_r64.py` 新增口径测试；`test_panel_persist_r53.py` 的旧断言同步改写。
+
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

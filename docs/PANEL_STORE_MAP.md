@@ -11,7 +11,6 @@
 | none | 17 |
 | persisted | 16 |
 | read_only | 3 |
-| memory_only | 1 |
 
 ## 明细
 
