@@ -1,0 +1,24 @@
+{
+  "base": "D:\\training\\cradle\\CradleCFD_2025.2_scFLOW_Example_a\\Exercise\\exA06\\exA06-2\\Org\\exA06-2_d_50.pph",
+  "native_fph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg1\\exA06-2_d_50_139.fph",
+  "member": "meshinggroup1.gph",
+  "member_bytes": [
+    3470133,
+    3278601
+  ],
+  "ours_pph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r17_ours\\ours.pph",
+  "run_ok": true,
+  "ours_fph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r17_ours\\ours_139.fph",
+  "seconds": 78.9,
+  "zero_field": false,
+  "primary_nonzero": [
+    "EC_Scalar:PRES",
+    "EC_Vector:VEL",
+    "FC_Scalar:PRES",
+    "FC_Vector:VEL"
+  ],
+  "n_fields": 20,
+  "gate_ok": true,
+  "n_fail": 0,
+  "gate_reason": null
+}

@@ -1362,7 +1362,7 @@ STEP --CADthru--> x_t(v37 即可) --宿主 OpenCadFile--> SNode → BuildAnalysi
 
 ---
 
-## R17 —— 提案（2026-09-14，≈3.5 人日）
+## R17 —— **本仓重写成员 vs 宿主原生：求解结果逐点一致**（2026-09-14）
 
 ### 依据
 
@@ -1380,11 +1380,66 @@ STEP --CADthru--> x_t(v37 即可) --宿主 OpenCadFile--> SNode → BuildAnalysi
 | **R17-2** | **FLD/iFLD 可得性收口** | 用 exA06-2 跑一腿开 FLD 输出，回答「iFLD 是否可得」 | 结论明确（可得/不可得 + 依据） | 1 |
 | **R17-3** | **排期纪律入册** | 把 R16 的教训写成 `docs/ROUNDS.md` 顶部一条硬规矩：估算必须以**目标算例**实测为准 | 顶部有该规矩；后续提案引用它 | 0.5 |
 
+### 执行记录（2026-09-14）
+
+#### R17-1 ✅ **已成（数值等价完整验收）—— 非零场 delta，`gate_ok=true`、`n_fail=0`**
+
+官方 `exA06-2_d_50.pph` 只带 `meshinggroup1.gph` + `_ridge.mdl`（**无 `_part.mdl`/`.oct`**），
+故对照腿的重写对象 = **GPH**（本仓写端）：
+
+| 腿 | 工程 | 求解用时 | FPH |
+|---|---|---|---|
+| 原生 | 官方 `exA06-2_d_50.pph` | 57–187 s | `r16_dual/leg1/exA06-2_d_50_139.fph` |
+| 对照 | 同上 + **GPH 成员由本仓写端重写**（`tools/_r17_dual_ours.py`，`clone_pph` 回注） | 57 s（总 78.9 s） | `r17_ours/ours_139.fph` |
+
+**对拍结论**（`_p12u_gate/r17_ours/delta_native_vs_ours.{json,md}`）：
+
+* `zero_field=false`（非零场）；
+* `primary_nonzero=[EC_Scalar:PRES, EC_Vector:VEL, FC_Scalar:PRES, FC_Vector:VEL]`；
+* **`gate_ok=true`、`n_fail=0`** —— 默认容差 0（逐位复现线）下主变量逐点一致。
+
+即：**本仓写端重写的网格成员，喂给求解器后与宿主原生工程得到的主变量逐点一致**。
+数值等价这条线（R10-1 立判据 → R11-3 入 gate → R16 拿到非零场 → R17 完成对照）**至此收口**。
+
+#### R17-2 / R17-3 ❌ 未执行
+
+FLD/iFLD 可得性（需一腿开 FLD 输出）与「排期纪律入册」顺延 R18；本轮实机预算用于对照腿与对拍。
+
+#### 回归
+
+全量回归 **1212 passed / 4 skipped / 0 failed**（563.64 s；与 R16 持平 —— 本轮为实机对照验证）。
 ### 明确不做（R17 内）
 
 * CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
 * 内核 / 求解器 / scPOST 复刻；
 * 条件收割、STEP 直导网格参数扫描、宿主 mesh worker 崩溃（外部缺陷）。
+
+---
+
+---
+
+## R18 —— 提案（2026-09-14，≈3 人日）
+
+### 依据
+
+* R17-1 完成数值等价对照（`gate_ok=true`、`n_fail=0`）→ 该线收口，转入**固化**而非继续探索；
+* 一次性脚本 `_r17_dual_ours.py` 应升格为正式工具（对照腿可重复跑）；
+* R17-2（FLD/iFLD）与 R17-3（排期纪律）是两件低成本收尾。
+
+### 条目
+
+| # | 条目 | 做法 | 验收句 | 人日 |
+|---|---|---|---|---|
+| **R18-1（主项）** | **对照腿固化为工具** | 把 `_r17_dual_ours.py` 并入 `tools/solver_dual_run.py`（新增 `leg-ours` + 自动对拍），并加生成器单测 | 一条命令完成「重写 GPH → 求解 → 对拍」；单测覆盖 | 1.5 |
+| **R18-2** | **FLD/iFLD 可得性收口** | 用 exA06-2 跑一腿开 FLD 输出 | 结论明确（可得/不可得 + 依据） | 1 |
+| **R18-3** | **排期纪律入册** | 把 R16 的教训（估算以目标算例实测为准）写成 `docs/ROUNDS.md` 顶部硬规矩 | 顶部有该规矩且 R17+ 提案引用它 | 0.5 |
+
+### 明确不做（R18 内）
+
+* CATIA / 3DXML / SolidEdge / JT / Rhino / VDAFS；
+* 内核 / 求解器 / scPOST 复刻；
+* 条件收割、STEP 参数扫描、宿主 mesh worker 崩溃（外部缺陷）；
+* 不再重复数值等价探索（R17 已收口）。
 
 ---
 

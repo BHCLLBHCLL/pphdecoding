@@ -1237,6 +1237,25 @@ FC_Vector:VEL]`、`gate_ok=true` —— 两次独立求解下主变量逐点一�
 
 此前六轮按「50 Pa 双跑需 ≥1 h」反复让位，该估算取自**别的算例**（J3 exA36-2）；
 目标算例 exA06-2 实测单腿 57–187 s。**估算必须以目标算例实测为准**（R17-3 入册为硬规矩）。
+
+---
+
+## 32. R17 更新（2026-09-14）—— **数值等价完整验收：本仓重写成员 vs 宿主原生，逐点一致**
+
+官方 `exA06-2_d_50.pph` 只带 `meshinggroup1.gph` + `_ridge.mdl`（无 `_part.mdl`/`.oct`）→ 对照腿重写
+对象 = **GPH**（本仓写端）。
+
+| 腿 | 工程 | 求解 | FPH |
+|---|---|---|---|
+| 原生 | 官方工程 | 57–187 s | `r16_dual/leg1/exA06-2_d_50_139.fph` |
+| 对照 | 同工程 + **GPH 由本仓写端重写** | 57 s | `r17_ours/ours_139.fph` |
+
+对拍（`_p12u_gate/r17_ours/delta_native_vs_ours.json`）：`zero_field=false`、
+`primary_nonzero=[EC_Scalar:PRES, EC_Vector:VEL, FC_Scalar:PRES, FC_Vector:VEL]`、
+**`gate_ok=true`、`n_fail=0`**（默认容差 0 = 逐位复现线）。
+
+**结论**：本仓写端重写的网格成员喂给求解器后，主变量与宿主原生工程**逐点一致** ——
+「自研产物数值等价」由推测变为实测。该线（R10-1 判据 → R11-3 入 gate → R16 非零场 → R17 对照）收口。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。
