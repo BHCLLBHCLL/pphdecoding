@@ -39,6 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import automation.host_boot as host_boot  # noqa: E402
+from automation import host_paths  # noqa: E402
 
 WORK = ROOT / "_p12u_gate"
 XT = ROOT / "tests" / "box" / "box.x_t"
@@ -384,7 +385,9 @@ def main(argv=None) -> int:
     for case in cases:
         # 必须绝对路径：宿主 CWD 与本进程不同，相对路径会让 OpenCadFile
         # 静默返回 Nothing（表现为 sn_=False / ret_bam=False，看着像「格式不被接受」）。
-        cad = XT if case == "xt" else Path(args.step).resolve()
+        # R15-1：这里改为**断言**（此前只做 resolve，掩盖了「传参就错」的事实）。
+        cad = host_paths.require_abs(XT if case == "xt" else args.step,
+                                     what=case + " cad")
         if not cad.is_file():
             results[case] = {"ok": False, "error": f"cad missing: {cad}"}
             continue

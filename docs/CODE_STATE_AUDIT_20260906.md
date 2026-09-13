@@ -1198,6 +1198,24 @@ R13-1 的离线降版保留为**可用能力**（能产出宿主同代 schema）
 
 STEP → CADthru(v37) → 宿主摄取 → BAM（`ret_bam=True`、`vmdl_`/`oct_` 在场）**已通**；
 唯一剩余阻塞 = 宿主 worker 在网格计算中崩溃（§22.1 的 APPCRASH / mfc140u.dll，外部缺陷）。
+
+---
+
+## 30. R15 更新（2026-09-14）—— 宿主路径纪律断言化 + STEP 路由收口
+
+### 30.1 路径必须绝对（R15-1）
+
+`automation/host_paths.py`：`require_abs()` / `abs_str()`，相对路径**当场抛** `RelativeHostPath`。
+`tools/cad_pipeline_gate.py` 的 `--step` 从「悄悄 resolve」改为**断言** —— 正是那处 resolve 掩盖了
+「传参就错」，把 R8-3/R9-2 引向 schema 误判（§29.2 已纠正）。
+
+### 30.2 STEP 路由收口（R15-3）
+
+```
+STEP --CADthru--> x_t(v37 即可) --宿主 OpenCadFile--> SNode → BuildAnalysisModel → BAM
+```
+
+剩余唯一阻塞 = 宿主 worker 网格期崩溃（§22.1，外部缺陷）。v34 降版为**可选能力**，非必要条件。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。
