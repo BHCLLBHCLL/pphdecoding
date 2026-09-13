@@ -136,7 +136,8 @@ def stage_delta() -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="R16-2 50 Pa 双跑分段驱动")
-    ap.add_argument("stage", choices=("leg1", "leg2", "delta", "status"))
+    ap.add_argument("stage", choices=("leg1", "leg2", "leg-ours", "delta",
+                                     "status"))
     ap.add_argument("--wait-timeout", type=float, default=1800.0)
     ap.add_argument("--vbs-timeout", type=float, default=3600.0)
     args = ap.parse_args(argv)

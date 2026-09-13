@@ -1314,6 +1314,22 @@ R19-1 遗留的「产物可得性」应改走 `fldutil`/scPOST 从求解结果�
 
 **最终口径**：iFLD/FLD **读取可得**（本仓读取器齐备），**生成需 scPOST GUI** —— 属产品形态限制，
 非本仓缺口；除非接入 scPOST 自动化通道，否则该线不再投入（R22 起不再列条目）。
+
+---
+
+## 37. R22 更新（2026-09-14）—— 数值等价结论入口径行 + leg-ours 集成待办
+
+### 37.1 口径回填（R22-1 后半）
+
+`docs/NEXT_PRIORITIES_20260913.md` 新增一行：**R16/R17/R18 数值等价 ✅ 已达成并固化** ——
+`exA06-2_d_50` 双跑、本仓重写 GPH vs 宿主原生、`zero_field=false`、`gate_ok=true`、`n_fail=0`。
+与 §32/§33 口径一致（本条即 R22-1 的第二个验收点）。
+
+### 37.2 leg-ours 并入 `solver_dual_run`（未完成，需先核文件现状）
+
+两次按记忆中的文本改 `tools/solver_dual_run.py` 的 `stage` 行均**未命中**（文件实际内容与预期不符）。
+教训与 R16 的排期纪律同源：**改文件前先读文件**，不要凭记忆构造 old_string。→ R23-1。
+
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。
