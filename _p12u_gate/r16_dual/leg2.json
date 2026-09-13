@@ -1,0 +1,599 @@
+{
+  "stage": "leg2",
+  "src": "D:\\training\\cradle\\CradleCFD_2025.2_scFLOW_Example_a\\Exercise\\exA06\\exA06-2\\Org\\exA06-2_d_50.pph",
+  "work": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2",
+  "pph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\exA06-2_d_50.pph",
+  "ok": true,
+  "run": {
+    "vbs": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\solve_vbs.vbs",
+    "log": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\solve_vbs.log",
+    "backend": "rot",
+    "execute": true,
+    "quit_after": false,
+    "vbs_run": {
+      "backend": "rot",
+      "ok": true,
+      "owned": false,
+      "script": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\solve_vbs.vbs"
+    },
+    "vbs_log": [
+      "start",
+      "app_alive=True err=0",
+      "doc_alive=True err=0",
+      "open_err=0",
+      "setmode_err=0",
+      "savepoly_err=0",
+      "gph_exists=True",
+      "savesph_err=0",
+      "sph_exists=True",
+      "exec_method=ExecuteSolver",
+      "exec_err=0",
+      "exec_ret=True",
+      "end"
+    ],
+    "wait": {
+      "ok": true,
+      "saw_solver": true,
+      "elapsed": 37.6,
+      "artifacts": {
+        "case": [
+          "exA06-2_d_50",
+          "scFLOWpre"
+        ],
+        "dirs": [
+          "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2",
+          "C:\\Users\\sdcll\\Documents\\Cradle\\scFLOW2023\\Work",
+          "C:\\Users\\sdcll\\Documents\\Cradle\\scFLOW2025\\Work"
+        ],
+        "artifacts": [
+          {
+            "path": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\exA06-2_d_50_139.fph",
+            "size": 3765046,
+            "mtime": 1789320897.079454
+          },
+          {
+            "path": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\exA06-2_d_50_139.rph",
+            "size": 3441620,
+            "mtime": 1789320897.107037
+          },
+          {
+            "path": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\scFLOWpre.csln",
+            "size": 462,
+            "mtime": 1789320897.2595103
+          },
+          {
+            "path": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\scFLOWpre.l",
+            "size": 635213,
+            "mtime": 1789320900.162568
+          }
+        ],
+        "fph": [
+          {
+            "path": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\exA06-2_d_50_139.fph",
+            "size": 3765046,
+            "mtime": 1789320897.079454
+          }
+        ],
+        "logs": [
+          {
+            "path": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\scFLOWpre.csln",
+            "size": 462,
+            "mtime": 1789320897.2595103
+          },
+          {
+            "path": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\scFLOWpre.l",
+            "size": 635213,
+            "mtime": 1789320900.162568
+          }
+        ]
+      }
+    },
+    "verify": {
+      "ok": true,
+      "strict_ok": true,
+      "path": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\exA06-2_d_50_139.fph",
+      "size": 3765046,
+      "n_cells": 11590,
+      "n_faces": 57731,
+      "key_fields": [
+        "EC_Scalar:PRES",
+        "EC_Vector:VEL"
+      ],
+      "fields_ok": [
+        "EC_Vector:VEL",
+        "EC_Scalar:PRES",
+        "EC_Scalar:DENS",
+        "EC_Scalar:TEMP",
+        "EC_Scalar:TURK",
+        "EC_Scalar:TEPS",
+        "EC_Scalar:EVIS",
+        "EC_Scalar:ENTL",
+        "EC_Scalar:TPRS",
+        "EC_Scalar:MACH",
+        "FC_Vector:VEL",
+        "FC_Scalar:YPLS",
+        "FC_Scalar:USTR",
+        "FC_Scalar:PRES",
+        "FC_Scalar:TPRS",
+        "FC_Scalar:DENS",
+        "FC_Scalar:TEMP",
+        "FC_Scalar:TURK",
+        "FC_Scalar:TEPS"
+      ],
+      "nonzero_fields": [
+        "EC_Vector:VEL",
+        "EC_Scalar:PRES",
+        "EC_Scalar:DENS",
+        "EC_Scalar:TEMP",
+        "EC_Scalar:TURK",
+        "EC_Scalar:TEPS",
+        "EC_Scalar:EVIS",
+        "EC_Scalar:ENTL",
+        "EC_Scalar:TPRS",
+        "EC_Scalar:MACH",
+        "FC_Vector:VEL",
+        "FC_Scalar:YPLS",
+        "FC_Scalar:USTR",
+        "FC_Scalar:PRES",
+        "FC_Scalar:TPRS",
+        "FC_Scalar:DENS",
+        "FC_Scalar:TEMP",
+        "FC_Scalar:TURK",
+        "FC_Scalar:TEPS"
+      ],
+      "fields": {
+        "EC_Vector:VEL": {
+          "kind": "EC_",
+          "target": "velocity",
+          "components": 3,
+          "ok": true,
+          "n": 11590,
+          "min": 40.08118438720703,
+          "max": 63.27827835083008,
+          "mean": 50.15960837356791
+        },
+        "EC_Scalar:PRES": {
+          "kind": "EC_",
+          "target": "pressure",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": -1375.0274658203125,
+          "max": 830.23828125,
+          "mean": -17.794127467256928
+        },
+        "EC_Scalar:DENS": {
+          "kind": "EC_",
+          "target": "density",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": 1.2502660751342773,
+          "max": 1.275956392288208,
+          "mean": 1.2665223614525651
+        },
+        "EC_Scalar:TEMP": {
+          "kind": "EC_",
+          "target": "temperature",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": -54.078758239746094,
+          "max": -52.46721649169922,
+          "mean": -53.15756292071602
+        },
+        "EC_Scalar:TURK": {
+          "kind": "EC_",
+          "target": "turbulence energy",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": 1.0177638614550233e-05,
+          "max": 18.57615852355957,
+          "mean": 0.1318992804786418
+        },
+        "EC_Scalar:TEPS": {
+          "kind": "EC_",
+          "target": "turbulence dissipation rate",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": 5.762287536015265e-09,
+          "max": 19234.525390625,
+          "mean": 45.98354147926977
+        },
+        "EC_Scalar:EVIS": {
+          "kind": "EC_",
+          "target": "eddy viscosity",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": 2.7881169444299303e-05,
+          "max": 0.004684803541749716,
+          "mean": 0.0011324674929592746
+        },
+        "EC_Scalar:ENTL": {
+          "kind": "EC_",
+          "target": "enthalpy",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": -54457.3125,
+          "max": -52834.484375,
+          "mean": -53529.66587036238
+        },
+        "EC_Scalar:TPRS": {
+          "kind": "EC_",
+          "target": "total pressure",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": 931.6128540039062,
+          "max": 2092.47314453125,
+          "mean": 1589.0340367051422
+        },
+        "EC_Scalar:MACH": {
+          "kind": "EC_",
+          "target": "mach number",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": 0.1354648470878601,
+          "max": 0.2133340686559677,
+          "mean": 0.16883163478762245
+        },
+        "FC_Vector:VEL": {
+          "kind": "FC_",
+          "target": "velocity",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": 40.08118438720703,
+          "max": 63.27827835083008,
+          "mean": 50.15960837356791
+        },
+        "FC_Scalar:YPLS": {
+          "kind": "FC_",
+          "target": "YPLS",
+          "components": 1,
+          "ok": true,
+          "n": 110,
+          "min": 316.86798095703125,
+          "max": 2388.830810546875,
+          "mean": 1845.7193215110085
+        },
+        "FC_Scalar:USTR": {
+          "kind": "FC_",
+          "target": "USTR",
+          "components": 1,
+          "ok": true,
+          "n": 110,
+          "min": 5.56974100615185e-41,
+          "max": 8.089415774854304e-41,
+          "mean": 7.295735611553066e-41
+        },
+        "FC_Scalar:HTFX": {
+          "kind": "FC_",
+          "target": "HTFX",
+          "components": 1,
+          "ok": false
+        },
+        "FC_Scalar:PRES": {
+          "kind": "FC_",
+          "target": "pressure",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": -1375.0274658203125,
+          "max": 830.23828125,
+          "mean": -17.794127467256928
+        },
+        "FC_Scalar:TPRS": {
+          "kind": "FC_",
+          "target": "total pressure",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": 931.6128540039062,
+          "max": 2092.47314453125,
+          "mean": 1589.0340367051422
+        },
+        "FC_Scalar:DENS": {
+          "kind": "FC_",
+          "target": "density",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": 1.2502660751342773,
+          "max": 1.275956392288208,
+          "mean": 1.2665223614525651
+        },
+        "FC_Scalar:TEMP": {
+          "kind": "FC_",
+          "target": "temperature",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": -54.078758239746094,
+          "max": -52.46721649169922,
+          "mean": -53.15756292071602
+        },
+        "FC_Scalar:TURK": {
+          "kind": "FC_",
+          "target": "turbulence energy",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": 1.0177638614550233e-05,
+          "max": 18.57615852355957,
+          "mean": 0.1318992804786418
+        },
+        "FC_Scalar:TEPS": {
+          "kind": "FC_",
+          "target": "turbulence dissipation rate",
+          "components": 1,
+          "ok": true,
+          "n": 11590,
+          "min": 5.762287536015265e-09,
+          "max": 19234.525390625,
+          "mean": 45.98354147926977
+        }
+      }
+    },
+    "ok": true
+  },
+  "fph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\exA06-2_d_50_139.fph",
+  "verify": {
+    "ok": true,
+    "strict_ok": true,
+    "path": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\exA06-2_d_50_139.fph",
+    "size": 3765046,
+    "n_cells": 11590,
+    "n_faces": 57731,
+    "key_fields": [
+      "EC_Scalar:PRES",
+      "EC_Vector:VEL"
+    ],
+    "fields_ok": [
+      "EC_Vector:VEL",
+      "EC_Scalar:PRES",
+      "EC_Scalar:DENS",
+      "EC_Scalar:TEMP",
+      "EC_Scalar:TURK",
+      "EC_Scalar:TEPS",
+      "EC_Scalar:EVIS",
+      "EC_Scalar:ENTL",
+      "EC_Scalar:TPRS",
+      "EC_Scalar:MACH",
+      "FC_Vector:VEL",
+      "FC_Scalar:YPLS",
+      "FC_Scalar:USTR",
+      "FC_Scalar:PRES",
+      "FC_Scalar:TPRS",
+      "FC_Scalar:DENS",
+      "FC_Scalar:TEMP",
+      "FC_Scalar:TURK",
+      "FC_Scalar:TEPS"
+    ],
+    "nonzero_fields": [
+      "EC_Vector:VEL",
+      "EC_Scalar:PRES",
+      "EC_Scalar:DENS",
+      "EC_Scalar:TEMP",
+      "EC_Scalar:TURK",
+      "EC_Scalar:TEPS",
+      "EC_Scalar:EVIS",
+      "EC_Scalar:ENTL",
+      "EC_Scalar:TPRS",
+      "EC_Scalar:MACH",
+      "FC_Vector:VEL",
+      "FC_Scalar:YPLS",
+      "FC_Scalar:USTR",
+      "FC_Scalar:PRES",
+      "FC_Scalar:TPRS",
+      "FC_Scalar:DENS",
+      "FC_Scalar:TEMP",
+      "FC_Scalar:TURK",
+      "FC_Scalar:TEPS"
+    ],
+    "fields": {
+      "EC_Vector:VEL": {
+        "kind": "EC_",
+        "target": "velocity",
+        "components": 3,
+        "ok": true,
+        "n": 11590,
+        "min": 40.08118438720703,
+        "max": 63.27827835083008,
+        "mean": 50.15960837356791
+      },
+      "EC_Scalar:PRES": {
+        "kind": "EC_",
+        "target": "pressure",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": -1375.0274658203125,
+        "max": 830.23828125,
+        "mean": -17.794127467256928
+      },
+      "EC_Scalar:DENS": {
+        "kind": "EC_",
+        "target": "density",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": 1.2502660751342773,
+        "max": 1.275956392288208,
+        "mean": 1.2665223614525651
+      },
+      "EC_Scalar:TEMP": {
+        "kind": "EC_",
+        "target": "temperature",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": -54.078758239746094,
+        "max": -52.46721649169922,
+        "mean": -53.15756292071602
+      },
+      "EC_Scalar:TURK": {
+        "kind": "EC_",
+        "target": "turbulence energy",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": 1.0177638614550233e-05,
+        "max": 18.57615852355957,
+        "mean": 0.1318992804786418
+      },
+      "EC_Scalar:TEPS": {
+        "kind": "EC_",
+        "target": "turbulence dissipation rate",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": 5.762287536015265e-09,
+        "max": 19234.525390625,
+        "mean": 45.98354147926977
+      },
+      "EC_Scalar:EVIS": {
+        "kind": "EC_",
+        "target": "eddy viscosity",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": 2.7881169444299303e-05,
+        "max": 0.004684803541749716,
+        "mean": 0.0011324674929592746
+      },
+      "EC_Scalar:ENTL": {
+        "kind": "EC_",
+        "target": "enthalpy",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": -54457.3125,
+        "max": -52834.484375,
+        "mean": -53529.66587036238
+      },
+      "EC_Scalar:TPRS": {
+        "kind": "EC_",
+        "target": "total pressure",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": 931.6128540039062,
+        "max": 2092.47314453125,
+        "mean": 1589.0340367051422
+      },
+      "EC_Scalar:MACH": {
+        "kind": "EC_",
+        "target": "mach number",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": 0.1354648470878601,
+        "max": 0.2133340686559677,
+        "mean": 0.16883163478762245
+      },
+      "FC_Vector:VEL": {
+        "kind": "FC_",
+        "target": "velocity",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": 40.08118438720703,
+        "max": 63.27827835083008,
+        "mean": 50.15960837356791
+      },
+      "FC_Scalar:YPLS": {
+        "kind": "FC_",
+        "target": "YPLS",
+        "components": 1,
+        "ok": true,
+        "n": 110,
+        "min": 316.86798095703125,
+        "max": 2388.830810546875,
+        "mean": 1845.7193215110085
+      },
+      "FC_Scalar:USTR": {
+        "kind": "FC_",
+        "target": "USTR",
+        "components": 1,
+        "ok": true,
+        "n": 110,
+        "min": 5.56974100615185e-41,
+        "max": 8.089415774854304e-41,
+        "mean": 7.295735611553066e-41
+      },
+      "FC_Scalar:HTFX": {
+        "kind": "FC_",
+        "target": "HTFX",
+        "components": 1,
+        "ok": false
+      },
+      "FC_Scalar:PRES": {
+        "kind": "FC_",
+        "target": "pressure",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": -1375.0274658203125,
+        "max": 830.23828125,
+        "mean": -17.794127467256928
+      },
+      "FC_Scalar:TPRS": {
+        "kind": "FC_",
+        "target": "total pressure",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": 931.6128540039062,
+        "max": 2092.47314453125,
+        "mean": 1589.0340367051422
+      },
+      "FC_Scalar:DENS": {
+        "kind": "FC_",
+        "target": "density",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": 1.2502660751342773,
+        "max": 1.275956392288208,
+        "mean": 1.2665223614525651
+      },
+      "FC_Scalar:TEMP": {
+        "kind": "FC_",
+        "target": "temperature",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": -54.078758239746094,
+        "max": -52.46721649169922,
+        "mean": -53.15756292071602
+      },
+      "FC_Scalar:TURK": {
+        "kind": "FC_",
+        "target": "turbulence energy",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": 1.0177638614550233e-05,
+        "max": 18.57615852355957,
+        "mean": 0.1318992804786418
+      },
+      "FC_Scalar:TEPS": {
+        "kind": "FC_",
+        "target": "turbulence dissipation rate",
+        "components": 1,
+        "ok": true,
+        "n": 11590,
+        "min": 5.762287536015265e-09,
+        "max": 19234.525390625,
+        "mean": 45.98354147926977
+      }
+    }
+  },
+  "seconds": 56.8
+}

@@ -1,0 +1,18 @@
+{
+  "stage": "delta",
+  "legs": {
+    "leg1": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg1\\exA06-2_d_50_139.fph",
+    "leg2": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r16_dual\\leg2\\exA06-2_d_50_139.fph"
+  },
+  "ok": true,
+  "zero_field": false,
+  "primary_nonzero": [
+    "EC_Scalar:PRES",
+    "EC_Vector:VEL",
+    "FC_Scalar:PRES",
+    "FC_Vector:VEL"
+  ],
+  "n_fields": 20,
+  "gate_ok": true,
+  "gate_reason": null
+}

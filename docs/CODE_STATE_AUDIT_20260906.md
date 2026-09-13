@@ -1216,6 +1216,27 @@ STEP --CADthru--> x_t(v37 即可) --宿主 OpenCadFile--> SNode → BuildAnalysi
 ```
 
 剩余唯一阻塞 = 宿主 worker 网格期崩溃（§22.1，外部缺陷）。v34 降版为**可选能力**，非必要条件。
+
+---
+
+## 31. R16 更新（2026-09-14）—— **数值等价首次拿到非零场证据**
+
+### 31.1 分段驱动 + 官方 50 Pa 算例
+
+`tools/solver_dual_run.py`（leg1/leg2/delta/status，逐段落册）默认算例 = 本机 2025.2 官方样本
+`exA06-2_d_50.pph`。实测单腿 **57–187 s**（远快于 J3 exA36-2 的 1000–1500 s）。
+
+### 31.2 delta 结论（`_p12u_gate/r16_dual/delta_table.json`）
+
+`ok=true`、**`zero_field=false`**、`primary_nonzero=[EC_Scalar:PRES, EC_Vector:VEL, FC_Scalar:PRES,
+FC_Vector:VEL]`、`gate_ok=true` —— 两次独立求解下主变量逐点一致。
+
+§5-O3「delta 建立在零流场」**至此解决**：新证据带主变量、且 gate 拒绝零流场。
+
+### 31.3 排期估算纠错（教训）
+
+此前六轮按「50 Pa 双跑需 ≥1 h」反复让位，该估算取自**别的算例**（J3 exA36-2）；
+目标算例 exA06-2 实测单腿 57–187 s。**估算必须以目标算例实测为准**（R17-3 入册为硬规矩）。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。
