@@ -1371,6 +1371,27 @@ R26-1（51/51 err=0）新增 2 条实测键：
 宿主联动，本轮不足以定罪 → R27-2 归因。
 
 **尚未满足收敛判据**（`OCT_MESH` 段 4+ 键未核实）→ R27-1。
+
+---
+
+## 41. R27 更新（2026-09-14）—— 宿主键 13 条 + **收敛判定**
+
+R27-1（51/51 err=0）新增 3 条实测键：`FACET.SOLID_BASE_MINIMUM_ANGLE` /
+`SOLID_BASE_LENGTH_FACTOR_FOR_OCTREE` / `SOLID_BASE_MINIMUM_ANGLE_FOR_OCTREE`（累计 **13 条**）。
+`FACET.USE_SIMPLE_SETTING` 的 true→false 联动**两轮独立复现**（归因待做，属观察项）。
+
+### ★ 收敛判定：不再有可验证的新 R* 条目
+
+| 面 | 状态 |
+|---|---|
+| 数值等价 | ✅ R17/R18/R23 |
+| STEP 路由 | ✅ 摄取已通（剩余 = 宿主 mesh worker 崩溃，外部缺陷，有 APPCRASH+WER 证据） |
+| FLD/iFLD | ✅ 产品形态限制（R20/R21） |
+| 条件体系 | ✅ 92 精确键封顶（R8-1） |
+| 面板落盘 | ✅ memory_only 面板 = 0（R25） |
+| 宿主键 | ✅ 13 条实测（R27-1） |
+| x_t schema | ✅ 误判已纠正 + 可选降版（R14-1） |
+
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。
