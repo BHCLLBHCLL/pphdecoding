@@ -1050,6 +1050,32 @@ Windows Application 日志 / WER 取证：`Application Error` ID 1000 的出错�
   `AppCrash_scFLOWpre_Bx64ne_*`，与 R7-1 事件日志互证）；
 * **宿主键闭环成立**：Faceter 面板 `apply` 写出的 `FACET.SIMPLE_CHORD_TOLERANCE` / `SIMPLE_MAX_ANGLE`
   **正是** R6-5/R7-4 实测键（离线断言），实机侧 R7-4 已证宿主回读一致、27/27 err=0。
+
+---
+
+## 24. R9 更新（2026-09-14）—— x_t 拒收判据（schema 版本）+ 崩溃标记 + 账目口径固化
+
+### 24.1 宿主拒收 CADthru x_t 的字段级判据（R9-2）
+
+`tools/xt_format_diff.py` 逐字段对比头部块（注意：只看连续 `**` 行会得到假阴性——两边都只剩 3 行）：
+
+| 字段 | 宿主原生 `tests/box/box.x_t` | CADthru 产出 |
+|---|---|---|
+| **`SCH`** | **`SCH_3400153_34001`（Parasolid v34）** | **`SCH_3701153_37102`（v37）** |
+| `FRU` / `APPL` | sdl_parasolid_customer_support / parasolid_acceptance_tests | Software Cradle Co.,Ltd. / CADthru |
+| `KEY` / `FILE` | 占位名 | 绝对路径 |
+
+**判据：写入端 schema（v37）高于宿主接收端（v34）→ `OpenCadFile` 静默零几何**（不报错、无 SNode），
+与 R8-3 观测及 CATIA 边界形态同源。修复方向 → R10-2。
+
+### 24.2 失败标记自动化（R9-4）
+
+host-gone 行带 WER 报告时同时置 **`host_crash=True`**，可直接断言。
+
+### 24.3 条件账目口径固化（R9-5）
+
+`tools/cond_ledger.py` 常量 + 校验：宇宙 **165 = 精确键 92（90+2）+ 别名 1 + 边界 72（71+1）**；
+`Thermoregulation` 为宇宙外族级注记，单独记账。再生若改账目 → 立即红。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

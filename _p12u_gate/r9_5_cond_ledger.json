@@ -1,0 +1,41 @@
+{
+  "ledger": {
+    "version": 8,
+    "universe": 165,
+    "annotations": [
+      "Thermoregulation"
+    ],
+    "dispositions": 166,
+    "kinds": {
+      "registry_key": 90,
+      "wizard_session_state": 71,
+      "poison_isolated": 1,
+      "alias": 1,
+      "member_locus": 2,
+      "wizard_session_state_gated": 1
+    },
+    "buckets": {
+      "exact_key": 92,
+      "boundary": 72,
+      "alias": 1
+    },
+    "unknown_kinds": []
+  },
+  "expected": {
+    "universe": 165,
+    "kinds": {
+      "registry_key": 90,
+      "member_locus": 2,
+      "wizard_session_state": 71,
+      "wizard_session_state_gated": 1,
+      "alias": 1,
+      "poison_isolated": 1
+    },
+    "buckets": {
+      "exact_key": 92,
+      "alias": 1,
+      "boundary": 72
+    }
+  },
+  "problems": []
+}

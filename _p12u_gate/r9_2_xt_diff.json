@@ -1,0 +1,76 @@
+{
+  "a": {
+    "path": "D:\\training\\cgns\\pphdecoding\\tests\\box\\box.x_t",
+    "bytes": 6596,
+    "header": [
+      "**ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz**************************",
+      "**PARASOLID !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~0123456789**************************",
+      "**PART1;",
+      "MC=unknown;",
+      "MC_MODEL=unknown;",
+      "MC_ID=unknown;",
+      "OS=unknown;",
+      "OS_RELEASE=unknown;",
+      "FRU=sdl_parasolid_customer_support;",
+      "APPL=parasolid_acceptance_tests;",
+      "SITE=unknown;",
+      "USER=unknown;",
+      "FORMAT=text;",
+      "GUISE=transmit;",
+      "KEY=__PSolid__;",
+      "FILE=__psolid__.xmt_txt;",
+      "DATE=unknown;",
+      "**PART2;",
+      "SCH=SCH_3400153_34001;",
+      "USFLD_SIZE=0;",
+      "**PART3;",
+      "**END_OF_HEADER*****************************************************************"
+    ],
+    "parse_error": "ValueError: unknown XT binary flag b'*'"
+  },
+  "b": {
+    "path": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r8_3_keyv2.x_t",
+    "bytes": 6896,
+    "header": [
+      "**ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz**************************",
+      "**PARASOLID !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~0123456789**************************",
+      "**PART1;",
+      "MC=unknown;",
+      "MC_MODEL=unknown;",
+      "MC_ID=unknown;",
+      "OS=unknown;",
+      "OS_RELEASE=unknown;",
+      "FRU=Software Cradle Co.,Ltd.;",
+      "APPL=CADthru;",
+      "SITE=unknown;",
+      "USER=unknown;",
+      "FORMAT=text;",
+      "GUISE=transmit;",
+      "KEY=D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r8_3_keyv20;",
+      "FILE=D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r8_3_keyv20.X_T;",
+      "DATE=unknown;",
+      "**PART2;",
+      "SCH=SCH_3701153_37102;",
+      "USFLD_SIZE=0;",
+      "**PART3;",
+      "**END_OF_HEADER*****************************************************************"
+    ],
+    "parse_error": "ValueError: unknown XT binary flag b'*'"
+  },
+  "header_only_in_a": [
+    "APPL=parasolid_acceptance_tests;",
+    "FILE=__psolid__.xmt_txt;",
+    "FRU=sdl_parasolid_customer_support;",
+    "KEY=__PSolid__;",
+    "SCH=SCH_3400153_34001;"
+  ],
+  "header_only_in_b": [
+    "APPL=CADthru;",
+    "FILE=D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r8_3_keyv20.X_T;",
+    "FRU=Software Cradle Co.,Ltd.;",
+    "KEY=D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r8_3_keyv20;",
+    "SCH=SCH_3701153_37102;"
+  ],
+  "node_only_in_a": [],
+  "node_only_in_b": []
+}

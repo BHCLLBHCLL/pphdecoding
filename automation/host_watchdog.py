@@ -356,6 +356,9 @@ class FlowExecutor:
                     wer = []
                 if wer:
                     row["wer_reports"] = wer
+                    # R9-4：有 WER 报告 = 崩溃（而非优雅退出/被杀），
+                    # 直接给台账一个可断言的标记，省掉事后翻事件日志。
+                    row["host_crash"] = True
             if outcome == "hung":
                 dump = self.work_dir / (self.name + "_hang_" +
                                         time.strftime("%H%M%S") + ".dmp")
