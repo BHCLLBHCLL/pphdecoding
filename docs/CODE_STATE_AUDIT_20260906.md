@@ -1128,6 +1128,23 @@ FLD/iFLD 可得性：读取器齐备（`fldstats`/`ifld`/`solver_delta --kind fl
 
 `ps_facet2_nodes._TRANSMIT`（`PK_PART_transmit_o_t`）含**未使用**字段 **`transmit_nw_version`**，
 而本仓已直调 `PK_PART_transmit` 写文本 x_t → **离线把 v37 重编码为 v34 可达**（无需宿主参与）。
+
+---
+
+## 27. R12 更新（2026-09-14）—— 离线降版尝试：字段/判据两条修正
+
+### 27.1 `transmit_nw_version` 不改变输出 schema（负结果）
+
+`tools/xt_downgrade.py` 逐档实测 `PK_PART_transmit(nw_version=?)`：`0` → 6278 B（v37）、`100` → 5464 B（v37）；
+`1 / 34 / 1000 / 2025 / 3400153 / 34001 / 37102 / 3701153` → **无输出**（取值非法）。
+即按当前 `_TRANSMIT` 布局写该字段**无法降版**。
+
+### 27.2 判据修正：本仓 transmit 产物没有 `**PART2;`
+
+其版本信息在首行 `T51 : TRANSMIT FILE created by modeller version 370115323
+SCH_3701153_37102_1300` —— R9-2 的 `SCH=` 判据对这类文件不适用，需读版本串（工具已改）。
+
+→ R13-1 从 `pskernel.dll` 导出表找真正的版本入口并核对 o_t 真实偏移。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

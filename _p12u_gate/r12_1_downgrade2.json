@@ -1,0 +1,29 @@
+{
+  "src": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r8_3_keyv2.x_t",
+  "src_sch": "SCH_3701153_37102",
+  "target_sch": "SCH_3400153_34001",
+  "attempts": [
+    {
+      "nw_version": 3400153,
+      "error": "RuntimeError: PK_PART_transmit failed: 923",
+      "ok": false
+    },
+    {
+      "nw_version": 34001,
+      "error": "RuntimeError: PK_PART_transmit failed: 923",
+      "ok": false
+    },
+    {
+      "nw_version": 37102,
+      "error": "RuntimeError: PK_PART_transmit failed: 923",
+      "ok": false
+    },
+    {
+      "nw_version": 3701153,
+      "error": "RuntimeError: PK_PART_transmit failed: 923",
+      "ok": false
+    }
+  ],
+  "hit": null,
+  "passed": false
+}
