@@ -65,28 +65,28 @@ Err.Clear
 out_.WriteLine "edit0_err=" & CStr(Err.Number) & " err=" & CStr(Err.Number)
 out_.WriteLine "s017=" & CStr(Err.Number)
 Err.Clear
-P10_ = True
+P10_ = 12.0
 out_.WriteLine "s018=" & CStr(Err.Number)
 Err.Clear
-MGS_.SetCompleteParallelFlag P10
+MGS_.SetAFFaceterMinimumAngle P10
 out_.WriteLine "s019=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "edit1_err=" & CStr(Err.Number) & " err=" & CStr(Err.Number)
 out_.WriteLine "s020=" & CStr(Err.Number)
 Err.Clear
-P20_ = 0.06
+P20_ = 0.3
 out_.WriteLine "s021=" & CStr(Err.Number)
 Err.Clear
-MGS_.SetAFFaceterLengthFactor P20
+MGS_.SetAFFaceterLengthFactorForOctree P20
 out_.WriteLine "s022=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "edit2_err=" & CStr(Err.Number) & " err=" & CStr(Err.Number)
 out_.WriteLine "s023=" & CStr(Err.Number)
 Err.Clear
-P30_ = 7
+P30_ = 8.0
 out_.WriteLine "s024=" & CStr(Err.Number)
 Err.Clear
-MGS_.SetIntersectionDetectionDepth P30
+MGS_.SetAFFaceterMinimumAngleForOctree P30
 out_.WriteLine "s025=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "edit3_err=" & CStr(Err.Number) & " err=" & CStr(Err.Number)

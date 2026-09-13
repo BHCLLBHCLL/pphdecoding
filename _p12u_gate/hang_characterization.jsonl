@@ -84,3 +84,4 @@
 {"ts": "2026-09-14T01:02:11", "flow": "step_reopen", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r13_step_reopen.log", "log_bytes": 348, "idle_s": 0.0, "elapsed_s": 20.0, "vbs_bytes": 2748}
 {"ts": "2026-09-14T01:03:42", "flow": "r131_host", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r131_host.log", "log_bytes": 375, "idle_s": 0.0, "elapsed_s": 30.0, "vbs_bytes": 2834}
 {"ts": "2026-09-14T03:30:46", "flow": "r65_keys", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r65_keys.log", "log_bytes": 696, "idle_s": 0.0, "elapsed_s": 20.0, "vbs_bytes": 4478}
+{"ts": "2026-09-14T03:41:34", "flow": "r65_keys", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r65_keys.log", "log_bytes": 696, "idle_s": 0.0, "elapsed_s": 20.0, "vbs_bytes": 4493}

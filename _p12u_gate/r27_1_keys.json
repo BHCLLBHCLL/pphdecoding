@@ -1,0 +1,80 @@
+{
+  "base": "D:\\training\\cgns\\pphdecoding\\box.pph",
+  "edits": [
+    {
+      "setter": "SetFacetUseSimpleSetting",
+      "params": [
+        false
+      ],
+      "label": "UseSimpleSetting=false"
+    },
+    {
+      "setter": "SetAFFaceterMinimumAngle",
+      "params": [
+        12.0
+      ],
+      "label": "AFFaceterMinimumAngle=12"
+    },
+    {
+      "setter": "SetAFFaceterLengthFactorForOctree",
+      "params": [
+        0.3
+      ],
+      "label": "AFFaceterLengthFactorForOctree=0.3"
+    },
+    {
+      "setter": "SetAFFaceterMinimumAngleForOctree",
+      "params": [
+        8.0
+      ],
+      "label": "AFFaceterMinimumAngleForOctree=8"
+    }
+  ],
+  "host": {
+    "error": null,
+    "err0": 51,
+    "total": 51,
+    "alive": {
+      "app_": "True",
+      "doc_": "True",
+      "mg_": "True",
+      "mgs_": "True",
+      "mgs2_": "True"
+    },
+    "seconds": 43.3
+  },
+  "chord_before": "1",
+  "chord_after": "1",
+  "angle_before": "5",
+  "angle_after": "5",
+  "width_before": "5",
+  "width_after": "5",
+  "detailw_before": "True",
+  "detailw_after": "True",
+  "mesher_before": "oct",
+  "surf_before": "facet_base",
+  "xenv_diff": {
+    "changed": {
+      "FACET.USE_SIMPLE_SETTING": {
+        "before": "true",
+        "after": "false"
+      },
+      "FACET.SOLID_BASE_MINIMUM_ANGLE": {
+        "before": "10",
+        "after": "0"
+      },
+      "FACET.SOLID_BASE_LENGTH_FACTOR_FOR_OCTREE": {
+        "before": "0.5",
+        "after": "0"
+      },
+      "FACET.SOLID_BASE_MINIMUM_ANGLE_FOR_OCTREE": {
+        "before": "5",
+        "after": "0"
+      }
+    },
+    "changed_count": 4,
+    "missing_count": 0,
+    "missing_sample": {}
+  },
+  "passed": true
+}

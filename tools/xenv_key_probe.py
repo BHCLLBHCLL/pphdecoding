@@ -44,9 +44,11 @@ BASE = ROOT / "box.pph"
 #: R10-3：新一批待核实键（前一批 5 条已在 R6-5/R7-4 定谳）
 EDITS = [
     ("SetFacetUseSimpleSetting", [False], "UseSimpleSetting=false"),
-    ("SetCompleteParallelFlag", [True], "CompleteParallelFlag=true"),
-    ("SetAFFaceterLengthFactor", [0.06], "AFFaceterLengthFactor=0.06"),
-    ("SetIntersectionDetectionDepth", [7], "IntersectionDetectionDepth=7"),
+    ("SetAFFaceterMinimumAngle", [12.0], "AFFaceterMinimumAngle=12"),
+    ("SetAFFaceterLengthFactorForOctree", [0.3],
+     "AFFaceterLengthFactorForOctree=0.3"),
+    ("SetAFFaceterMinimumAngleForOctree", [8.0],
+     "AFFaceterMinimumAngleForOctree=8"),
 ]
 
 
