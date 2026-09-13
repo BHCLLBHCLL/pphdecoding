@@ -1303,6 +1303,17 @@ FC_Vector:VEL]`、`gate_ok=true` —— 两次独立求解下主变量逐点一�
 
 **结论**：FLD/iFLD 是 **STpre / scPOST 侧的映射与读取格式**，不是 scFLOWpre 求解器的输出选项；
 R19-1 遗留的「产物可得性」应改走 `fldutil`/scPOST 从求解结果生成（本仓 `fldutil_bridge.py` 即此链路）→ R21-1。
+
+---
+
+## 36. R21 更新（2026-09-14）—— FLD/iFLD 生成：本机无无头入口（收口）
+
+* `fldutil_bridge.py` 是**只读**桥（exports/rosace/cross_check/probe_counts），不生成 FLD；
+* 安装树无独立 `FLDUTIL.exe`；`Programs_x64\*.exe` 无 `scPOST*.exe`；scPOST 只以
+  `kicker_conf\document_def_scPOST_eng.xml` + `Samples_POST\ProjectTemplates\…` 的 **GUI 模块**形态存在。
+
+**最终口径**：iFLD/FLD **读取可得**（本仓读取器齐备），**生成需 scPOST GUI** —— 属产品形态限制，
+非本仓缺口；除非接入 scPOST 自动化通道，否则该线不再投入（R22 起不再列条目）。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。
