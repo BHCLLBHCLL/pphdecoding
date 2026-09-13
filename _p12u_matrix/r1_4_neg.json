@@ -1,0 +1,76 @@
+{
+  "cases": {
+    "step_unicode": {
+      "ok": true,
+      "expectation": "geometry",
+      "verdict": "geometry landed (snapshot present)",
+      "cad": "D:\\training\\cgns\\pphdecoding\\_p12u_matrix\\中文 目录 空格\\键 v2 模型.step",
+      "seconds": 60.0,
+      "has_end": true,
+      "err0": 29,
+      "total": 29,
+      "probe": {
+        "sn__alive": "True",
+        "sn2__alive": "False",
+        "sn3__alive": "False",
+        "parts_ub": "0",
+        "parts2_ub": "0"
+      },
+      "bbox": "bbox_ub=5 b0=-4 bL=3 err=0",
+      "members": {
+        "count": 5,
+        "has_snapshot": true,
+        "mdl": []
+      }
+    },
+    "step_corrupt": {
+      "ok": true,
+      "expectation": "reject",
+      "verdict": "clean business reject (no geometry, no hang)",
+      "cad": "D:\\training\\cgns\\pphdecoding\\_p12u_matrix\\corrupt.step",
+      "seconds": 45.0,
+      "has_end": true,
+      "err0": 29,
+      "total": 29,
+      "probe": {
+        "sn__alive": "False",
+        "sn2__alive": "False",
+        "sn3__alive": "False",
+        "parts_ub": "-1",
+        "parts2_ub": "-1"
+      },
+      "bbox": "bbox_ub=5 b0=1.79769313486232E+308 bL=-1.79769313486232E+308 err=0",
+      "members": {
+        "count": 4,
+        "has_snapshot": false,
+        "mdl": []
+      }
+    },
+    "step_garbage": {
+      "ok": true,
+      "expectation": "reject",
+      "verdict": "clean business reject (no geometry, no hang)",
+      "cad": "D:\\training\\cgns\\pphdecoding\\_p12u_matrix\\garbage.step",
+      "seconds": 60.0,
+      "has_end": true,
+      "err0": 29,
+      "total": 29,
+      "probe": {
+        "sn__alive": "False",
+        "sn2__alive": "False",
+        "sn3__alive": "False",
+        "parts_ub": "-1",
+        "parts2_ub": "-1"
+      },
+      "bbox": "bbox_ub=5 b0=1.79769313486232E+308 bL=-1.79769313486232E+308 err=0",
+      "members": {
+        "count": 4,
+        "has_snapshot": false,
+        "mdl": []
+      }
+    }
+  },
+  "passed": 3,
+  "total": 3,
+  "note": "本机 STEP 样本均为 AP214；AP203/AP242 无样本可测"
+}

@@ -1,0 +1,86 @@
+start
+s001=0
+app__alive=True err=0
+s002=0
+s003=0
+doc__alive=True err=0
+s004=0
+s005=0
+sn__alive=True err=0
+s006=0
+ret_mode_oct=False err=0
+s007=0
+s008=0
+mg__alive=True err=0
+s009=0
+mg2__alive=True err=0
+ret_bam=True err=0
+s010=0
+s011=0
+mgs_t=Object err=0
+s012=0
+s013=0
+mgs__alive=True err=0
+mesher_t=String err=0
+s014=0
+mdlmethod_t=Long err=0
+s015=0
+surfmesher_t=String err=0
+s016=0
+facet_spec_type=0 err=0
+s017=0
+facet_simple=True err=0
+s018=0
+oct_exists0=False err=0
+s019=0
+s020=0
+octparam__alive=True err=0
+s021=0
+opt_type0=1 err=0
+s022=0
+s023=0
+s024=0
+s025=0
+s026=0
+s027=0
+s028=0
+opt_type1=3 err=0
+s029=0
+opt_num1=10000 err=0
+s030=0
+opt_min1=0.00021875 err=0
+s031=0
+ret_oct=True err=0
+s032=0
+s033=0
+oct_exists1=True err=0
+s034=0
+oct_t=Object err=0
+s035=0
+groups_ub=1 err=0
+s036=0
+amg_t=Object err=0
+s037=0
+amb=True err=0
+s038=0
+ret_setmode_mesh=False err=0
+s039=0
+is_mode_oct_after=False err=0
+s040=0
+ret_act=False err=0
+s041=0
+ret_mesh=False err=0
+s042=0
+s043=0
+mesh_exists=False err=0
+s044=0
+mesh_err=True err=0
+s045=0
+ws= err=0
+s046=0
+s047=0
+mg3__alive=True err=0
+mesh_exists2=False err=0
+s048=0
+s049=0
+end

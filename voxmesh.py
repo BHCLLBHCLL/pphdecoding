@@ -459,9 +459,14 @@ class _OctNode:
     def split(self) -> None:
         h = self.size * 0.5
         kids: list[_OctNode] = []
-        for i in range(2):
-            for j in range(2):
-                for k in range(2):
+        # 子序必须与 .oct / 快照约定一致：slot = x + 2y + 4z（**x 最快**，
+        # 见 oct.py:81-88 与 sctsnapshot.octree_region_as_oct_order）。
+        # 故 z 作最外层、x 作最内层；此前为 x 外层/z 内层（slot = 4x+2y+z），
+        # 写出的前序位图会被宿主/oct.parse_oct 解读成另一棵树
+        # （P2-1：L-shape 非对称树实测 127/155 叶子落错包围盒）。
+        for k in range(2):          # z（最慢）
+            for j in range(2):      # y
+                for i in range(2):  # x（最快）
                     mn = self.box_min + np.array([i * h, j * h, k * h])
                     kids.append(_OctNode(mn, h, self.depth + 1))
         self.children = kids

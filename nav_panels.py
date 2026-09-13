@@ -24,7 +24,7 @@ from PyQt5.QtWidgets import (
     QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
     QDoubleSpinBox, QFileDialog, QFormLayout, QGridLayout, QGroupBox,
     QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMessageBox, QPushButton, QRadioButton, QScrollArea,
+    QListWidgetItem, QMenu, QMessageBox, QPushButton, QRadioButton, QScrollArea,
     QSlider, QSpinBox, QStackedWidget, QTableWidget, QTableWidgetItem,
     QTabWidget, QTextEdit, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
@@ -6822,7 +6822,12 @@ class ConditionsBody(_Body):
         self.btn_flow_remove = QPushButton("Remove")
         self.btn_flow_set = QPushButton("Set")
         self.btn_flow_back_new = QPushButton("<< New condition")
+        # R2-4 去壳入口：dedicated 表单只覆盖 3–5 个标签，全字段走 schema 表单
+        self.btn_flow_all = QPushButton("All fields (schema)...")
+        self.btn_flow_all.setToolTip(
+            "Edit every schema field of this condition (R2-4 de-shelling)")
         row.addWidget(self.btn_flow_back_new)
+        row.addWidget(self.btn_flow_all)
         row.addWidget(self.btn_flow_preview)
         row.addWidget(self.btn_flow_remove)
         row.addWidget(self.btn_flow_set)
@@ -6836,6 +6841,7 @@ class ConditionsBody(_Body):
         self.btn_flow_set.clicked.connect(self._set_flow_bc)
         self.btn_flow_remove.clicked.connect(self._remove_flow_bc)
         self.btn_flow_preview.clicked.connect(self._preview_flow_bc)
+        self.btn_flow_all.clicked.connect(self._open_flow_all_fields)
         self._rebuild_flow_params()
 
         h.addWidget(left, 2)
@@ -6951,6 +6957,110 @@ class ConditionsBody(_Body):
         if it.parent() is not None:
             return it.parent().text(0)
         return it.text(0)
+
+    def _open_flow_all_fields(self) -> None:
+        """R2-4：flow BC 的 schema 全字段编辑入口（去壳）。"""
+        name = self.ed_flow_name.text().strip()
+        if not name:
+            QMessageBox.information(self, "All fields",
+                                    "Set a condition name first.")
+            return
+        self._open_schema_cond_editor("CondBoundaryFlowIO", name)
+
+    def _open_schema_cond_editor(self, cond_type: str, name: str) -> None:
+        """用 schema 驱动表单编辑既有条件的**全部字段**（R2-4 去壳）。
+
+        背景：dedicated 编辑器（如 flow BC 的 ``_set_flow_bc``）只写
+        ``type`` / ``name`` / ``flow_io_type`` / ``regions.face`` 四个标签，
+        而宿主 ``CondBoundaryFlowIO`` 有数百条字段路径。本入口以既有
+        ``<condition>`` 元素预填 :class:`GenericCondBody`（schema 语料
+        ``schemas/*.json`` 合并而来），OK 后**原地替换**该元素——既不新增
+        重复条件，也不丢弃未在 dedicated 表单中出现的字段。
+        """
+        xml = self._ctx.get("xml")
+        if xml is None:
+            QMessageBox.information(self, "All fields",
+                                    "No project XML loaded.")
+            return
+        el = _find_condition_el(xml, cond_type, name)
+        if el is not None:
+            self._deshell_condition_el(el)
+            return
+        # 尚未落盘 → 全字段新建（保留 R2-4 行为）
+        ctype = self._schema_type(cond_type)
+        if ctype is None:
+            return
+        dlg = GenericCondBody(cond_type, ctype, self._ctx, self)
+        if dlg.exec_() != QDialog.Accepted:
+            return
+        if write_condition_to_xml(self._ctx, ctype, dlg.result_cond()):
+            self._refill_condition_lists()
+
+    def _schema_type(self, cond_type: str):
+        """条件类型的 schema（无则弹提示并返回 None）。"""
+        reg = condition_registry_cached()
+        ctype = reg.types.get(cond_type) if reg is not None else None
+        if ctype is None:
+            QMessageBox.information(
+                self, "All fields",
+                f"Schema for {cond_type} is unavailable (schemas/*.json).")
+        return ctype
+
+    def _refill_condition_lists(self) -> None:
+        fill = getattr(self, "_fill_condition_lists", None)
+        if fill is not None:
+            fill()
+
+    def _deshell_condition_el(self, el) -> None:
+        """R3-2：以 schema 全字段表单编辑**任意类型**的既有条件并原地落盘。"""
+        if el is None:
+            return
+        cond_type = (el.findtext("type") or "").strip()
+        ctype = self._schema_type(cond_type)
+        if ctype is None:
+            return
+        dlg = GenericCondBody(cond_type, ctype, self._ctx, self,
+                              initial=_condition_to_initial(el))
+        if dlg.exec_() != QDialog.Accepted:
+            return
+        if write_condition_to_xml(self._ctx, ctype, dlg.result_cond(),
+                                  replace_el=el):
+            self._refill_condition_lists()
+
+    def _install_deshell_menus(self) -> None:
+        """R3-2：给每个条件列表挂 schema 全字段编辑的右键入口。
+
+        与 R2-4 的 flow BC 按钮等价但一次覆盖全部页（flow / wall /
+        thermal / sym / periodic / source / fixed / 其余带 ``_cond_list`` 的
+        页），不再逐页加按钮；树形页的区域节点因查不到同名条件而自动不弹菜单。
+        """
+        hooked = self.__dict__.setdefault("_deshell_hooked", set())
+        for _key, page in list(self._pages.items()):
+            lst = getattr(page, "_cond_list", None)
+            if lst is None or not hasattr(lst, "setContextMenuPolicy"):
+                continue
+            if id(lst) in hooked:
+                continue
+            lst.setContextMenuPolicy(Qt.CustomContextMenu)
+            lst.customContextMenuRequested.connect(
+                lambda pos, w=lst: self._deshell_menu(w, pos))
+            hooked.add(id(lst))
+
+    def _deshell_menu(self, lst, pos) -> None:
+        item = lst.itemAt(pos)
+        if item is None:
+            return
+        name = (item.text(0) or "").strip()
+        if not name:
+            return
+        el = _find_condition_el_any(self._ctx.get("xml"), name)
+        if el is None:
+            return
+        menu = QMenu(lst)
+        act = menu.addAction("All fields (schema)...")
+        act.setToolTip("Edit every schema field (R3-2 de-shelling)")
+        if menu.exec_(lst.viewport().mapToGlobal(pos)) is act:
+            self._deshell_condition_el(el)
 
     def _set_flow_bc(self) -> None:
         page = self._pages["bc_flow"]
@@ -10778,6 +10888,7 @@ class ConditionsBody(_Body):
 
     def _fill_condition_lists(self) -> None:
         xml = self._ctx.get("xml")
+        self._install_deshell_menus()
         self._fill_flow_bc_tree()
         self._sync_flow_bc_buttons()
         self._fill_wall_bc_tree()
@@ -12522,7 +12633,8 @@ class AnalysisModelWizardBody(_Body):
         self.ed_tol_edge.setText(str(sess.get("tol_multifold_edge", "1e+06")))
         self.ed_tol_face.setText(str(sess.get("tol_multifold_face", "1e+06")))
         self.sp_match_tol.setValue(float(sess.get("match_tol", 0.001)))
-        self.sp_rm_tol.setValue(float(sess.get("remove_tiny_tol", 0.001)))
+        # 默认与录制向导 FindTinyFace 一致（1e-05）；0.001 会删光小模型面片
+        self.sp_rm_tol.setValue(float(sess.get("remove_tiny_tol", 1e-5)))
         self.chk_elem_use.setChecked(bool(sess.get("elem_use", False)))
         self.sp_elem_range.setValue(int(sess.get("elem_range", 5)))
         dir_i = int(sess.get("elem_dir", 0))
@@ -14226,6 +14338,61 @@ def _region_names_for_cond(ctx: dict) -> list[str]:
     return names
 
 
+def _find_condition_el(xml, cond_type: str, name: str):
+    """按 (type, name) 在 ``<conditions>`` 里定位既有条件元素（R2-4）。"""
+    root = xml.section("conditions")
+    if root is None:
+        return None
+    for c in root.findall("condition"):
+        if ((c.findtext("type") or "") == cond_type
+                and (c.findtext("name") or "").strip() == name.strip()):
+            return c
+    return None
+
+
+def _find_condition_el_any(xml, name: str):
+    """按条件名（不限类型）定位既有条件元素（R3-2 通用去壳入口）。"""
+    if xml is None:
+        return None
+    root = xml.section("conditions")
+    if root is None:
+        return None
+    want = name.strip()
+    if not want:
+        return None
+    for c in root.findall("condition"):
+        if (c.findtext("name") or "").strip() == want:
+            return c
+    return None
+
+
+def _flatten_cond(node, prefix: str, out: dict) -> None:
+    """``<condition>`` 子树 → ``{"a.b.c": "value"}`` 路径表（R2-4）。"""
+    kids = list(node)
+    if not kids:
+        val = (node.text or "").strip()
+        if val:
+            out[prefix] = val
+        return
+    for ch in kids:
+        _flatten_cond(ch, prefix + "." + ch.tag, out)
+
+
+def _condition_to_initial(el) -> dict:
+    """既有 ``<condition>`` 元素 → GenericCondBody 预填结构（R2-4 去壳）。"""
+    out: dict = {"name": (el.findtext("name") or "").strip(),
+                 "regions": [], "fields": {}}
+    regs = el.find("regions")
+    if regs is not None:
+        out["regions"] = [(ch.text or "").strip() for ch in list(regs)
+                          if (ch.text or "").strip()]
+    for ch in list(el):
+        if ch.tag in ("type", "name", "regions"):
+            continue
+        _flatten_cond(ch, ch.tag, out["fields"])
+    return out
+
+
 class GenericCondBody(QDialog):
     """schema 驱动的通用 Cond* 条件表单（新建）。
 
@@ -14234,13 +14401,18 @@ class GenericCondBody(QDialog):
     与样本默认值。OK 后通过 :func:`write_condition_to_xml` 落 main.xml。
     """
 
-    def __init__(self, cond_type: str, ctype, ctx: dict, parent=None):
+    def __init__(self, cond_type: str, ctype, ctx: dict, parent=None,
+                 initial: dict | None = None):
+        """``initial``（R2-4）：既有条件的 name/regions/fields 预填；
+        给定即为"编辑"语义（标题 Edit Condition）。"""
         super().__init__(parent)
         self.cond_type = cond_type
         self.ctype = ctype
+        self._initial: dict = initial or {}
         self._widgets: dict[str, object] = {}   # path → widget
         self._meta: list[dict] = ctype.field_meta()
-        self.setWindowTitle(f"New Condition — {cond_type}")
+        _kind = "Edit" if initial else "New"
+        self.setWindowTitle(f"{_kind} Condition — {cond_type}")
         self.setMinimumSize(520, 420)
 
         outer = QVBoxLayout(self)
@@ -14277,6 +14449,8 @@ class GenericCondBody(QDialog):
         inner = self._build_group(self._meta, "")
         fv.addWidget(inner)
         v.addWidget(gb_root, 1)
+        if self._initial:
+            self._apply_initial()
 
         tip = _note("* required. 空的可选字段不会写入 XML；样本值仅为默认建议。")
         scroll.setWidget(body)
@@ -14343,6 +14517,27 @@ class GenericCondBody(QDialog):
                 w.setPlaceholderText(kind)
         self._widgets[m["name"]] = w
         return w
+
+    def _apply_initial(self) -> None:
+        """R2-4：把既有条件值写进各控件（name / regions / fields）。"""
+        ini = self._initial
+        nm = ini.get("name")
+        if nm:
+            self.ed_name.setText(str(nm))
+        regs = ini.get("regions")
+        if regs:
+            want = {str(r) for r in regs}
+            for i in range(self.lst_regions.count()):
+                it = self.lst_regions.item(i)
+                it.setSelected(it.text() in want)
+        for path, val in (ini.get("fields") or {}).items():
+            w = self._widgets.get(path)
+            if w is None:
+                continue
+            if isinstance(w, QComboBox):
+                w.setCurrentText(str(val))
+            else:
+                w.setText(str(val))
 
     # -- 取值 / 校验 -------------------------------------------------------
     def _value(self, path: str, m: dict) -> str:
@@ -14748,12 +14943,16 @@ class SolarSiteDialog(QDialog):
         self.accept()
 
 
-def write_condition_to_xml(ctx: dict, ctype, data: dict) -> bool:
+def write_condition_to_xml(ctx: dict, ctype, data: dict,
+                           replace_el=None) -> bool:
     """把 GenericCondBody 结果写进 ctx['xml'] 的 ``<conditions>``。
 
     返回是否写入成功（无 xml 时 False）。字段按 schema 首现顺序重建，
     复合父节点按 "." 路径展开；区域子标签取 schema 中 regions.<tag>
     的首个形态（如 region/face）。
+
+    ``replace_el``（R2-4）：给定既有 ``<condition>`` 元素则**原地重写**
+    （先清空子节点，再按本次表单结果重建）——去壳编辑不新增重复条件。
     """
     xml = ctx.get("xml")
     if xml is None:
@@ -14761,7 +14960,12 @@ def write_condition_to_xml(ctx: dict, ctype, data: dict) -> bool:
     cond_root = xml.section("conditions")
     if cond_root is None:
         cond_root = ET.SubElement(xml.root, "conditions")
-    el = ET.SubElement(cond_root, "condition")
+    if replace_el is not None:
+        el = replace_el
+        for ch in list(el):
+            el.remove(ch)
+    else:
+        el = ET.SubElement(cond_root, "condition")
     ET.SubElement(el, "type").text = data["type"]
     ET.SubElement(el, "name").text = data["name"]
 

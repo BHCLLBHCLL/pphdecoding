@@ -1,0 +1,47 @@
+{
+ "flows": {
+  "cm_xt": true,
+  "cm_step": true,
+  "cm_catia": true,
+  "cm_catia2": true
+ },
+ "facet": {},
+ "cadmatrix": {
+  "cm_xt": {
+   "sn2__alive": "True",
+   "sn3__alive": "True",
+   "parts_ub": "0",
+   "parts2_ub": "0",
+   "bbox": "bbox_ub=5 b0=0 bL=0.01 err=0",
+   "cad_members": []
+  },
+  "cm_step": {
+   "sn2__alive": "False",
+   "sn3__alive": "False",
+   "parts_ub": "1",
+   "parts2_ub": "1",
+   "bbox": "bbox_ub=5 b0=-82.2 bL=36 err=0",
+   "cad_members": []
+  },
+  "cm_catia": {
+   "sn2__alive": "False",
+   "sn3__alive": "False",
+   "parts_ub": "-1",
+   "parts2_ub": "-1",
+   "bbox": "bbox_ub=5 b0=1.79769313486232E+308 bL=-1.79769313486232E+308 err=0",
+   "cad_members": []
+  },
+  "cm_catia2": {
+   "sn2__alive": "False",
+   "sn3__alive": "False",
+   "parts_ub": "-1",
+   "parts2_ub": "-1",
+   "bbox": "bbox_ub=5 b0=1.79769313486232E+308 bL=-1.79769313486232E+308 err=0",
+   "cad_members": []
+  }
+ },
+ "members": {},
+ "verdict": {
+  "cadmatrix_branch": "catia-feature zero-geometry (datakit chain alive via step)"
+ }
+}

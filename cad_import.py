@@ -36,8 +36,44 @@ class ImportedBody:
     tess: object  # ps_facet2_nodes.TessPart
 
 
-def available() -> bool:
+def offline_available() -> bool:
+    """**离线** CAD 能力：Cradle 安装内的 pskernel.dll 在位。
+
+    只依赖安装目录，**不需要宿主进程、也不需要许可**（2026-09-13 实测：
+    许可地址置死后仍可 PK_PART_receive + 剖分）。X_T 剖分 / 原生几何造型
+    （geometry_ops）走这条判据。
+    """
     return _ps_facet2 is not None and _ps_facet2.available()
+
+
+def host_available() -> dict:
+    """**宿主** CAD 能力：STEP / CATIA 等格式经宿主 OpenCadFile 转换时需要。
+
+    返回 dict(ok, installed, running, gui_ready, hint, error)；探测出错时降级为
+    ok=False + error 文本，**不抛异常**（GUI 灰显判断必须无副作用）。
+
+    与 offline_available 的区别正是审计 §13.1 的边界：只装 Cradle 但无许可/
+    未启动宿主时，离线能力可用而宿主导入不可用——旧代码只查 pskernel 在位，
+    会让 GUI 误报"CAD 可用"。
+    """
+    out: dict = {"ok": False, "installed": False, "running": False,
+                 "gui_ready": False, "hint": "", "error": None}
+    try:
+        from automation import host_pipeline
+        st = host_pipeline.host_status()
+        out["installed"] = bool(st.get("installed"))
+        out["running"] = bool(st.get("running_pids"))
+        out["gui_ready"] = bool(st.get("gui_ready"))
+        out["hint"] = st.get("hint", "") or ""
+        out["ok"] = out["installed"] and out["running"]
+    except Exception as exc:  # noqa: BLE001
+        out["error"] = f"{type(exc).__name__}: {exc}"
+    return out
+
+
+def available() -> bool:
+    """向后兼容旧名 —— 等价于 offline_available。"""
+    return offline_available()
 
 
 def import_xt_bytes(raw: bytes, *, adaptive: bool = True,

@@ -6293,7 +6293,8 @@ class PphViewer(QMainWindow):
             import cad_import
         except Exception:
             return
-        if not cad_import.available():
+        # 离线判据（pskernel 在位即可，免宿主免许可）
+        if not cad_import.offline_available():
             return
         xt_items = [
             (n, d) for n, d in self.member_bytes.items()
@@ -6324,9 +6325,17 @@ class PphViewer(QMainWindow):
             return
         suf = os.path.splitext(path)[1].lower()
         if suf not in (".x_t", ".xmt_txt"):
+            # R1-8：宿主导入链的可用性判据与离线判据分开。pskernel 在位
+            # 只说明离线能力可用，STEP/CATIA 仍需运行中的宿主（审计 §13.1）。
+            host = {}
+            try:
+                import cad_import as _ci
+                host = _ci.host_available()
+            except Exception:  # noqa: BLE001
+                host = {}
             self.log(
-                f"Import：{suf} 走宿主 OpenCadFile（本仓仅剖分 XT）",
-                "WARN")
+                f"Import：{suf} 走宿主 OpenCadFile（本仓离线仅剖分 XT）；"
+                f"host_ready={bool(host.get('ok'))}", "WARN")
             if self.archive_path:
                 try:
                     from automation.pipeline_plan import write_nav_vbs
@@ -6338,21 +6347,25 @@ class PphViewer(QMainWindow):
                     self._try_host_vbs(out)
                 except Exception as exc:  # noqa: BLE001
                     self.log(f"OpenCadFile VBS 失败: {exc}", "ERROR")
+            extra = ""
+            if host and not host.get("ok"):
+                extra = ("\n\n宿主当前不可用："
+                         + str(host.get("hint") or host.get("error") or ""))
             QMessageBox.information(
                 self, "Import",
                 "STEP / CATIA 等格式由 scFLOWpre OpenCadFile 导入。\n"
                 "已写出 VBS；若 Kicker 前台可见将尝试自动执行，"
-                "否则请 File → Execute VBScript。")
+                "否则请 File → Execute VBScript。" + extra)
             return
         try:
             import cad_import
         except Exception as exc:  # noqa: BLE001
             QMessageBox.critical(self, "Import", str(exc))
             return
-        if not cad_import.available():
+        if not cad_import.offline_available():
             QMessageBox.warning(
                 self, "Import",
-                "未找到 Cradle pskernel.dll。\n"
+                "未找到 Cradle pskernel.dll（离线剖分能力不可用）。\n"
                 "请安装 Cradle CFD，或设置环境变量 CRADLE_PROGRAMS\n"
                 r"指向 …\CradleCFD*\Programs_x64")
             return

@@ -33,7 +33,8 @@ from typing import Iterator, Optional
 
 import numpy as np
 
-from crdlfld import CrdlFldFile, MAGIC, iter_data_blocks, iter_descriptors
+from crdlfld import (CrdlFldFile, MAGIC, Section, find_section,
+                     iter_data_blocks, iter_descriptors)
 
 
 @dataclass
@@ -168,10 +169,21 @@ def parse_oct(filepath: str) -> OctModel:
                     break
 
         # ── 单位与生成年份 ───────────────────────────────────────────
+        # 不能直接用 sec.end：scan_sections 的通用扫描会把 UnitOfCoordinates
+        # 体内 unit32 数据块的「[I4=32] + 32 字节 ASCII」误判为节头
+        # （两者字节层面同构，见 crdlfld._valid_section_start），把本节截断到
+        # 首个记录（只剩那个 f8=1.0 数值块）→ unit 恒为空。
+        # 修法：用**下一个具名节**的起点重算 end，再走正规 iter_data_blocks。
         unit = ""
         sec = f.get_section("UnitOfCoordinates")
         if sec:
-            for b in iter_data_blocks(data, sec):
+            end = len(data)
+            for nm in ("HeaderDataEnd", "OverlapStart_0", "LS_CoordinateSystem"):
+                off = find_section(data, nm)
+                if sec.records_start < off < end:
+                    end = off
+            sub = Section("UnitOfCoordinates", sec.start, end)
+            for b in iter_data_blocks(data, sub):
                 raw = bytes(data[b.offset : b.offset + b.byte_count])
                 if all(x == 0 or 32 <= x < 127 for x in raw):
                     s = raw.decode("ascii", errors="replace").strip("\x00").rstrip()
@@ -281,8 +293,26 @@ def _block(payload: bytes) -> bytes:
     return _i32(12) + _i32(len(payload)) + payload + _i32(len(payload))
 
 
+#: 非空节尾部的 20 字节「节结束哨兵」（与 gphstats / 宿主实测一致）
+_SECTION_SENTINEL = _i32(12) + _i32(0) + _i32(0) + _i32(0) + _i32(12)
+
+
+def _f64_bytes(value: float) -> bytes:
+    """大端 f64 载荷（UnitOfCoordinates 的比例字段）。"""
+    return struct.pack(">d", float(value))
+
+
 def _section(name: str, body: bytes) -> bytes:
-    return _i32(32) + name.ljust(32).encode("ascii") + body
+    """命名节头（40 字节）：[I4=32][name 32B][I4=32] + 记录流。
+
+    宿主实测（tests/box/meshinggroup1.oct）：name 后有尾随 [I4=32]，
+    空节无 20 字节哨兵。此前缺尾随 32（P2-3 修正）。
+    """
+    out = _i32(32) + name.ljust(32).encode("ascii") + _i32(32) + body
+    # 节体自带 20 字节节尾时不再追加哨兵（与 mdl._section 同规则）
+    if body and not body.endswith(_SECTION_SENTINEL):
+        out += _SECTION_SENTINEL
+    return out
 
 
 def write_oct(filepath: str | Path,
@@ -315,15 +345,20 @@ def write_oct(filepath: str | Path,
     unit32 = unit.encode("ascii")[:32].ljust(32)
 
     out = bytearray()
-    out += _i32(8) + MAGIC + _i32(8) + _i32(4) + _i32(4)
-    out += _section("Application", _block(app_block))
+    out += _i32(8) + MAGIC + _i32(8) + _i32(4) + _i32(4) + _i32(4)  # 容器头第 4 个 I4（PPH_FORMAT_SPEC §2：实测 4,4,4）
+    # 宿主 OCT 实测：Application = desc(1,8,1) + block(8)（注意与 MDL 的
+    # desc(1,1,8) 维序相反）
+    out += _section("Application", _descriptor(1, 8, 1) + _block(app_block))
     out += _section("Dimension",
                     _descriptor(4, 1, 1) + _descriptor(4, 3, 4))
     out += _section("Date",
                     _descriptor(4, 1, 1) + _descriptor(4, date, 4))
+    # 宿主 OCT 实测：比例 f64(1.0) + 长名 + 短名（本机两种都写单位短名）
     out += _section(
         "UnitOfCoordinates",
-        _descriptor(8, 1, 1) + _block(unit8) + _block(unit32) + _block(unit32))
+        _descriptor(8, 1, 1) + _block(_f64_bytes(1.0)) +
+        _descriptor(1, 32, 1) + _block(unit32) +
+        _descriptor(1, 32, 1) + _block(unit32))
     out += _section("HeaderDataEnd", b"")
     out += _section("OverlapStart_0", b"")
     coord = (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
@@ -338,7 +373,9 @@ def write_oct(filepath: str | Path,
     out += _section(
         "LS_OctOctantRefinement",
         _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
-        _descriptor(4, 1, 1) + _descriptor(4, n, 4) + _block(ref.tobytes()))
+        _descriptor(4, 1, 1) + _descriptor(4, n, 4) +
+        _descriptor(1, n, 1) +            # 宿主实测：type=1（非 4）
+        _block(ref.tobytes()))
     out += _section(
         "LS_OctOctantBlockID",
         _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +

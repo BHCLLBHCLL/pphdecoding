@@ -1741,3 +1741,48 @@ J5 骨架集群派发抽象（§9.6-4 部署层豁免维持）：
   build_legs_from_i5 2 + make_transport 2 + CLI 3。全离线 mock。
 * §9.6-4 豁免维持不变。骨架不引入 paramiko/SSH 依赖；未来集群
   可用时仅需实现 SSHTransport 三方法即可接入。
+
+### 10.25 Sprint J6 实录（2026-09-06）：回归 / 验收强化——结构不变量 + 边界用例
+
+J6 离线测试覆盖强化（不触碰宿主依赖代码）：
+
+* `tests/test_pipeline_plan_struct.py`（+10）：pipeline_plan.py 纯数据
+  常量结构不变量——WRAP_PARAM_PAIRS 43 项无重复键、WRAP_OCT_PARAM_PAIRS
+  36 项无重复键、BAM_WIZARD_ACTIONS 97 项首尾序列（BeginMDLWizard →
+  EndMDLWizard 精确一次）、OCTREE_ENUM_MAP ⊆ OCTREE_SETTING_MAP、
+  EXECUTE_STEP_MAP 值 ∈ LOCKED/UNLOCKED_COMMANDS；工具函数直接覆盖
+  （_vbs_value / _vbs_enum / _oct_sect_name / _fmt_oct_num / _xenv_get）。
+* `tests/test_host_watchdog_edge.py`（+7）：host_watchdog.py 边界用例
+  ——错误重试耗尽触发 boot、错误重试不消耗 attempts（n -= 1）、
+  completed_no_return 路径（worker 挂起但日志有 end 标记 → ok=True）、
+  _rewrite_last_row JSONL 更新 + 空文件安全、log_size / has_end_marker
+  缺失路径。复用 FakeEnv 模式。
+* `tests/test_batch_bridge_modal_edge.py`（+8）：batch_bridge _run_helper
+  stdout 解析 + stderr 回退（rc≠0 且 stdout 空 → 用 stderr）+ stdout
+  优先于 stderr + BatchBridge.dry_run mock；modal_watch visible_windows
+  返回所有类（不仅 #32770）+ PID 过滤 + ModalWatcher 跨 watch_once()
+  累积 closures + 上下文管理器异常安全。
+* `tests/conftest.py`（基础设施）：pytest 路径配置，允许 pytest 直接
+  运行（runner 用 unittest，不受影响）。
+* 全离线：grep user32 / kernel32 / ctypes.windll 零匹配。回归 1007
+  passed / 11 skipped（全绿，+25 新测试）。
+
+### 10.26 Sprint J7 实录（2026-09-06）：宿主在线验收——GUI 驱动路径带自愈批量
+
+J7 实机验收 J4 声明（"GUI 驱动路径带自愈通过 1 次批量，0 人工干预"）：
+
+* `tools/_p12q_j7_run.py`：复用 `_p12e_e2e_run.run_e2e` 基础设施，
+  SELFHEAL=1 默认，驱动 3 VBS 经 FlowExecutor + ModalWatcher。
+* **p12d_region_e2e**（域 10 面区域）：13 checks（8 步 + 5 alive），
+  全 err=0，has_end=true，outcome="ok"。基础 COM 通路 + ModalWatcher
+  不干扰正常流程。
+* **p12e_mesh_e2e**（域 9 网格）：23 checks（16 步 + 7 alive），全
+  err=0，has_end=true，outcome="ok"。WaitForWorker 长时阻塞期间
+  ModalWatcher 持续轮询。
+* **p12m_wiz_e2e**（域 10 MDL Wizard）：151 checks（110 步 + 41 alive），
+  全 err=0，has_end=true，outcome="ok"。GUI 密集（BeginMDLWizard →
+  97 步向导序列 → EndMDLWizard），Exercise ModalWatcher 自动 dismiss
+  "Initial Wizard" 模态（如出现）。
+* **验收结果**：3/3 通过，187 total checks，0 bad，0 人工干预。
+  FlowExecutor watch_modals=True 全程守护，无模态阻塞、无挂起、无手动
+  重启宿主。J4 声明实机成立。摘要入册 `_p12q_j7_summary.json`。

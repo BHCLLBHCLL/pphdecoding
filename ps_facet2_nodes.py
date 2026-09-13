@@ -702,11 +702,73 @@ class _PsSession:
             raise RuntimeError(f"PK_PART_receive failed: {rc}")
         return list(cast(parts, POINTER(c_int * n.value)).contents)
 
+    # -- 分区→实体展开（P2-5）-------------------------------------------
+    def part_bodies(self, part: int) -> list:
+        """PK_PARTITION_ask_bodies：把分区/部件标签展开为 body 标签。
+
+        `PK_PART_receive` 返回的是**分区（PK_PARTITION_t / class 5007）**
+        标签，而不是 body（5006）。把分区标签直接当 body 传给
+        `PK_BODY_ask_*` / faceting 会踩空指针（实测
+        `access violation reading 0x000000000000005C`）——这正是
+        CADthru 转出的 `**PART1;` 装配流在本仓剖分路径上失败的原因。
+        """
+        pk = self.pk
+        f = pk.PK_PARTITION_ask_bodies
+        f.restype = c_int
+        f.argtypes = [c_int, POINTER(c_int), POINTER(c_void_p)]
+        n = c_int(0)
+        arr = c_void_p()
+        if f(int(part), byref(n), byref(arr)) != 0 or not n.value:
+            return []
+        return list(cast(arr, POINTER(c_int * n.value)).contents)
+
+    def assembly_parts(self, asm: int) -> list:
+        """PK_ASSEMBLY_ask_parts：装配（class 5008）→ 部件标签列表。"""
+        pk = self.pk
+        f = pk.PK_ASSEMBLY_ask_parts
+        f.restype = c_int
+        f.argtypes = [c_int, POINTER(c_int), POINTER(c_void_p)]
+        n = c_int(0)
+        arr = c_void_p()
+        if f(int(asm), byref(n), byref(arr)) != 0 or not n.value:
+            return []
+        return list(cast(arr, POINTER(c_int * n.value)).contents)
+
+    def bodies_of(self, tags, _depth: int = 0) -> list:
+        """把 `receive_xt` 的返回统一成 **body** 标签列表。
+
+        三类标签按类分派（实测）：
+        * `5006` body            → 原样保留；
+        * `5007` 分区/部件       → `PK_PARTITION_ask_bodies` 展开；
+        * `5008` 装配            → `PK_ASSEMBLY_ask_parts` → 递归（CADthru
+          转出的 `**PART1;` STEP 流即为该形态，此前直接喂 body 接口会
+          `access violation`）。
+        全部展开失败时保留原标签，与旧行为兼容。
+        """
+        out: list = []
+        for t in tags or []:
+            t = int(t)
+            cls = self._ask_class(t)
+            if cls == 5006:
+                out.append(t)
+                continue
+            sub: list = []
+            if cls == 5008:
+                sub = self.assembly_parts(t)
+            if not sub:
+                sub = self.part_bodies(t)
+            if sub and _depth < 8:
+                out.extend(self.bodies_of(sub, _depth + 1))
+            elif not sub:
+                out.append(t)
+        return out
+
     # -- B-rep 拓扑/几何提取（P1：decode_brep 内核介导）-----------------
     _PK_CLASS_NAMES = {
         2501: "point", 3001: "curve", 4001: "surface",
         5001: "vertex", 5002: "edge", 5003: "loop",
         5004: "face", 5005: "fin", 5006: "body", 5007: "part",
+        5008: "assembly",
     }
 
     def _ask_class(self, entity: int) -> int:
@@ -1673,7 +1735,7 @@ def decode_brep(xt_bytes: bytes) -> dict:
     classes}）。
     """
     sess = _get_session()
-    bodies = sess.receive_xt(xt_bytes)
+    bodies = sess.bodies_of(sess.receive_xt(xt_bytes))   # P2-5：分区→body
     if not bodies:
         raise RuntimeError("decode_brep: no bodies received")
     return sess.extract_brep(bodies)
@@ -1736,7 +1798,7 @@ def tessellate_xt(xt_bytes: bytes, *, adaptive: bool = False,
     default stays on the plain STpre-style tolerances.
     """
     sess = _get_session()
-    tags = sess.receive_xt(xt_bytes)
+    tags = sess.bodies_of(sess.receive_xt(xt_bytes))   # P2-5：分区→body
     out: list[TessPart] = []
     for tag in tags:
         if adaptive:

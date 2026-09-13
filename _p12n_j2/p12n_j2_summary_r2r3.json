@@ -1,0 +1,134 @@
+{
+ "r2_facet_matrix": {
+  "f_stl": {
+   "app__alive": "True",
+   "doc__alive": "True",
+   "mg__alive": "True",
+   "f_ret": "True",
+   "mdl3__alive": "True",
+   "im2": "True",
+   "bbox": null,
+   "has_end": true
+  },
+  "f_stl_af": {
+   "app__alive": "True",
+   "doc__alive": "True",
+   "proj__alive": "True",
+   "mg__alive": "True",
+   "f_ret": "True",
+   "mdl3__alive": "True",
+   "im2": "True",
+   "bbox": null,
+   "has_end": true
+  },
+  "f_xt_af": {
+   "app__alive": "True",
+   "doc__alive": "True",
+   "proj__alive": "True",
+   "mg__alive": "True",
+   "f_ret": "False",
+   "mdl3__alive": "False",
+   "im2": "False",
+   "bbox": null,
+   "has_end": true
+  },
+  "f_catia_af": {
+   "app__alive": "True",
+   "doc__alive": "True",
+   "proj__alive": "True",
+   "mg__alive": "True",
+   "f_ret": "False",
+   "mdl3__alive": "False",
+   "im2": "False",
+   "bbox": null,
+   "has_end": true
+  },
+  "f_catia_empty": {
+   "app__alive": "True",
+   "doc__alive": "True",
+   "proj__alive": "True",
+   "mg__alive": "True",
+   "f_ret": "False",
+   "mdl3__alive": "False",
+   "im2": "False",
+   "bbox": null,
+   "has_end": true
+  }
+ },
+ "r2_catia_mdl": {
+  "catia_mdl": {
+   "app__alive": "True",
+   "doc__alive": "True",
+   "sn__alive": "False",
+   "sn2__alive": "False",
+   "mgw__alive": "True",
+   "meshinggroup__alive": "True",
+   "proj__alive": "True",
+   "mdlwizard__alive": "True",
+   "meshinggroupsetting__alive": "True",
+   "mdl2__alive": "False",
+   "vmdl2__alive": "False",
+   "bbox": null,
+   "has_end": true
+  },
+  "catia_mdl2": {
+   "app__alive": "True",
+   "doc__alive": "True",
+   "sn__alive": "False",
+   "sn2__alive": "False",
+   "mgw__alive": "True",
+   "meshinggroup__alive": "True",
+   "proj__alive": "True",
+   "mdlwizard__alive": "True",
+   "meshinggroupsetting__alive": "True",
+   "mdl2__alive": "False",
+   "vmdl2__alive": "False",
+   "bbox": null,
+   "has_end": true
+  }
+ },
+ "r3_cadmatrix": {
+  "cm_xt": {
+   "sn2__alive": "True",
+   "sn3__alive": "True",
+   "parts_ub": "0",
+   "parts2_ub": "0",
+   "bbox": "bbox_ub=5 b0=0 bL=0.01 err=0",
+   "cad_members": []
+  },
+  "cm_step": {
+   "sn2__alive": "False",
+   "sn3__alive": "False",
+   "parts_ub": "1",
+   "parts2_ub": "1",
+   "bbox": "bbox_ub=5 b0=-82.2 bL=36 err=0",
+   "cad_members": []
+  },
+  "cm_catia": {
+   "sn2__alive": "False",
+   "sn3__alive": "False",
+   "parts_ub": "-1",
+   "parts2_ub": "-1",
+   "bbox": "bbox_ub=5 b0=1.79769313486232E+308 bL=-1.79769313486232E+308 err=0",
+   "cad_members": []
+  },
+  "cm_catia2": {
+   "sn2__alive": "False",
+   "sn3__alive": "False",
+   "parts_ub": "-1",
+   "parts2_ub": "-1",
+   "bbox": "bbox_ub=5 b0=1.79769313486232E+308 bL=-1.79769313486232E+308 err=0",
+   "cad_members": []
+  }
+ },
+ "verdicts": {
+  "facet": "precondition pinned: facet-format input (STL f_ret=True lands meshinggroup2_part.mdl; XT/CATPart False across +-AF/+-empty-doc, err=0 clean business rejection)",
+  "catia_mdl": "P12-D snode recipe replays err=0 (137 checks) but upstream OpenCadFile(CATPart) lands zero geometry -> empty group -> no MDL/VMDL -> VMDL.Save unreachable (s096=424 cascade); MDL artifact closure not reachable in COM mode on this machine",
+  "cadmatrix": "catia-feature zero-geometry (datakit chain alive via step)",
+  "i7_overturn": "I7 sn2__alive=True was box.pph's own 'Part' node (container diff c1_out vs c1: zero CATPart geometry); 'V5 import boundary lifted' retracted"
+ },
+ "notes": [
+  "batch-1 console died once silently (exit=127, buffered prints lost, no WER record); -u rerun reproduced full matrix 4/4 GATE PASS exit=0",
+  "scFLOWpre_Bx64net.exe AV (mfc140u.dll) observed 16:47/16:48 (r2 tail) + 17:08 (rerun cm_xt window) - flows unaffected via selfheal"
+ ]
+}

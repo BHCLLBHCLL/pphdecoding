@@ -1,0 +1,35 @@
+{
+ "tag": "a1r",
+ "pph": "D:\\training\\cgns\\pphdecoding\\_p12o_j3\\a1r\\exA36_3_a1r.pph",
+ "work": "D:\\training\\cgns\\pphdecoding\\_p12o_j3\\a1r",
+ "case": "exA36_3_a1r",
+ "vbs_ok": true,
+ "wait_ok": true,
+ "saw_solver": true,
+ "wait_timeout": false,
+ "wait_elapsed": 955.1,
+ "verify_ok": true,
+ "key_fields": [],
+ "fph": "D:\\training\\cgns\\pphdecoding\\_p12o_j3\\a1r\\exA36_3_a1r_0.fph",
+ "log_scan": {
+  "exists": true,
+  "size": 60484,
+  "bad_term_blocks": 7,
+  "time_solver_s": 952.124,
+  "ranks_bad": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7
+  ],
+  "cycle_max": 2,
+  "error_log": true,
+  "mpiexec_error": true
+ },
+ "ok": true,
+ "verdict": "CRASH_RECURRED_SAME_SIGNATURE_952s_ISOLATED",
+ "note": "隔离复现（无并发）：同征 BAD TERMINATION RANK1-7 + mpiexec exit -1，死亡点漂移 692s(CYCLE1)->952.1s(CYCLE2)；日志前置 monitor_termination::killProcess（a1=monalive 心跳丢失；a1r=terminate 检出）→ 求解器自监视机制触发，非 MPI 随机崩溃；资源轨迹平稳（mem 754-767MB 无泄漏无饥饿）"
+}

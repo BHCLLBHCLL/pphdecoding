@@ -1,0 +1,17 @@
+{
+  "err0": 84,
+  "total": 84,
+  "problems": [],
+  "alive": {
+    "app_": "True",
+    "doc_": "True",
+    "sn_": "True",
+    "mg_": "True",
+    "mg2_": "True",
+    "mgs_": "True",
+    "octparam_": "True",
+    "mg3_": "True"
+  },
+  "error": null,
+  "raw": "start\ns001=0\napp__alive=True err=0\ns002=0\ns003=0\ndoc__alive=True err=0\ns004=0\ns005=0\nsn__alive=True err=0\ns006=0\nret_mode_oct=False err=0\ns007=0\ns008=0\nmg__alive=True err=0\ns009=0\nmg2__alive=True err=0\nret_bam=True err=0\ns010=0\ns011=0\nmgs_t=Object err=0\ns012=0\ns013=0\nmgs__alive=True err=0\nmesher_t=String err=0\ns014=0\nmdlmethod_t=Long err=0\ns015=0\nsurfmesher_t=String err=0\ns016=0\nfacet_spec_type=0 err=0\ns017=0\nfacet_simple=True err=0\ns018=0\noct_exists0=False err=0\ns019=0\ns020=0\noctparam__alive=True err=0\ns021=0\nopt_type0=1 err=0\ns022=0\ns023=0\ns024=0\ns025=0\ns026=0\ns027=0\ns028=0\nopt_type1=3 err=0\ns029=0\nopt_num1=10000 err=0\ns030=0\nopt_min1=0.00021875 err=0\ns031=0\nret_oct=True err=0\ns032=0\ns033=0\noct_exists1=True err=0\ns034=0\noct_t=Object err=0\ns035=0\ngroups_ub=1 err=0\ns036=0\namg_t=Object err=0\ns037=0\namb=True err=0\ns038=0\nret_setmode_mesh=False err=0\ns039=0\nis_mode_oct_after=False err=0\ns040=0\nret_act=False err=0\ns041=0\nret_mesh=False err=0\ns042=0\ns043=0\nmesh_exists=False err=0\ns044=0\nmesh_err=True err=0\ns045=0\nws= err=0\ns046=0\ns047=0\nmg3__alive=True err=0\nmesh_exists2=False err=0\ns048=0\ns049=0\nend\n"
+}

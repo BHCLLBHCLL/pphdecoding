@@ -1,0 +1,44 @@
+start
+s001=0
+app__alive=True err=0
+s002=0
+s003=0
+doc__alive=True err=0
+s004=0
+s005=0
+sn__alive=True err=0
+s006=0
+s007=0
+mg__alive=True err=0
+s008=0
+s009=0
+bbox=-4,4,4,3 err=0
+s010=0
+s011=0
+s012=0
+ret_bam=True err=0
+s013=0
+s014=0
+s015=0
+mg2__alive=True err=0
+s016=0
+vmdl__alive=True err=0
+s017=0
+mdl__alive=False err=0
+s018=0
+octparam__alive=True err=0
+s019=0
+s020=0
+s021=0
+s022=0
+s023=0
+s024=0
+s025=0
+s026=0
+ret_oct=True err=0
+s027=0
+s028=0
+s029=0
+oct__alive=True err=0
+s030=0
+end

@@ -1,0 +1,6 @@
+{"ts": "2026-09-13T11:45:54", "flow": "xt_multibody", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r14_xt_multibody.log", "log_bytes": 364, "idle_s": 0.0, "elapsed_s": 50.0, "vbs_bytes": 3475}
+{"ts": "2026-09-13T11:46:59", "flow": "step_ap214", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r14_step_ap214.log", "log_bytes": 361, "idle_s": 0.0, "elapsed_s": 65.1, "vbs_bytes": 3469}
+{"ts": "2026-09-13T11:48:59", "flow": "step_large", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r14_step_large.log", "log_bytes": 377, "idle_s": 0.0, "elapsed_s": 120.0, "vbs_bytes": 3469}
+{"ts": "2026-09-13T11:50:54", "flow": "step_unicode", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r14_step_unicode.log", "log_bytes": 361, "idle_s": 0.0, "elapsed_s": 60.0, "vbs_bytes": 6944}
+{"ts": "2026-09-13T11:51:39", "flow": "step_corrupt", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r14_step_corrupt.log", "log_bytes": 404, "idle_s": 0.0, "elapsed_s": 45.0, "vbs_bytes": 3462}
+{"ts": "2026-09-13T11:52:39", "flow": "step_garbage", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r14_step_garbage.log", "log_bytes": 404, "idle_s": 0.0, "elapsed_s": 60.0, "vbs_bytes": 3462}

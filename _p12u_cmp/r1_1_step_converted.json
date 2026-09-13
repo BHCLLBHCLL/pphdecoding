@@ -1,0 +1,39 @@
+{
+  "xt": "D:\\training\\cgns\\pphdecoding\\_p12r_step\\cadthru_base_v7.x_t",
+  "offline": {
+    "bytes": 38499,
+    "receive_tags": 1,
+    "bodies": 2,
+    "brep_faces": 34,
+    "brep_edges": 76,
+    "brep_vertices": 44,
+    "tess_parts": 2,
+    "tess_triangles": 6952,
+    "tess_area": 27123.226771,
+    "bbox_min": [
+      -82.2,
+      1.0,
+      0.0
+    ],
+    "bbox_max": [
+      82.2,
+      99.0,
+      36.0
+    ]
+  },
+  "host": {
+    "seconds": 20.0,
+    "snapshot_bodies": 2,
+    "xt_node_types": {
+      "int": 1170
+    },
+    "note": "host project has no *_part.mdl (OpenCadFile 不产 facet MDL)",
+    "members": [
+      "main.js",
+      "main.prp",
+      "main.sctsnapshot",
+      "main.xenv",
+      "main.xml"
+    ]
+  }
+}

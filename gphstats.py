@@ -301,6 +301,38 @@ def surface_regions_summary(data) -> list[tuple[str, int]]:
     return [(name, n) for name, _off, n in _iter_surface_region_blocks(data)]
 
 
+def volume_region_names(data) -> list[str]:
+    """LS_VolumeRegions → [名称]（该节无面号数组，只有名称记录）。
+
+    与 :func:`surface_region_face_ids` 对称，供写端往返使用。
+    """
+    section = _find_section(data, "LS_VolumeRegions")
+    if section is None:
+        return []
+    names: list[str] = []
+    pos = section.records_start
+    end = min(len(data), section.end)
+    while pos + 16 <= end:
+        ok_head = (crdlfld.read_i32_be(data, pos) == 12
+                   and crdlfld.read_i32_be(data, pos + 4) == 1
+                   and crdlfld.read_i32_be(data, pos + 8) == 255
+                   and crdlfld.read_i32_be(data, pos + 12) == 1)
+        if ok_head:
+            p = pos + 16
+            ok_name = (p + 12 <= end
+                       and crdlfld.read_i32_be(data, p) == 12
+                       and crdlfld.read_i32_be(data, p + 4) == 255)
+            if ok_name:
+                raw = bytes(data[p + 8:p + 8 + 255])
+                nm = raw.decode("ascii", "replace").strip()
+                if nm:
+                    names.append(nm)
+                pos = p + 8 + 255 + 4
+                continue
+        pos += 4
+    return names
+
+
 def surface_region_face_ids(data) -> dict[str, np.ndarray]:
     """LS_SurfaceRegions → ``{name: face_index_i32}``（0-based 面号）。"""
     out: dict[str, np.ndarray] = {}
@@ -796,6 +828,10 @@ def _block(payload: bytes) -> bytes:
     return _i32(12) + _i32(len(payload)) + payload + _i32(len(payload))
 
 
+#: 节尾哨兵（宿主全节实测：I4=12 + 3×0 + I4=12）
+_SECTION_SENTINEL_B = _i32(12) + _i32(0) + _i32(0) + _i32(0) + _i32(12)
+
+
 def _section(name: str, body: bytes) -> bytes:
     """命名节头（40 字节）：[I4=32][name 32B][I4=32] + 记录流。
 
@@ -805,10 +841,11 @@ def _section(name: str, body: bytes) -> bytes:
     写端首描述符被读端跳过 4 字节——字节对齐修正）。
     """
     out = _i32(32) + name.ljust(32).encode("ascii") + _i32(32) + body
-    if body:
-        # 非空节尾部有 20 字节「节结束哨兵」[12][0][0][0][12]（读端按
-        # bc=0 跳过）；空节（OverlapEnd 等）无此哨兵。
-        out += _i32(12) + _i32(0) + _i32(0) + _i32(0) + _i32(12)
+    # 非空节尾部有 20 字节「节结束哨兵」[12][0][0][0][12]（读端按 bc=0
+    # 跳过）；空节（OverlapEnd 等）无此哨兵。节体若已自带哨兵则不再追加
+    # （模板节 Comments/Cycle/Unused 自带，规则与 mdl/oct._section 一致）。
+    if body and not body.endswith(_SECTION_SENTINEL_B):
+        out += _SECTION_SENTINEL_B
     return out
 
 
@@ -840,7 +877,7 @@ def write_gph_volume(filepath,
                      parts=None,
                      assemblies=None,
                      element_info=None,
-                     comments=None) -> "Path":
+                     comments: Optional[str] = "PolyHedra") -> "Path":
     """写完整 CRDL-FLD GPH 体网格（LS_Links 含 owner/neigh）。
 
     vertices：(n,3) 浮点坐标；faces：多边形顶点索引列表（0-based），
@@ -866,17 +903,33 @@ def write_gph_volume(filepath,
                          neigh_u4.astype(_np.int64)).astype(">u4")
 
     out = bytearray()
-    out += _i32(8) + crdlfld.MAGIC + _i32(8) + _i32(4) + _i32(4)
+    out += _i32(8) + crdlfld.MAGIC + _i32(8) + _i32(4) + _i32(4) + _i32(4)  # 容器头第 4 个 I4（PPH_FORMAT_SPEC §2：实测 4,4,4）
+    # 节序与内容严格对齐宿主 GPH（P2 验收：cradle box 工程实测 23 节）
     out += _section("FileRevision",
                     _descriptor(4, 1, 1) + _descriptor(4, 2025, 4))
+    # GPH 的 Application 描述符为 (1,8,1)（与 MDL 的 (1,1,8) 维序相反，实测）
     out += _section("Application",
+                    _descriptor(1, 8, 1) +
                     _block(app.encode("ascii")[:8].ljust(8)))
+    out += _section("ApplicationVersion",
+                    _descriptor(4, 1, 1) + _descriptor(4, 2025, 4))
+    out += _section("ReleaseDate",
+                    _descriptor(4, 1, 1) + _descriptor(4, 20251217, 4))
+    out += _section("GridType",
+                    _descriptor(4, 1, 1) + _descriptor(4, 1, 4))
     out += _section("Dimension",
                     _descriptor(4, 1, 1) + _descriptor(4, 3, 4))
+    out += _section("Bias",
+                    _descriptor(4, 1, 1) + _descriptor(4, 0, 4))
     out += _section("Date",
                     _descriptor(4, 1, 1) + _descriptor(4, date, 4))
+    # 节序严格照宿主：Date → Comments → Cycle → Unused → Encoding
     if comments is not None:
         out += _comments_section(comments)
+    out += _cycle_section()
+    out += _unused_section()
+    out += _section("Encoding",
+                    _descriptor(1, 32, 1) + _block(b"UTF-8".ljust(32)))
     out += _section("HeaderDataEnd", b"")
     out += _section("OverlapStart_0", b"")
     if cvol is not None:
@@ -887,9 +940,10 @@ def write_gph_volume(filepath,
     links = (
         _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
         _descriptor(4, 1, 1) + _descriptor(4, n_faces, 4) +
-        _descriptor(4, n_faces, 1) +
-        _block(owner.tobytes()) + _block(neigh_u4.tobytes()) +
-        _block(npe.tobytes()) +
+        # 宿主实测：**每个数组块前都重复一次 desc(4,n,1)**（非只写一次）
+        _descriptor(4, n_faces, 1) + _block(owner.tobytes()) +
+        _descriptor(4, n_faces, 1) + _block(neigh_u4.tobytes()) +
+        _descriptor(4, n_faces, 1) + _block(npe.tobytes()) +
         _descriptor(4, 1, 1) + _descriptor(4, conn_total, 4) +
         _descriptor(4, conn_total, 1) + _block(conn.tobytes()))
     out += _section("LS_Links", links)
@@ -897,9 +951,12 @@ def write_gph_volume(filepath,
     nodes = (
         _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
         _descriptor(4, 1, 1) + _descriptor(4, n_vertices, 4) +
+        # 同上：每个坐标轴块前重复 desc(8,n,1)
         _descriptor(8, n_vertices, 1) +
         _block(verts[:, 0].astype(">f8").tobytes()) +
+        _descriptor(8, n_vertices, 1) +
         _block(verts[:, 1].astype(">f8").tobytes()) +
+        _descriptor(8, n_vertices, 1) +
         _block(verts[:, 2].astype(">f8").tobytes()))
     out += _section("LS_Nodes", nodes)
     if surface_regions is not None:
@@ -951,12 +1008,41 @@ def _assemblies_section(xml) -> bytes:
     return _section("LS_Assemblies", bytes(body))
 
 
+#: 宿主固定元数据节模板（2026-09-13 从 cradle box 工程 GPH 逐字节提取）。
+#: 三节均为定长模板（含各自的 20 字节节尾哨兵），值与环境相关处保留常量。
+_META_COMMENTS_BODY = bytes.fromhex(
+    "0000000c0000000100000050000000010000000c00000050506f6c794865647261202020202020202020202020202020"
+    "202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020"
+    "2020202020202020000000500000000c0000000000000000000000000000000c")
+_META_CYCLE_BODY = bytes.fromhex(
+    "0000000c0000000400000001000000010000000c0000000400000000000000040000000c000000080000000100000001"
+    "0000000c000000080000000000000000000000080000000c0000000000000000000000000000000c00000020556e6974"
+    "3a2454454d5020202020202020202020202020202020202020202020000000200000000c000000080000000200000001"
+    "0000000c000000103ff00000000000000000000000000000000000100000000c0000000400000001000000010000000c"
+    "0000000400000001000000040000000c0000000100000014000000010000000c0000001454454d502020202020202020"
+    "2020202020202020000000140000000c0000000000000000000000000000000c")
+_META_UNUSED_BODY = bytes.fromhex(
+    "0000000c0000000400000001000000010000000c0000000460ad78ec000000040000000c000000080000000100000001"
+    "0000000c000000084415af1d78b58c40000000080000000c0000000000000000000000000000000c")
+
+
+def _cycle_section() -> bytes:
+    """Cycle：宿主固定模板（内嵌 `Unit:$TEMP` 记录；本机 TEMP 路径）。"""
+    return _section("Cycle", _META_CYCLE_BODY)
+
+
+def _unused_section() -> bytes:
+    """Unused：宿主固定模板（u32 时间戳 + f64 值）。"""
+    return _section("Unused", _META_UNUSED_BODY)
+
+
 def _comments_section(text: str = "PolyHedra") -> bytes:
-    """Comments 写端（box 布局：字符串描述符 (1,n,1) + 80B ASCII 块，实存 mesher 名）。"""
-    b = (text.encode("ascii") if isinstance(text, str) else bytes(text))
-    b = b[:80].ljust(80)
-    body = _descriptor(1, len(b), 1) + _block(b)
-    return _section("Comments", bytes(body))
+    """Comments：网格类型名（默认 PolyHedra，宿主 box 实测）。"""
+    if text == "PolyHedra":
+        return _section("Comments", _META_COMMENTS_BODY)
+    body = (_descriptor(1, 80, 1) +
+            _block(text.encode("ascii")[:80].ljust(80)))
+    return _section("Comments", body)
 
 
 def _name255(text: str) -> bytes:
@@ -971,7 +1057,8 @@ def _volume_regions_section(names) -> bytes:
              _descriptor(4, 1, 1) + _descriptor(4, len(names), 4) +
              _descriptor(4, 1, 1) + _descriptor(4, 255, 4))
     for name in names:
-        body += _block(_name255(name))
+        # 宿主实测：每条记录前有 desc(1,255,1)
+        body += _descriptor(1, 255, 1) + _block(_name255(name))
         body += (_descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
                  _descriptor(4, 1, 1) + _descriptor(4, 1, 4))
     return _section("LS_VolumeRegions", bytes(body))
@@ -990,7 +1077,8 @@ def _surface_regions_section(regions) -> bytes:
     for name, ids in regions:
         ids = np.asarray(ids, dtype=">i4").reshape(-1)
         n = int(ids.size)
-        body += _block(_name255(name))
+        # 宿主实测：每条区域记录前有 desc(1,255,1)（名称块描述符）
+        body += _descriptor(1, 255, 1) + _block(_name255(name))
         body += (_descriptor(4, 1, 1) + _descriptor(4, n, 4) +
                  _descriptor(4, n, 1) + _block(ids.tobytes()))
         body += _descriptor(4, n, 1) + _block(
@@ -1006,7 +1094,8 @@ def _parts_section(parts) -> bytes:
              _descriptor(4, 1, 1) + _descriptor(4, len(parts), 4) +
              _descriptor(4, 1, 1) + _descriptor(4, 255, 4))
     for name, spec in parts:
-        body += _block(_name255(name))
+        # 宿主实测：每条记录前有 desc(1,255,1)
+        body += _descriptor(1, 255, 1) + _block(_name255(name))
         if isinstance(spec, (list, tuple, set)):
             ids = sorted(set(int(x) for x in spec))
             body += (_descriptor(4, 1, 1) + _descriptor(4, len(ids), 4) +

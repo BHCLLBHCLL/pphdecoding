@@ -1,0 +1,58 @@
+{
+ "scan": {
+  "suspect": 606,
+  "REAL": 15,
+  "FALSE-POSITIVE": 2
+ },
+ "datakit_side_counts": {
+  "neutral": 18,
+  "read": 4
+ },
+ "e2e": {
+  "catia_open": {
+   "err0": 14,
+   "total": 14,
+   "has_end": true,
+   "alive": {
+    "app_": "True",
+    "doc_": "True",
+    "sn_": "False",
+    "sn2_": "True"
+   },
+   "info": {},
+   "members_new": []
+  },
+  "catia_facet": {
+   "err0": 15,
+   "total": 15,
+   "has_end": true,
+   "alive": {
+    "app_": "True",
+    "doc_": "True",
+    "mg_": "True"
+   },
+   "info": {
+    "f_ret": "False"
+   },
+   "members_new": []
+  },
+  "facet_xt": {
+   "err0": 15,
+   "total": 15,
+   "has_end": true,
+   "alive": {
+    "app_": "True",
+    "doc_": "True",
+    "mg_": "True"
+   },
+   "info": {
+    "f_ret": "False"
+   },
+   "members_new": []
+  }
+ },
+ "verdict": {
+  "catia_v5_read_chain": "WORKS (OpenCadFile -> SNode Part alive, err=0 all steps, P12-D STEP same pattern)",
+  "import_cad_as_facet_retval": "False for BOTH CATPart and XT control — not CATIA-specific; err=0 in all legs"
+ }
+}

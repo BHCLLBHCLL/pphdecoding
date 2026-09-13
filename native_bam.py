@@ -66,8 +66,13 @@ class BamParams:
     apply_face_matching: bool = True
     match_tol: float = 1e-3
     # 9. Tiny faces
+    #: 默认容差 = 录制向导实测值（automation/pipeline_plan.LOCKED_COMMANDS
+    #: build_analysis_model 内 `MDLWizard_.FindTinyFace 1e-05`）。
+    #: 此前默认 1e-3 是**绝对**长度：对 0.01 m 的黄金 box（面宽 ~1.4e-4）
+    #: 会把 60,492 个面**全部判为微小面并删光**（P2-2 实测 kept=0），
+    #: 与宿主行为不符；1e-05 与宿主逐项结果一致（闭体 1 / ridge 边 852）。
     remove_tiny: bool = True
-    remove_tiny_tol: float = 1e-3
+    remove_tiny_tol: float = 1e-5
     tiny_pct: float = 5.0                # 自动去除参考（面宽 %，0-100）
     # 10. Repair
     repair: bool = True
@@ -142,7 +147,8 @@ class BamParams:
             apply_face_matching=bool(sess.get("apply_face_matching", True)),
             match_tol=float(sess.get("match_tol", 1e-3)),
             remove_tiny=bool(sess.get("remove_tiny", True)),
-            remove_tiny_tol=float(sess.get("remove_tiny_tol", 1e-3)),
+            # 默认与录制向导一致（FindTinyFace 1e-05）；见 BamParams 注释
+            remove_tiny_tol=float(sess.get("remove_tiny_tol", 1e-5)),
             tiny_pct=tiny,
             repair=bool(sess.get("repair", True)),
         )
@@ -717,7 +723,10 @@ def detect_ridges(points: np.ndarray, faces: list,
         node_cnt[a] += 1
         node_cnt[b] += 1
     for v, c in node_cnt.items():
-        if c >= 2:  # 两条以上尖边交汇 → 特征点
+        # 宿主实测：特征点 = **3 条及以上**尖边交汇的节点
+        # （box 8 个 / laptop 188 个与宿主 node_state 逐值相等；
+        #  >=2 会给出 848 / 1877，约为宿主的 10 倍 —— P2-2 修正）
+        if c >= 3:
             node_flag[v] = 1
     return edge_state, node_flag, n_ridge
 

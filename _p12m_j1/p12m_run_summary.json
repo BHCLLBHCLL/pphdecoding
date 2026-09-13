@@ -1,0 +1,20 @@
+{
+ "flows": {
+  "restore": true
+ },
+ "business": {
+  "app__alive": "True",
+  "doc__alive": "True",
+  "mg2__alive": "True",
+  "md2__alive": "True",
+  "md2_alive": "True",
+  "str2_ub": "0",
+  "cur2_ub": "0",
+  "av1": "False",
+  "cand_ub": "-1",
+  "dest__alive": "True",
+  "src__alive": "True",
+  "restore_ret": "False"
+ },
+ "restorable": -1
+}

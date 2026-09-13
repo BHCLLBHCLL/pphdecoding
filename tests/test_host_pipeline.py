@@ -350,209 +350,30 @@ class TestBackendConvergence(unittest.TestCase):
         com.assert_not_called()
 
     def test_gui_uses_authoritative_channel(self):
-        """pph_gui 的执行调用点走 FlowExecutor 或 run_vbs_if_ready。
+        """pph_gui 的宿主执行必须走权威通道（P12-A 路由锁 + Sprint J4 收敛）。
 
-        P12-A 验收「测试锁定路由」：GUI 不再直接指定 com 后端。
-        J4 自愈基建产品化：主路径经 FlowExecutor（内部调
-        run_vbs_authoritative），快速路径经 run_vbs_if_ready。
+        路由锁的**实质**是否定式：GUI 绝不显式指定 com 后端（com 仅作诊断）。
+        J4 后 GUI 的具体通道收敛为两条：
+        * `_selfheal_execute` → `automation.host_watchdog.FlowExecutor`
+          （挂起检测 + 模态关闭 + 冷启动自愈）；
+        * `host_pipeline.run_vbs_if_ready`（宿主就绪时内部选择 rot 权威后端）。
+
+        历史教训：本用例原先断言 `host_pipeline.run_vbs_authoritative(...)`
+        字面量出现，J4 改走 FlowExecutor 后即失败——源码字符串断言与实现细节
+        耦合（见 docs/CODE_STATE_AUDIT_20260906.md §5-O5）。现改为断言**契约**。
         """
         src = Path("pph_gui.py").read_text(encoding="utf-8")
+        # ① 路由锁：不得显式指定 com 后端
         self.assertNotIn('run_in_host(path, backend="com")', src)
         self.assertNotIn('run_in_host(vbs, backend="com")', src)
-        self.assertIn("FlowExecutor", src)
-        self.assertIn("host_pipeline.run_vbs_if_ready", src)
-
-
-class TestBackendConvergence(unittest.TestCase):
-    """P12-A 后端收敛：rot 唯一权威通道，gui/manual/com 仅诊断。"""
-
-    def test_authoritative_backend_constant(self):
-        self.assertEqual(host_pipeline.AUTHORITATIVE_BACKEND, "rot")
-
-    def test_resolve_backend_default_is_rot(self):
-        self.assertEqual(host_pipeline.resolve_backend(), "rot")
-        self.assertEqual(host_pipeline.resolve_backend(None), "rot")
-        # 显式诊断通道按原样放行
-        self.assertEqual(host_pipeline.resolve_backend("manual"), "manual")
-        self.assertEqual(host_pipeline.resolve_backend("gui"), "gui")
-        self.assertEqual(host_pipeline.resolve_backend("com"), "com")
-        self.assertEqual(host_pipeline.resolve_backend("rot"), "rot")
-
-    def test_resolve_backend_rejects_unknown(self):
-        with self.assertRaises(ValueError):
-            host_pipeline.resolve_backend("bogus")
-
-    def test_run_in_host_default_routes_rot(self):
-        """未指定 backend → rot（权威），不再默认 manual。"""
-        with tempfile.TemporaryDirectory() as td:
-            vbs = Path(td) / "host.vbs"
-            vbs.write_text("' test", encoding="utf-8")
-            with mock.patch.object(
-                    host_pipeline, "_run_rot_vbs",
-                    return_value={"backend": "rot", "ok": True,
-                                  "script": str(vbs)}) as rot:
-                result = host_pipeline.run_in_host(vbs)
-        self.assertEqual(result["backend"], "rot")
-        self.assertTrue(result["ok"])
-        rot.assert_called_once()
-
-    def test_run_vbs_authoritative_routes_rot(self):
-        """GUI Execute 权威入口：rot，无 com 回退。"""
-        with tempfile.TemporaryDirectory() as td:
-            vbs = Path(td) / "host.vbs"
-            vbs.write_text("' test", encoding="utf-8")
-            with mock.patch.object(
-                    host_pipeline, "_run_rot_vbs",
-                    return_value={"backend": "rot", "ok": True,
-                                  "script": str(vbs)}) as rot, \
-                 mock.patch.object(
-                    host_pipeline, "_run_com_vbs") as com:
-                result = host_pipeline.run_vbs_authoritative(vbs)
-        self.assertEqual(result["backend"], "rot")
-        self.assertTrue(result["ok"])
-        rot.assert_called_once()
-        com.assert_not_called()
-
-    def test_gui_uses_authoritative_channel(self):
-        """pph_gui 的执行调用点走 FlowExecutor 或 run_vbs_if_ready。
-
-        P12-A 验收「测试锁定路由」：GUI 不再直接指定 com 后端。
-        J4 自愈基建产品化：主路径经 FlowExecutor（内部调
-        run_vbs_authoritative），快速路径经 run_vbs_if_ready。
-        """
-        src = Path("pph_gui.py").read_text(encoding="utf-8")
-        self.assertNotIn('run_in_host(path, backend="com")', src)
-        self.assertNotIn('run_in_host(vbs, backend="com")', src)
-        self.assertIn("FlowExecutor", src)
-        self.assertIn("host_pipeline.run_vbs_if_ready", src)
-
-
-class TestBackendConvergence(unittest.TestCase):
-    """P12-A 后端收敛：rot 唯一权威通道，gui/manual/com 仅诊断。"""
-
-    def test_authoritative_backend_constant(self):
-        self.assertEqual(host_pipeline.AUTHORITATIVE_BACKEND, "rot")
-
-    def test_resolve_backend_default_is_rot(self):
-        self.assertEqual(host_pipeline.resolve_backend(), "rot")
-        self.assertEqual(host_pipeline.resolve_backend(None), "rot")
-        # 显式诊断通道按原样放行
-        self.assertEqual(host_pipeline.resolve_backend("manual"), "manual")
-        self.assertEqual(host_pipeline.resolve_backend("gui"), "gui")
-        self.assertEqual(host_pipeline.resolve_backend("com"), "com")
-        self.assertEqual(host_pipeline.resolve_backend("rot"), "rot")
-
-    def test_resolve_backend_rejects_unknown(self):
-        with self.assertRaises(ValueError):
-            host_pipeline.resolve_backend("bogus")
-
-    def test_run_in_host_default_routes_rot(self):
-        """未指定 backend → rot（权威），不再默认 manual。"""
-        with tempfile.TemporaryDirectory() as td:
-            vbs = Path(td) / "host.vbs"
-            vbs.write_text("' test", encoding="utf-8")
-            with mock.patch.object(
-                    host_pipeline, "_run_rot_vbs",
-                    return_value={"backend": "rot", "ok": True,
-                                  "script": str(vbs)}) as rot:
-                result = host_pipeline.run_in_host(vbs)
-        self.assertEqual(result["backend"], "rot")
-        self.assertTrue(result["ok"])
-        rot.assert_called_once()
-
-    def test_run_vbs_authoritative_routes_rot(self):
-        """GUI Execute 权威入口：rot，无 com 回退。"""
-        with tempfile.TemporaryDirectory() as td:
-            vbs = Path(td) / "host.vbs"
-            vbs.write_text("' test", encoding="utf-8")
-            with mock.patch.object(
-                    host_pipeline, "_run_rot_vbs",
-                    return_value={"backend": "rot", "ok": True,
-                                  "script": str(vbs)}) as rot, \
-                 mock.patch.object(
-                    host_pipeline, "_run_com_vbs") as com:
-                result = host_pipeline.run_vbs_authoritative(vbs)
-        self.assertEqual(result["backend"], "rot")
-        self.assertTrue(result["ok"])
-        rot.assert_called_once()
-        com.assert_not_called()
-
-    def test_gui_uses_authoritative_channel(self):
-        """pph_gui 的执行调用点走 FlowExecutor 或 run_vbs_if_ready。
-
-        P12-A 验收「测试锁定路由」：GUI 不再直接指定 com 后端。
-        J4 自愈基建产品化：主路径经 FlowExecutor（内部调
-        run_vbs_authoritative），快速路径经 run_vbs_if_ready。
-        """
-        src = Path("pph_gui.py").read_text(encoding="utf-8")
-        self.assertNotIn('run_in_host(path, backend="com")', src)
-        self.assertNotIn('run_in_host(vbs, backend="com")', src)
-        self.assertIn("FlowExecutor", src)
-        self.assertIn("host_pipeline.run_vbs_if_ready", src)
-
-
-class TestBackendConvergence(unittest.TestCase):
-    """P12-A 后端收敛：rot 唯一权威通道，gui/manual/com 仅诊断。"""
-
-    def test_authoritative_backend_constant(self):
-        self.assertEqual(host_pipeline.AUTHORITATIVE_BACKEND, "rot")
-
-    def test_resolve_backend_default_is_rot(self):
-        self.assertEqual(host_pipeline.resolve_backend(), "rot")
-        self.assertEqual(host_pipeline.resolve_backend(None), "rot")
-        # 显式诊断通道按原样放行
-        self.assertEqual(host_pipeline.resolve_backend("manual"), "manual")
-        self.assertEqual(host_pipeline.resolve_backend("gui"), "gui")
-        self.assertEqual(host_pipeline.resolve_backend("com"), "com")
-        self.assertEqual(host_pipeline.resolve_backend("rot"), "rot")
-
-    def test_resolve_backend_rejects_unknown(self):
-        with self.assertRaises(ValueError):
-            host_pipeline.resolve_backend("bogus")
-
-    def test_run_in_host_default_routes_rot(self):
-        """未指定 backend → rot（权威），不再默认 manual。"""
-        with tempfile.TemporaryDirectory() as td:
-            vbs = Path(td) / "host.vbs"
-            vbs.write_text("' test", encoding="utf-8")
-            with mock.patch.object(
-                    host_pipeline, "_run_rot_vbs",
-                    return_value={"backend": "rot", "ok": True,
-                                  "script": str(vbs)}) as rot:
-                result = host_pipeline.run_in_host(vbs)
-        self.assertEqual(result["backend"], "rot")
-        self.assertTrue(result["ok"])
-        rot.assert_called_once()
-
-    def test_run_vbs_authoritative_routes_rot(self):
-        """GUI Execute 权威入口：rot，无 com 回退。"""
-        with tempfile.TemporaryDirectory() as td:
-            vbs = Path(td) / "host.vbs"
-            vbs.write_text("' test", encoding="utf-8")
-            with mock.patch.object(
-                    host_pipeline, "_run_rot_vbs",
-                    return_value={"backend": "rot", "ok": True,
-                                  "script": str(vbs)}) as rot, \
-                 mock.patch.object(
-                    host_pipeline, "_run_com_vbs") as com:
-                result = host_pipeline.run_vbs_authoritative(vbs)
-        self.assertEqual(result["backend"], "rot")
-        self.assertTrue(result["ok"])
-        rot.assert_called_once()
-        com.assert_not_called()
-
-    def test_gui_uses_authoritative_channel(self):
-        """pph_gui 的执行调用点走 FlowExecutor 或 run_vbs_if_ready。
-
-        P12-A 验收「测试锁定路由」：GUI 不再直接指定 com 后端。
-        J4 自愈基建产品化：主路径经 FlowExecutor（内部调
-        run_vbs_authoritative），快速路径经 run_vbs_if_ready。
-        """
-        src = Path("pph_gui.py").read_text(encoding="utf-8")
-        self.assertNotIn('run_in_host(path, backend="com")', src)
-        self.assertNotIn('run_in_host(vbs, backend="com")', src)
-        self.assertIn("FlowExecutor", src)
-        self.assertIn("host_pipeline.run_vbs_if_ready", src)
+        self.assertNotIn('backend="com"', src)
+        # ② 自愈通道接线
+        self.assertIn("from automation.host_watchdog import FlowExecutor", src)
+        self.assertIn("FlowExecutor(", src)
+        # ③ 宿主就绪通道接线（rot 权威后端在其内部选择）
+        self.assertIn("host_pipeline.run_vbs_if_ready(", src)
+        # ④ 两条通道至少一条被真实调用（防"只 import 不用"）
+        self.assertRegex(src, r"self\._selfheal_execute\(|run_vbs_if_ready\(vbs\)")
 
 
 class TestHostStatus(unittest.TestCase):

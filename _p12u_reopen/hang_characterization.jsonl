@@ -1,0 +1,5 @@
+{"ts": "2026-09-13T11:25:54", "flow": "pph", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r1_pph.log", "log_bytes": 364, "idle_s": 0.0, "elapsed_s": 35.0, "vbs_bytes": 2907}
+{"ts": "2026-09-13T11:26:40", "flow": "mdl", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r1_mdl.log", "log_bytes": 364, "idle_s": 0.0, "elapsed_s": 30.0, "vbs_bytes": 2907}
+{"ts": "2026-09-13T11:27:05", "flow": "oct", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r1_oct.log", "log_bytes": 364, "idle_s": 0.0, "elapsed_s": 25.0, "vbs_bytes": 2907}
+{"ts": "2026-09-13T11:27:36", "flow": "gph", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r1_gph.log", "log_bytes": 364, "idle_s": 0.0, "elapsed_s": 30.0, "vbs_bytes": 2907}
+{"ts": "2026-09-13T11:28:15", "flow": "all", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r1_all.log", "log_bytes": 364, "idle_s": 0.0, "elapsed_s": 25.0, "vbs_bytes": 2907}

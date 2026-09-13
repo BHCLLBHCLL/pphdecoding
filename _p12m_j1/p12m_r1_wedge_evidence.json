@@ -1,0 +1,24 @@
+{
+  "flow": "wiz",
+  "attempts": "r1(2 attempts)+r2(1 attempt, stopped mid-retry)",
+  "date": "2026-09-05",
+  "verdict": "ImportPatchAsCAD(60k-tri STL) pathological in work process - 2/2 reproduction on CLEAN process too; not a stale-process-only accident",
+  "chain": [
+    "part.mdl manifold analysis: 60492 tris = 6 faces x 71x71 grid x2, verts 30248 = 6*70^2+12*70+8 exact, normals 6-axis clusters 10082 each |cos|=1.0, all verts on bbox planes -> closed volume IS the full [0,0.01]^3 cube, no cavity",
+    "r1 (13:05): stale scFLOWpre work process 14220 (born 10:12, survived cold boots - kill_all_hosts blind spot) wedged on 3h-old compute thread 59540 (1800.9s CPU); my import threads (13:07:00) burned 8.3s then queued forever; watchdog idle-killed STpre 40916 at 13:26:53, dump wiz_hang_132655.dmp",
+    "r2 (13:45): after host_boot patch (kill both images), CLEAN pair STpre 60052 + work 41528 (13:46:00, session-spawned); import request 13:46:25 -> single main thread 94% core, zero log progress for 12+ min, cpu 788s by 13:59; idle-killed again -> SAME signature on clean process = ImportPatchAsCAD(60k tris) itself pathological, 2/2",
+    "work process killed manually after MiniDump _p12m_j1/scflowpre_wedged_1420_dump.dmp (14220); host_boot patched: kill_all_hosts reaps scFLOWpre_Bx64net (WORK_IMAGE) too",
+    "r3 redesign: patch2 = exact 12-tri cube [0,0.01]^3 (region-identical to closed volume, .his 100 samples all interior with >=1e-5 margin); 60k boxshell STL kept as _p12m_j1/p12m_patch2_boxshell.stl evidence"
+  ],
+  "thread_profile_14220_at_kill": [
+    {"id": 59540, "cpu_s": 1800.9, "start": "10:12:17"},
+    {"id": 59984, "cpu_s": 9.4, "start": "10:12:19"},
+    {"id": 60608, "cpu_s": 4.7, "start": "13:07:00"},
+    {"id": 33984, "cpu_s": 3.6, "start": "13:07:00"}
+  ],
+  "infra_gaps_found": [
+    "kill_all_hosts only covered HOST_IMAGE=STpre_Bx64net; work processes survived cold boots (PATCHED in J1)",
+    "idle_limit=1200s cannot distinguish pathological-never-returning compute from legitimate long compute; acceptable here because retry inherits wedge anyway"
+  ],
+  "classification": "product-level pathological import scale boundary: ImportPatchAsCAD + 60492-tri STL wedges work process single-thread indefinitely; ImportPatchAsCAD(small STL) proven fine (I3 r2 sample_cube)"
+}

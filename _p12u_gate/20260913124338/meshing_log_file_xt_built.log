@@ -1,0 +1,106 @@
+﻿scFLOW V2025.2
+SCTpreLib Double Precision Version 6225.22302.20251217
+Copyright © 2025 Hexagon AB and/or its subsidiaries.
+open log file : meshing_log_file_xt_built.log
+Sun Sep 13 12:43:38 2026
+polyhedral mesh is not present
+   34310 faces
+   18470 nodes
+### FRGN '@VMDLSurf_MG0_Group_0' was removed.
+model file load: xt_built_org.mdl
+octree file load: xt_built.oct
+  ------------------------------------------------
+  Estimation of the number of elements
+  ------------------------------------------------
+             Octants        19216
+           Displayed        19216
+            Elements        22169
+           Displayed        22169
+               Nodes        68400
+saved to xt_built_before_surfmesh.mdl
+0 quadrilaterals are converted to triangles
+Detecting Surface-Singularity...
+start at Sun Sep 13 12:43:38 2026
+     0 singular points are detected
+finished at Sun Sep 13 12:43:38 2026
+Detecting Surface-Singularity finished in 00:00:00
+--- setup octree parameter ---
+--- setup model point status ---
+     0 points change state.
+--- make surface mesh process ---
+start at Sun Sep 13 12:43:38 2026
+--- make surface edge process ---
+ 1/15 edge process...
+ 2/15 edge process...
+ 3/15 edge process...
+ 4/15 edge process...
+ 5/15 edge process...
+ 6/15 edge process...
+ 7/15 edge process...
+ 8/15 edge process...
+ 9/15 edge process...
+10/15 edge process...
+11/15 edge process...
+--- make surface smoothing process ---
+ 1/ 6 smoothing process...
+ 2/ 6 smoothing process...
+ 3/ 6 smoothing process...
+ 4/ 6 smoothing process...
+======== Start Bad Patch Fixer ========
+Type : Iterative Approach
+
+### CYCLE    1 ###
+
+Bad Patch not found
+
+All bad patch removed.
+---- CONVERGED ----
+
+======== Bad Patch Fixer Finished ========
+ 5/ 6 smoothing process...
+--- 1st iteration ---
+ 6/ 6 smoothing process...
+finished at Sun Sep 13 12:43:41 2026
+surface mesh process finished in 00:00:03
+------- triangle h-ratio ------
+     h-ratio          count    
+-------------------------------
+  0.45 - 0.50     :     14702
+  0.40 - 0.45     :      2398
+  0.35 - 0.40     :       300
+  0.30 - 0.35     :        15
+  0.25 - 0.30     :         1
+  0.20 - 0.25     :         0
+  0.15 - 0.20     :         0
+  0.10 - 0.15     :         0
+  0.05 - 0.10     :         0
+  0.00 - 0.05     :         0
+------------------------------
+  minimum h-ratio :  0.287014
+  maximum h-ratio :  0.500000
+  average h-ratio :  0.472747
+saved to xt_built_before_tetramesh.mdl
+saved octree as xt_built_after_surfmesh.oct.
+0 quadrilaterals are converted to triangles
+### all the MAT numbers are ZERO.
+### exectetraparam() failed
+### failed to create the volume mesh.
+### Refer to [Edit] - [Create Volume Mesh] of Preprocessor Reference.
+model is not present.
+model is not present.
+region '@UNDEFINEDMOM_TEMP' is not found.
+model is not present.
+model is not present.
+model is not present.
+model is not present.
+model is not present.
+model is not present.
+region '@WALL' is not found.
+model is not present.
+model is not present.
+model is not present.
+model is not present.
+saved to D:/training/cgns/pphdecoding/_p12u_gate\20260913124341\meshinggroup1_error.mdl
+close log file
+Sun Sep 13 12:43:44 2026
+00:00:06

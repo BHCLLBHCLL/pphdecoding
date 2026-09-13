@@ -1,0 +1,100 @@
+{
+ "runs": {
+  "b1": {
+   "tag": "b1",
+   "pph": "D:\\training\\cgns\\pphdecoding\\_p12k_i5\\b1\\box_b1.pph",
+   "work": "D:\\training\\cgns\\pphdecoding\\_p12k_i5\\b1",
+   "case": "box_b1",
+   "vbs_ok": true,
+   "vbs_log": [
+    "start",
+    "app_alive=True err=0",
+    "doc_alive=True err=0",
+    "open_err=0",
+    "setmode_err=0",
+    "savepoly_err=0",
+    "gph_exists=True",
+    "savesph_err=0",
+    "sph_exists=True",
+    "exec_method=ExecuteSolver",
+    "exec_err=0",
+    "exec_ret=True",
+    "end"
+   ],
+   "wait_ok": true,
+   "saw_solver": true,
+   "wait_timeout": false,
+   "wait_elapsed": 2329.8,
+   "verify_ok": true,
+   "verify_strict": true,
+   "key_fields": [
+    "EC_Scalar:PRES",
+    "EC_Vector:VEL"
+   ],
+   "fph": "D:\\training\\cgns\\pphdecoding\\_p12k_i5\\b1\\box_b1_400.fph",
+   "fld_ifld": {
+    "fld": [],
+    "ifld": []
+   },
+   "ok": true
+  },
+  "b2": {
+   "tag": "b2",
+   "pph": "D:\\training\\cgns\\pphdecoding\\_p12k_i5\\b2\\box_b2.pph",
+   "work": "D:\\training\\cgns\\pphdecoding\\_p12k_i5\\b2",
+   "case": "box_b2",
+   "vbs_ok": true,
+   "vbs_log": [
+    "start",
+    "app_alive=True err=0",
+    "doc_alive=True err=0",
+    "open_err=0",
+    "setmode_err=0",
+    "savepoly_err=0",
+    "gph_exists=True",
+    "savesph_err=0",
+    "sph_exists=True",
+    "exec_method=ExecuteSolver",
+    "exec_err=0",
+    "exec_ret=True",
+    "end"
+   ],
+   "wait_ok": true,
+   "saw_solver": true,
+   "wait_timeout": false,
+   "wait_elapsed": 1715.6,
+   "verify_ok": true,
+   "verify_strict": true,
+   "key_fields": [
+    "EC_Scalar:PRES",
+    "EC_Vector:VEL"
+   ],
+   "fph": "D:\\training\\cgns\\pphdecoding\\_p12k_i5\\b2\\box_b2_400.fph",
+   "fld_ifld": {
+    "fld": [],
+    "ifld": []
+   },
+   "ok": true
+  }
+ },
+ "fph_compare_ok": true,
+ "fph_compare_reason": null,
+ "n_fields": 13,
+ "fld_compare": null,
+ "ifld_compare": null,
+ "sph_fingerprints": {
+  "exported_b1": {
+   "path": "D:\\training\\cgns\\pphdecoding\\_p12k_i5\\b1\\scFLOWpre.sph",
+   "exists": true,
+   "size": 1648,
+   "md5": "ff44de33c93a584e3b9b98874a83d213"
+  },
+  "exported_b2": {
+   "path": "D:\\training\\cgns\\pphdecoding\\_p12k_i5\\b2\\scFLOWpre.sph",
+   "exists": true,
+   "size": 1648,
+   "md5": "e842b63103d2a2a5cbb863b1ddd7c93c"
+  }
+ },
+ "ok": true
+}

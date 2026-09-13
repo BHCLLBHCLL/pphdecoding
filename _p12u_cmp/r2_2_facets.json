@@ -1,0 +1,153 @@
+{
+  "xt": "D:\\training\\cgns\\pphdecoding\\tests\\box\\box.x_t",
+  "offline": {
+    "bytes": 6596,
+    "receive_tags": 5,
+    "bodies": 5,
+    "brep_faces": 6,
+    "brep_edges": 16,
+    "brep_vertices": 16,
+    "tess_parts": 1,
+    "tess_triangles": 12,
+    "tess_area": 0.0006,
+    "bbox_min": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "bbox_max": [
+      0.01,
+      0.01,
+      0.01
+    ]
+  },
+  "facets": {
+    "offline": {
+      "parts": 1,
+      "triangles": 12,
+      "area_total": 0.0006,
+      "area_cum_pct": {
+        "10": 0.0833,
+        "25": 0.25,
+        "50": 0.5,
+        "75": 0.75,
+        "90": 0.9167,
+        "99": 1.0
+      },
+      "axial_area": [
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001
+      ],
+      "area_min": 5e-05,
+      "area_max": 5e-05,
+      "bbox_min": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "bbox_max": [
+        0.01,
+        0.01,
+        0.01
+      ]
+    },
+    "host": {
+      "pph": "D:\\training\\cgns\\pphdecoding\\_p2_accept\\control_out.pph",
+      "all_members": [
+        "main.js",
+        "main.prp",
+        "main.sctsnapshot",
+        "main.xenv",
+        "main.xml",
+        "meshinggroup1.gph",
+        "meshinggroup1.oct",
+        "meshinggroup1_part.mdl",
+        "meshinggroup1_ridge.mdl"
+      ],
+      "mdl_members": [
+        "meshinggroup1_part.mdl"
+      ],
+      "member": "meshinggroup1_part.mdl",
+      "mdl_bytes": 2969210,
+      "mdl_vertices": 30248,
+      "mdl_faces": 60492,
+      "host_triangles_from_faces": 60492,
+      "triangles": 60492,
+      "area_total": 0.0006,
+      "area_cum_pct": {
+        "10": 0.1,
+        "25": 0.25,
+        "50": 0.5,
+        "75": 0.75,
+        "90": 0.9,
+        "99": 0.99
+      },
+      "axial_area": [
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001
+      ],
+      "area_min": 1e-08,
+      "area_max": 1e-08,
+      "bbox_min": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "bbox_max": [
+        0.01,
+        0.01,
+        0.01
+      ]
+    },
+    "compare": {
+      "triangles_off": 12,
+      "triangles_host": 60492,
+      "area_total_off": 0.0006,
+      "area_total_host": 0.0006,
+      "area_total_relerr": 0.0,
+      "triangles_ratio": 5041.0,
+      "axial_off": [
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001
+      ],
+      "axial_host": [
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001,
+        0.0001
+      ],
+      "axial_relerr": 0.0,
+      "area_cum_pct_off": {
+        "10": 0.0833,
+        "25": 0.25,
+        "50": 0.5,
+        "75": 0.75,
+        "90": 0.9167,
+        "99": 1.0
+      },
+      "area_cum_pct_host": {
+        "10": 0.1,
+        "25": 0.25,
+        "50": 0.5,
+        "75": 0.75,
+        "90": 0.9,
+        "99": 0.99
+      },
+      "area_cum_maxdiff": 0.0167
+    }
+  }
+}

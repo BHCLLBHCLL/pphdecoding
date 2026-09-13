@@ -1,0 +1,50 @@
+{
+  "cases": {
+    "step": {
+      "cad": "D:\\training\\3dprint\\FunHome-main\\funHomeFan\\cad\\FunDeskFan\\key v2.step",
+      "build": {
+        "ok": true,
+        "seconds": 125.1,
+        "err0": 48,
+        "total": 48,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "True",
+          "mg_": "True",
+          "mg2_": "True",
+          "vmdl_": "True",
+          "mdl_": "False",
+          "octparam_": "True",
+          "oct_": "True"
+        },
+        "info": {
+          "ret_bam": "True",
+          "ret_oct": "True",
+          "ret_mesh": "True",
+          "mesh_exists": "False"
+        }
+      },
+      "reopen": {
+        "ok": true,
+        "seconds": 25.0,
+        "err0": 25,
+        "total": 25,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "False",
+          "mg_": "True",
+          "mdl_": "False",
+          "vmdl_": "True",
+          "oct_": "True"
+        },
+        "info": {
+          "mesh_exists": "False"
+        }
+      },
+      "built_pph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\step_built.pph"
+    }
+  },
+  "passed": 1
+}

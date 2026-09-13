@@ -101,28 +101,20 @@ EVALUATIONS: dict[str, str] = {
 # 非菜单 NYI，而是跨域产品边界声明：随扫描清单一并再生，保证
 # 手册重生成不丢账。
 BOUNDARY_DECLARATIONS: list[tuple[str, str]] = [
-    ("CATIA V4/V5/V6 导入（域 4）",
-     "**J2 实测重注册（2026-09-05，DEV_PLAN §21.6 / gap §10.21；推翻"
-     " §10.19-I7「V5 导入边界解除」）**：真样本在位（starcat5 15 件 "
-     "V5_CFV2）但宿主 COM 读链对 CATPart **静默零几何**——4 格式裸宿主"
-     "矩阵（J2 r3 cadmatrix）：XT（SNode alive + 1 零件 + bbox [0,0.01]）"
-     "与 STEP（SNode alive + 2 零件 + 真实 bbox）几何落地 = Datakit 链"
-     "在本机 COM 面活着，唯 CATPart ×2 样本零 SNode、`GetSParts` 空"
-     "（早/晚两轮一致，排除异步慢导入）、bbox = ±DBL_MAX 空指纹，"
-     "全程 err=0 无模态（29/29 × 4 冷启动）。I7 的 sn2__alive=True 实为 "
-     "box.pph 自带 \"Part\" 节点混淆（c1_out 容器差分零 CATPart 几何）"
-     "——I7 结论撤回。①MDL 产物级闭环不可达：P12-D snode 全链配方在 "
-     "CATPart 上复放 err=0（137 checks）但跑在空组上（MDL/VMDL "
-     "Nothing）。根因 = CATIA 特异性（同链 XT/STEP 均落地）：指向本机 "
-     "CADthru CATIA V5 读特性未授权（许可矩阵唯 CATIA V5 带 R/RW 双"
-     "变体 = 独立特性）或 Datakit CATIA 转换器 headless no-op；手册"
-     "导入矩阵无许可注（导出才注）。**余边界**：复验前置 = CADthru "
-     "CATIA 读特性授权（或 GUI 导入路线对照判别 license vs COM 特异）；"
-     "V4/V6 样本全机缺失；原生存写向（CATIA V5 / SAT / IGES）为许可"
-     "门控导出面，非域 4 导入缺口。`ImportCADAsFacet` 前置已钉死为"
-     "输入格式 = 面片格式（STL True 落 part.mdl；XT/CATPart 干净业务"
-     "拒 = 归 OpenCadFile 链，非许可门）。"),
-    ("Actran Acoustic（域 3 菜单 / 域 8 链）",
+    ("CAD 格式范围：仅 x_t / STEP（域 4 · 产品决策 2026-09-13，R1-5）",
+     "**范围收敛**：本仓 CAD 导入只支持 **x_t** 与 **STEP**；CATIA V4/V5/V6、"
+     "3DXML、SolidEdge、JT、Rhino、VDAFS 移出 backlog（不再排期）。依据："
+     "① **许可实测**（审计 §10，license.dat + lmstat 实证）：本机授权 "
+     "CADTHRUSTD、OP_CATIAV5R/RW、OP_CATIAV4、OP_IGES、OP_SAT、OP_PROE、"
+     "OP_SLDWRKS、OP_UNIGRAPHICS、OP_INVENTOR，但**无** 3DXML / SolidEdge / "
+     "JT / Rhino / VDAFS 的 OP_*；② CATIA V5 读特性虽已授权，转换核仍"
+     "**静默零几何**（6/6 样本、容器无 snapshot 成员，§9/§15）；③ x_t 与 STEP "
+     "既有宿主通道，x_t 另有**免宿主免许可**离线通道（§12–§15：pskernel 剖分 + "
+     "CADthru 独立 COM 转换）。**前置钉死**：STEP 不在按格式许可门控名单内"
+     "（CADthru 的 13 条 No valid license found to import 不含 STEP；DKCTCore "
+     "0 处 step）；ImportCADAsFacet 只接受面片格式（STL/MDL），CAD kernel "
+     "格式一律走 OpenCadFile。**复验前置**（若将来恢复 CATIA）：CADthru CATIA "
+     "读特性授权，或 GUI 导入路线对照以判别 license vs COM/headless 特异。"),    ("Actran Acoustic（域 3 菜单 / 域 8 链）",
      "**产品边界**：typed 接线链绿（`CreateActranFiles` e2e err=0）但"
      "业务 retval=False——Acoustic Session 前置在本机无样本可构造；"
      "菜单已接线，前置具备即可复验（P12-F §10.8 如实记录）。"),

@@ -98,11 +98,20 @@ def kill_pid(pid: int) -> bool:
 
 
 def _pid_alive(pid: int) -> bool:
-    out = subprocess.run(
-        ["powershell", "-NoProfile", "-Command",
-         "Get-Process -Id " + str(pid) + " -ErrorAction SilentlyContinue"
-         " | Select-Object -ExpandProperty Id"],
-        capture_output=True, text=True, timeout=15).stdout.strip()
+    """pid 是否存活。R3-1：优先无子进程的 OpenProcess 探针（毫秒级），
+    PowerShell 仅作回退，且回退超时**保守判为存活**（绝不误判已死）。"""
+    try:
+        return modal_watch.pid_alive(pid)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "Get-Process -Id " + str(pid) + " -ErrorAction SilentlyContinue"
+             " | Select-Object -ExpandProperty Id"],
+            capture_output=True, text=True, timeout=15).stdout.strip()
+    except (subprocess.TimeoutExpired, OSError):
+        return True
     return bool(out)
 
 
@@ -194,6 +203,17 @@ class FlowExecutor:
     def _hosts(self) -> list[int]:
         return self._host_fn()
 
+    def _hosts_safe(self):
+        """宿主 pid 探针；异常/超时 → None（未知），**绝不当作已消失**。
+
+        R3-1：忙时探针可能失败，把「未知」判成「宿主消失」会误杀正在做
+        重网格计算的健康宿主（``_p12u_gate/hang_characterization.jsonl``
+        的 step_mesh 行即此误判）。"""
+        try:
+            return self._host_fn()
+        except Exception:  # noqa: BLE001
+            return None
+
     def _characterize(self, attempt: int, outcome: str, reason: str,
                       idle_s: float, t_start: float) -> dict:
         row = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -204,7 +224,7 @@ class FlowExecutor:
                round(time.time() - t_start, 1),
                "vbs_bytes": self.vbs_path.stat().st_size}
         if outcome in ("hung", "completed_no_return"):
-            hosts = self._hosts()
+            hosts = self._hosts_safe() or []
             row["host_pids"] = hosts
             row["host_diag"] = [self._diag_fn(p) for p in hosts]
             row["windows"] = [{k: w[k] for k in ("cls", "title")}
@@ -291,7 +311,12 @@ class FlowExecutor:
             idle = time.time() - last_change
             if idle > self.gone_check_after and not checked_hosts:
                 checked_hosts = True
-                if not self._hosts():
+                alive = self._hosts_safe()
+                if alive is None:
+                    # 探针不可用/超时 → 未知：不判消失，稍后重探
+                    hosts_gone_since = None
+                    checked_hosts = False
+                elif not alive:
                     hosts_gone_since = hosts_gone_since or time.time()
                 else:
                     hosts_gone_since = None

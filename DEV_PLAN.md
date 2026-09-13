@@ -3041,5 +3041,61 @@ build_legs_from_i5 2 + make_transport 2 + CLI 3。全离线 mock。
 ClusterConfig 格式），未来集群可用时仅需实现 SSHTransport 三方法。
 不引入 paramiko/SSH 依赖。
 
+### 21.10 J6 执行记录（2026-09-06）：回归/验收强化——结构不变量 + 边缘路径
+
+**目标**：在不触宿主依赖的前提下，补齐自动化模块未覆盖的结构
+不变量与边缘执行路径，强化离线回归密度。
+
+**新增测试 25**（3 文件 + 1 conftest）：
+
+* **`tests/test_pipeline_plan_struct.py`（+10）**：
+  WRAP_PARAM_PAIRS / WRAP_OCT_PARAM_PAIRS 无重复键、BAM_WIZARD_ACTIONS
+  首尾序列（BeginMDLWizard → EndMDLWizard 唯一且靠尾、CreateBoundary
+  先于 CreateMDL）、OCTREE_ENUM_MAP 键集 ⊆ OCTREE_SETTING_MAP 键集、
+  EXECUTE_STEP_MAP 值集 ⊆ LOCKED_COMMANDS ∪ UNLOCKED_COMMANDS；工具
+  函数直接覆盖（`_vbs_value` / `_vbs_enum` / `_oct_sect_name` /
+  `_fmt_oct_num` / `_xenv_get`）。
+* **`tests/test_host_watchdog_edge.py`（+7）**：error 重试耗尽触发
+  boot、error 重试不消耗 attempts 计数、completed_no_return 路径
+  （worker 挂起但日志有 end → ok=True + rebooted）、_rewrite_last_row
+  JSONL 改写 + 空文件安全、`log_size` / `has_end_marker` 缺失路径。
+* **`tests/test_batch_bridge_modal_edge.py`（+8）**：`_run_helper`
+  stdout 解析 / stderr fallback / stdout 优先；BatchBridge.dry_run
+  mock；`visible_windows` 全类返回 + PID 过滤；ModalWatcher 多轮
+  累积 + 上下文管理器异常安全。
+* **`tests/conftest.py`**：最小 pytest 路径配置（runner 用 unittest
+  不受影响）。
+
+**全绿**：25 新测 + 1081 既存 = 1106 测试离线通过。新测文件 grep
+`user32` / `kernel32` / `ctypes.windll` 零命中（确认纯离线）。
+
+### 21.11 J7 执行记录（2026-09-06）：宿主在线验收——GUI 驱动路径带自愈批量
+
+**目标**：实机验证 J4 声明——"GUI 驱动路径带自愈通过 1 次批量（0 人工
+干预）"在宿主在线时成立。
+
+**验收场景 3**（覆盖简单→复杂，全部经 FlowExecutor + ModalWatcher）：
+
+* **p12d_region_e2e**（域 10 面区域）：OpenProject(box.pph) →
+  CreateFaceRegion → QueryFaceRegionByName → SaveProject。8 步 + 5 alive
+  检查 = 13 checks，全 err=0，has_end=true，outcome="ok"。验证基础 COM
+  通路 + ModalWatcher 不干扰正常流程。
+* **p12e_mesh_e2e**（域 9 网格）：OpenProject(p12a_bam_e2e_out.pph) →
+  MeshingGroup.CreateMesh → WaitForWorker → SaveProject。16 步 + 7 alive
+  检查 = 23 checks，全 err=0，has_end=true，outcome="ok"。验证
+  WaitForWorker 长时阻塞期间 ModalWatcher 持续轮询。
+* **p12m_wiz_e2e**（域 10 MDL Wizard）：OpenProject(p12i_cv1b_out.pph) →
+  ImportPatchAsCAD → BeginMDLWizard → 97 步向导序列 → EndMDLWizard →
+  CreateOctree → SaveProject。110 步 + 41 alive 检查 = 151 checks，全
+  err=0，has_end=true，outcome="ok"。GUI 密集，Exercise ModalWatcher
+  自动 dismiss "Initial Wizard" 模态（如出现）。
+
+**验收结果**：3/3 通过，187 total checks，0 bad，0 人工干预。
+FlowExecutor watch_modals=True 全程守护，无模态阻塞、无挂起、无手动
+重启宿主。J4 声明实机成立。
+
+**工具**：`tools/_p12q_j7_run.py`（复用 `_p12e_e2e_run.run_e2e` 基础设施，
+SELFHEAL=1 默认）。摘要入册 `_p12q_j7_summary.json`。
+
 ---
 *本文仅规划 Analysis Model Wizard 及其直接关联入口；Octree/Mesh/Condition Wizard 等仍以 SCFLOWPRE_FEATURE_PLAN 为准，冲突时以手册 + 本 DEV_PLAN 向导章节为准。*

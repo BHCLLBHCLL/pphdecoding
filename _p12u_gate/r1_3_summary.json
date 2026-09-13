@@ -1,0 +1,61 @@
+{
+  "cases": {
+    "xt": {
+      "cad": "D:\\training\\cgns\\pphdecoding\\tests\\box\\box.x_t",
+      "build": {
+        "ok": false,
+        "seconds": 35.0,
+        "err0": 39,
+        "total": 40,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "True",
+          "mg_": "True",
+          "vmdl_": "False",
+          "mdl_": "False",
+          "oct_": "False"
+        },
+        "info": {
+          "ret_bam": "True",
+          "ret_oct": "False",
+          "ret_mesh": "False",
+          "mesh_exists": "False"
+        }
+      },
+      "reopen": {
+        "skipped": "build failed"
+      },
+      "built_pph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\xt_built.pph"
+    },
+    "step": {
+      "cad": "D:\\training\\3dprint\\FunHome-main\\funHomeFan\\cad\\FunDeskFan\\key v2.step",
+      "build": {
+        "ok": false,
+        "seconds": 45.0,
+        "err0": 39,
+        "total": 40,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "True",
+          "mg_": "True",
+          "vmdl_": "False",
+          "mdl_": "False",
+          "oct_": "False"
+        },
+        "info": {
+          "ret_bam": "True",
+          "ret_oct": "False",
+          "ret_mesh": "False",
+          "mesh_exists": "False"
+        }
+      },
+      "reopen": {
+        "skipped": "build failed"
+      },
+      "built_pph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\step_built.pph"
+    }
+  },
+  "passed": 0
+}

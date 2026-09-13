@@ -46,6 +46,21 @@ from automation.vbs_bridge import build_vbs  # noqa: E402
 SELFHEAL = os.environ.get("PPH_SELFHEAL", "1") == "1"
 
 
+def utf8_stdout() -> None:
+    """把 stdout/stderr 切成 UTF-8 + replace（R3-1）——见 :mod:`console_utf8`。
+
+    实测：经 PowerShell 管道运行时 stdout 是 ANSI 代码页，
+    ``json.dumps(..., ensure_ascii=False)`` 的结果一旦含该代码页没有的
+    字符，``print`` 就抛 ``UnicodeEncodeError`` —— 把真实失败（宿主在
+    STEP 网格计算中崩溃）掩盖成编码错误，自愈重试也随之失去意义。
+    """
+    import console_utf8
+    console_utf8.enable()
+
+
+utf8_stdout()
+
+
 def _write_ansi_vbs(actions, path, title):
     # 实测（2026-08-30）：write_vbs_file 的 UTF-16LE 脚本在部分宿主
     # 会话状态下 OpenProject 挂起（同脚本转 ANSI/mbcs 秒过）；P12-E

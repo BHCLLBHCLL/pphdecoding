@@ -35,12 +35,28 @@
 三种二进制成员共享同一容器格式（与 gphdecoding 仓 GPH 一致）：
 
 - 文件头：`[I4=8]["CRDL-FLD"][I4=8][I4][I4][I4]`（三个 I4 观测为 4,4,4），
-  之后是命名节序列。
+  之后是命名节序列。**注意是 4 个 I4（含 `[I4=8]`），少写一个会使全文件错位**
+  （2026-09-13 实测：三个写端此前都只写 3 个）。
 - **全部大端序**。
-- 命名节：`[I4=32][名称 32B ASCII，空格填充]` + 记录流。
+- 命名节（**40 字节节头**）：`[I4=32][名称 32B ASCII，空格填充][I4=32]` + 记录流。
+  name 之后的尾随 `[I4=32]` 不可省（省掉会让首描述符被读端跳过 4 字节）。
+- **节尾哨兵**：非空节在记录流之后有 20 字节 `[I4=12][0][0][0][I4=12]`；
+  空节（`HeaderDataEnd`/`OverlapStart_0`/`OverlapEnd`）无哨兵。
+  区域类节（`LS_Mdl*`）自带该哨兵，**不可重复追加**。
 - 记录流元素：
-  - 描述符：`[I4=12][type][dim0][dim1]`；type 4=I4、8=R8/C1。
+  - 描述符：`[I4=12][type][dim0][dim1]`；type 4=I4、8=R8/C1；**部分数组描述符
+    type=1**（如 `LS_EdgeStateOfFaces`、`LS_OctOctantRefinement` 的
+    `[I4=1][n][1]`，写成 4 会得到同尺寸不同字节的文件）。
   - 数据块：`[I4=12][byte_count][payload][I4=byte_count]`（尾部哨兵=块长）。
+- **数组描述符逐块交错（关键写端规律）**：多数组节的“数组描述符”是
+  **每个数据块前各写一个**，而不是把 n 个描述符连写在所有块之前。适用于
+  MDL 的 `LS_Nodes`（X/Y/Z 各一个 `desc(8,n,1)`）、`LS_Faces`
+  （face_type 块之后才是 conn 的描述符）、`LS_CsidOfFaces`/`LS_FridOfFaces`
+  （两块各一个 `desc(4,n,1)`）、GPH 的 `LS_Links`（owner/neigh/npe 各一个）
+  与 `LS_Nodes`。连写不改变文件大小，只改变字节布局——因此**尺寸相等不等于
+  布局正确**，必须逐字节对拍（本仓 `tests/test_writer_host_fidelity.py`）。
+- 区域类节的**每条记录前**有 `desc(1,255,1)`（SurfaceRegions/VolumeRegions/
+  Parts 三节皆是），之后才是 255 字节名称块。
 - 通用元数据节：`FileRevision`（如 2025）、`Application`（"SCTpre"）、
   `ApplicationVersion`、`ReleaseDate`、`GridType`、`Dimension`、`Bias`、
   `Date`、`Encoding`、`UnitOfCoordinates`（f64 缩放 1.0 + 单位串 'm'）、

@@ -1,0 +1,135 @@
+{
+ "generated": "2026-09-06 00:25:06",
+ "sprint": "J3-4 closeout",
+ "case": "exA36-2 (5918 cells + BATTERY p2d, ENERGY-only, scripted current table)",
+ "legs": {
+  "probe": {
+   "dir": "_p12o_j3\\probe_exa36_2",
+   "scan": {
+    "interrupt": true,
+    "terminate": false,
+    "monalive_loss": false,
+    "bad_term": 0,
+    "finish": true,
+    "time_solver_s": 974.337
+   },
+   "fph": [
+    "exa36_2_probe_0.fph",
+    "exa36_2_probe_247.fph"
+   ],
+   "probe_verdict": {
+    "tag": "probe",
+    "pph": "D:\\training\\cgns\\pphdecoding\\_p12o_j3\\probe\\exa36_2_probe.pph",
+    "work": "D:\\training\\cgns\\pphdecoding\\_p12o_j3\\probe",
+    "case": "exa36_2_probe",
+    "vbs_ok": true,
+    "wait_ok": true,
+    "saw_solver": true,
+    "wait_timeout": false,
+    "wait_elapsed": 973.1,
+    "verify_ok": true,
+    "key_fields": [],
+    "fph": "D:\\training\\cgns\\pphdecoding\\_p12o_j3\\probe\\exa36_2_probe_247.fph",
+    "log_scan": {
+     "exists": true,
+     "size": 349417,
+     "bad_term_blocks": 0,
+     "time_solver_s": 974.337,
+     "ranks_bad": [],
+     "cycle_max": 247,
+     "error_log": true,
+     "mpiexec_error": false
+    },
+    "ok": true,
+    "wall_s": 1000.3,
+    "verdict": "SOLVABLE"
+   }
+  },
+  "c1": {
+   "dir": "_p12o_j3\\c1",
+   "scan": {
+    "interrupt": true,
+    "terminate": false,
+    "monalive_loss": false,
+    "bad_term": 0,
+    "finish": true,
+    "time_solver_s": 1564.345
+   },
+   "fph": [
+    "exa36_2_c1_0.fph",
+    "exa36_2_c1_166.fph"
+   ]
+  },
+  "c2": {
+   "dir": "_p12o_j3\\c2",
+   "scan": {
+    "interrupt": false,
+    "terminate": true,
+    "monalive_loss": false,
+    "bad_term": 7,
+    "finish": false,
+    "time_solver_s": 1009.182
+   },
+   "fph": [
+    "exa36_2_c2_0.fph"
+   ]
+  },
+  "a1r": {
+   "dir": "_p12o_j3\\a1r",
+   "scan": {
+    "interrupt": false,
+    "terminate": true,
+    "monalive_loss": false,
+    "bad_term": 7,
+    "finish": false,
+    "time_solver_s": 952.124
+   },
+   "fph": [
+    "exA36_3_a1r_0.fph"
+   ],
+   "a1r_verdict": {
+    "tag": "a1r",
+    "pph": "D:\\training\\cgns\\pphdecoding\\_p12o_j3\\a1r\\exA36_3_a1r.pph",
+    "work": "D:\\training\\cgns\\pphdecoding\\_p12o_j3\\a1r",
+    "case": "exA36_3_a1r",
+    "vbs_ok": true,
+    "wait_ok": true,
+    "saw_solver": true,
+    "wait_timeout": false,
+    "wait_elapsed": 955.1,
+    "verify_ok": true,
+    "key_fields": [],
+    "fph": "D:\\training\\cgns\\pphdecoding\\_p12o_j3\\a1r\\exA36_3_a1r_0.fph",
+    "log_scan": {
+     "exists": true,
+     "size": 60484,
+     "bad_term_blocks": 7,
+     "time_solver_s": 952.124,
+     "ranks_bad": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+     ],
+     "cycle_max": 2,
+     "error_log": true,
+     "mpiexec_error": true
+    },
+    "ok": true,
+    "verdict": "CRASH_RECURRED_SAME_SIGNATURE_952s_ISOLATED",
+    "note": "隔离复现（无并发）：同征 BAD TERMINATION RANK1-7 + mpiexec exit -1，死亡点漂移 692s(CYCLE1)->952.1s(CYCLE2)；日志前置 monitor_termination::killProcess（a1=monalive 心跳丢失；a1r=terminate 检出）→ 求解器自监视机制触发，非 MPI 随机崩溃；资源轨迹平稳（mem 754-767MB 无泄漏无饥饿）"
+   }
+  }
+ },
+ "verdict": "PARTIAL_BY_DESIGN",
+ "ok": false,
+ "reason": "三腿全被外部作业控制中断代理在任意 sim-time 截停（probe/c1 instruction 优雅停 @247/166 cycle、c2 terminate 杀 @70 cycle）→ 等时终态双跑本夜不可达；J3-4 的「第 2 案例双跑 delta 表」以 ① t=0 初始保存三腿跨冷启动逐位一致 gate PASS（11/11 场）+ ② c1@166 vs c2@0 不等时比较 FAIL 归因（纯演化量，6/11 脚本/BC 常量场位一致旁证）+ ③ 中断代理全表征入册（interrupt_forensics.md）收口。",
+ "equal_time_t0_gate": "PASS (11/11 fields bit-identical across 3 cold-boot legs)",
+ "asrun_pair_gate": "FAIL (c1@166s-final vs c2@0s-initial, unequal sim-time; deltas == evolution deltas)",
+ "sph_diff": "c1 vs c2 sph: only %Date line + FPH/RPH/ETCO case-stem lines differ (277 lines, 3 diffs)",
+ "interruption_agent": "external (not in repo — full-tree grep clean; no other project sessions; pph/sph/csln carry no stop policy)",
+ "a1_series_implication": "a1r (terminate) + c2 (terminate, non-ELEC case) = same BAD TERMINATION RANK1-7 signature family via solver-side monitor_termination::killProcess → J3-2 verdict (same-signature isolated recurrence) stands; ELEC/FVF phase-specific attribution RETRACTED in favor of external job-control interruption agent"
+}

@@ -1,0 +1,82 @@
+{
+  "base": "D:\\training\\cgns\\pphdecoding\\_p12a_e2e\\box.pph",
+  "cases": {
+    "pph": {
+      "ok": true,
+      "seconds": 35,
+      "checks": {
+        "has_end": true,
+        "err0": 27,
+        "total": 27,
+        "sn_alive": "True",
+        "mg_alive": "True",
+        "mdl_alive": "True",
+        "oct_alive": "True",
+        "mesh_exists": "True",
+        "bbox": "bbox_ub=5 b0=0 bL=0.01 err=0"
+      }
+    },
+    "mdl": {
+      "ok": true,
+      "seconds": 30,
+      "checks": {
+        "has_end": true,
+        "err0": 27,
+        "total": 27,
+        "sn_alive": "True",
+        "mg_alive": "True",
+        "mdl_alive": "True",
+        "oct_alive": "True",
+        "mesh_exists": "True",
+        "bbox": "bbox_ub=5 b0=0 bL=0.01 err=0"
+      }
+    },
+    "oct": {
+      "ok": true,
+      "seconds": 25,
+      "checks": {
+        "has_end": true,
+        "err0": 27,
+        "total": 27,
+        "sn_alive": "True",
+        "mg_alive": "True",
+        "mdl_alive": "True",
+        "oct_alive": "True",
+        "mesh_exists": "True",
+        "bbox": "bbox_ub=5 b0=0 bL=0.01 err=0"
+      }
+    },
+    "gph": {
+      "ok": true,
+      "seconds": 30,
+      "checks": {
+        "has_end": true,
+        "err0": 27,
+        "total": 27,
+        "sn_alive": "True",
+        "mg_alive": "True",
+        "mdl_alive": "True",
+        "oct_alive": "True",
+        "mesh_exists": "True",
+        "bbox": "bbox_ub=5 b0=0 bL=0.01 err=0"
+      }
+    },
+    "all": {
+      "ok": true,
+      "seconds": 25,
+      "checks": {
+        "has_end": true,
+        "err0": 27,
+        "total": 27,
+        "sn_alive": "True",
+        "mg_alive": "True",
+        "mdl_alive": "True",
+        "oct_alive": "True",
+        "mesh_exists": "True",
+        "bbox": "bbox_ub=5 b0=0 bL=0.01 err=0"
+      }
+    }
+  },
+  "passed": 5,
+  "total": 5
+}

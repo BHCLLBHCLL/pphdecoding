@@ -365,22 +365,31 @@ def compute_quality(vertices: np.ndarray, faces, owner: np.ndarray,
         bno = np.degrees(np.arccos(np.clip(cos_t, 0.0, 1.0)))
     rep.boundary_non_ortho = bno
 
-    # ── 单元长宽比：包围盒最长边 / 最短边（对薄切片单元数值稳定）──
-    if conn.size and len(owner):
-        npe = np.diff(offsets)
-        face_of_conn = np.repeat(np.arange(len(owner), dtype=np.int64), npe)
-        cell_of_conn = owner[face_of_conn]
-        coords = vertices[conn]
-        cmin = np.full((n_cells, 3), np.inf)
-        cmax = np.full((n_cells, 3), -np.inf)
-        np.minimum.at(cmin, cell_of_conn, coords)
-        np.maximum.at(cmax, cell_of_conn, coords)
-        extent = cmax - cmin
-        emax = extent.max(axis=1)
-        emin = extent.min(axis=1)
-        with np.errstate(invalid="ignore", divide="ignore"):
-            aspect = np.where(emin > 0, emax / emin, np.nan)
-        rep.cell_aspect = aspect
+    # ── 单元长宽比：中心到各关联面重心距离的 max/min（模块文档口径）──
+    # 关联面 = 「本单元为 owner 的面」∪「本单元为 neigh 的面」。此前只用
+    # owner 面且取**顶点包围盒**长短边之比：对只拥有 0–2 个面的单元直接退化
+    # （宿主黄金 GPH 实测 n=943/944、max 62,777；polymesh 上 1e14–1e15，
+    # 而其实体体积是均值的 0.29–0.52 倍，并非畸变单元）—— P2-4 修正。
+    if len(owner) and n_cells:
+        own = np.asarray(owner, dtype=np.int64).reshape(-1)
+        nei = np.asarray(neigh, dtype=np.int64).reshape(-1)
+        own_ok = own >= 0
+        # neigh 边界哨兵在不同来源里是 -1 / 0xFFFFFFFF，统一按"是否落在
+        # [0, n_cells)"判定（单元下标必然小于 n_cells）。
+        nei_ok = (nei >= 0) & (nei < n_cells)
+        cells = np.concatenate([own[own_ok], nei[nei_ok]])
+        fidx = np.concatenate([np.nonzero(own_ok)[0],
+                               np.nonzero(nei_ok)[0]])
+        if cells.size:
+            d = np.linalg.norm(face_c[fidx] - centroids[cells], axis=1)
+            dmin = np.full(n_cells, np.inf)
+            dmax = np.full(n_cells, -np.inf)
+            np.minimum.at(dmin, cells, d)
+            np.maximum.at(dmax, cells, d)
+            with np.errstate(invalid="ignore", divide="ignore"):
+                aspect = np.where((dmin > 0.0) & np.isfinite(dmin),
+                                  dmax / dmin, np.nan)
+            rep.cell_aspect = aspect
     return rep
 
 

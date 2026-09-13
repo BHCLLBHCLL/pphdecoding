@@ -29,13 +29,108 @@ EnumChildProc = ctypes.WINFUNCTYPE(
     wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
 
-def host_pids(image_name: str = "STpre_Bx64net") -> list[int]:
+#: R3-1：进程枚举改走 Toolhelp32 快照（纯 ctypes，毫秒级、无子进程）。
+#: 原实现用 ``powershell Get-Process`` 且 20 s 上限：重网格计算期间整机
+#: 繁忙，PowerShell 冷启动可超 20 s → ``TimeoutExpired`` 直接崩掉 flow
+#: （``_p12u_gate/r13_step_mesh.log`` 实测）；更糟的是探针无输出会被判成
+#: 宿主消失而误杀健康宿主（``hang_characterization.jsonl`` step_mesh 行）。
+TH32CS_SNAPPROCESS = 0x00000002
+MAX_PATH = 260
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+SYNCHRONIZE = 0x00100000
+STILL_ACTIVE = 259
+
+
+class _PROCESSENTRY32W(ctypes.Structure):
+    _fields_ = [("dwSize", wintypes.DWORD),
+                ("cntUsage", wintypes.DWORD),
+                ("th32ProcessID", wintypes.DWORD),
+                ("th32DefaultHeapID", ctypes.c_void_p),
+                ("th32ModuleID", wintypes.DWORD),
+                ("cntThreads", wintypes.DWORD),
+                ("th32ParentProcessID", wintypes.DWORD),
+                ("pcPriClassBase", ctypes.c_long),
+                ("dwFlags", wintypes.DWORD),
+                ("szExeFile", wintypes.WCHAR * MAX_PATH)]
+
+
+def _kernel32():
+    k = ctypes.WinDLL("kernel32", use_last_error=True)
+    k.CreateToolhelp32Snapshot.restype = ctypes.c_void_p
+    k.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    k.Process32FirstW.restype = wintypes.BOOL
+    k.Process32FirstW.argtypes = [ctypes.c_void_p,
+                                  ctypes.POINTER(_PROCESSENTRY32W)]
+    k.Process32NextW.restype = wintypes.BOOL
+    k.Process32NextW.argtypes = [ctypes.c_void_p,
+                                 ctypes.POINTER(_PROCESSENTRY32W)]
+    k.CloseHandle.restype = wintypes.BOOL
+    k.CloseHandle.argtypes = [ctypes.c_void_p]
+    k.OpenProcess.restype = ctypes.c_void_p
+    k.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    k.GetExitCodeProcess.restype = wintypes.BOOL
+    k.GetExitCodeProcess.argtypes = [ctypes.c_void_p,
+                                     ctypes.POINTER(wintypes.DWORD)]
+    return k
+
+
+def host_pids_toolhelp(image_name: str = "STpre_Bx64net") -> list[int]:
+    """按映像名枚举 pid（Toolhelp32 快照；不区分扩展名，同 Get-Process 语义）。"""
+    k = _kernel32()
+    snap = k.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    if not snap or snap == ctypes.c_void_p(-1).value:
+        raise OSError("CreateToolhelp32Snapshot failed")
+    want = image_name.lower()
+    if want.endswith(".exe"):
+        want = want[:-4]
+    pids: list[int] = []
+    try:
+        entry = _PROCESSENTRY32W()
+        entry.dwSize = ctypes.sizeof(_PROCESSENTRY32W)
+        ok = k.Process32FirstW(snap, ctypes.byref(entry))
+        while ok:
+            exe = entry.szExeFile or ""
+            stem = exe[:-4] if exe.lower().endswith(".exe") else exe
+            if stem.lower() == want:
+                pids.append(int(entry.th32ProcessID))
+            ok = k.Process32NextW(snap, ctypes.byref(entry))
+    finally:
+        k.CloseHandle(snap)
+    return pids
+
+
+def pid_alive(pid: int) -> bool:
+    """pid 是否存活（OpenProcess + GetExitCodeProcess；无子进程）。"""
+    k = _kernel32()
+    h = k.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE,
+                      False, int(pid))
+    if not h:
+        return False
+    try:
+        code = wintypes.DWORD()
+        if not k.GetExitCodeProcess(h, ctypes.byref(code)):
+            return True          # 有句柄但读不到退出码 → 保守当作存活
+        return int(code.value) == STILL_ACTIVE
+    finally:
+        k.CloseHandle(h)
+
+
+def _host_pids_powershell(image_name: str = "STpre_Bx64net") -> list[int]:
+    """回退探针（仅快照不可用时）。超时向上抛，由调用方判为未知。"""
     out = subprocess.run(
         ["powershell", "-NoProfile", "-Command",
          "Get-Process " + image_name + " -ErrorAction SilentlyContinue "
          "| Select-Object -ExpandProperty Id"],
-        capture_output=True, text=True, timeout=20).stdout.split()
-    return [int(p) for p in out]
+        capture_output=True, text=True, timeout=60).stdout.split()
+    return [int(p) for p in out if p.isdigit()]
+
+
+def host_pids(image_name: str = "STpre_Bx64net") -> list[int]:
+    """宿主 pid 列表：优先 Toolhelp32 快照；非 Windows / 快照失败才回退 PowerShell。"""
+    try:
+        return host_pids_toolhelp(image_name)
+    except Exception:  # noqa: BLE001
+        return _host_pids_powershell(image_name)
 
 
 def _window_text(hwnd: int) -> str:

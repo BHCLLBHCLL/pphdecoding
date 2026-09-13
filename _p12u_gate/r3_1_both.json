@@ -1,0 +1,132 @@
+{
+  "cases": {
+    "xt": {
+      "cad": "D:\\training\\cgns\\pphdecoding\\tests\\box\\box.x_t",
+      "build": {
+        "ok": true,
+        "seconds": 30.0,
+        "err0": 42,
+        "total": 42,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "True",
+          "mg_": "True",
+          "mg2_": "True",
+          "vmdl_": "True",
+          "mdl_": "False",
+          "octparam_": "True",
+          "oct_": "True"
+        },
+        "info": {
+          "ret_bam": "True",
+          "ret_oct": "True"
+        }
+      },
+      "mesh": {
+        "ok": true,
+        "seconds": 170.5,
+        "err0": 176,
+        "total": 176,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "True",
+          "mg_": "True",
+          "mgs_": "True",
+          "proj_": "True",
+          "snode_": "True",
+          "fluidregion_": "True",
+          "fluid": "True",
+          "mg2_": "True",
+          "wiz_": "True",
+          "mg3_": "True",
+          "octparam_": "True",
+          "mg4_": "True",
+          "octparam4_": "True",
+          "mg5_": "True"
+        },
+        "info": {
+          "ret_oct": "True",
+          "ret_mesh": "True",
+          "wait_ret": "1",
+          "mesh_exists": "True",
+          "mesh_err": "False"
+        },
+        "mesh_exists_in_session": "True"
+      },
+      "reopen": {
+        "ok": true,
+        "seconds": 20.0,
+        "err0": 25,
+        "total": 25,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "True",
+          "mg_": "True",
+          "mdl_": "False",
+          "vmdl_": "True",
+          "oct_": "True"
+        },
+        "info": {
+          "mesh_exists": "True"
+        },
+        "mesh_exists_after_reopen": "True"
+      },
+      "built_pph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\xt_built.pph",
+      "meshed_pph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\xt_meshed.pph"
+    },
+    "step": {
+      "cad": "D:\\training\\3dprint\\FunHome-main\\funHomeFan\\cad\\FunDeskFan\\key v2.step",
+      "build": {
+        "ok": true,
+        "seconds": 40.0,
+        "err0": 42,
+        "total": 42,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "True",
+          "mg_": "True",
+          "mg2_": "True",
+          "vmdl_": "True",
+          "mdl_": "False",
+          "octparam_": "True",
+          "oct_": "True"
+        },
+        "info": {
+          "ret_bam": "True",
+          "ret_oct": "True"
+        }
+      },
+      "mesh": {
+        "ok": false,
+        "error": "UnicodeEncodeError: 'charmap' codec can't encode characters in position 65-73: character maps to <undefined>",
+        "mesh_exists_in_session": null
+      },
+      "reopen": {
+        "ok": true,
+        "seconds": 20.0,
+        "err0": 25,
+        "total": 25,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "False",
+          "mg_": "True",
+          "mdl_": "False",
+          "vmdl_": "True",
+          "oct_": "True"
+        },
+        "info": {
+          "mesh_exists": "False"
+        },
+        "mesh_exists_after_reopen": "False"
+      },
+      "built_pph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\step_built.pph",
+      "meshed_pph": null
+    }
+  },
+  "passed": 1
+}

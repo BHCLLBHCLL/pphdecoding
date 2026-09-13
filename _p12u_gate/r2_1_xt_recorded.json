@@ -1,0 +1,79 @@
+{
+  "cases": {
+    "xt": {
+      "cad": "D:\\training\\cgns\\pphdecoding\\tests\\box\\box.x_t",
+      "build": {
+        "ok": true,
+        "seconds": 35.0,
+        "err0": 42,
+        "total": 42,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "True",
+          "mg_": "True",
+          "mg2_": "True",
+          "vmdl_": "True",
+          "mdl_": "False",
+          "octparam_": "True",
+          "oct_": "True"
+        },
+        "info": {
+          "ret_bam": "True",
+          "ret_oct": "True"
+        }
+      },
+      "mesh": {
+        "ok": true,
+        "seconds": 110.5,
+        "err0": 149,
+        "total": 149,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "True",
+          "mg_": "True",
+          "mgs_": "True",
+          "proj_": "True",
+          "mg2_": "True",
+          "wiz_": "True",
+          "mg3_": "True",
+          "octparam_": "True",
+          "mg4_": "True",
+          "octparam4_": "True",
+          "mg5_": "True"
+        },
+        "info": {
+          "ret_oct": "True",
+          "ret_mesh": "True",
+          "wait_ret": "1",
+          "mesh_exists": "False",
+          "mesh_err": "True"
+        },
+        "mesh_exists_in_session": "False"
+      },
+      "reopen": {
+        "ok": true,
+        "seconds": 25.0,
+        "err0": 25,
+        "total": 25,
+        "alive": {
+          "app_": "True",
+          "doc_": "True",
+          "sn_": "True",
+          "mg_": "True",
+          "mdl_": "False",
+          "vmdl_": "True",
+          "oct_": "True"
+        },
+        "info": {
+          "mesh_exists": "False"
+        },
+        "mesh_exists_after_reopen": "False"
+      },
+      "built_pph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\xt_built.pph",
+      "meshed_pph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\xt_meshed.pph"
+    }
+  },
+  "passed": 0
+}

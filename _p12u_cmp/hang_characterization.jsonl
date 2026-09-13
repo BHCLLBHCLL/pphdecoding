@@ -1,0 +1,2 @@
+{"ts": "2026-09-13T11:29:18", "flow": "r1_host", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r1_host.log", "log_bytes": 152, "idle_s": 0.0, "elapsed_s": 20.0, "vbs_bytes": 1498}
+{"ts": "2026-09-13T11:30:45", "flow": "r1_host", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r1_host.log", "log_bytes": 152, "idle_s": 0.0, "elapsed_s": 20.0, "vbs_bytes": 1498}

@@ -269,13 +269,40 @@ def _block(payload: bytes) -> bytes:
     return _i32(12) + _i32(len(payload)) + payload + _i32(len(payload))
 
 
+#: 非空节尾部的 20 字节「节结束哨兵」（gphstats 同款，宿主实测一致）
+_SECTION_SENTINEL = _i32(12) + _i32(0) + _i32(0) + _i32(0) + _i32(12)
+
+
 def _section(name: str, body: bytes) -> bytes:
-    return _i32(32) + name.ljust(32).encode("ascii") + body
+    """命名节头（40 字节）：[I4=32][name 32B][I4=32] + 记录流。
+
+    宿主实测（tests/box/meshinggroup1_part.mdl）：name 之后有尾随 [I4=32]，
+    其后才是描述符/数据块；空节（HeaderDataEnd 等）无 20 字节哨兵。
+    此前缺尾随 32，写端整节后移 4 字节（P2-3 修正）。
+    """
+    out = _i32(32) + name.ljust(32).encode("ascii") + _i32(32) + body
+    # 区域类节自带 20 字节节尾（_SECTION_TRAILER），不可再加一次哨兵（P2-3：
+    # 重复哨兵使 LS_Mdl{ClosedVolumes,VolumeRegions,SurfaceRegions} 各 +20B）
+    if (body and not body.endswith(_SECTION_SENTINEL)
+            and not body.endswith(_SECTION_TRAILER)):
+        out += _SECTION_SENTINEL
+    return out
 
 
 def _name255(text: str) -> bytes:
     raw = text.encode("ascii", errors="replace")[:255]
     return raw.ljust(255, b" ")
+
+
+def _f64_bytes(value: float) -> bytes:
+    """大端 f64 载荷（MDL/OCT 的 UnitOfCoordinates 比例字段）。"""
+    return struct.pack(">d", float(value))
+
+
+#: 单位短名 → 长名（宿主 MDL UnitOfCoordinates 第二段；缺省回落短名）
+_UNIT_LONG = {"m": "Metre", "mm": "Millimetre", "cm": "Centimetre",
+              "km": "Kilometre", "um": "Micrometre", "nm": "Nanometre",
+              "in": "Inch", "ft": "Foot", "mil": "Mil"}
 
 
 def _name_record(text: str) -> bytes:
@@ -284,7 +311,8 @@ def _name_record(text: str) -> bytes:
 
 
 # 区域/闭体三节共用的 20 字节节尾（box/laptop 实测一致）：I4=12 + 16×0
-_SECTION_TRAILER = _i32(12) + b"\x00" * 16
+#: 标准 20 字节哨兵 [I4=12][0][0][0][I4=12]（宿主实测；此前末 4 字节误为 0）
+_SECTION_TRAILER = _i32(12) + _i32(0) + _i32(0) + _i32(0) + _i32(12)
 
 
 def _regions_section(names_idx: list) -> bytes:
@@ -407,11 +435,17 @@ def write_mdl(filepath,
                    else [("@PartSurface_Part", 0)])
     unit8 = unit.encode("ascii")[:8].ljust(8)
     unit32 = unit.encode("ascii")[:32].ljust(32)
+    # 长单位名（宿主 MDL 实测：UnitOfCoordinates = 比例 + 长名 + 短名 三段）
+    unit_long = _UNIT_LONG.get(unit.strip().lower(), unit.strip())
+    unit_long32 = unit_long.encode("ascii")[:32].ljust(32)
     out = bytearray()
-    out += _i32(8) + MAGIC + _i32(8) + _i32(4) + _i32(4)
+    out += _i32(8) + MAGIC + _i32(8) + _i32(4) + _i32(4) + _i32(4)  # 容器头第 4 个 I4（PPH_FORMAT_SPEC §2：实测 4,4,4）
     out += _section("FileRevision",
                     _descriptor(4, 1, 1) + _descriptor(4, 2025, 4))
-    out += _section("Application", _block(app.encode("ascii")[:8].ljust(8)))
+    # 宿主 MDL 实测：Application 描述符为 (1,8,1)
+    out += _section("Application",
+                    _descriptor(1, 8, 1) +
+                    _block(app.encode("ascii")[:8].ljust(8)))
     out += _section("GridType", _descriptor(4, 1, 1) + _descriptor(4, 1, 4))
     out += _section("Dimension",
                     _descriptor(4, 1, 1) + _descriptor(4, 3, 4))
@@ -421,10 +455,13 @@ def write_mdl(filepath,
                     _descriptor(4, 1, 1) + _descriptor(4, 2025, 4))
     out += _section("ReleaseDate",
                     _descriptor(4, 1, 1) + _descriptor(4, 20251217, 4))
-    out += _section("Encoding", _block(b" " * 32))
+    out += _section("Encoding",
+                    _descriptor(1, 32, 1) + _block(b"UTF-8".ljust(32)))
     out += _section(
         "UnitOfCoordinates",
-        _descriptor(8, 1, 1) + _block(unit8) + _block(unit32) + _block(unit32))
+        _descriptor(8, 1, 1) + _block(_f64_bytes(1.0)) +
+        _descriptor(1, 32, 1) + _block(unit_long32) +
+        _descriptor(1, 32, 1) + _block(unit32))
     out += _section("HeaderDataEnd", b"")
     out += _section("OverlapStart_0", b"")
     out += _section("LS_CoordinateSystem",
@@ -434,10 +471,13 @@ def write_mdl(filepath,
     nodes = (
         _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
         _descriptor(4, 1, 1) + _descriptor(4, n_vertices, 4) +
+        # 宿主 MDL 实测：数组描述符**逐块交错**（X 前一个、Y 前一个、Z 前一个），
+        # 三个连写会让块顺序整体错位（同尺寸、不同字节）
         _descriptor(8, n_vertices, 1) +
-        _descriptor(8, n_vertices, 1) + _descriptor(8, n_vertices, 1) +
         _block(verts[:, 0].astype(">f8").tobytes()) +
+        _descriptor(8, n_vertices, 1) +
         _block(verts[:, 1].astype(">f8").tobytes()) +
+        _descriptor(8, n_vertices, 1) +
         _block(verts[:, 2].astype(">f8").tobytes()))
     out += _section("LS_Nodes", nodes)
 
@@ -445,24 +485,30 @@ def write_mdl(filepath,
         _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
         _descriptor(4, 1, 1) + _descriptor(4, n_faces, 4) +
         _descriptor(4, n_faces, 1) +
+        # 宿主实测：conn 的描述符在 **face_type 块之后**（分组写会整体错位）
+        _block(face_type.tobytes()) +
         _descriptor(4, 1, 1) + _descriptor(4, conn_total, 4) +
         _descriptor(4, conn_total, 1) +
-        _block(face_type.tobytes()) +
         _block(conn_flat.astype(">i4").tobytes()))
     out += _section("LS_Faces", faces_sec)
 
+    # 宿主实测：Csid/Frid 两节的描述符为 5 个（单 desc(4,n,1)），非 6 个
     pair_sec = (
         _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
         _descriptor(4, 1, 1) + _descriptor(4, n_faces, 4) +
-        _descriptor(4, n_faces, 1) + _descriptor(4, n_faces, 1))
+        _descriptor(4, n_faces, 1))
+    # 宿主实测：两个数组块**各自**前置一个 desc(4,n,1)（块间交错，非连写）
     out += _section("LS_CsidOfFaces",
-                    pair_sec + _block(b1.tobytes()) + _block(b2.tobytes()))
+                    pair_sec + _block(b1.tobytes()) +
+                    _descriptor(4, n_faces, 1) + _block(b2.tobytes()))
     out += _section("LS_FridOfFaces",
-                    pair_sec + _block(fr.tobytes()) + _block(fr.tobytes()))
+                    pair_sec + _block(fr.tobytes()) +
+                    _descriptor(4, n_faces, 1) + _block(fr.tobytes()))
     out += _section(
         "LS_EdgeStateOfFaces",
         _descriptor(4, 1, 1) + _descriptor(4, 1, 4) +
         _descriptor(4, 1, 1) + _descriptor(4, conn_total, 4) +
+        _descriptor(1, conn_total, 1) +          # 宿主实测：type=1（非 4）
         _block(es.tobytes()))
     out += _section(
         "LS_StateOfNodes",
