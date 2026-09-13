@@ -1,0 +1,25 @@
+{
+  "xt": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r8_3_keyv2.x_t",
+  "sch": "SCH_3701153_37102",
+  "error": null,
+  "err0": 28,
+  "total": 28,
+  "alive": {
+    "app_": "True",
+    "doc_": "True",
+    "sn_": "True",
+    "snode": "True",
+    "mg_": "True",
+    "mg": "True",
+    "vmdl_": "True",
+    "vmdl": "True"
+  },
+  "seconds": 55.1,
+  "snode_alive": "True",
+  "mg_alive": "True",
+  "ret_bam": "True",
+  "vmdl_alive": "True",
+  "bbox": null,
+  "pph": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r13_1_built.pph",
+  "passed": true
+}

@@ -382,7 +382,9 @@ def main(argv=None) -> int:
     print(f"[r1-3] fresh host pid={pid}", flush=True)
     results: dict = {}
     for case in cases:
-        cad = XT if case == "xt" else args.step
+        # 必须绝对路径：宿主 CWD 与本进程不同，相对路径会让 OpenCadFile
+        # 静默返回 Nothing（表现为 sn_=False / ret_bam=False，看着像「格式不被接受」）。
+        cad = XT if case == "xt" else Path(args.step).resolve()
         if not cad.is_file():
             results[case] = {"ok": False, "error": f"cad missing: {cad}"}
             continue

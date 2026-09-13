@@ -22,7 +22,7 @@ Err.Clear
 RetWW0_ = Doc_.WaitForWorker
 out_.WriteLine "s004=" & CStr(Err.Number)
 Err.Clear
-Set SN_ = Doc_.OpenCadFile("_p12u_gate/r8_3_keyv2.x_t")
+Set SN_ = Doc_.OpenCadFile("D:/training/cgns/pphdecoding/_p12u_gate/r14_1_v34.x_t")
 out_.WriteLine "s005=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "sn__alive=" & CStr(Not (SN_ Is Nothing)) & " err=" & CStr(Err.Number)

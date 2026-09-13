@@ -70,10 +70,43 @@ def available() -> bool:
         return False
 
 
+def downgrade_xt(path: str | Path, version: int = 340) -> dict:
+    """R14-1：把 x_t 离线降版到指定 Parasolid 版本（默认 340 = v34）。
+
+    CADthru 的 `SaveXTFile` 固定写 v37（R10-2 已证 COM 无法控版），而宿主 2025.2 的
+    接收端只吃 **v34**（R9-2 判据）→ 导入后静默零几何。这里用本仓自己的
+    `PK_PART_transmit` 重编码：`o_t_version=4` + `format=18220`(text) +
+    `transmit_version=主版本×10+次版本`（R13-1 实测 340 → `SCH_3400000_340010`）。
+    """
+    out: dict = {"ok": False, "version": int(version), "path": str(path)}
+    p = Path(path)
+    if not p.is_file():
+        out["message"] = "xt missing"
+        return out
+    raw = p.read_bytes()
+    try:
+        import ps_facet2_nodes as ps
+        data = ps.transmit_xt(raw, nw_version=int(version), o_t_version=4,
+                              transmit_format=18220)
+    except Exception as exc:  # noqa: BLE001
+        out["message"] = type(exc).__name__ + ": " + str(exc)
+        return out
+    if not data:
+        out["message"] = "transmit produced no bytes (非法版本取值?)"
+        return out
+    p.write_bytes(data)
+    import re as _re
+    m = _re.search(r"(SCH_\d+_\d+)", data[:600].decode("latin-1"))
+    out.update({"ok": True, "size": len(data),
+                "sch": m.group(1) if m else None})
+    return out
+
+
 def convert(src: str | Path, dst: str | Path, *,
             library: str = "datakit",
             progid: Optional[str] = None,
-            timeout: float = 300.0) -> dict:
+            timeout: float = 300.0,
+            downgrade: Optional[int] = None) -> dict:
     """把 CAD 文件 (`.step/.stp/.x_t/.stl/.mdl`) 转成 `x_t`。
 
     返回 `{ok, ret, src, dst, size, error_code, message, seconds}`。
@@ -136,6 +169,13 @@ def convert(src: str | Path, dst: str | Path, *,
         except Exception:
             pass
         out["ok"] = bool(dst.is_file() and out["size"] > 0)
+        if out["ok"] and downgrade:
+            d = downgrade_xt(dst, int(downgrade))
+            out["downgrade"] = d
+            out["ok"] = bool(d.get("ok"))
+            if d.get("ok"):
+                out["size"] = d.get("size")
+                out["sch"] = d.get("sch")
         return out
     except Exception as exc:  # noqa: BLE001
         out["message"] = f"{type(exc).__name__}: {exc}"
@@ -271,6 +311,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--pph", default=None, help="把 x_t 写成该 PPH 的成员")
     ap.add_argument("--out-pph", default=None, help="PPH 副本输出路径")
     ap.add_argument("--member", default=None, help="成员名（默认 <stem>.x_t）")
+    ap.add_argument("--downgrade", type=int, default=None, metavar="VER",
+                    help="R14-1：离线降版到指定 Parasolid 版本（340 = v34，"
+                         "宿主接收端版本；主版本×10+次版本）")
     args = ap.parse_args(argv)
 
     if args.import_cad:
@@ -291,7 +334,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             res["also_written"] = str(Path(args.dst).resolve())
     elif args.dst:
         res = convert(args.src, args.dst, library=args.library,
-                      progid=args.progid)
+                      progid=args.progid, downgrade=args.downgrade)
     else:
         ap.error("需要 dst 或 --cache")
         return 2

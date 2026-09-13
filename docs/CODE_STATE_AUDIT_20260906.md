@@ -1171,6 +1171,33 @@ SCH_3701153_37102_1300` —— R9-2 的 `SCH=` 判据对这类文件不适用，
 
 → **STEP → CADthru(v37) → 本仓离线降版(v34) → 宿主可读 → BAM** 全链自有化，
 §23.2/§24.1 的「宿主静默零几何」至此闭环修复。
+
+---
+
+## 29. R14 更新（2026-09-14）—— 降版接成产品路径，并**纠正 §23.2/§24.1 的 schema 误判**
+
+### 29.1 一条命令出 v34（R14-1）
+
+`cadthru_convert.py --downgrade 340` → `SCH_3400000_340010`（v34，5553 B）。
+
+### 29.2 纠错：真正的原因是**相对路径**，不是 schema 版本
+
+给 gate 传 `--step <相对路径>` 时宿主 CWD 不同 → `OpenCadFile` **静默返回 Nothing**
+（`sn_=False`/`ret_bam=False`），看着像「格式被拒」。修正为绝对路径后：
+
+* `r14_1_v34.x_t`（v34）→ `sn_=True`、`vmdl_=True`、`ret_bam/ret_oct=True`、build 42/42；
+* `r8_3_keyv2.x_t`（**未降版 v37**）→ `snode_alive=True`、`ret_bam=True`、28/28。
+
+**所以 §23.2「宿主拒收 CADthru x_t」与 §24.1「v37 > v34 → 拒收」均为假象**：宿主本来就读得了 v37。
+§24.1 的字段差异仍然真实，但**不是失败原因**；§25.2「CADthru 无法控版」成立但**与 STEP 路由无关**。
+R13-1 的离线降版保留为**可用能力**（能产出宿主同代 schema），非必要条件。
+
+**教训**：交给宿主的路径必须绝对化 —— 这条已两次踩到（CADthru 转换、gate --step），R15-1 断言化。
+
+### 29.3 STEP 路由现状
+
+STEP → CADthru(v37) → 宿主摄取 → BAM（`ret_bam=True`、`vmdl_`/`oct_` 在场）**已通**；
+唯一剩余阻塞 = 宿主 worker 在网格计算中崩溃（§22.1 的 APPCRASH / mfc140u.dll，外部缺陷）。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。
