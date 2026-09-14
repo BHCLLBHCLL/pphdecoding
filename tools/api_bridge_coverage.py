@@ -78,6 +78,7 @@ def report(catalog: dict | None = None) -> dict:
     # R35-3：按目录物化包装（属性名 = 目录键、派发名 = signature_name 优先），
     # 让账目反映"目录成员是否可经 typed 类调用且带取值校验"
     materialized = api.materialize_catalog_wrappers()
+    materialized_props = api.materialize_catalog_properties()
     cat = catalog or json.loads(CATALOG.read_text(encoding="utf-8"))
     classes = cat["classes"]
     rows = []
@@ -111,6 +112,7 @@ def report(catalog: dict | None = None) -> dict:
     total_wrapped = sum(r["wrapped"] for r in rows)
     return {
         "materialized_now": materialized,
+        "materialized_properties_now": materialized_props,
         "classes": len(rows),
         "catalog_members_in_typed_classes": total_cat,
         "wrapped": total_wrapped,

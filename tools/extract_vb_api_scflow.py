@@ -322,6 +322,18 @@ _VALUE_ADDENDA: dict = {
     ("CondDiscontinuous", "GetProjectionType", "return"): [
         {"value": "surface", "description": "（宿主语料：projection_type）",
          "source": "host-corpus"}],
+    # R36-2：`upwd_param` 容器（仅"包含"关系）经**取值词汇唯一性**归因 ——
+    # 语料 12 条全是 `eq_*` 形状，而全库只有 `GetUpwdOptionParamForEquation.eq`
+    # 是 `eq_*` 词汇（`GetUpwdParam.key` 是 MOM/ENERGY 大写码），故认定为同一族。
+    ("Conditions", "GetUpwdOptionParamForEquation", "eq"): [
+        {"value": "eq_comb", "description": "（宿主语料：upwd_param）",
+         "source": "host-corpus"},
+        {"value": "eq_dsol_cont", "description": "（宿主语料：upwd_param）",
+         "source": "host-corpus"},
+        {"value": "eq_dsol_e", "description": "（宿主语料：upwd_param）",
+         "source": "host-corpus"},
+        {"value": "eq_dsol_mom", "description": "（宿主语料：upwd_param）",
+         "source": "host-corpus"}],
     ("Conditions", "GetSolvParam", "key"): [
         {"value": "eq_comb", "description": "（宿主语料：solv_param）",
          "source": "host-corpus"}],

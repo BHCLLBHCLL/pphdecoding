@@ -1753,6 +1753,39 @@ Doc 14.1%，WrappingGroup/NumericalRegion/SubmeshSurfaceRegion 100%。
 `materialize_catalog_wrappers()`：属性名 = **目录键**（保证与目录对账一致），
 派发名 = **裁定名优先**。意义是**取值校验覆盖每个手册成员**（物化方法同走
 `call()` → `_check_values`），手写包装不被覆盖。
+
+---
+
+## 50. R36 更新（2026-09-15）—— 裁定补齐 / 仅包含关系归因 / 属性物化
+
+### 50.1 实例构造把「无实例」从 21 压到 10（R36-1）
+
+`_obtain()`：`Cond*` 走 `conditions.CreateCond*/QueryCond*ByName`，其余走 `Get*/GetPreset*`。
+新拿到 9 类（`obtained_via` 落盘）→ 裁定 **20 → 31/41**：`both 21 / heading 6 / signature 4`。
+
+> ★ **第三次踩同一个坑**：实例构建必须传 **typed 包装**。裸 `CDispatch` 的 `getattr`
+> 会被 win32com 当属性读 → `_obtain` **静默全失败**（表现为裁定数一点不涨，没有任何报错）。
+> 仓库里凡是"按名字取 COM 成员"的地方都不能用裸 dispatch。
+
+新裁定关键两条：`CondBladeShape.EditChordLength` **标题胜**（签名 `EditChoordLength` 拼写错）；
+`CondOutputLFileTurbo.ClearOutletBladeRegions` **签名胜**（标题多写 Blade）。
+裁定表**单调合并**（取不到实例的类保留上次结论），现覆盖 16 类。
+
+**余 10 处**需要链式实例（手册 `instance` 字段已给配方）：`PropItem`（`PropDataBase.GetPropItem`）、
+`MapCond`/`CondMapForStructure`（`GetValue`）、`ClosedVolume`（`GetCoordinatesSpecifiedPartLinkedToMesh`）、
+`SpecialRegion`（`QueryPropValueObj`）、`CondCoSimRegion`（`GetOwner`）、`CondCoSim`、
+`CondBoussinesqBaseTemp`（先建同名条件再按名查）→ R37-1。
+
+### 50.2 仅包含关系归因：取值词汇唯一性（R36-2）
+
+`upwd_param` 的语料 12 条全是 `eq_*` 形状；全库只有 `GetUpwdOptionParamForEquation.eq`
+是 `eq_*` 词汇（名字更像的 `GetUpwdParam.key` 是 `MOM/ENERGY/TURB` 大写码）→ 认定为同族，
+补 4 条 → 复跑对拍 `一致=True（12 = 12）`。addenda 累计 **33**。
+
+### 50.3 属性物化（R36-3）
+
+目录 16 条属性全部物化成 Python property：**名字取括号前那段**（`Visible(BOOL)` → `Visible`，
+宿主认的也是这段），读经 `prop()`、写经 `set_prop()`，已存在者不覆盖。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

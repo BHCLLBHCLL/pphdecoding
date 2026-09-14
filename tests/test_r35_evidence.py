@@ -102,16 +102,22 @@ class TestAttribution(unittest.TestCase):
                 self.assertEqual(link["only_corpus"], [],
                                  link["member"] + " 仍有手册漏项")
 
-    def test_loose_stem_links_are_not_merged(self):
-        """词干只是"包含"关系的（upwd_param → GetUpwdOptionParamForEquation）
-        只作提示：其 only_corpus 不得出现在那个槽里。"""
+    def test_loose_stem_links_need_extra_evidence_to_merge(self):
+        """词干只是"包含"关系的（upwd_param → GetUpwdOptionParamForEquation）默认只作提示。
+
+        R36-2 给了一条**额外判据**（取值词汇唯一性）后确实并了几个值 —— 但那必须
+        经显式 addenda 走 `source: host-corpus` 溯源，**不得静默并入**：
+        本测试即钉"要么不在库里，要么带溯源"。
+        """
         loose = [a for a in self.data["attributed"]
                  if not a.get("exact_stem") and a["only_corpus"]]
         self.assertTrue(loose, "证据里应有仅包含关系的候选")
         for link in loose:
-            got = {v["value"] for v in self._slot(link["member"])}
+            got = {v["value"]: v for v in self._slot(link["member"])}
             for v in link["only_corpus"]:
-                self.assertNotIn(v, got, link["member"] + " 混入了 " + v)
+                if v in got:
+                    self.assertEqual(got[v].get("source"), "host-corpus",
+                                     v + " 无溯源即入库 = 静默并入")
 
     def test_added_values_keep_provenance(self):
         """每个 host-corpus 取值都必须能追到一条语料链接（含已并入 discovered 的）。"""

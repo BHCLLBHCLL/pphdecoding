@@ -2581,22 +2581,81 @@ callable` —— 必须走仓内 typed 包装（内部 `_FlagAsMethod` 派发）
 
 ---
 
-## R36 —— 提案（≈1.5 人日）
+## R36 —— 名字裁定补齐 + 仅包含关系归因 + 属性物化（2026-09-15，✅ 已完成）
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R36-1** | **`Cond*` 类名字裁定** | 裁定覆盖 41/41 | ⚠️ **31/41**（+11）：**both 21 / heading 6 / signature 4**；余 10 需**链式实例**（如实记为未裁定） |
+| **R36-2** | **仅包含关系候选归因** | 每条有结论 | ✅ `upwd_param` 经**取值词汇唯一性**归因 → 4 条入库，链接收敛（12 = 12） |
+| **R36-3** | **属性物化** | typed 类可读属性名一致；有测试 | ✅ 16 条目录属性物化成 Python property（get→`prop()`、set→`set_prop()`） |
+
+### R36-1 实例构造：把「无实例」从 21 压到 10
+
+`_obtain()` 按名字家族逐个试：`Cond*` → `conditions.CreateCond*/QueryCond*ByName`，
+其余 → `Get*/GetPreset*`。新拿到 **9 个类**（`obtained_via` 落盘）：
+CondActranBoundaryNonReflection / CondBladeShape / CondBoundaryFlowIO /
+CondInitialShapeModify / CondOutputCSV / CondOutputLFileTurbo / CondOutputTimeSeries
+（各 `CreateCond*`）、`HybridParam`（`GetHybridParam`）、`OctParam`（`GetOctParam`）。
+
+**第三次踩同一个坑**：实例构建必须传 **typed 包装**——裸 `CDispatch` 的 `getattr` 会被
+win32com 当属性读，第一版 `_obtain` 因此**静默全失败**（表现为裁定数不变）。已写进注释 + 单测。
+
+新裁定的关键两条：`CondBladeShape.EditChordLength` **标题胜**（签名 `EditChoordLength` 是拼写错）、
+`CondOutputLFileTurbo.ClearOutletBladeRegions` **签名胜**（标题多写了 Blade）。
+裁定表**单调合并**（取不到实例的类保留上次结论）→ `schemas/name_verdicts.json` 现覆盖 16 类。
+
+余 10 处需要**链式实例**（手册 `instance` 字段给了配方）：
+`PropItem`（`PropDataBase.GetPropItem`）、`MapCond`/`CondMapForStructure`（`GetValue`）、
+`ClosedVolume`（`GetCoordinatesSpecifiedPartLinkedToMesh`）、`SpecialRegion`（`QueryPropValueObj`）、
+`CondCoSimRegion`（`GetOwner`）、`CondCoSim`、`CondBoussinesqBaseTemp`（须先建同名条件再按名查）。
+
+### R36-2 归因：取值词汇唯一性
+
+`upwd_param` 的语料 12 条**全是 `eq_*` 形状**，而全库只有
+`Conditions.GetUpwdOptionParamForEquation.eq` 是 `eq_*` 词汇
+（名字相近的 `GetUpwdParam.key` 是 `MOM/ENERGY/TURB` 大写码）→ 认定为同一族，
+补 4 条（`eq_comb`/`eq_dsol_cont`/`eq_dsol_e`/`eq_dsol_mom`）→ 复跑对拍
+`一致=True（12 = 12）`。目录 addenda 累计 **33** 条。
+
+### R36-3 属性物化
+
+目录共 **16 条属性**（`Application.Visible(BOOL)` 等），全部物化成 Python property：
+**属性名取括号前那段**（宿主认的名字），读经 `prop()`、写经 `set_prop()`，已存在者不覆盖。
+
+### 回归
+
+全量回归 **1392 passed / 4 skipped / 0 failed**（546.84 s；R35 收口同口径 1377，
+增量 +15 = 本轮新模块 15，逐项对得上）。首轮跑出 1 条红是 R35 的
+`test_loose_stem_links_are_not_merged`：R36-2 给「仅包含关系」补了额外判据后确实并了值，
+该断言按新口径改写为「要么不在库、要么带 `host-corpus` 溯源（不得静默并入）」。
+新增测试 1 个模块：`test_r36_evidence.py`（15）。
+
+### 证据
+
+`_p12u_gate/r36/name_verdicts.json`（31 裁定 + `obtained_via` 9 类 + 10 未裁定）、
+`schemas/name_verdicts.json`（16 类裁定表）、
+`_p12u_gate/r36/corpus_diff_attr.json`（`upwd_param` 收敛）。
+
+---
+
+## R37 —— 提案（≈1.5 人日）
 
 ### 依据
 
-* 41 处里仍有 **21 处未裁定**（全是 `Cond*` 类，需要条件对象实例）——
-  其中就可能有"标题胜"的对，而物化当前对未裁定者用签名名；
-* R35-2 剩 5 条仅"包含"关系的候选（`upwd_param` 等）没归因完；
-* 物化让每个成员都可调，但**属性**（`properties`）没有对应设施（仍是 `prop()/set_prop()` 手写）。
+* 仍有 **10 处未裁定**，且都有手册给的链式实例配方（未做只是工序问题）；
+* 名字裁定的结论**只回灌了 typed 桥**：VBS 生成通道仍按目录键写字面量，
+  而 **4 处"签名胜"** 的对用目录键发出去必然失败；
+* 物化包装只校验**取值**，参数**个数**不符要等宿主报错才发现（`_check_values` 不看 arity）。
 
 ### 条目
 
 | # | 条目 | 做法 | 验收句 | 人日 |
 |---|---|---|---|---|
-| **R36-1** | **`Cond*` 类名字裁定** | 借条件收割配方造出条件对象，把 21 处未裁定对补齐 | 裁定覆盖 41/41；表更新 | 0.5 |
-| **R36-2** | **"包含"关系候选归因** | 对 5 条逐条判定真成员（必要时实机试键） | 每条有结论；真对应的补链接 | 0.5 |
-| **R36-3** | **属性物化** | 目录 `properties` 也物化成 `prop/set_prop` 访问器 | typed 类可读属性名一致；有测试 | 0.5 |
+| **R37-1** | **链式实例补裁定** | 按手册 `instance` 配方建 `PropItem`/`MapCond`/`ClosedVolume`/`SpecialRegion`/`CondCoSimRegion` 等 | 裁定覆盖 41/41（或每条未覆盖给出确切原因） | 0.5 |
+| **R37-2** | **VBS 通道按裁定表纠名** | `build_vbs` 校验时用裁定表：目录键调不通的（4 处签名胜）要纠名或告警 | 生成期指出/纠正，有测试 | 0.5 |
+| **R37-3** | **物化包装的参数个数校验** | 按目录签名解析 arity，调用前比对（`*args` 泛收也要挡明显错） | 个数不符在派发前拦下/告警，有测试 | 0.5 |
 
 ### 明确不做
 

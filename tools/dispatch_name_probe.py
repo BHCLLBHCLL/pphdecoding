@@ -73,6 +73,39 @@ def _has_type_info(obj) -> str:
         return "no:" + type(exc).__name__
 
 
+def _obtain(cls: str, conds, doc, mg):
+    """尽力取一个该类的实例（R36-1）。
+
+    手册在类级 `instance` 里给了配方，但形态各异；这里按"名字家族"逐个试：
+    `Cond*` 走 `conditions.CreateCond*/QueryCond*ByName`，其余试 `Get*/GetPreset*`。
+    取不到就如实记为「无实例」（不猜）。
+    """
+    short = cls[4:] if cls.startswith("Cond") else cls
+    plan = []
+    if conds is not None:
+        plan += [(conds, "CreateCond" + short, (cls + "_r36",)),
+                 (conds, "QueryCond" + short + "ByName", (cls + "_r36",)),
+                 (conds, "Create" + short, (cls + "_r36",)),
+                 (conds, "Get" + short, ())]
+    for host in (doc, mg):
+        if host is None:
+            continue
+        plan += [(host, "Get" + short, ()),
+                 (host, "GetPreset" + short, ()),
+                 (host, "Get" + short + "Default", ())]
+    for host, name, args in plan:
+        fn = getattr(host, name, None)
+        if fn is None:
+            continue
+        try:
+            obj = fn(*args) if args else fn()
+        except Exception:  # noqa: BLE001
+            continue
+        if obj is not None:
+            return obj, name
+    return None, None
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="标题名 vs 签名名 实机裁定")
     ap.add_argument("--json", type=Path, default=None)
@@ -114,7 +147,8 @@ def main(argv=None) -> int:
         # "TypeError: 'bool' object is not callable"（R35-1 第二次踩）。
         doc.OpenProject(str(BOX))          # typed 包装只收 path（flag 缺省 False）
         doc.WaitForWorker()
-        ctx["Conditions"] = _raw(doc.GetConditions())
+        conds_typed = doc.GetConditions()      # typed：实例构建要走它的 call()
+        ctx["Conditions"] = _raw(conds_typed)
         mg = doc.QueryMeshingGroupByIndex(0)
         ctx["MeshingGroup"] = _raw(mg)
         ctx["MeshingGroupSetting"] = _raw(mg.GetMeshingGroupSetting())
@@ -138,6 +172,18 @@ def main(argv=None) -> int:
         result["object_probe"][name] = _has_type_info(obj)
         print("   " + name + " GetTypeInfo: " + result["object_probe"][name],
               flush=True)
+    # R36-1：把上一轮「无实例」的类补上（尽力而为，取不到如实记录）
+    wanted = sorted({p["class"] for p in pairs})
+    for cls in wanted:
+        if ctx.get(cls) is not None:
+            continue
+        # 注意：host 必须传 **typed** 包装 —— 裸 CDispatch 的 getattr 会被
+        # win32com 当属性读（R36-1 第三次踩同一个坑），实例构建全部静默失败。
+        obj, how = _obtain(cls, conds_typed, doc, mg)
+        if obj is not None:
+            ctx[cls] = getattr(obj, "raw", obj)
+            result.setdefault("obtained_via", {})[cls] = how
+            print("   + " + cls + " <- " + str(how), flush=True)
     by_class: dict = {}
     for p in pairs:
         by_class.setdefault(p["class"], []).append(p)
@@ -183,7 +229,16 @@ def main(argv=None) -> int:
                              encoding="utf-8")
     # 紧凑裁定表：{类: {目录键: 宿主接受的名字}} —— typed 桥据此选派发名
     # （"both" 保留目录键，避免无谓漂移；"neither" 不入表）
+    # 与既有裁定表**合并**（单调累积：某次运行取不到实例的类，保留上次结论）
     resolved: dict = {}
+    prev_path = ROOT / "schemas" / "name_verdicts.json"
+    if prev_path.is_file():
+        try:
+            prev = json.loads(prev_path.read_text(encoding="utf-8"))
+            for k, v in (prev.get("resolved") or {}).items():
+                resolved[k] = dict(v)
+        except Exception:  # noqa: BLE001
+            pass
     for v in result["verdicts"]:
         name = {"heading": v["heading"], "signature": v["signature"],
                 "both": v["heading"]}.get(v["verdict"])
@@ -196,7 +251,7 @@ def main(argv=None) -> int:
         "resolved": resolved,
         "tally": result["tally"],
     }
-    path = ROOT / "schemas" / "name_verdicts.json"
+    path = prev_path
     path.write_text(json.dumps(out, ensure_ascii=False, indent=1),
                     encoding="utf-8")
     print("[r35-1] 已写 " + str(path) + "（" + str(len(resolved)) + " 类）")

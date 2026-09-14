@@ -36,11 +36,40 @@
   "Octree": {
    "GetMeshingGroup": "GetMeshingGroup",
    "GetOctInfoConsideringMesherType": "GetOctInfoConsideringMesherType"
+  },
+  "CondActranBoundaryNonReflection": {
+   "SetInfiniteElementsAxis": "SetInfiniteElementsAxis"
+  },
+  "CondBladeShape": {
+   "EditChordLength": "EditChordLength"
+  },
+  "CondBoundaryFlowIO": {
+   "GetEnvironmentParam": "GetEnvironmentParam",
+   "GetPassiveScalarIndividualInflowType": "GetPassiveScalarIndividualInflowType"
+  },
+  "CondInitialShapeModify": {
+   "AddMorphingRegion": "AddMorphingRegion"
+  },
+  "CondOutputCSV": {
+   "GetOutputTimingParam": "GetOutputTimingParam"
+  },
+  "CondOutputLFileTurbo": {
+   "ClearOutletBladeRegions": "ClearOutletRegions"
+  },
+  "CondOutputTimeSeries": {
+   "GetCSVOutputTimingParam": "GetCSVOutputTimingParam"
+  },
+  "HybridParam": {
+   "SetSimpleLayerNum": "SetSimpleLayerNum",
+   "SetSimpleOctRatio": "SetSimpleOctRatio"
+  },
+  "OctParam": {
+   "SetMinSize": "SetMinSize"
   }
  },
  "tally": {
-  "heading": 4,
-  "both": 13,
-  "signature": 3
+  "both": 21,
+  "heading": 6,
+  "signature": 4
  }
 }

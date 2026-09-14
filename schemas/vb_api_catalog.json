@@ -44235,6 +44235,26 @@
         {
          "value": "eq_pbe",
          "description": "Population balance equation"
+        },
+        {
+         "value": "eq_comb",
+         "description": "（宿主语料：upwd_param）",
+         "source": "host-corpus"
+        },
+        {
+         "value": "eq_dsol_cont",
+         "description": "（宿主语料：upwd_param）",
+         "source": "host-corpus"
+        },
+        {
+         "value": "eq_dsol_e",
+         "description": "（宿主语料：upwd_param）",
+         "source": "host-corpus"
+        },
+        {
+         "value": "eq_dsol_mom",
+         "description": "（宿主语料：upwd_param）",
+         "source": "host-corpus"
         }
        ]
       },

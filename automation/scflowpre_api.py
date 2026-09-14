@@ -1699,11 +1699,34 @@ def materialize_catalog_wrappers() -> int:
     return n
 
 
+def materialize_catalog_properties() -> int:
+    """目录 `properties` → Python 属性（R36-3）：读走 `prop()`、写走 `set_prop()`。
+
+    目录里的属性键带类型后缀（`Visible(BOOL)`），属性名取括号前那段；
+    宿主认的名字也是这一段。已存在的名字不覆盖（保住手写语义）。
+    """
+    cat = load_catalog()
+    n = 0
+    for cls_name, klass in TYPED_CLASSES.items():
+        info = cat["classes"].get(cls_name) or {}
+        for key in (info.get("properties") or {}):
+            name = str(key).split("(", 1)[0].strip()
+            if not name.isidentifier() or name in vars(klass):
+                continue
+            setattr(klass, name, property(
+                lambda self, _n=name: self.prop(_n),
+                lambda self, value, _n=name: self.set_prop(_n, value),
+                doc="目录物化属性（R36-3）：" + str(key)))
+            n += 1
+    return n
+
+
 def _ensure_api_wiring() -> None:
     global _API_WIRED
     if not _API_WIRED:
         wire_api_classes()
         materialize_catalog_wrappers()
+        materialize_catalog_properties()
         _API_WIRED = True
 
 
