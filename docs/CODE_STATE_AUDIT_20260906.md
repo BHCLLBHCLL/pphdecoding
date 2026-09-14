@@ -1685,6 +1685,42 @@ R32-3 的护栏（`Conditions.GetAnalysisType` 的 30 条取值必须挂在参�
 `known_gaps` 升级为 `known_gap_status`：`FACET.INTERSECTION_DETECTION_DEPTH` =
 `no-panel-surface`（`terminal: true` + 理由 + 轮次）—— 缺口不许停在"待办"，
 测试要求「缺口 ↔ 终态一一对应」。
+
+---
+
+## 48. R34 更新（2026-09-15）—— 语料对拍扩面 / VBS 取值校验 / 桥接落差账
+
+### 48.1 语料对拍扩面：333 容器、36 同源链接、12 条漏项（R34-1）
+
+语料取值两种写法都收（`<X><name>V</name>` 与 `<X_type>V</X_type>`）→ **333 个容器**，
+按「取值集交叉」自动找链接。**交叉只能找候选**（实测 `loop_eq_param` 与
+`equa_start_param` 都会匹配到 `Conditions.GetUpwdParam`），故加**名字同源**门槛：
+
+| 桶 | 组数 | 处置 |
+|---|---|---|
+| 名字同源 | 36 | 12 条差异入库（`source: host-corpus`）→ 复跑 `auto_with_gap = 0` |
+| 仅取值重叠 | 23 | 只提示，**不入库**（测试钉住"不得并进它匹配到的那个槽"） |
+
+入库漏项：`battery`/`clear`/`infinite_elements`、`not_connect`、`glue`、`none`、
+`CAVI`/`CMBV`/`CONC_VAPOR`、`saturated_humidity`、`surface`、`eq_comb`。
+
+### 48.2 VBS 通道取值校验：第二版才守住（R34-2）
+
+`build_vbs`（VBS 唯一生成口）校验「字面量紧跟方法名」的形态**之前**，
+**第一版漏了 `note_ref` 回退**：setter 自己常无词表（取值挂在 getter 上，
+R30 实测 `SetVoxelOctRefineType`），不跟进引用就**整类放过**。补上后两条通道
+（typed 桥 / VBS）与 `check_api_value` 同一口径：`None` 不管、`False` 默认告警、
+`strict` 抛错（VBS 侧在**生成阶段**抛，早于任何宿主会话）。
+
+### 48.3 桥接落差账 + 两条不变量（R34-3）
+
+17 类覆盖目录 1766 成员里的 **372（21.1%）**；`Conditions` 仅 **1.2%（7/607）**，
+Doc 14.1%，WrappingGroup/NumericalRegion/SubmeshSurfaceRegion 100%。
+
+1. **包装方法必须可追溯到目录名**（自研便捷方法按命名规则排除），否则等于调手册外成员；
+2. **标题名 ≠ 签名名 41 处必须记 `signature_name`**（如标题 `…WitouthMovingPart` vs
+   签名 `…WithoutMovingPart`、`SelectFace` vs `SetSelectFaces`）——包装类按签名写，
+   不记这条就会在"目录里找不到"（本项第一版即因此误报）。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

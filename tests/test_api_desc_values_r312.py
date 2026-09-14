@@ -88,9 +88,13 @@ class TestCatalogAfterR312(unittest.TestCase):
         return (info.get("methods") or {}).get(member)
 
     def test_connection_type_vocabulary_visible(self):
+        """手册三条 + R34-1 经宿主语料补的 \`not_connect\`（带 source）。"""
         ret = self._member("ClosedVolume", "GetConnectionType")["return"]
-        self.assertEqual([v["value"] for v in ret["values"]],
-                         ["default", "connect", "disconnect"])
+        names = [v["value"] for v in ret["values"]]
+        self.assertEqual(names[:3], ["default", "connect", "disconnect"])
+        extra = {v["value"]: v for v in ret["values"]
+                 if v.get("source") == "host-corpus"}
+        self.assertEqual(set(extra), {"not_connect"})
 
     def test_prose_and_hint_rows_have_no_values(self):
         # R32-3：GetRadiationVFRETimingParam 已判定为**真词表**（cycle_interval /

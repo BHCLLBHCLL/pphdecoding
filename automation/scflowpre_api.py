@@ -157,15 +157,18 @@ class ComObject:
         if not entry:
             return
         for i, a in enumerate(entry.get("arguments") or []):
-            if i >= len(args) or not a.get("values"):
+            if i >= len(args):
+                break
+            values = api_arg_values(cls, name, a.get("name"))
+            if not values:
                 continue
             val = args[i]
             if not isinstance(val, str):
                 continue
-            if check_api_value(cls, name, val, a.get("name")) is False:
+            if val not in {v["value"] for v in values}:
                 msg = (cls + "." + name + " 参数 " + str(a.get("name"))
                        + " 取值 " + repr(val) + " 不在手册词表内（"
-                       + str(len(a["values"]))
+                       + str(len(values))
                        + " 项；目录 schemas/vb_api_catalog.json）")
                 if self.strict_values:
                     raise ApiValueError(msg)
@@ -1587,6 +1590,26 @@ def api_value_set(cls: str, member: str, arg: Optional[str] = None,
     return {v["value"] for v in api_values(cls, member, arg, catalog)}
 
 
+def api_arg_values(cls: str, member: str,
+                   arg: Optional[str] = None,
+                   catalog: Optional[dict] = None) -> list:
+    """参数取值，带 **`note_ref` 回退**（R34-2 修）。
+
+    setter 自己常常没有词表：手册用 `(Note) Refer to GetXxx` 把取值挂在对应的
+    getter 上（R30 实测 `SetVoxelOctRefineType` 正是这种）。不跟进这条引用，
+    校验就会**静默放过**整个 setter —— 这是最初版本的漏洞。
+    """
+    values = api_values(cls, member, arg, catalog)
+    if values:
+        return values
+    entry = _member_entry(cls, member, catalog)
+    ref = (entry or {}).get("note_ref")
+    if ref:
+        return (api_values(cls, ref, "return", catalog)
+                or api_values(cls, ref, None, catalog))
+    return []
+
+
 def check_api_value(cls: str, member: str, value: str,
                     arg: Optional[str] = None,
                     catalog: Optional[dict] = None) -> Optional[bool]:
@@ -1594,7 +1617,7 @@ def check_api_value(cls: str, member: str, value: str,
 
     None 与 False 必须分开：手册没有词表 ≠ 取值非法（手册本身有漏项）。
     """
-    values = api_value_set(cls, member, arg, catalog)
+    values = {v["value"] for v in api_arg_values(cls, member, arg, catalog)}
     if not values:
         return None
     return str(value) in values

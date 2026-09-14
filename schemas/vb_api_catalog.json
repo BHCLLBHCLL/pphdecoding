@@ -840,6 +840,11 @@
        {
         "value": "disconnect",
         "description": "disconnect"
+       },
+       {
+        "value": "not_connect",
+        "description": "（宿主语料：connection_type；手册另有 disconnect）",
+        "source": "host-corpus"
        }
       ]
      }
@@ -1822,7 +1827,8 @@
       "type": "",
       "name": "None",
       "description": ""
-     }
+     },
+     "signature_name": "SetSelectFaces"
     },
     "SelectMeshElementsOfSpecifiedCVolID": {
      "signature": "cvol.SelectMeshElementsOfSpecifiedCVolID bSelect, id",
@@ -2822,7 +2828,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True(successful), False(failed)"
-     }
+     },
+     "signature_name": "GetInfiniteElementsAxis"
     },
     "SetInfiniteElementsOrigin": {
      "signature": "retval=actranboundnrbc.SetInfiniteElementsOrigin(origin)",
@@ -3737,7 +3744,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True(successful), False(failed)"
-     }
+     },
+     "signature_name": "EditChoordLength"
     },
     "EditCrossSectionPos": {
      "signature": "retval=classname.EditCrossSectionPos(index, val)",
@@ -4160,6 +4168,21 @@
        {
         "value": "conduction",
         "description": "Coating/Conducting layer"
+       },
+       {
+        "value": "battery",
+        "description": "（宿主语料：boundary_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "clear",
+        "description": "（宿主语料：boundary_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "infinite_elements",
+        "description": "（宿主语料：boundary_type）",
+        "source": "host-corpus"
        }
       ]
      }
@@ -4810,7 +4833,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "signature_name": "GetParam"
     },
     "GetFlowIOType": {
      "signature": "retval=boundaryflowio.GetFlowIOType()",
@@ -5110,7 +5134,8 @@
         "description": "Specify value"
        }
       ]
-     }
+     },
+     "signature_name": "GetMixedGasInflowType"
     },
     "GetPassiveScalarInflowType": {
      "signature": "retval=boundflowio.GetPassiveScalarInflowType ()",
@@ -7815,6 +7840,11 @@
        {
         "value": "thermal_resistance",
         "description": "Specify contact thermal resistance"
+       },
+       {
+        "value": "glue",
+        "description": "（宿主语料：contact_type）",
+        "source": "host-corpus"
        }
       ]
      }
@@ -7976,6 +8006,11 @@
        {
         "value": "no_exchange",
         "description": "No heat exchange"
+       },
+       {
+        "value": "saturated_humidity",
+        "description": "（宿主语料：outside_type）",
+        "source": "host-corpus"
        }
       ]
      }
@@ -8788,7 +8823,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (Considered), False (Not considered)"
-     }
+     },
+     "signature_name": "GetConsiderBuoyancyFlag"
     },
     "SetBaseTemperature": {
      "signature": "boussinesqbasetemp.SetBaseTemperature(temp)",
@@ -9076,7 +9112,8 @@
       "type": "LPDISPATCH",
       "name": "cosim_vol",
       "description": "CondCoSimRegionVolume class"
-     }
+     },
+     "signature_name": "CreateCoSimRegionSurface"
     },
     "DeleteCoSimRegion": {
      "signature": "retval=condcosim.DeleteCoSimRegion(name)",
@@ -9270,7 +9307,8 @@
       "name": "type",
       "description": "Name of the type (string)"
      },
-     "note": "Name of co-simulation region type acquired in each of the inherited class are as follows"
+     "note": "Name of co-simulation region type acquired in each of the inherited class are as follows",
+     "signature_name": "GetRegionType"
     },
     "RemoveRegion": {
      "signature": "retval=cosim_region.RemoveFromRegion(name)",
@@ -9286,7 +9324,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True(successful), False(failed)"
-     }
+     },
+     "signature_name": "RemoveFromRegion"
     },
     "SetName": {
      "signature": "retval=cosim_region.SetName(name)",
@@ -10458,6 +10497,11 @@
        {
         "value": "cylinder",
         "description": "Cylindrical projection"
+       },
+       {
+        "value": "surface",
+        "description": "（宿主语料：projection_type）",
+        "source": "host-corpus"
        }
       ]
      }
@@ -14053,7 +14097,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "signature_name": "AddMorphingCalcFaceRegion"
     },
     "ClearMorphingRegion": {
      "signature": "retval=initial_shape_modify.ClearMorphingRegion()",
@@ -15625,7 +15670,8 @@
       "type": "",
       "name": "None",
       "description": ""
-     }
+     },
+     "signature_name": "SetLoadIDFaceRegionCorresp"
     }
    }
   },
@@ -18718,7 +18764,8 @@
       "name": "retval",
       "description": "True (successful), False (failed)"
      },
-     "note": "Available keywords and the values to be obtained are as follows:"
+     "note": "Available keywords and the values to be obtained are as follows:",
+     "signature_name": "GetOutputTimingType"
     },
     "GetOutputTimingType": {
      "signature": "retval=outputcsv.GetOutputTimingType",
@@ -23294,7 +23341,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "signature_name": "ClearOutletRegions"
     },
     "GetBladeRegions": {
      "signature": "array=outputlfileturbo.GetBladeRegions()",
@@ -25342,7 +25390,8 @@
      }
     },
     "GetCSVOutputTimingParam": {
-     "signature": "retval=outputtimeseries.GetCSVOutputTimingType(key,val)"
+     "signature": "retval=outputtimeseries.GetCSVOutputTimingType(key,val)",
+     "signature_name": "GetCSVOutputTimingType"
     },
     "GetCSVOutputTimingType": {
      "signature": "retval = outputtimeseries.GetCSVOutputTimingType",
@@ -27236,6 +27285,11 @@
        {
         "value": "humidity",
         "description": "Convert to amount of dew condensation"
+       },
+       {
+        "value": "none",
+        "description": "（宿主语料：conversion_type）",
+        "source": "host-corpus"
        }
       ]
      }
@@ -41727,6 +41781,21 @@
         {
          "value": "PBEV",
          "description": "Population balance variables"
+        },
+        {
+         "value": "CAVI",
+         "description": "（宿主语料：next_param）",
+         "source": "host-corpus"
+        },
+        {
+         "value": "CMBV",
+         "description": "（宿主语料：next_param）",
+         "source": "host-corpus"
+        },
+        {
+         "value": "CONC_VAPOR",
+         "description": "（宿主语料：next_param）",
+         "source": "host-corpus"
         }
        ]
       },
@@ -42395,7 +42464,7 @@
         },
         {
          "value": "elem_volume",
-         "description": "（宿主语料补充：stabilitygeom_type 的 name 取值）",
+         "description": "（宿主语料：stabilitygeom_type）",
          "source": "host-corpus"
         }
        ]
@@ -43252,6 +43321,11 @@
         {
          "value": "eq_pbe",
          "description": "Population balance equation"
+        },
+        {
+         "value": "eq_comb",
+         "description": "（宿主语料：solv_param）",
+         "source": "host-corpus"
         }
        ]
       },
@@ -45072,7 +45146,8 @@
       "name": "None",
       "description": ""
      },
-     "note": "Refer to GetContactThicknessDefault for contact types."
+     "note": "Refer to GetContactThicknessDefault for contact types.",
+     "signature_name": "SetContactTicknessDefault"
     },
     "SetCoSimMoveParam": {
      "signature": "retval=conditions.SetCoSimMoveParam(key, val)"
@@ -45257,7 +45332,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "signature_name": "SetMeshOptionParam"
     },
     "SetDiscontinuousOption": {
      "signature": "retval=conditions.SetDiscontinuousOption(key, value)"
@@ -50180,7 +50256,8 @@
       "type": "LPDISPATCH",
       "name": "meshgroup",
       "description": "MeshingGroup class"
-     }
+     },
+     "signature_name": "CreateDiscontinuousMeshingGroupWithoutMovingPart"
     },
     "CreateFaceRegion": {
      "signature": "Set face_region=doc.CreateFaceRegion(name)",
@@ -52609,7 +52686,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "List of selected edges (ISEdge array)"
-     }
+     },
+     "signature_name": "GetSelectedSFaces"
     },
     "GetSelectedSFaces": {
      "signature": "retval=doc.GetSelectedSFaces(bTargetVisible, bExcludePartForSubmesh)",
@@ -53271,7 +53349,8 @@
       "type": "VARIANT",
       "name": "retv",
       "description": "Information (string)"
-     }
+     },
+     "signature_name": "GetSPartInformation"
     },
     "GetVParts": {
      "signature": "retval=doc.GetVParts",
@@ -53892,7 +53971,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "signature_name": "ImprintEdgeToBody"
     },
     "InterruptWorker": {
      "signature": "retval=doc.InterruptWorker",
@@ -54644,7 +54724,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "signature_name": "OpenPropFile"
     },
     "PreviewMDLFaceRegion": {
      "signature": "doc.PreviewMDLFaceRegion regions",
@@ -55977,7 +56058,8 @@
       "type": "",
       "name": "None",
       "description": ""
-     }
+     },
+     "signature_name": "SelectMeshFaceFromVFace"
     },
     "SelectPatterns": {
      "signature": "retval=doc.SelectPatterns(patterns, patternbodies)",
@@ -56093,7 +56175,8 @@
       "type": "",
       "name": "None",
       "description": ""
-     }
+     },
+     "signature_name": "SetMeshDisplaySide"
     },
     "SetModeMesh": {
      "signature": "retval=doc.SetModeMesh",
@@ -56971,7 +57054,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True(successful), False(failed)"
-     }
+     },
+     "signature_name": "SetMeshDisplaySide"
     },
     "SetWorkDir": {
      "signature": "doc.SetWorkDir folder",
@@ -59672,7 +59756,8 @@
       "type": "",
       "name": "None",
       "description": ""
-     }
+     },
+     "signature_name": "GetParallelMeshingFlag"
     },
     "SetPartSelectionMode": {
      "signature": "env.SetPartSelectionMode mode",
@@ -60112,7 +60197,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True(successful), False(failed)"
-     }
+     },
+     "signature_name": "GetZipLevel"
     },
     "ShowNaviBuildModel": {
      "signature": "env.ShowNaviBuildModel flag",
@@ -63951,7 +64037,8 @@
       "type": "",
       "name": "None",
       "description": ""
-     }
+     },
+     "signature_name": "GetSimpleLayerNum"
     },
     "SetSimpleOctRatio": {
      "signature": "hybridparam.GetSimpleOctRatio(ratio)",
@@ -63967,7 +64054,8 @@
       "type": "",
       "name": "None",
       "description": ""
-     }
+     },
+     "signature_name": "GetSimpleOctRatio"
     }
    }
   },
@@ -66487,7 +66575,8 @@
       "type": "LPDISPATCH",
       "name": "snode",
       "description": "SNode class"
-     }
+     },
+     "signature_name": "MultiEntityCo_SNode"
     },
     "ReconfigureAutoRemoveTinyFace": {
      "signature": "mdlwizard.ReconfigureAutoRemoveTinyFace",
@@ -66752,7 +66841,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "signature_name": "IsAutoRemoveTinyFaceValid"
     },
     "TinyFace_GetCenters": {
      "signature": "retval=mdlwizard.TinyFace_GetCenters(index)",
@@ -67059,7 +67149,8 @@
      "signature": "retval=mapcond.SetParam(key, val)"
     },
     "SetParam2": {
-     "signature": "retval=mapcond.SetParam(key, val, unit)"
+     "signature": "retval=mapcond.SetParam(key, val, unit)",
+     "signature_name": "SetParam"
     },
     "SetRotateAxis": {
      "signature": "retval=mapcond.SetRotateAxis(axis)",
@@ -67719,7 +67810,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (Exist), False (Does not exist)"
-     }
+     },
+     "signature_name": "DoesOctMeshCVollementExist"
     },
     "DoesOctMeshSNodeElementExist": {
      "signature": "retval=meshgroup.DoesOctMeshSNodeElementExist(name)",
@@ -69987,7 +70079,8 @@
       "type": "",
       "name": "None",
       "description": ""
-     }
+     },
+     "signature_name": "SetSelectMeshFacesFromMDLFace"
     },
     "SetVisible": {
      "signature": "retval=meshgroup.SetVisible(flag)",
@@ -70077,7 +70170,8 @@
       "type": "",
       "name": "None",
       "description": ""
-     }
+     },
+     "signature_name": "ShowEachTypeMeshEelemregion"
     },
     "ShowMarkedMesh": {
      "signature": "meshgroup.ShowMarkedMesh",
@@ -71543,7 +71637,8 @@
       "type": "",
       "name": "None",
       "description": ""
-     }
+     },
+     "signature_name": "GetMDLMethod"
     },
     "SetOctLengthParamItr": {
      "signature": "retval=meshset.SetOctLengthParamItr(itr)",
@@ -73090,7 +73185,8 @@
       "type": "",
       "name": "None",
       "description": ""
-     }
+     },
+     "signature_name": "SetMeshNum"
     },
     "SetOctType": {
      "signature": "octparam.SetOctType(type)",
@@ -73186,7 +73282,8 @@
       "type": "LPDISPATCH",
       "name": "meshing_group",
       "description": "MeshingGroup class"
-     }
+     },
+     "signature_name": "GetMeshingGroupet"
     },
     "GetOctantCountByGroup": {
      "signature": "retval=octree.GetOctantCountByGroup(group)",
@@ -73246,7 +73343,8 @@
       "name": "retval",
       "description": "0(Tetra mesher), 1(Polyhedral mesher), 2(Voxel Fitting mesher)"
      },
-     "note": "The number of displayed octant and node number predicted from displayed octant are valid only when the mdl has been imported."
+     "note": "The number of displayed octant and node number predicted from displayed octant are valid only when the mdl has been imported.",
+     "signature_name": "GetOctInfo"
     },
     "GetOctLevelSize": {
      "signature": "size_list=octree.GetOctLevelSize",
@@ -76727,7 +76825,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True(successful), False(failed)"
-     }
+     },
+     "signature_name": "GetRefpropFluid"
     },
     "GetRegions": {
      "signature": "retval=propitem.GetRegions",
@@ -77071,7 +77170,8 @@
       "name": "retval",
       "description": "True(successful), False(failed)"
      },
-     "note": "Refer GetRefpropTableParam for available strings for arguments."
+     "note": "Refer GetRefpropTableParam for available strings for arguments.",
+     "signature_name": "SetRefpropFluid"
     }
    }
   },
@@ -80588,7 +80688,8 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "signature_name": "SetContactAngle"
     },
     "SetIsDynamicContactAngleSet": {
      "signature": "retval=specialregion.SetIsDynamicContactAngleSet(value)",

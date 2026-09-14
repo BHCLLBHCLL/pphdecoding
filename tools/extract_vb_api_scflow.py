@@ -74,6 +74,10 @@ _ARG_CELL = re.compile(r"^\(([^)]+)\)\s*(.+)$")
 #: 另有 `[Arguments]`(50) / `[Return]`(50) / 拼写错 `[Argiment]` `[Resturn Value]`
 #: `[Return Value]]` `[Explnation]` `[Explanetion]` `[xplanation]` 与日文 `[引数]`
 #: `[戻り値]` `[戻り値/Return value]`；`[Description]` 只出现在类级表，方法块内为 0。
+#: 签名里的真实成员名（h3 标题可能拼错：实测 41 处标题名 ≠ 签名名，如
+#: `CreateDiscontinuousMeshingGroupWitouthMovingPart` 标题 vs `…WithoutMovingPart` 签名）。
+#: 不一致时写进 `signature_name`，让调用侧能用**宿主真正认的**名字。
+_SIG_MEMBER = re.compile(r"\.([A-Za-z_]\w*)\s*[\( ]")
 _HEAD_EXPL = re.compile(r"xpl|説明", re.I)
 _HEAD_ARG = re.compile(r"argu|argi|引数", re.I)
 _HEAD_RET = re.compile(r"return|resturn|戻り値", re.I)
@@ -281,7 +285,45 @@ _VALUE_FIXES = {
 _VALUE_ADDENDA: dict = {
     ("Conditions", "GetPresetStabilityParamGeom", "param"): [
         {"value": "elem_volume",
-         "description": "（宿主语料补充：stabilitygeom_type 的 name 取值）",
+         "description": "（宿主语料：stabilitygeom_type）",
+         "source": "host-corpus"}],
+    # ↓ R34-1：`--auto` 对拍（151 工程）发现的**名字同源**漏项，共 12 条。
+    # 只收「容器名 ↔ 成员名同源」的链接；仅取值重叠的链接只作提示、不入库
+    # （实测 loop_eq_param / equa_start_param 都会"匹配"到 GetUpwdParam）。
+    ("CondBoundaryElectric", "GetBoundaryType", "return"): [
+        {"value": "battery", "description": "（宿主语料：boundary_type）",
+         "source": "host-corpus"},
+        {"value": "clear", "description": "（宿主语料：boundary_type）",
+         "source": "host-corpus"},
+        {"value": "infinite_elements",
+         "description": "（宿主语料：boundary_type）",
+         "source": "host-corpus"}],
+    ("ClosedVolume", "GetConnectionType", "return"): [
+        {"value": "not_connect",
+         "description": "（宿主语料：connection_type；手册另有 disconnect）",
+         "source": "host-corpus"}],
+    ("CondBoundaryWallThermal", "GetContactType", "return"): [
+        {"value": "glue", "description": "（宿主语料：contact_type）",
+         "source": "host-corpus"}],
+    ("CondParticleGeneration", "GetConversionType", "return"): [
+        {"value": "none", "description": "（宿主语料：conversion_type）",
+         "source": "host-corpus"}],
+    ("Conditions", "GetNextParam", "key"): [
+        {"value": "CAVI", "description": "（宿主语料：next_param）",
+         "source": "host-corpus"},
+        {"value": "CMBV", "description": "（宿主语料：next_param）",
+         "source": "host-corpus"},
+        {"value": "CONC_VAPOR", "description": "（宿主语料：next_param）",
+         "source": "host-corpus"}],
+    ("CondBoundaryWallThermal", "GetOutsideType", "return"): [
+        {"value": "saturated_humidity",
+         "description": "（宿主语料：outside_type）",
+         "source": "host-corpus"}],
+    ("CondDiscontinuous", "GetProjectionType", "return"): [
+        {"value": "surface", "description": "（宿主语料：projection_type）",
+         "source": "host-corpus"}],
+    ("Conditions", "GetSolvParam", "key"): [
+        {"value": "eq_comb", "description": "（宿主语料：solv_param）",
          "source": "host-corpus"}],
 }
 
@@ -406,6 +448,9 @@ def extract_class(path: Path) -> dict:
     out["properties"] = {}
     for mode, name, block in _split_sections(text):
         entry = _parse_method_block(block)
+        sig = _SIG_MEMBER.search(entry.get("signature") or "")
+        if sig and sig.group(1) != name:
+            entry["signature_name"] = sig.group(1)
         target = out["methods"] if mode == "method" else out["properties"]
         target[name] = entry
     if not out["properties"]:

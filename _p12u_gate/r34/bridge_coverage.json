@@ -1,0 +1,457 @@
+{
+ "classes": 17,
+ "catalog_members_in_typed_classes": 1766,
+ "wrapped": 372,
+ "coverage": 0.211,
+ "rows": [
+  {
+   "class": "Conditions",
+   "wrapper": "ScFlowpreConditions",
+   "catalog_members": 607,
+   "wrapped": 7,
+   "coverage": 0.012,
+   "unwrapped_sample": [
+    "AddCoSimStructRegion",
+    "AddOversetContactRegion",
+    "AddOversetMovingRegion",
+    "AddWaveLengthBoundary",
+    "ClearCoSimStructRegion",
+    "CreateCondAcceleration"
+   ]
+  },
+  {
+   "class": "Doc",
+   "wrapper": "ScFlowpreDoc",
+   "catalog_members": 426,
+   "wrapped": 60,
+   "coverage": 0.141,
+   "unwrapped_sample": [
+    "AddTemporaryDrawingObjectAxis",
+    "AddTemporaryDrawingObjectCuboid",
+    "AddTemporaryDrawingObjectCylinder",
+    "AddTemporaryDrawingObjectLine",
+    "AddTemporaryDrawingObjectPoint",
+    "AddTemporaryDrawingObjectPointWithDefault"
+   ]
+  },
+  {
+   "class": "MeshingGroup",
+   "wrapper": "ScFlowpreMeshingGroup",
+   "catalog_members": 175,
+   "wrapped": 23,
+   "coverage": 0.131,
+   "unwrapped_sample": [
+    "BeginSolidEdit",
+    "CheckAbnormalFaceDirection",
+    "CheckAtomicElementVolume",
+    "CheckBothSideSameElement",
+    "CheckElementConstruction",
+    "CheckFaceFlatness"
+   ]
+  },
+  {
+   "class": "SNode",
+   "wrapper": "ScFlowpreSNode",
+   "catalog_members": 145,
+   "wrapped": 48,
+   "coverage": 0.331,
+   "unwrapped_sample": [
+    "CalculateRotateAxis",
+    "ChangeCoordinatesSpecifiedPartPriority",
+    "ClearAutoRemoveTinyFaceWidthRatio",
+    "DeleteAllSweepLayer",
+    "DeleteSweepLayer",
+    "DoesGroupPartExistInAncestor"
+   ]
+  },
+  {
+   "class": "MeshingGroupSetting",
+   "wrapper": "ScFlowpreMeshingGroupSetting",
+   "catalog_members": 104,
+   "wrapped": 28,
+   "coverage": 0.269,
+   "unwrapped_sample": [
+    "GetAFFaceterConsiderSpatialSeparation",
+    "GetAFFaceterLengthFactor",
+    "GetAFFaceterLengthFactorForOctree",
+    "GetAFFaceterMinimumAngle",
+    "GetAFFaceterMinimumAngleForOctree",
+    "GetAFFaceterTinyFaceWidthRatio"
+   ]
+  },
+  {
+   "class": "FaceRegion",
+   "wrapper": "ScFlowpreFaceRegion",
+   "catalog_members": 70,
+   "wrapped": 27,
+   "coverage": 0.386,
+   "unwrapped_sample": [
+    "CalculateRotateAxis",
+    "ClearFacetingParameter",
+    "GetAutoGroupNumberSw",
+    "GetBetweenPartsDirection",
+    "GetBetweenPartsPart1",
+    "GetBetweenPartsPart2"
+   ]
+  },
+  {
+   "class": "FluidRegion",
+   "wrapper": "ScFlowpreFluidRegion",
+   "catalog_members": 66,
+   "wrapped": 25,
+   "coverage": 0.379,
+   "unwrapped_sample": [
+    "GetAbsorptionCoeff",
+    "GetAutoGroupNumberSw",
+    "GetCarrierMixedGasSpecies",
+    "GetDiffuseReflectivity",
+    "GetEmissivity",
+    "GetGroupNumber"
+   ]
+  },
+  {
+   "class": "WrappingGroup",
+   "wrapper": "ScFlowpreWrappingGroup",
+   "catalog_members": 30,
+   "wrapped": 30,
+   "coverage": 1.0,
+   "unwrapped_sample": []
+  },
+  {
+   "class": "Octree",
+   "wrapper": "ScFlowpreOctree",
+   "catalog_members": 29,
+   "wrapped": 26,
+   "coverage": 0.897,
+   "unwrapped_sample": [
+    "GetMeshingGroupet",
+    "GetOctInfoConsideringMesherType",
+    "GetOctLevelVisible"
+   ]
+  },
+  {
+   "class": "Application",
+   "wrapper": "ScFlowpreApplication",
+   "catalog_members": 23,
+   "wrapped": 9,
+   "coverage": 0.391,
+   "unwrapped_sample": [
+    "EndRecordMessage",
+    "EndRecordVBS",
+    "GetLang",
+    "GetViewSize",
+    "GetWindowLayout",
+    "IsValidLocaleName"
+   ]
+  },
+  {
+   "class": "NumericalRegion",
+   "wrapper": "ScFlowpreNumericalRegion",
+   "catalog_members": 20,
+   "wrapped": 20,
+   "coverage": 1.0,
+   "unwrapped_sample": []
+  },
+  {
+   "class": "SubmeshSurfaceRegion",
+   "wrapper": "ScFlowpreSubmeshSurfaceRegion",
+   "catalog_members": 19,
+   "wrapped": 19,
+   "coverage": 1.0,
+   "unwrapped_sample": []
+  },
+  {
+   "class": "OctParam",
+   "wrapper": "ScFlowpreOctParam",
+   "catalog_members": 18,
+   "wrapped": 16,
+   "coverage": 0.889,
+   "unwrapped_sample": [
+    "GetMeshingGroup",
+    "SetMinSize"
+   ]
+  },
+  {
+   "class": "Utility",
+   "wrapper": "ScFlowpreUtility",
+   "catalog_members": 16,
+   "wrapped": 16,
+   "coverage": 1.0,
+   "unwrapped_sample": []
+  },
+  {
+   "class": "Condition",
+   "wrapper": "ScFlowpreCondition",
+   "catalog_members": 8,
+   "wrapped": 8,
+   "coverage": 1.0,
+   "unwrapped_sample": []
+  },
+  {
+   "class": "Region",
+   "wrapper": "ScFlowpreRegion",
+   "catalog_members": 6,
+   "wrapped": 6,
+   "coverage": 1.0,
+   "unwrapped_sample": []
+  },
+  {
+   "class": "AdaptiveParam",
+   "wrapper": "ScFlowpreAdaptiveParam",
+   "catalog_members": 4,
+   "wrapped": 4,
+   "coverage": 1.0,
+   "unwrapped_sample": []
+  }
+ ],
+ "unknown_wrapped_members": [],
+ "heading_signature_mismatch": [
+  {
+   "class": "ClosedVolume",
+   "heading": "SelectFace",
+   "signature": "SetSelectFaces",
+   "kind": "methods"
+  },
+  {
+   "class": "CondActranBoundaryNonReflection",
+   "heading": "SetInfiniteElementsAxis",
+   "signature": "GetInfiniteElementsAxis",
+   "kind": "methods"
+  },
+  {
+   "class": "CondBladeShape",
+   "heading": "EditChordLength",
+   "signature": "EditChoordLength",
+   "kind": "methods"
+  },
+  {
+   "class": "CondBoundaryFlowIO",
+   "heading": "GetEnvironmentParam",
+   "signature": "GetParam",
+   "kind": "methods"
+  },
+  {
+   "class": "CondBoundaryFlowIO",
+   "heading": "GetPassiveScalarIndividualInflowType",
+   "signature": "GetMixedGasInflowType",
+   "kind": "methods"
+  },
+  {
+   "class": "CondBoussinesqBaseTemp",
+   "heading": "IsBuoyancyConsideredInCurrentSetting",
+   "signature": "GetConsiderBuoyancyFlag",
+   "kind": "methods"
+  },
+  {
+   "class": "CondCoSim",
+   "heading": "CreateCoSimRegionVolume",
+   "signature": "CreateCoSimRegionSurface",
+   "kind": "methods"
+  },
+  {
+   "class": "CondCoSimRegion",
+   "heading": "GetType",
+   "signature": "GetRegionType",
+   "kind": "methods"
+  },
+  {
+   "class": "CondCoSimRegion",
+   "heading": "RemoveRegion",
+   "signature": "RemoveFromRegion",
+   "kind": "methods"
+  },
+  {
+   "class": "CondInitialShapeModify",
+   "heading": "AddMorphingRegion",
+   "signature": "AddMorphingCalcFaceRegion",
+   "kind": "methods"
+  },
+  {
+   "class": "CondMapForStructure",
+   "heading": "SetPIDPartCorresp",
+   "signature": "SetLoadIDFaceRegionCorresp",
+   "kind": "methods"
+  },
+  {
+   "class": "CondOutputCSV",
+   "heading": "GetOutputTimingParam",
+   "signature": "GetOutputTimingType",
+   "kind": "methods"
+  },
+  {
+   "class": "CondOutputLFileTurbo",
+   "heading": "ClearOutletBladeRegions",
+   "signature": "ClearOutletRegions",
+   "kind": "methods"
+  },
+  {
+   "class": "CondOutputTimeSeries",
+   "heading": "GetCSVOutputTimingParam",
+   "signature": "GetCSVOutputTimingType",
+   "kind": "methods"
+  },
+  {
+   "class": "Conditions",
+   "heading": "SetContactThicknessDefault",
+   "signature": "SetContactTicknessDefault",
+   "kind": "methods"
+  },
+  {
+   "class": "Conditions",
+   "heading": "SetDiffusionOptionParam",
+   "signature": "SetMeshOptionParam",
+   "kind": "methods"
+  },
+  {
+   "class": "Doc",
+   "heading": "CreateDiscontinuousMeshingGroupWitouthMovingPart",
+   "signature": "CreateDiscontinuousMeshingGroupWithoutMovingPart",
+   "kind": "methods"
+  },
+  {
+   "class": "Doc",
+   "heading": "GetSelectedSEdges",
+   "signature": "GetSelectedSFaces",
+   "kind": "methods"
+  },
+  {
+   "class": "Doc",
+   "heading": "GetVPartInformation",
+   "signature": "GetSPartInformation",
+   "kind": "methods"
+  },
+  {
+   "class": "Doc",
+   "heading": "ImprintEdgeToFace",
+   "signature": "ImprintEdgeToBody",
+   "kind": "methods"
+  },
+  {
+   "class": "Doc",
+   "heading": "OutputPartsList",
+   "signature": "OpenPropFile",
+   "kind": "methods"
+  },
+  {
+   "class": "Doc",
+   "heading": "SelectMeshFaceFromVFaces",
+   "signature": "SelectMeshFaceFromVFace",
+   "kind": "methods"
+  },
+  {
+   "class": "Doc",
+   "heading": "SetMeshDisplaySid",
+   "signature": "SetMeshDisplaySide",
+   "kind": "methods"
+  },
+  {
+   "class": "Doc",
+   "heading": "SetVMDLEdgeDisplayMode",
+   "signature": "SetMeshDisplaySide",
+   "kind": "methods"
+  },
+  {
+   "class": "Env",
+   "heading": "SetParallelMeshingFlag",
+   "signature": "GetParallelMeshingFlag",
+   "kind": "methods"
+  },
+  {
+   "class": "Env",
+   "heading": "SetZipLevel",
+   "signature": "GetZipLevel",
+   "kind": "methods"
+  },
+  {
+   "class": "HybridParam",
+   "heading": "SetSimpleLayerNum",
+   "signature": "GetSimpleLayerNum",
+   "kind": "methods"
+  },
+  {
+   "class": "HybridParam",
+   "heading": "SetSimpleOctRatio",
+   "signature": "GetSimpleOctRatio",
+   "kind": "methods"
+  },
+  {
+   "class": "MDLWizard",
+   "heading": "MultiEntityCo_GetSNode",
+   "signature": "MultiEntityCo_SNode",
+   "kind": "methods"
+  },
+  {
+   "class": "MDLWizard",
+   "heading": "SetValidAutoRemoveTinyFace",
+   "signature": "IsAutoRemoveTinyFaceValid",
+   "kind": "methods"
+  },
+  {
+   "class": "MapCond",
+   "heading": "SetParam2",
+   "signature": "SetParam",
+   "kind": "methods"
+  },
+  {
+   "class": "MeshingGroup",
+   "heading": "DoesOctMeshCVolElementExist",
+   "signature": "DoesOctMeshCVollementExist",
+   "kind": "methods"
+  },
+  {
+   "class": "MeshingGroup",
+   "heading": "SetSelectMeshFacesFromMDLFaces",
+   "signature": "SetSelectMeshFacesFromMDLFace",
+   "kind": "methods"
+  },
+  {
+   "class": "MeshingGroup",
+   "heading": "ShowEachTypeMeshEelem",
+   "signature": "ShowEachTypeMeshEelemregion",
+   "kind": "methods"
+  },
+  {
+   "class": "MeshingGroupSetting",
+   "heading": "SetMDLMethod",
+   "signature": "GetMDLMethod",
+   "kind": "methods"
+  },
+  {
+   "class": "OctParam",
+   "heading": "SetMinSize",
+   "signature": "SetMeshNum",
+   "kind": "methods"
+  },
+  {
+   "class": "Octree",
+   "heading": "GetMeshingGroup",
+   "signature": "GetMeshingGroupet",
+   "kind": "methods"
+  },
+  {
+   "class": "Octree",
+   "heading": "GetOctInfoConsideringMesherType",
+   "signature": "GetOctInfo",
+   "kind": "methods"
+  },
+  {
+   "class": "PropItem",
+   "heading": "GetRefpropTableParam",
+   "signature": "GetRefpropFluid",
+   "kind": "methods"
+  },
+  {
+   "class": "PropItem",
+   "heading": "SetRefpropTableParam",
+   "signature": "SetRefpropFluid",
+   "kind": "methods"
+  },
+  {
+   "class": "SpecialRegion",
+   "heading": "SetIsContactAngleSet",
+   "signature": "SetContactAngle",
+   "kind": "methods"
+  }
+ ],
+ "catalog_members_total": 4455
+}

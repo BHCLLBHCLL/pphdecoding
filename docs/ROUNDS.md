@@ -2434,24 +2434,102 @@ R32-3 留下的两个可疑取值（`"'protectd1"` / `"'orthogonality"`，引号
 
 ---
 
-## R34 —— 提案（≈1.5 人日）
+## R34 —— 语料对拍扩面 + VBS 通道取值校验 + 桥接落差账（2026-09-15，✅ 已完成）
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R34-1** | **语料对拍扩面** | ≥5 组有结论；新差异入库或无差异 | ✅ 容器 **333 种**、名字同源链接 **36 组**（差异 **12 条**全部入库 → `auto_with_gap=0`）、仅重叠提示 **23 组** |
+| **R34-2** | **VBS 通道取值校验** | 非法取值在生成期即告警/拦下 | ✅ `build_vbs` 唯一生成口校验；**`note_ref` 回退补上第一版漏洞** |
+| **R34-3** | **目录 ↔ 桥接落差账** | 有逐类账目；缺口清单进 R35 | ✅ 17 类 / 目录 1766 成员 / 已包装 **372（21.1%）**；两条不变量 + 41 处标题≠签名入册 |
+
+### R34-1 语料对拍扩面：333 个容器、36 组链接、12 条漏项
+
+R33-3 只覆盖 2 个容器（`stability*`）。本轮把语料里**两种取值写法**全收
+（`<X><name>V</name>` 与 `<X_type>V</X_type>`）→ **333 个容器**，再用
+「取值集交叉」自动找链接。
+
+**但交叉只能找候选**：实测 `loop_eq_param` 与 `equa_start_param` **都会**"匹配"到
+`Conditions.GetUpwdParam`（同名取值挂在不同设置上）。故入库多加一条门槛 ——
+**容器名与成员名必须同源**（`connection_type` ↔ `GetConnectionType`）。分桶结果：
+
+| 桶 | 组数 | 处置 |
+|---|---|---|
+| 名字同源（可入库） | 36 | 差异 12 条已入库；入库后差集归零（`auto_with_gap=0`） |
+| 仅取值重叠（只提示） | 23 | **不入库**，只作提示（测试钉住"不得并进它匹配到的那个槽"） |
+
+12 条入库漏项（`source: host-corpus`）：`battery`/`clear`/`infinite_elements`
+（`GetBoundaryType`）、`not_connect`（`GetConnectionType`，手册另写 `disconnect`）、
+`glue`（`GetContactType`）、`none`（`GetConversionType`）、`CAVI`/`CMBV`/`CONC_VAPOR`
+（`GetNextParam`）、`saturated_humidity`（`GetOutsideType`）、`surface`
+（`GetProjectionType`）、`eq_comb`（`GetSolvParam`）。
+
+### R34-2 VBS 通道：第二版才守住
+
+`build_vbs` 是 VBS 的唯一生成口，在那里校验「**字面量紧跟方法名**」的形态
+（那必然是第一个实参；路径/说明等行内字符串一律跳过）。
+
+**第一版有个静默漏洞**：setter 自己往往没有词表（取值挂在对应 getter 上，
+R30 实测 `SetVoxelOctRefineType` 即此）—— 不跟进 `note_ref` 就**整类放过**。
+补上回退后：`SetVoxelOctRefineType "speed"` 通过、`"voxel"` 告警；
+`ChangeMesher "polyhedral"` 告警；`strict_values=True` 在**生成阶段**抛 `ApiValueError`
+（早于任何宿主会话）。同一修复也回灌到 typed 桥与 `check_api_value`（三条路径同一口径）。
+
+### R34-3 落差账与两条不变量
+
+| 类 | 已包装 / 目录成员 | 覆盖率 |
+|---|---|---|
+| Conditions | 7 / 607 | **1.2%** |
+| Doc | 60 / 426 | 14.1% |
+| MeshingGroup | 23 / 175 | 13.1% |
+| SNode | 48 / 145 | 33.1% |
+| MeshingGroupSetting | 28 / 104 | 26.9% |
+| WrappingGroup / NumericalRegion / SubmeshSurfaceRegion | 30/30 · 20/20 · 19/19 | **100%** |
+| **合计** | **372 / 1766** | **21.1%** |
+
+两条不变量：
+
+1. **包装方法必须能在目录里找到**（自研便捷方法 `create_cond`/`query_cond`/`check`
+   按命名规则排除）——否则就是调了手册外成员，须像 `SetIntersectionDetectionDepth` 显式登记；
+2. **手册 h3 标题名 ≠ 签名名 的 41 处必须把真名记进 `signature_name`**：实测
+   `Doc.CreateDiscontinuousMeshingGroupWitouthMovingPart`（标题）vs
+   `…WithoutMovingPart`（签名）、`ClosedVolume.SelectFace` vs `SetSelectFaces`、
+   `CondBladeShape.EditChordLength` vs `EditChoordLength` 等。包装类按**签名**写，
+   不记这条就会在"目录里找不到"（本项第一版就是这么误报的）。
+
+### 回归
+
+全量回归 **1363 passed / 4 skipped / 0 failed**（554.58 s；R33 收口同口径 1338，
+增量 +25 = 本轮三个新模块 7 + 10 + 8）。
+新增测试 3 个模块：`test_corpus_autolink_r341.py`（7）、
+`test_vbs_value_guard_r342.py`（10）、`test_bridge_coverage_r343.py`（8）；
+并按 R34-1 口径更新 `test_api_desc_values_r312.py` 的 connection_type 断言
+（手册三条 + 语料补的 `not_connect`，带 `source`）。
+
+### 证据
+
+`_p12u_gate/r34/corpus_diff_auto.json`（333 容器 / 36 同源链接 / 23 仅重叠）、
+`_p12u_gate/r34/bridge_coverage.json`（逐类落差账 + 41 处标题≠签名）。
+
+---
+
+## R35 —— 提案（≈1.5 人日）
 
 ### 依据
 
-* R33-2 的守卫只覆盖 **typed 桥**；VBS 直写通道（`automation/vbs_bridge.py` + 大量
-  `tools/_p12*.py` 生成器）仍照写不误；
-* R33-3 的语料对拍只覆盖到 **2 个取值容器**（151 个工程里只识别出 `stability*` 两种
-  `<xxx_type><name>` 结构）—— 覆盖面远小于语料实际包含的枚举；
-* R32-3 捞出 **4177 条 return**，但 typed 桥的包装方法只覆盖高频类的一部分，
-  「目录有、桥没有」的落差没有账。
+* 41 处「标题名 ≠ 签名名」到底哪个是宿主认的，**目录里两个名字都留着**，没有裁定；
+* 23 条「仅取值重叠」候选（`loop_eq_param`/`equa_start_param` → `GetUpwdParam` 之类）
+  只停在提示，没有归因；
+* 落差账显示 `Conditions` 只包装了 1.2%（7/607）—— 而条件线正是本仓最大的业务面。
 
 ### 条目
 
 | # | 条目 | 做法 | 验收句 | 人日 |
 |---|---|---|---|---|
-| **R34-1** | **语料对拍扩面** | 在语料里找出更多「容器 ↔ 目录成员」可对拍组（含 xenv 侧），目标 ≥5 组 | ≥5 组有结论；新差异入库或无差异（结论落盘） | 0.5 |
-| **R34-2** | **VBS 通道取值校验** | 在 VBS 生成侧（调用构造点）用 `check_api_value` 三态校验 | 非法取值在生成期即告警/拦下，且有测试 | 0.5 |
-| **R34-3** | **目录 ↔ 桥接落差账** | 按类统计「目录成员数 vs typed 包装方法数」，列缺口 | 有逐类账目；缺口清单进 R35 提案 | 0.5 |
+| **R35-1** | **类型库枚举（宿主真实成员表）** | 用 COM `GetTypeInfo` 把 `MeshingGroupSetting`/`Doc` 等类的**真实成员名**导出来，与目录对账 | 至少 1 个类的真实成员表落盘；41 处标题/签名分歧给出裁定 | 0.5 |
+| **R35-2** | **仅重叠候选归因** | 对 23 条候选逐条判定「真对应某成员 / 纯重叠」 | 每条有结论；确认为真对应的补链接并复跑对拍 | 0.5 |
+| **R35-3** | **落差账驱动补面** | 按落差账优先补 `Conditions` 高频成员包装 | 覆盖率 21.1% → **≥25%**，且有测试 | 0.5 |
 
 ### 明确不做
 
