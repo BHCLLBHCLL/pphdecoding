@@ -4065,6 +4065,21 @@
        {
         "value": "mass_transfer_coef",
         "description": "Mass transfer with a given transfer coefficient."
+       },
+       {
+        "value": "adiabatic",
+        "description": "（宿主语料：transfer_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "no_resistance",
+        "description": "（宿主语料：transfer_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "transfer",
+        "description": "（宿主语料：transfer_type）",
+        "source": "host-corpus"
        }
       ]
      }
@@ -13284,6 +13299,26 @@
        {
         "value": "volume",
         "description": "Specified volume"
+       },
+       {
+        "value": "all",
+        "description": "（宿主语料：region_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "point_group",
+        "description": "（宿主语料：region_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "region",
+        "description": "（宿主语料：region_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "surface_region",
+        "description": "（宿主语料：region_type）",
+        "source": "host-corpus"
        }
       ]
      }
@@ -13525,6 +13560,51 @@
        {
         "value": "mixed_gas",
         "description": "Mixed gas"
+       },
+       {
+        "value": "fuel",
+        "description": "（宿主语料：variable_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "fvf",
+        "description": "（宿主语料：variable_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "oxid",
+        "description": "（宿主语料：variable_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "pbnd",
+        "description": "（宿主语料：variable_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "reaction_incomp_species",
+        "description": "（宿主语料：variable_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "specify_value",
+        "description": "（宿主语料：variable_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "vapor",
+        "description": "（宿主语料：variable_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "velocity_poisson",
+        "description": "（宿主语料：variable_type）",
+        "source": "host-corpus"
+       },
+       {
+        "value": "vos",
+        "description": "（宿主语料：variable_type）",
+        "source": "host-corpus"
        }
       ]
      }

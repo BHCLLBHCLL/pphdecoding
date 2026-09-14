@@ -1,0 +1,46 @@
+{
+ "source": "tools/dispatch_name_probe.py（运行时 GetIDsOfNames，151 工程语料外）",
+ "method": "IDispatch::GetIDsOfNames 只做名字解析、不调用方法",
+ "note": "宿主不实现 GetTypeInfo 且未注册类型库；未裁定的对（需 Cond* 实例）不在此表",
+ "resolved": {
+  "Conditions": {
+   "SetContactThicknessDefault": "SetContactThicknessDefault",
+   "SetDiffusionOptionParam": "SetDiffusionOptionParam"
+  },
+  "Doc": {
+   "CreateDiscontinuousMeshingGroupWitouthMovingPart": "CreateDiscontinuousMeshingGroupWithoutMovingPart",
+   "GetSelectedSEdges": "GetSelectedSEdges",
+   "GetVPartInformation": "GetVPartInformation",
+   "ImprintEdgeToFace": "ImprintEdgeToFace",
+   "OutputPartsList": "OutputPartsList",
+   "SelectMeshFaceFromVFaces": "SelectMeshFaceFromVFaces",
+   "SetMeshDisplaySid": "SetMeshDisplaySide",
+   "SetVMDLEdgeDisplayMode": "SetVMDLEdgeDisplayMode"
+  },
+  "Env": {
+   "SetParallelMeshingFlag": "SetParallelMeshingFlag",
+   "SetZipLevel": "SetZipLevel"
+  },
+  "MDLWizard": {
+   "MultiEntityCo_GetSNode": "MultiEntityCo_GetSNode",
+   "SetValidAutoRemoveTinyFace": "SetValidAutoRemoveTinyFace"
+  },
+  "MeshingGroup": {
+   "DoesOctMeshCVolElementExist": "DoesOctMeshCVollementExist",
+   "SetSelectMeshFacesFromMDLFaces": "SetSelectMeshFacesFromMDLFaces",
+   "ShowEachTypeMeshEelem": "ShowEachTypeMeshEelem"
+  },
+  "MeshingGroupSetting": {
+   "SetMDLMethod": "SetMDLMethod"
+  },
+  "Octree": {
+   "GetMeshingGroup": "GetMeshingGroup",
+   "GetOctInfoConsideringMesherType": "GetOctInfoConsideringMesherType"
+  }
+ },
+ "tally": {
+  "heading": 4,
+  "both": 13,
+  "signature": 3
+ }
+}

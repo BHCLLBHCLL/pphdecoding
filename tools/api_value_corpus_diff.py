@@ -167,7 +167,61 @@ def discover_links(scan: dict, *, min_shared: int = 2,
     return actionable[:limit], overlap_only[:limit]
 
 
-def diff(scan: dict, auto: bool = False) -> dict:
+def _stem(name: str) -> str:
+    """名字 → 词干（去 Get/Set 前缀与 type/param/option 之类后缀）。
+
+    两侧都要过这一道：`region_type` 与 `GetRegionType` 才判为同源。
+    """
+    s = re.sub(r"^(get|set)", "", _norm(name))
+    for suffix in ("type", "param", "option", "setting", "value", "keyword"):
+        if s.endswith(suffix) and len(s) > len(suffix) + 2:
+            s = s[: -len(suffix)]
+    return s
+
+
+def attribute_overlap(scan: dict, *, min_shared: int = 2) -> list:
+    """给「仅取值重叠」候选找**名字对得上**的真成员（R35-2）。
+
+    取值交叉只会指向"取值最像"的槽，不一定是语义对应的那个 ——
+    实测 `equa_start_param` 被指到 `GetUpwdParam`，而目录里其实有
+    `GetEquaStartParam`。这里按容器词干在成员名里找匹配，再复核取值交集。
+    """
+    slots = [(cls, member, arg, {v["value"] for v in values})
+             for cls, member, arg, values in _slots(load_catalog())]
+    out = []
+    for parent, values in sorted(scan["per_container"].items()):
+        corpus = set(values)
+        if len(corpus) < min_shared:
+            continue
+        stem = _stem(parent)
+        if len(stem) < 4:
+            continue
+        best = None
+        for cls, member, arg, manual in slots:
+            m = _norm(member)
+            m = re.sub(r"^(get|set)", "", m)
+            if stem not in m:
+                continue
+            shared = len(corpus & manual)
+            if shared < min(min_shared, len(corpus)):
+                continue
+            score = (shared, -abs(len(m) - len(stem)))
+            if best is None or score > best[0]:
+                best = (score, cls, member, arg)
+        if best:
+            _score, cls, member, arg = best
+            link = _link(parent, cls, member, arg, corpus)
+            link["stem"] = stem
+            link["name_matched"] = True
+            # 精确同源（去掉 Get/Set 后与词干相同）才允许据以入库；
+            # 词干只是"包含"关系的（upwd_param → GetUpwdOptionParamForEquation）
+            # 只作归因提示，留给 R36 裁定。
+            link["exact_stem"] = stem == _stem(member)
+            out.append(link)
+    return out
+
+
+def diff(scan: dict, auto: bool = False, attribute: bool = False) -> dict:
     manual_all = all_catalog_values()
     corpus_all = {v for vals in scan["per_container"].values() for v in vals}
     links = [_link(parent, *KNOWN_LINKS[parent],
@@ -178,8 +232,13 @@ def diff(scan: dict, auto: bool = False) -> dict:
     discovered = [d for d in discovered
                   if d["member"] not in {c + "." + m + "." + a
                                          for c, m, a in known_pairs}]
+    attributed = attribute_overlap(scan) if attribute else []
+    known_ids = {d["member"] for d in discovered} | {
+        c + "." + m + "." + a for c, m, a in known_pairs}
+    attributed = [a for a in attributed if a["member"] not in known_ids]
     return {
         "files": scan["files"], "errors": scan["errors"],
+        "attributed": attributed,
         "containers": {k: len(v)
                        for k, v in sorted(scan["per_container"].items())},
         "links": links, "discovered": discovered,
@@ -204,9 +263,11 @@ def main(argv=None) -> int:
     ap.add_argument("--json", type=Path, default=None)
     ap.add_argument("--auto", action="store_true",
                     help="按取值集交叉自动发现链接")
+    ap.add_argument("--attribute", action="store_true",
+                    help="给仅重叠候选按词干归因到真成员（R35-2）")
     ap.add_argument("--limit", type=int, default=25)
     args = ap.parse_args(argv)
-    data = diff(scan_corpus(), auto=args.auto)
+    data = diff(scan_corpus(), auto=args.auto, attribute=args.attribute)
     print("[corpus] 工程 " + str(data["files"]) + "（读失败 "
           + str(data["errors"]) + "）| 取值容器 "
           + str(len(data["containers"])) + " 种")
@@ -214,6 +275,8 @@ def main(argv=None) -> int:
         _print_link(link, "known")
     for link in data["discovered"]:
         _print_link(link, "auto ")
+    for link in data.get("attributed") or []:
+        _print_link(link, "attr ")
     print("[corpus] 仅取值重叠（名字不同源，**不入库**，只作提示）: "
           + str(len(data["overlap_only"])))
     for link in data["overlap_only"][:8]:

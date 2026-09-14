@@ -2514,22 +2514,89 @@ R30 实测 `SetVoxelOctRefineType` 即此）—— 不跟进 `note_ref` 就**整
 
 ---
 
-## R35 —— 提案（≈1.5 人日）
+## R35 —— 名字实机裁定 + 归因入库 + 目录物化（2026-09-15，✅ 已完成）
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R35-1** | **宿主真实成员名裁定** | ≥1 个类落盘；41 处分歧给出裁定 | ✅ 实机裁定 **20/41**（**both 13 / heading 4 / signature 3**），裁定表入册 `schemas/name_verdicts.json` |
+| **R35-2** | **仅重叠候选归因** | 每条有结论；真对应的补链接 | ✅ 8 条按词干归因，**3 条精确同源 → 16 条取值入库**；5 条仅"包含"关系只提示 |
+| **R35-3** | **落差账驱动补面** | 覆盖率 21.1% → ≥25% | ✅ 目录物化 → **1759/1766 = 99.6%**（属性名=目录键、派发名=裁定名优先） |
+
+### R35-1 名字裁定：`GetTypeInfo` 走不通，改用 `GetIDsOfNames`
+
+**离线路线先被排除**：scFLOWpre 的 COM 服务器**没有注册类型库**
+（`HKCR\\CLSID\\{6FDA4768-…}\\TypeLib` 不存在；二进制也 `LoadTypeLib` 不出来），
+运行时 `GetTypeInfo` 同样 `com_error`（7 个对象实测全 `no:com_error`）。
+
+于是改用 **`IDispatch::GetIDsOfNames`** —— 它**只做名字解析、不调用任何方法**，零副作用：
+
+| 裁定 | 对数 | 含义 |
+|---|---|---|
+| `both` | **13** | 两个名字宿主都认（互为别名） |
+| `heading` | **4** | 只有**手册标题名**能解析（签名写错了） |
+| `signature` | **3** | 只有**签名名**能解析（标题拼错） |
+| 未裁定 | 21 | `Cond*` 类需要条件对象实例，本轮未构建 |
+
+两条典型：`Doc.CreateDiscontinuousMeshingGroupWitouthMovingPart` → **签名胜**
+（`…WithoutMovingPart`，印证 R34-3 的假设）；`Conditions.SetContactThicknessDefault`
+→ **标题胜**（签名 `SetContactTicknessDefault` 是手册自己的拼写错）。
+**所以"一律用签名名"也是错的** —— 裁定优先、签名次之、目录键兜底。
+
+**过程中踩了两个坑**（都记进代码注释）：① 未打开工程就 `GetConditions` 抛
+`DISP_E_MEMBERNOTFOUND`，把后面所有实例构建全挡掉；② 裸 `CDispatch` 链式调用会被
+win32com 当属性读，`QueryMeshingGroupByIndex(0)` 抛 `TypeError: 'bool' object is not
+callable` —— 必须走仓内 typed 包装（内部 `_FlagAsMethod` 派发）。
+
+### R35-2 归因：词干同源才入库
+
+23 条「仅取值重叠」候选里，按**词干**（去 `Get/Set` 与 `type/param` 后缀）找真成员：
+**8 条找到**，其中 **3 条精确同源**（`region_type`↔`GetRegionType`、
+`variable_type`↔`GetVariableType`、`transfer_type`↔`GetTransferType`）→ **16 条取值入库**；
+另 5 条只是"包含"关系（`upwd_param` → `GetUpwdOptionParamForEquation`）**不入库**，
+留作提示（测试钉住"不得并进它匹配到的那个槽"）。
+
+### R35-3 目录物化：21.1% → 99.6%
+
+`materialize_catalog_wrappers()` 把目录里**尚未手写**的成员物化成包装方法：
+**属性名 = 目录键**（与目录对账一致，`test_scflowpre_api` 的名字断言才成立）、
+**派发名 = 裁定名 → 签名名 → 目录键**。意义不在"多写几行"，而在
+**取值校验覆盖到每个手册成员**（物化方法走同一个 `call()` → `_check_values`）。
+手写包装不被覆盖（保住其文档与语义）。
+
+### 回归
+
+全量回归 **1377 passed / 4 skipped / 0 failed**（557.45 s；R34 收口同口径 1363，
+增量 +14 = 本轮新模块 14，逐项对得上）。
+新增测试 1 个模块：`test_r35_evidence.py`（14）；并把 R34 的
+`test_bridge_coverage_r343.py` 证据断言从"等于快照"改为**单调不变量**（覆盖率只增不减）。
+
+### 证据
+
+`_p12u_gate/r35/name_verdicts.json`（20 对裁定 + 7 对象 `GetTypeInfo` 全否）、
+`schemas/name_verdicts.json`（紧凑裁定表，typed 桥据此选派发名）、
+`_p12u_gate/r35/corpus_diff_attr.json`（36 同源 + 8 归因 + 23 仅重叠）、
+`_p12u_gate/r35/bridge_coverage.json`（物化后 1759/1766）。
+
+---
+
+## R36 —— 提案（≈1.5 人日）
 
 ### 依据
 
-* 41 处「标题名 ≠ 签名名」到底哪个是宿主认的，**目录里两个名字都留着**，没有裁定；
-* 23 条「仅取值重叠」候选（`loop_eq_param`/`equa_start_param` → `GetUpwdParam` 之类）
-  只停在提示，没有归因；
-* 落差账显示 `Conditions` 只包装了 1.2%（7/607）—— 而条件线正是本仓最大的业务面。
+* 41 处里仍有 **21 处未裁定**（全是 `Cond*` 类，需要条件对象实例）——
+  其中就可能有"标题胜"的对，而物化当前对未裁定者用签名名；
+* R35-2 剩 5 条仅"包含"关系的候选（`upwd_param` 等）没归因完；
+* 物化让每个成员都可调，但**属性**（`properties`）没有对应设施（仍是 `prop()/set_prop()` 手写）。
 
 ### 条目
 
 | # | 条目 | 做法 | 验收句 | 人日 |
 |---|---|---|---|---|
-| **R35-1** | **类型库枚举（宿主真实成员表）** | 用 COM `GetTypeInfo` 把 `MeshingGroupSetting`/`Doc` 等类的**真实成员名**导出来，与目录对账 | 至少 1 个类的真实成员表落盘；41 处标题/签名分歧给出裁定 | 0.5 |
-| **R35-2** | **仅重叠候选归因** | 对 23 条候选逐条判定「真对应某成员 / 纯重叠」 | 每条有结论；确认为真对应的补链接并复跑对拍 | 0.5 |
-| **R35-3** | **落差账驱动补面** | 按落差账优先补 `Conditions` 高频成员包装 | 覆盖率 21.1% → **≥25%**，且有测试 | 0.5 |
+| **R36-1** | **`Cond*` 类名字裁定** | 借条件收割配方造出条件对象，把 21 处未裁定对补齐 | 裁定覆盖 41/41；表更新 | 0.5 |
+| **R36-2** | **"包含"关系候选归因** | 对 5 条逐条判定真成员（必要时实机试键） | 每条有结论；真对应的补链接 | 0.5 |
+| **R36-3** | **属性物化** | 目录 `properties` 也物化成 `prop/set_prop` 访问器 | typed 类可读属性名一致；有测试 | 0.5 |
 
 ### 明确不做
 

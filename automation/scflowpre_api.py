@@ -1637,10 +1637,73 @@ def wire_api_classes() -> int:
     return n
 
 
+def load_name_verdicts(path: Optional[Path] = None) -> dict:
+    """读 `schemas/name_verdicts.json`（R35-1 实机裁定表）。
+
+    结构：`{"resolved": {类: {目录键: 宿主接受的名字}}}`。文件不存在时返回空表
+    （此时退回"签名名优先"）。
+    """
+    import json
+    p = Path(path or (Path(__file__).resolve().parent.parent / "schemas"
+                      / "name_verdicts.json"))
+    try:
+        return json.loads(p.read_text(encoding="utf-8")).get("resolved") or {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _make_catalog_wrapper(dispatch: str, doc: str, name: str,
+                         qualname: str):
+    def wrapper(self, *args):
+        return self.call(dispatch, *args)
+    wrapper.__name__ = name
+    wrapper.__qualname__ = qualname
+    wrapper.__doc__ = doc
+    return wrapper
+
+
+def materialize_catalog_wrappers() -> int:
+    """按目录把**尚未手写**的成员物化成包装方法（R35-3）。返回新增条数。
+
+    两个设计点：
+
+    * **属性名 = 目录键**（保持与目录对账一致，`test_scflowpre_api` 的名字断言才成立）；
+    * **派发名 = `signature_name` 优先**：手册 h3 标题有拼写错（R34-3 记了 41 处，
+      如标题 `…WitouthMovingPart` vs 签名 `…WithoutMovingPart`），拿标题名去调宿主会失败。
+
+    意义不在"多写几行"：物化出的方法走同一个 `call()` → `_check_values`，
+    于是**取值校验覆盖到每个手册成员**，而不只是手写的那 372 个。
+    """
+    cat = load_catalog()
+    verdicts = load_name_verdicts()
+    n = 0
+    for cls_name, klass in TYPED_CLASSES.items():
+        info = cat["classes"].get(cls_name) or {}
+        existing = set(vars(klass))
+        for member, entry in (info.get("methods") or {}).items():
+            if member.startswith("_") or member in existing:
+                continue
+            if not member.isidentifier():
+                continue
+            # 派发名优先级（R35-1 实机裁定 > 签名 > 目录键）：
+            # 实测 20 对里 4 对**只有标题名**能解析（如
+            # Conditions.SetContactThicknessDefault vs SetContactTicknessDefault），
+            # 所以不能一律用签名名。
+            dispatch = ((verdicts.get(cls_name) or {}).get(member)
+                        or entry.get("signature_name") or member)
+            doc = ("目录物化包装（R35-3）：派发 " + dispatch
+                   + "；签名 " + str(entry.get("signature") or "-"))
+            setattr(klass, member, _make_catalog_wrapper(
+                dispatch, doc, member, klass.__name__ + "." + member))
+            n += 1
+    return n
+
+
 def _ensure_api_wiring() -> None:
     global _API_WIRED
     if not _API_WIRED:
         wire_api_classes()
+        materialize_catalog_wrappers()
         _API_WIRED = True
 
 

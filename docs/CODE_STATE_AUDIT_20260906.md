@@ -1721,6 +1721,38 @@ Doc 14.1%，WrappingGroup/NumericalRegion/SubmeshSurfaceRegion 100%。
 2. **标题名 ≠ 签名名 41 处必须记 `signature_name`**（如标题 `…WitouthMovingPart` vs
    签名 `…WithoutMovingPart`、`SelectFace` vs `SetSelectFaces`）——包装类按签名写，
    不记这条就会在"目录里找不到"（本项第一版即因此误报）。
+
+---
+
+## 49. R35 更新（2026-09-15）—— 名字实机裁定 / 归因入库 / 目录物化
+
+### 49.1 名字裁定：`GetTypeInfo` 双路皆堵，`GetIDsOfNames` 可用（R35-1）
+
+离线：`HKCR\\CLSID\\{6FDA4768-…}\\TypeLib` **不存在**，二进制 `LoadTypeLib` 全部失败
+→ 服务器**未注册类型库**。运行时：7 个对象的 `GetTypeInfo` 全部 `com_error`
+→ 也没有运行时类型信息。故只剩 `IDispatch::GetIDsOfNames`（**只解析、不调用**）。
+
+实机裁定 **20/41**：`both` 13 / `heading` 4 / `signature` 3 / 未裁定 21（`Cond*` 需实例）。
+两条典型：`Doc.CreateDiscontinuousMeshingGroupWitouthMovingPart` **签名胜**；
+`Conditions.SetContactThicknessDefault` **标题胜**（签名 `SetContactTicknessDefault` 是拼写错）。
+→ **"一律用签名名"是错的**：派发名优先级 = 裁定名 → 签名名 → 目录键。裁定表入册
+`schemas/name_verdicts.json`。
+
+两个坑（已写进代码注释）：① 未开工程就 `GetConditions` 抛 `DISP_E_MEMBERNOTFOUND`，
+后续实例构建全被挡；② 裸 `CDispatch` 链式调用被 win32com 当属性读，
+`QueryMeshingGroupByIndex(0)` 抛 `TypeError: 'bool' object is not callable` → 必须走 typed 包装。
+
+### 49.2 归因口径：精确同源才入库（R35-2）
+
+23 条仅重叠候选按词干归因 → 8 条找到真成员；其中 **3 条精确同源**
+（`region_type`/`variable_type`/`transfer_type`）→ 16 条取值入库；
+5 条仅"包含"关系（`upwd_param` → `GetUpwdOptionParamForEquation`）**不入库**，留提示。
+
+### 49.3 目录物化：覆盖率 21.1% → 99.6%（R35-3）
+
+`materialize_catalog_wrappers()`：属性名 = **目录键**（保证与目录对账一致），
+派发名 = **裁定名优先**。意义是**取值校验覆盖每个手册成员**（物化方法同走
+`call()` → `_check_values`），手写包装不被覆盖。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

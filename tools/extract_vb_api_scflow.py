@@ -325,6 +325,45 @@ _VALUE_ADDENDA: dict = {
     ("Conditions", "GetSolvParam", "key"): [
         {"value": "eq_comb", "description": "（宿主语料：solv_param）",
          "source": "host-corpus"}],
+    # ↓ R35-2：由「仅取值重叠」候选按**词干同源**归因后补入（`--attribute`）。
+    # 词干只是"包含"关系的不入库（如 upwd_param → GetUpwdOptionParamForEquation）。
+    ("CondInitial", "GetRegionType", "return"): [
+        {"value": "all", "description": "（宿主语料：region_type）",
+         "source": "host-corpus"},
+        {"value": "point_group", "description": "（宿主语料：region_type）",
+         "source": "host-corpus"},
+        {"value": "region", "description": "（宿主语料：region_type）",
+         "source": "host-corpus"},
+        {"value": "surface_region", "description": "（宿主语料：region_type）",
+         "source": "host-corpus"}],
+    ("CondBoundaryDiffusiveSpecies", "GetTransferType", "return"): [
+        {"value": "adiabatic", "description": "（宿主语料：transfer_type）",
+         "source": "host-corpus"},
+        {"value": "no_resistance", "description": "（宿主语料：transfer_type）",
+         "source": "host-corpus"},
+        {"value": "transfer", "description": "（宿主语料：transfer_type）",
+         "source": "host-corpus"}],
+    ("CondInitial", "GetVariableType", "return"): [
+        {"value": "fuel", "description": "（宿主语料：variable_type）",
+         "source": "host-corpus"},
+        {"value": "fvf", "description": "（宿主语料：variable_type）",
+         "source": "host-corpus"},
+        {"value": "oxid", "description": "（宿主语料：variable_type）",
+         "source": "host-corpus"},
+        {"value": "pbnd", "description": "（宿主语料：variable_type）",
+         "source": "host-corpus"},
+        {"value": "reaction_incomp_species",
+         "description": "（宿主语料：variable_type）",
+         "source": "host-corpus"},
+        {"value": "specify_value", "description": "（宿主语料：variable_type）",
+         "source": "host-corpus"},
+        {"value": "vapor", "description": "（宿主语料：variable_type）",
+         "source": "host-corpus"},
+        {"value": "velocity_poisson",
+         "description": "（宿主语料：variable_type）",
+         "source": "host-corpus"},
+        {"value": "vos", "description": "（宿主语料：variable_type）",
+         "source": "host-corpus"}],
 }
 
 

@@ -91,14 +91,18 @@ class TestHeadingSignatureMismatch(unittest.TestCase):
 
 
 class TestEvidenceFile(unittest.TestCase):
-    def test_evidence_matches_live_report(self):
+    def test_coverage_never_shrinks(self):
+        """R34 的证据是**当时的账**：R35-3 物化后覆盖只增不减（单调口径）。
+
+        （原断言是"证据 == 实时"，R35-3 把包装从 372 提到 1759 后它必然失败 ——
+        快照类断言一律改单调不变量，这是本仓的既定口径。）
+        """
         if not EVIDENCE.is_file():
             raise unittest.SkipTest("coverage evidence missing")
         saved = json.loads(EVIDENCE.read_text(encoding="utf-8"))
         live = _load("bridgecov_r343c", COV).report()
-        self.assertEqual(saved["wrapped"], live["wrapped"])
-        self.assertEqual(saved["unknown_wrapped_members"],
-                         live["unknown_wrapped_members"])
+        self.assertGreaterEqual(live["wrapped"], saved["wrapped"])
+        self.assertEqual(live["unknown_wrapped_members"], [])
 
 
 if __name__ == "__main__":
