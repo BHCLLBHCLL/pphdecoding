@@ -2136,10 +2136,11 @@ if k not in base_types and k not in have_before]`，并且只在 `to_add` 非空
 
 ### 回归
 
-全量回归 **1246 passed / 4 skipped / 0 failed**（563.49 s）；另 R30-5 的
-`tests/test_git_milestone_size_r305.py` 在改后单独复跑 **4 passed**（`git_milestone` 无其他引用者，
-且改后 `--dry-run` 跳过清单清零）—— 合计 **1250 passed / 4 skipped / 0 failed**。
-两次全量之间的代码差异只有 `tools/git_milestone.py` 与新测试本身。
+全量回归 **1246 passed / 4 skipped / 0 failed**（563.49 s，含 R30-1/2/3 的 26 项与 R30-4 的 3 项）。
+此后才落地的 R30-5（`tools/git_milestone.py` 三处修复 + `tests/test_git_milestone_size_r305.py`）
+**单独复跑 8 passed** —— `git_milestone` 在全仓只有该测试引用（`Select-String` 实测），
+且改后 `--dry-run` 跳过清单清零、收录/删除集与实际暂存集一致。
+口径合计 **1254 passed / 4 skipped / 0 failed**。
 
 新增测试：`tests/test_xenv_setter_probe_r301.py`（档位解析 / VBS 取值引号 / 每档只改一个 setter /
 逐档存档 / 增量 diff）与 `tests/test_api_catalog_values_r303.py`（取值格 4 类 / 行型派发 4 例 /
