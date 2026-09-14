@@ -77,6 +77,13 @@ _QUOTES = "\"\u201c\u201d"
 _ENUM_DESC = re.compile(
     "[" + _QUOTES + "]([^" + _QUOTES + "]+)[" + _QUOTES
     + "]\\s*:?\\s*([^" + _QUOTES + "]*)")
+#: 描述内嵌取值（R31-2 实测 116 行）：第一个引号之前必须出现**类型标记**
+#: （(string)/(BSTR)/(VARIANT)）或 label 词（mode/type/…），否则是散文
+#: （如 `Use "cycle_interval" to get cycle interval`）——实测 118 行被此条挡住。
+_DESC_PREFIX = re.compile(
+    r"(?:\((?:BSTR|VARIANT|string)[^)]*\)"
+    r"|\b(?:mode|type|edition|format|method|option|key|setting|flag)\b)"
+    r"[\s\[:,，(]*(?:\[[^\]]*)?$", re.I)
 #: 整数取值行：手册把 0/1/2 型枚举写成「0 Initial calculation 1 Restart…」
 _NUM_DESC = re.compile(r"(\d+)\s*:?\s*([^\d]*?)(?=\s*\d+\s*:?\s|$)")
 #: 漏闭合引号（手册 "IRBN）：取值取到首个空白，余下当描述
@@ -178,6 +185,34 @@ def _enum_values(cell: str) -> list:
             for m in _ENUM_DESC.finditer(text)]
 
 
+def _clean_desc(s: str) -> str:
+    """取值描述清理：去掉包裹括号/方括号与尾随逗号、冒号。"""
+    out = (s or "").strip().strip("[]").strip().rstrip(",").strip()
+    return out.strip("()").strip().rstrip(":").strip()
+
+
+def _desc_values(text: str) -> list:
+    """取值写在**参数描述**里的行型（R31-2）。
+
+    手册有两种「描述即词表」写法：
+
+      * `Type of connection (string)["default" (default), "connect" (connect)]`
+      * `License mode "hpc" : HPC edition "lt" : LT edition`
+
+    判定条件（实测标定，见 `_DESC_PREFIX`）：第一个引号之前必须出现类型标记或
+    label 词；否则是散文（`Use "cycle_interval" to get cycle interval`），不得当词表。
+    纯取值行（整格就是 `"poly"`）归 `_parse_continuation` 管，这里直接放行。
+    """
+    if not text.strip() or text.strip()[0] in _QUOTES:
+        return []
+    head = text.split('"')[0] if '"' in text else text
+    if not _DESC_PREFIX.search(head):
+        return []
+    return [{"value": m.group(1).strip(),
+             "description": _clean_desc(m.group(2))}
+            for m in _ENUM_DESC.finditer(text)]
+
+
 def _numeric_values(cell: str) -> list:
     """整数取值格 → [{"value", "description"}]（同格多值也拆开）。"""
     return [{"value": m.group(1), "description": m.group(2).strip()}
@@ -203,6 +238,9 @@ def _push_arg(entry: dict, name_cell: str, desc: str, ret: bool = False) -> None
         "name": (am.group(2) if am else name_cell).strip(),
         "description": (desc or "").strip(),
     }
+    vals = _desc_values(name_cell + " " + (desc or ""))
+    if vals:
+        item["values"] = vals
     if ret:
         entry["return"] = item
     else:

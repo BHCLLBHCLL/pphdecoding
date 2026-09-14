@@ -71,7 +71,10 @@ class TestFacetKeysMatchHost(unittest.TestCase):
         # 不变量（单调）：**每一个**已实测键都必须是面板真的写出的键名；
         # 具体集合随轮次增长（R8-5 两条 → R10-3 三条 → …），故不写死。
         verified = {key for key, _v, _g, _l in self.check.WRITES}
-        self.assertGreaterEqual(len(verified), 3)
+        # R31-1 起：非 FACET 段的实测键（WRITES_MORE）也纳入同一契约
+        verified |= {key for _s, key, _v, _g, _e, _l
+                     in getattr(self.check, "WRITES_MORE", [])}
+        self.assertGreaterEqual(len(verified), 4)
         src = (ROOT / "nav_panels.py").read_text(encoding="utf-8")
         for key in sorted(verified):
             self.assertIn(key, src, key)

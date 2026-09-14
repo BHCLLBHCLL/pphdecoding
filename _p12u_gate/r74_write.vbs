@@ -53,20 +53,23 @@ out_.WriteLine "s011=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "mgs__alive=" & CStr(Not (MGS_ Is Nothing)) & " err=" & CStr(Err.Number)
 Err.Clear
-out_.WriteLine "read_USE_SIMPLE_SETTING=" & CStr(MGS_.GetFacetUseSimpleSetting) & " err=" & CStr(Err.Number)
+out_.WriteLine "read_FACET_USE_SIMPLE_SETTING=" & CStr(MGS_.GetFacetUseSimpleSetting) & " err=" & CStr(Err.Number)
 out_.WriteLine "s012=" & CStr(Err.Number)
 Err.Clear
-out_.WriteLine "read_MDL_METHOD=" & CStr(MGS_.GetMDLMethod) & " err=" & CStr(Err.Number)
+out_.WriteLine "read_FACET_MDL_METHOD=" & CStr(MGS_.GetMDLMethod) & " err=" & CStr(Err.Number)
 out_.WriteLine "s013=" & CStr(Err.Number)
 Err.Clear
-out_.WriteLine "read_SIMPLE_MAX_ANGLE=" & CStr(MGS_.GetFacetSimpleMaxAngle) & " err=" & CStr(Err.Number)
+out_.WriteLine "read_FACET_SIMPLE_MAX_ANGLE=" & CStr(MGS_.GetFacetSimpleMaxAngle) & " err=" & CStr(Err.Number)
 out_.WriteLine "s014=" & CStr(Err.Number)
 Err.Clear
-out_.WriteLine "mesh_exists=" & CStr(MG_.DoesMeshExist) & " err=" & CStr(Err.Number)
+out_.WriteLine "read_OCT_MESH_VOXEL_OCT_REFINE_TYPE=" & CStr(MGS_.GetVoxelOctRefineType) & " err=" & CStr(Err.Number)
 out_.WriteLine "s015=" & CStr(Err.Number)
 Err.Clear
-Doc_.SaveProject "D:/training/cgns/pphdecoding/_p12u_gate/r7_4_rewritten.pph"
+out_.WriteLine "mesh_exists=" & CStr(MG_.DoesMeshExist) & " err=" & CStr(Err.Number)
 out_.WriteLine "s016=" & CStr(Err.Number)
+Err.Clear
+Doc_.SaveProject "D:/training/cgns/pphdecoding/_p12u_gate/r7_4_rewritten.pph"
+out_.WriteLine "s017=" & CStr(Err.Number)
 Err.Clear
 out_.WriteLine "end"
 out_.Close

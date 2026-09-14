@@ -1474,6 +1474,83 @@ TYPED_CLASSES: dict[str, type] = {
 COND_CLASS_PREFIX = "Cond"
 
 
+# ── API 取值词表（R31-3）─────────────────────────────────────────────────
+#: 目录按需加载（2 MB JSON：只在第一次查询时读盘，避免 import 期开销）
+CATALOG_PATH = (Path(__file__).resolve().parent.parent
+                / "schemas" / "vb_api_catalog.json")
+_CATALOG: Optional[dict] = None
+
+
+def load_catalog(path: Optional[Path] = None) -> dict:
+    """读 `schemas/vb_api_catalog.json`（进程内缓存）。"""
+    global _CATALOG
+    if _CATALOG is None or path is not None:
+        import json
+        _CATALOG = json.loads(
+            Path(path or CATALOG_PATH).read_text(encoding="utf-8"))
+    return _CATALOG
+
+
+def _member_entry(cls: str, member: str,
+                  catalog: Optional[dict] = None) -> Optional[dict]:
+    cat = catalog if catalog is not None else load_catalog()
+    info = (cat.get("classes") or {}).get(cls)
+    if not info:
+        return None
+    for kind in ("methods", "properties"):
+        entry = (info.get(kind) or {}).get(member)
+        if entry:
+            return entry
+    return None
+
+
+def api_values(cls: str, member: str, arg: Optional[str] = None,
+               catalog: Optional[dict] = None) -> list:
+    """返回某成员的**取值词表**（R31-2 起覆盖「描述即词表」的行型）。
+
+    `arg=None` 取第一个带词表的参数；`arg="return"` 取返回值；
+    找不到（或该成员没有词表）返回 `[]`。
+
+    取值来自官方手册的枚举行，是**文档子集**：宿主可能接受手册未列的取值
+    （R30 实测 GetVoxelOctRefineType 手册只列 shape/speed，宿主还有默认值
+    `octree`），故本函数用于**提示 / 预校验**，不是硬白名单。
+    """
+    entry = _member_entry(cls, member, catalog)
+    if not entry:
+        return []
+    if arg == "return":
+        cands = [entry.get("return") or {}]
+    elif arg is None:
+        cands = [c for c in list(entry.get("arguments") or [])
+                 + [entry.get("return") or {}] if c.get("values")]
+    else:
+        cands = [a for a in (entry.get("arguments") or [])
+                 if a.get("name") == arg]
+    for c in cands:
+        if c.get("values"):
+            return list(c["values"])
+    return []
+
+
+def api_value_set(cls: str, member: str, arg: Optional[str] = None,
+                  catalog: Optional[dict] = None) -> set:
+    """取值集合（`api_values` 的集合视图）。"""
+    return {v["value"] for v in api_values(cls, member, arg, catalog)}
+
+
+def check_api_value(cls: str, member: str, value: str,
+                    arg: Optional[str] = None,
+                    catalog: Optional[dict] = None) -> Optional[bool]:
+    """取值合法性三态：True 合法 / False 非法 / **None 未知**（无词表，不拦）。
+
+    None 与 False 必须分开：手册没有词表 ≠ 取值非法（手册本身有漏项）。
+    """
+    values = api_value_set(cls, member, arg, catalog)
+    if not values:
+        return None
+    return str(value) in values
+
+
 def catalog_coverage(catalog: dict) -> dict[str, str]:
     """catalog 类名 → 覆盖方式（typed / condition-subclass / generic-call）。
 

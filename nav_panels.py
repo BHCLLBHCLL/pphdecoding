@@ -2009,6 +2009,16 @@ class MesherFaceterBody(_Body):
         self._add_row(mesher, "oct_include",
                       "Inclusion of octree creation process in meshing",
                       self.cb_oct_include)
+        # R31-1：R30 实测的宿主编码是字符串枚举（speed/shape/octree），
+        # xenv 落整数码 —— 面板留枚举名，写盘时经 pphxml 映射成码。
+        self.cb_vx_refine = _mf_combo([
+            ("Model shape-weighted", "shape"),
+            ("Speed-weighted", "speed"),
+            ("Octree (host default)", "octree"),
+        ])
+        self._add_row(mesher, "oct_refine",
+                      "Octant refinement type when octree is created",
+                      self.cb_vx_refine)
         vx_acc = self._add_branch(
             mesher, "vx_acc",
             "Facet accuracy for the whole model (relative to default value)")
@@ -2189,8 +2199,8 @@ class MesherFaceterBody(_Body):
         self._hide("elem", "elem_dir", "elem_range",
                    "oct_param", "oct_ang", "oct_reduce",
                    show=poly and solid_surf)
-        self._hide("oct_include", "vx_acc", "vx_dist", "vx_ang", "vx_edge",
-                   show=not poly)
+        self._hide("oct_include", "oct_refine", "vx_acc", "vx_dist", "vx_ang",
+                   "vx_edge", show=not poly)
         # Condition 专有：part/region；Voxel 页专有：rough / init
         show_cond_voxel = (not poly) and (not self._settings_mode)
         self._hide("vx_each", show=show_cond_voxel)
@@ -2330,6 +2340,10 @@ class MesherFaceterBody(_Body):
             (xenv.get("OCT_MESH", "COMPLETE_PARALLEL", "false")
              or "false").lower())
         _set_combo_data(
+            self.cb_vx_refine,
+            pphxml.voxel_oct_refine_name(
+                xenv.get("OCT_MESH", "VOXEL_OCT_REFINE_TYPE", "3")) or "octree")
+        _set_combo_data(
             self.cb_rough,
             (xenv.get("MESH_COMMON", "USE_ROUGH_POLY_WHEN_VOXEL_MESHING",
                       "false") or "false").lower())
@@ -2405,6 +2419,11 @@ class MesherFaceterBody(_Body):
         pphxml.set_xenv_value(
             xenv, "OCT_MESH", "COMPLETE_PARALLEL",
             self.cb_oct_include.currentData())
+        # 未知取值不落盘：宿主只认这三个枚举名（R30 实测，数值/大小写错都返回 False）
+        refine = pphxml.voxel_oct_refine_code(self.cb_vx_refine.currentData())
+        if refine is not None:
+            pphxml.set_xenv_value(
+                xenv, "OCT_MESH", "VOXEL_OCT_REFINE_TYPE", refine)
         pphxml.set_xenv_value(
             xenv, "MESH_COMMON", "USE_ROUGH_POLY_WHEN_VOXEL_MESHING",
             self.cb_rough.currentData())

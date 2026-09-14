@@ -49,6 +49,22 @@ WRITES = [
 ]
 SECTION = "FACET"
 
+#: 其它段的已实测键：(section, key, 写入值, getter, **期望回读值**, 说明)
+#: R31-1：OCT_MESH.VOXEL_OCT_REFINE_TYPE 写的是**整数码**，而 getter 回读
+#: **字符串枚举**（R30 实测 speed=1/shape=2/octree=3）——故期望值单列一栏，
+#: 不能拿写入值直接比。
+WRITES_MORE = [
+    ("OCT_MESH", "VOXEL_OCT_REFINE_TYPE", "2", "GetVoxelOctRefineType",
+     "shape", "八分细化类型=shape（码 2）"),
+]
+
+
+def _all_writes() -> list:
+    """统一视图：(section, key, 写入值, getter, 期望回读值, 说明)。"""
+    out = [(SECTION, k, v, g, v, label) for k, v, g, label in WRITES]
+    out += [tuple(row) for row in WRITES_MORE]
+    return out
+
 
 def _load(name: str, path: Path):
     spec = importlib.util.spec_from_file_location(name, str(path))
@@ -70,16 +86,18 @@ def write_keys(base: Path, out_pph: Path) -> dict:
     xenv = _xenv_of(base)
     if xenv is None:
         return {"ok": False, "error": "base has no main.xenv"}
-    before = {k: xenv.get(SECTION, k) for k, _, _, _ in WRITES}
-    for key, val, _getter, _label in WRITES:
-        pphxml.set_xenv_value(xenv, SECTION, key, val)
+    rows = _all_writes()
+    before = {s + "." + k: xenv.get(s, k) for s, k, _v, _g, _e, _l in rows}
+    for sec, key, val, _getter, _expect, _label in rows:
+        pphxml.set_xenv_value(xenv, sec, key, val)
     data = pphxml.serialize_xenv(xenv)
     pphwriter.clone_pph(str(base), str(out_pph), {"main.xenv": data})
     after = _xenv_of(out_pph)
-    stored = {k: after.get(SECTION, k) for k, _, _, _ in WRITES}
-    return {"ok": all(stored[k] == v for k, v, _, _ in WRITES),
-            "before": before, "written": {k: v for k, v, _, _ in WRITES},
-            "stored": stored, "pph": str(out_pph)}
+    stored = {s + "." + k: after.get(s, k) for s, k, _v, _g, _e, _l in rows}
+    written = {s + "." + k: v for s, k, v, _g, _e, _l in rows}
+    return {"ok": all(stored[k] == v for k, v in written.items()),
+            "before": before, "written": written, "stored": stored,
+            "pph": str(out_pph)}
 
 
 def host_readback(pph: Path) -> dict:
@@ -101,8 +119,8 @@ def host_readback(pph: Path) -> dict:
         "Set OCT_ = MG_.GetOctree",
         "Set MGS_ = MG_.GetMeshingGroupSetting",
     ]
-    for key, _val, getter, _label in WRITES:
-        acts.append(p12m._w("read_" + key, "MGS_." + getter))
+    for sec, key, _val, getter, _expect, _label in _all_writes():
+        acts.append(p12m._w("read_" + sec + "_" + key, "MGS_." + getter))
     acts += [
         p12m._w("mesh_exists", "MG_.DoesMeshExist"),
         "Doc_.SaveProject " + q + (WORK / "r7_4_rewritten.pph").as_posix() + q,
@@ -127,10 +145,10 @@ def host_readback(pph: Path) -> dict:
             if log.is_file() else "")
     ver = p12e.verify_log(text)
     reads = {}
-    for key, _val, _getter, _label in WRITES:
-        m = re.search("read_" + key + r"=(\S+)", text)
+    for sec, key, _val, _getter, _expect, _label in _all_writes():
+        m = re.search("read_" + sec + "_" + key + r"=(\S+)", text)
         if m:
-            reads[key] = m.group(1)
+            reads[sec + "." + key] = m.group(1)
     return {"error": err, "err0": ver.get("err0"), "total": ver.get("total"),
             "alive": ver.get("alive"), "reads": reads}
 
@@ -158,7 +176,8 @@ def main(argv=None) -> int:
         print("[r7-4] 宿主回读: " + json.dumps(
             {k: h.get(k) for k in ("err0", "total", "reads", "error")},
             ensure_ascii=False), flush=True)
-        want = {k: v for k, v, _, _ in WRITES}
+        want = {s + "." + k: expect
+                for s, k, _v, _g, expect, _l in _all_writes()}
         got = h.get("reads") or {}
         # VBS 的 CStr(Boolean) 是 "True"/"False"：布尔比较需忽略大小写
         hits = sum(1 for k, v in want.items()
@@ -171,7 +190,9 @@ def main(argv=None) -> int:
         result["hits"] = 0
         result["host_ok"] = False
     result["seconds"] = round(time.time() - t0, 1)
-    result["passed"] = bool(result["host_ok"] and result["hits"] >= 3)
+    result["required"] = len(_all_writes())
+    result["passed"] = bool(result["host_ok"]
+                            and result["hits"] >= result["required"])
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)
         args.json.write_text(json.dumps(result, ensure_ascii=False, indent=2),

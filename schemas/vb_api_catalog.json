@@ -807,7 +807,21 @@
      "return": {
       "type": "VARIANT",
       "name": "retval",
-      "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]"
+      "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]",
+      "values": [
+       {
+        "value": "default",
+        "description": "default"
+       },
+       {
+        "value": "connect",
+        "description": "connect"
+       },
+       {
+        "value": "disconnect",
+        "description": "disconnect"
+       }
+      ]
      }
     },
     "GetContactAngle": {
@@ -1873,7 +1887,21 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]"
+       "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]",
+       "values": [
+        {
+         "value": "default",
+         "description": "default"
+        },
+        {
+         "value": "connect",
+         "description": "connect"
+        },
+        {
+         "value": "disconnect",
+         "description": "disconnect"
+        }
+       ]
       }
      ],
      "return": {
@@ -2793,7 +2821,17 @@
      "return": {
       "type": "VARIANT",
       "name": "type",
-      "description": "Amplitude type (string) \"pressure\"(pressure) \"mass_flow_rate\"(mass flow rate)"
+      "description": "Amplitude type (string) \"pressure\"(pressure) \"mass_flow_rate\"(mass flow rate)",
+      "values": [
+       {
+        "value": "pressure",
+        "description": "pressure"
+       },
+       {
+        "value": "mass_flow_rate",
+        "description": "mass flow rate"
+       }
+      ]
      }
     },
     "GetConstAmplitude": {
@@ -2841,7 +2879,17 @@
      "return": {
       "type": "VARIANT",
       "name": "type",
-      "description": "Type of point sound source (string) \"monopole\" (Monopole) \"dipole\" (Dipole)"
+      "description": "Type of point sound source (string) \"monopole\" (Monopole) \"dipole\" (Dipole)",
+      "values": [
+       {
+        "value": "monopole",
+        "description": "Monopole"
+       },
+       {
+        "value": "dipole",
+        "description": "Dipole"
+       }
+      ]
      }
     },
     "GetValueType": {
@@ -2857,7 +2905,17 @@
      "return": {
       "type": "VARIANT",
       "name": "retval",
-      "description": "how to specify the amplitude (string) \"const_value\" (using constant value) \"frequency_table\" (using frequency-dependent table)"
+      "description": "how to specify the amplitude (string) \"const_value\" (using constant value) \"frequency_table\" (using frequency-dependent table)",
+      "values": [
+       {
+        "value": "const_value",
+        "description": "using constant value"
+       },
+       {
+        "value": "frequency_table",
+        "description": "using frequency-dependent table"
+       }
+      ]
      }
     },
     "RemoveAmplitudeTable": {
@@ -2899,7 +2957,17 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Amplitude type (string) \"pressure\"(Pressure) \"mass_flow_rate\"(mass flow rate)"
+       "description": "Amplitude type (string) \"pressure\"(Pressure) \"mass_flow_rate\"(mass flow rate)",
+       "values": [
+        {
+         "value": "pressure",
+         "description": "Pressure"
+        },
+        {
+         "value": "mass_flow_rate",
+         "description": "mass flow rate"
+        }
+       ]
       }
      ],
      "return": {
@@ -2947,7 +3015,17 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Type of point sound source (string) \"monopole\"(Monopole) \"dipole\"(Dipole)"
+       "description": "Type of point sound source (string) \"monopole\"(Monopole) \"dipole\"(Dipole)",
+       "values": [
+        {
+         "value": "monopole",
+         "description": "Monopole"
+        },
+        {
+         "value": "dipole",
+         "description": "Dipole"
+        }
+       ]
       }
      ],
      "return": {
@@ -2963,7 +3041,17 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "How to specify the amplitude (string) \"const_value\"(using constant value) \"frequency_table\"(using frequency-dependent table)"
+       "description": "How to specify the amplitude (string) \"const_value\"(using constant value) \"frequency_table\"(using frequency-dependent table)",
+       "values": [
+        {
+         "value": "const_value",
+         "description": "using constant value"
+        },
+        {
+         "value": "frequency_table",
+         "description": "using frequency-dependent table"
+        }
+       ]
       }
      ],
      "return": {
@@ -9312,7 +9400,17 @@
       {
        "type": "VARIANT",
        "name": "key",
-       "description": "Key (string) \"lfile\" L file \"csv\" CSV file"
+       "description": "Key (string) \"lfile\" L file \"csv\" CSV file",
+       "values": [
+        {
+         "value": "lfile",
+         "description": "L file"
+        },
+        {
+         "value": "csv",
+         "description": "CSV file"
+        }
+       ]
       }
      ],
      "return": {
@@ -9344,7 +9442,17 @@
       {
        "type": "VARIANT",
        "name": "key",
-       "description": "Key (string) \"lfile\" L file \"csv\" CSV file"
+       "description": "Key (string) \"lfile\" L file \"csv\" CSV file",
+       "values": [
+        {
+         "value": "lfile",
+         "description": "L file"
+        },
+        {
+         "value": "csv",
+         "description": "CSV file"
+        }
+       ]
       }
      ],
      "return": {
@@ -9403,7 +9511,17 @@
       {
        "type": "VARIANT",
        "name": "key",
-       "description": "Key (string) \"lfile\" L file \"csv\" CSV file"
+       "description": "Key (string) \"lfile\" L file \"csv\" CSV file",
+       "values": [
+        {
+         "value": "lfile",
+         "description": "L file"
+        },
+        {
+         "value": "csv",
+         "description": "CSV file"
+        }
+       ]
       }
      ],
      "return": {
@@ -9431,7 +9549,17 @@
       {
        "type": "VARIANT",
        "name": "key",
-       "description": "Key (string) \"lfile\" L file \"csv\" CSV file"
+       "description": "Key (string) \"lfile\" L file \"csv\" CSV file",
+       "values": [
+        {
+         "value": "lfile",
+         "description": "L file"
+        },
+        {
+         "value": "csv",
+         "description": "CSV file"
+        }
+       ]
       },
       {
        "type": "VARIANT",
@@ -9458,7 +9586,17 @@
       {
        "type": "VARIANT",
        "name": "key",
-       "description": "Key (string) \"lfile\" L file \"csv\" CSV file"
+       "description": "Key (string) \"lfile\" L file \"csv\" CSV file",
+       "values": [
+        {
+         "value": "lfile",
+         "description": "L file"
+        },
+        {
+         "value": "csv",
+         "description": "CSV file"
+        }
+       ]
       },
       {
        "type": "VARIANT",
@@ -10129,7 +10267,17 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Type of phase change (string) \"boiling\" Boil/Condensation \"evaporation\" Evaporation/Condensation"
+       "description": "Type of phase change (string) \"boiling\" Boil/Condensation \"evaporation\" Evaporation/Condensation",
+       "values": [
+        {
+         "value": "boiling",
+         "description": "Boil/Condensation"
+        },
+        {
+         "value": "evaporation",
+         "description": "Evaporation/Condensation"
+        }
+       ]
       }
      ]
     },
@@ -20556,7 +20704,13 @@
       {
        "type": "VARIANT",
        "name": "key",
-       "description": "Restriction type (string) \"particle_gen_label\" (Label name of particle generation condition)"
+       "description": "Restriction type (string) \"particle_gen_label\" (Label name of particle generation condition)",
+       "values": [
+        {
+         "value": "particle_gen_label",
+         "description": "Label name of particle generation condition"
+        }
+       ]
       },
       {
        "type": "VARIANT",
@@ -20583,7 +20737,33 @@
       {
        "type": "VARIANT",
        "name": "key",
-       "description": "Restriction type (string) \"cuboid\"(Cuboid), \"volume_region\"(Volume region), \"surface_region\"(Surface region), \"particle_gen_label\" (Label name of a particle generation condition), \"calc_time\"(Analysis time), \"particle_age\"(Particle age)"
+       "description": "Restriction type (string) \"cuboid\"(Cuboid), \"volume_region\"(Volume region), \"surface_region\"(Surface region), \"particle_gen_label\" (Label name of a particle generation condition), \"calc_time\"(Analysis time), \"particle_age\"(Particle age)",
+       "values": [
+        {
+         "value": "cuboid",
+         "description": "Cuboid"
+        },
+        {
+         "value": "volume_region",
+         "description": "Volume region"
+        },
+        {
+         "value": "surface_region",
+         "description": "Surface region"
+        },
+        {
+         "value": "particle_gen_label",
+         "description": "Label name of a particle generation condition"
+        },
+        {
+         "value": "calc_time",
+         "description": "Analysis time"
+        },
+        {
+         "value": "particle_age",
+         "description": "Particle age"
+        }
+       ]
       }
      ]
     },
@@ -20768,7 +20948,21 @@
      "return": {
       "type": "VARIANT",
       "name": "retval",
-      "description": "Rotation axis (string) \"xaxis\" : X axis \"yaxis\" : Y axis \"zaxis\" : Z axis"
+      "description": "Rotation axis (string) \"xaxis\" : X axis \"yaxis\" : Y axis \"zaxis\" : Z axis",
+      "values": [
+       {
+        "value": "xaxis",
+        "description": "X axis"
+       },
+       {
+        "value": "yaxis",
+        "description": "Y axis"
+       },
+       {
+        "value": "zaxis",
+        "description": "Z axis"
+       }
+      ]
      }
     },
     "SaveRotorInfoFile": {
@@ -20911,7 +21105,21 @@
       {
        "type": "VARIANT",
        "name": "axis",
-       "description": "Rotation axis (string) \"xaxis\" : X axis \"yaxis\" : Y axis \"zaxis\" : Z axis"
+       "description": "Rotation axis (string) \"xaxis\" : X axis \"yaxis\" : Y axis \"zaxis\" : Z axis",
+       "values": [
+        {
+         "value": "xaxis",
+         "description": "X axis"
+        },
+        {
+         "value": "yaxis",
+         "description": "Y axis"
+        },
+        {
+         "value": "zaxis",
+         "description": "Z axis"
+        }
+       ]
       }
      ],
      "return": {
@@ -24891,7 +25099,17 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Type of diameter distribution (string) \"normal\": Normal distribution \"lognormal\": Lognormal distribution"
+       "description": "Type of diameter distribution (string) \"normal\": Normal distribution \"lognormal\": Lognormal distribution",
+       "values": [
+        {
+         "value": "normal",
+         "description": "Normal distribution"
+        },
+        {
+         "value": "lognormal",
+         "description": "Lognormal distribution"
+        }
+       ]
       },
       {
        "type": "VARIANT",
@@ -33447,7 +33665,17 @@
       {
        "type": "VARIANT",
        "name": "key",
-       "description": "Parameter type (string) \"element_center\" (Method for calculating the coordinate of element center), \"face_center\"( Method for calculating the coordinate of face center)"
+       "description": "Parameter type (string) \"element_center\" (Method for calculating the coordinate of element center), \"face_center\"( Method for calculating the coordinate of face center)",
+       "values": [
+        {
+         "value": "element_center",
+         "description": "Method for calculating the coordinate of element center"
+        },
+        {
+         "value": "face_center",
+         "description": "Method for calculating the coordinate of face center"
+        }
+       ]
       },
       {
        "type": "VARIANT",
@@ -38481,7 +38709,29 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "\"none\" : no specification \"cycle_interval\" : cycle interval \"time_interval\" : time interval \"cycle_table_script\" : script of cycle interval table \"time_table_script\" : script of time interval table"
+       "description": "\"none\" : no specification \"cycle_interval\" : cycle interval \"time_interval\" : time interval \"cycle_table_script\" : script of cycle interval table \"time_table_script\" : script of time interval table",
+       "values": [
+        {
+         "value": "none",
+         "description": "no specification"
+        },
+        {
+         "value": "cycle_interval",
+         "description": "cycle interval"
+        },
+        {
+         "value": "time_interval",
+         "description": "time interval"
+        },
+        {
+         "value": "cycle_table_script",
+         "description": "script of cycle interval table"
+        },
+        {
+         "value": "time_table_script",
+         "description": "script of time interval table"
+        }
+       ]
       }
      ]
     },
@@ -40304,7 +40554,21 @@
      "return": {
       "type": "VARIANT",
       "name": "type",
-      "description": "Type (string)[\"passive_scalar\" (passive scalar), \"reaction_incompressible\" (incompressible chemical species), \"mixed_gas\" (mixed gas)]"
+      "description": "Type (string)[\"passive_scalar\" (passive scalar), \"reaction_incompressible\" (incompressible chemical species), \"mixed_gas\" (mixed gas)]",
+      "values": [
+       {
+        "value": "passive_scalar",
+        "description": "passive scalar"
+       },
+       {
+        "value": "reaction_incompressible",
+        "description": "incompressible chemical species"
+       },
+       {
+        "value": "mixed_gas",
+        "description": "mixed gas"
+       }
+      ]
      }
     },
     "GetTypeString": {
@@ -41130,12 +41394,32 @@
       {
        "type": "VARIANT",
        "name": "fromType",
-       "description": "Source Project Type (\"scflow\", \"scfast\")"
+       "description": "Source Project Type (\"scflow\", \"scfast\")",
+       "values": [
+        {
+         "value": "scflow",
+         "description": ""
+        },
+        {
+         "value": "scfast",
+         "description": ""
+        }
+       ]
       },
       {
        "type": "VARIANT",
        "name": "toType",
-       "description": "Target Project Type (\"scflow\", \"scfast\")"
+       "description": "Target Project Type (\"scflow\", \"scfast\")",
+       "values": [
+        {
+         "value": "scflow",
+         "description": ""
+        },
+        {
+         "value": "scfast",
+         "description": ""
+        }
+       ]
       }
      ]
     },
@@ -48494,12 +48778,32 @@
       {
        "type": "VARIANT",
        "name": "fromType",
-       "description": "Source Project Type (\"scflow\", \"scfast\")"
+       "description": "Source Project Type (\"scflow\", \"scfast\")",
+       "values": [
+        {
+         "value": "scflow",
+         "description": ""
+        },
+        {
+         "value": "scfast",
+         "description": ""
+        }
+       ]
       },
       {
        "type": "VARIANT",
        "name": "toType",
-       "description": "Target Project Type (\"scflow\", \"scfast\")"
+       "description": "Target Project Type (\"scflow\", \"scfast\")",
+       "values": [
+        {
+         "value": "scflow",
+         "description": ""
+        },
+        {
+         "value": "scfast",
+         "description": ""
+        }
+       ]
       }
      ]
     },
@@ -51263,7 +51567,21 @@
      "return": {
       "type": "VARIANT",
       "name": "type",
-      "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]"
+      "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]",
+      "values": [
+       {
+        "value": "default",
+        "description": "default"
+       },
+       {
+        "value": "connect",
+        "description": "connect"
+       },
+       {
+        "value": "disconnect",
+        "description": "disconnect"
+       }
+      ]
      }
     },
     "GetContactAngle": {
@@ -52023,7 +52341,21 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]"
+       "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]",
+       "values": [
+        {
+         "value": "default",
+         "description": "default"
+        },
+        {
+         "value": "connect",
+         "description": "connect"
+        },
+        {
+         "value": "disconnect",
+         "description": "disconnect"
+        }
+       ]
       }
      ],
      "return": {
@@ -52420,7 +52752,21 @@
      "return": {
       "type": "VARIANT",
       "name": "retval",
-      "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]"
+      "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]",
+      "values": [
+       {
+        "value": "default",
+        "description": "default"
+       },
+       {
+        "value": "connect",
+        "description": "connect"
+       },
+       {
+        "value": "disconnect",
+        "description": "disconnect"
+       }
+      ]
      }
     },
     "GetContactAngle": {
@@ -53056,7 +53402,21 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]"
+       "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]",
+       "values": [
+        {
+         "value": "default",
+         "description": "default"
+        },
+        {
+         "value": "connect",
+         "description": "connect"
+        },
+        {
+         "value": "disconnect",
+         "description": "disconnect"
+        }
+       ]
       }
      ],
      "return": {
@@ -55267,12 +55627,40 @@
       {
        "type": "BSTR",
        "name": "type",
-       "description": "License mode \"hpc\" : HPC edition \"lt\" : LT edition \"integrated_lt\" : Integrated LT edition \"integrated_hpc\" : Integrated HPC edition"
+       "description": "License mode \"hpc\" : HPC edition \"lt\" : LT edition \"integrated_lt\" : Integrated LT edition \"integrated_hpc\" : Integrated HPC edition",
+       "values": [
+        {
+         "value": "hpc",
+         "description": "HPC edition"
+        },
+        {
+         "value": "lt",
+         "description": "LT edition"
+        },
+        {
+         "value": "integrated_lt",
+         "description": "Integrated LT edition"
+        },
+        {
+         "value": "integrated_hpc",
+         "description": "Integrated HPC edition"
+        }
+       ]
       },
       {
        "type": "BSTR",
        "name": "license",
-       "description": "License type \"msc\" : MSC license Note. This is optional. If ommited, license will be set to \"msc\"."
+       "description": "License type \"msc\" : MSC license Note. This is optional. If ommited, license will be set to \"msc\".",
+       "values": [
+        {
+         "value": "msc",
+         "description": "MSC license Note. This is optional. If ommited, license will be set to"
+        },
+        {
+         "value": "msc",
+         "description": "."
+        }
+       ]
       }
      ],
      "return": {
@@ -55293,7 +55681,41 @@
       {
        "type": "BSTR",
        "name": "type",
-       "description": "License mode \"hpc\" : HPC edution \"mscone\" : MSC One edition \"mscone_unlimited\" : MSC One Unlimited edition \"lt\" : LT edition \"unlimited\" : Unlimited edition \"integrated_lt\" : Integrated LT edition \"integrated_hpc\" : Integrated HPC edition \"integrated_unlimited\" : Integrated Unlimited edition"
+       "description": "License mode \"hpc\" : HPC edution \"mscone\" : MSC One edition \"mscone_unlimited\" : MSC One Unlimited edition \"lt\" : LT edition \"unlimited\" : Unlimited edition \"integrated_lt\" : Integrated LT edition \"integrated_hpc\" : Integrated HPC edition \"integrated_unlimited\" : Integrated Unlimited edition",
+       "values": [
+        {
+         "value": "hpc",
+         "description": "HPC edution"
+        },
+        {
+         "value": "mscone",
+         "description": "MSC One edition"
+        },
+        {
+         "value": "mscone_unlimited",
+         "description": "MSC One Unlimited edition"
+        },
+        {
+         "value": "lt",
+         "description": "LT edition"
+        },
+        {
+         "value": "unlimited",
+         "description": "Unlimited edition"
+        },
+        {
+         "value": "integrated_lt",
+         "description": "Integrated LT edition"
+        },
+        {
+         "value": "integrated_hpc",
+         "description": "Integrated HPC edition"
+        },
+        {
+         "value": "integrated_unlimited",
+         "description": "Integrated Unlimited edition"
+        }
+       ]
       },
       {
        "type": "BSTR",
@@ -62252,7 +62674,25 @@
      "return": {
       "type": "VARIANT",
       "name": "type",
-      "description": "Coordinate definition type (string)[\"plane\" (plane), \"cuboid\" (cuboid), \"cylinder\" (cylinder), \"sphere\" (sphere)]"
+      "description": "Coordinate definition type (string)[\"plane\" (plane), \"cuboid\" (cuboid), \"cylinder\" (cylinder), \"sphere\" (sphere)]",
+      "values": [
+       {
+        "value": "plane",
+        "description": "plane"
+       },
+       {
+        "value": "cuboid",
+        "description": "cuboid"
+       },
+       {
+        "value": "cylinder",
+        "description": "cylinder"
+       },
+       {
+        "value": "sphere",
+        "description": "sphere"
+       }
+      ]
      }
     },
     "GetDefinitionTypeDisplayStr": {
@@ -62328,7 +62768,21 @@
      "return": {
       "type": "VARIANT",
       "name": "type",
-      "description": "Type of plane (string)[\"xyz\" (perpendicular to axis), \"equation\" (arbitrary plane (equation)), \"normal\" (arbitrary plane (point and normal))]"
+      "description": "Type of plane (string)[\"xyz\" (perpendicular to axis), \"equation\" (arbitrary plane (equation)), \"normal\" (arbitrary plane (point and normal))]",
+      "values": [
+       {
+        "value": "xyz",
+        "description": "perpendicular to axis"
+       },
+       {
+        "value": "equation",
+        "description": "arbitrary plane (equation"
+       },
+       {
+        "value": "normal",
+        "description": "arbitrary plane (point and normal"
+       }
+      ]
      }
     },
     "GetSide": {
@@ -62478,7 +62932,21 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Type of plane (string)[\"xyz\" (perpendicular to axis), \"equation\" (arbitrary plane (equation)), \"normal\" (arbitrary plane (point and normal))]"
+       "description": "Type of plane (string)[\"xyz\" (perpendicular to axis), \"equation\" (arbitrary plane (equation)), \"normal\" (arbitrary plane (point and normal))]",
+       "values": [
+        {
+         "value": "xyz",
+         "description": "perpendicular to axis"
+        },
+        {
+         "value": "equation",
+         "description": "arbitrary plane (equation"
+        },
+        {
+         "value": "normal",
+         "description": "arbitrary plane (point and normal"
+        }
+       ]
       }
      ],
      "return": {
@@ -65551,7 +66019,33 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Material type (string)[\"fluid\" (incompressible fluid), \"compressive_fluid\" (compressible fluid), \"solid\" (solid), \"multi_phase\"(Dispersed multiphase flow), \"free_surface\"(Free surface), \"refprop\"(REFPROP fluid)]"
+       "description": "Material type (string)[\"fluid\" (incompressible fluid), \"compressive_fluid\" (compressible fluid), \"solid\" (solid), \"multi_phase\"(Dispersed multiphase flow), \"free_surface\"(Free surface), \"refprop\"(REFPROP fluid)]",
+       "values": [
+        {
+         "value": "fluid",
+         "description": "incompressible fluid"
+        },
+        {
+         "value": "compressive_fluid",
+         "description": "compressible fluid"
+        },
+        {
+         "value": "solid",
+         "description": "solid"
+        },
+        {
+         "value": "multi_phase",
+         "description": "Dispersed multiphase flow"
+        },
+        {
+         "value": "free_surface",
+         "description": "Free surface"
+        },
+        {
+         "value": "refprop",
+         "description": "REFPROP fluid"
+        }
+       ]
       },
       {
        "type": "VARIANT",
@@ -65975,7 +66469,17 @@
       {
        "type": "VARIANT",
        "name": "locale",
-       "description": "Locale (string)[\"jpn\" (Japanese), \"eng\" (English)]"
+       "description": "Locale (string)[\"jpn\" (Japanese), \"eng\" (English)]",
+       "values": [
+        {
+         "value": "jpn",
+         "description": "Japanese"
+        },
+        {
+         "value": "eng",
+         "description": "English"
+        }
+       ]
       }
      ],
      "return": {
@@ -66039,7 +66543,17 @@
       {
        "type": "VARIANT",
        "name": "locale",
-       "description": "Locale (string)[\"jpn\" (Japanese), \"eng\" (English)]"
+       "description": "Locale (string)[\"jpn\" (Japanese), \"eng\" (English)]",
+       "values": [
+        {
+         "value": "jpn",
+         "description": "Japanese"
+        },
+        {
+         "value": "eng",
+         "description": "English"
+        }
+       ]
       },
       {
        "type": "VARIANT",
@@ -66229,7 +66743,17 @@
       {
        "type": "VARIANT",
        "name": "locale",
-       "description": "Locale (string)[\"jpn\" (Japanese), \"eng\" (English)]"
+       "description": "Locale (string)[\"jpn\" (Japanese), \"eng\" (English)]",
+       "values": [
+        {
+         "value": "jpn",
+         "description": "Japanese"
+        },
+        {
+         "value": "eng",
+         "description": "English"
+        }
+       ]
       }
      ],
      "return": {
@@ -66316,12 +66840,44 @@
       {
        "type": "VARIANT",
        "name": "propkey",
-       "description": "Key to specify the material property (string) \"density\" Density, \"drho_dp\" Partial derivative of density with respect to pressure, \"viscosity\" Viscosity \"isobaric_specific_heat\" Isobaric specific heat, \"thermal_conductivity\" Thermal conductivity"
+       "description": "Key to specify the material property (string) \"density\" Density, \"drho_dp\" Partial derivative of density with respect to pressure, \"viscosity\" Viscosity \"isobaric_specific_heat\" Isobaric specific heat, \"thermal_conductivity\" Thermal conductivity",
+       "values": [
+        {
+         "value": "density",
+         "description": "Density"
+        },
+        {
+         "value": "drho_dp",
+         "description": "Partial derivative of density with respect to pressure"
+        },
+        {
+         "value": "viscosity",
+         "description": "Viscosity"
+        },
+        {
+         "value": "isobaric_specific_heat",
+         "description": "Isobaric specific heat"
+        },
+        {
+         "value": "thermal_conductivity",
+         "description": "Thermal conductivity"
+        }
+       ]
       },
       {
        "type": "VARIANT",
        "name": "axiskey",
-       "description": "Key to specify the X axis of the table (string) \"temperature\" Temperature, \"pressure\" Pressure"
+       "description": "Key to specify the X axis of the table (string) \"temperature\" Temperature, \"pressure\" Pressure",
+       "values": [
+        {
+         "value": "temperature",
+         "description": "Temperature"
+        },
+        {
+         "value": "pressure",
+         "description": "Pressure"
+        }
+       ]
       },
       {
        "type": "VARIANT",
@@ -66574,7 +67130,17 @@
       {
        "type": "VARIANT",
        "name": "locale",
-       "description": "Locale (string)[\"jpn\" (Japanese), \"eng\" (English)]"
+       "description": "Locale (string)[\"jpn\" (Japanese), \"eng\" (English)]",
+       "values": [
+        {
+         "value": "jpn",
+         "description": "Japanese"
+        },
+        {
+         "value": "eng",
+         "description": "English"
+        }
+       ]
       },
       {
        "type": "VARIANT",
@@ -67293,7 +67859,21 @@
      "return": {
       "type": "VARIANT",
       "name": "type",
-      "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]"
+      "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]",
+      "values": [
+       {
+        "value": "default",
+        "description": "default"
+       },
+       {
+        "value": "connect",
+        "description": "connect"
+       },
+       {
+        "value": "disconnect",
+        "description": "disconnect"
+       }
+      ]
      }
     },
     "GetContactAngle": {
@@ -68764,7 +69344,21 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]"
+       "description": "Type of connection (string)[\"default\" (default), \"connect\" (connect), \"disconnect\" (disconnect)]",
+       "values": [
+        {
+         "value": "default",
+         "description": "default"
+        },
+        {
+         "value": "connect",
+         "description": "connect"
+        },
+        {
+         "value": "disconnect",
+         "description": "disconnect"
+        }
+       ]
       }
      ],
      "return": {
@@ -70548,7 +71142,21 @@
      "return": {
       "type": "VARIANT",
       "name": "type",
-      "description": "Type (string)[\"linear\" (linear interpolation), \"step\" (step interpolation), \"pulse\" (pulse interpolation)]"
+      "description": "Type (string)[\"linear\" (linear interpolation), \"step\" (step interpolation), \"pulse\" (pulse interpolation)]",
+      "values": [
+       {
+        "value": "linear",
+        "description": "linear interpolation"
+       },
+       {
+        "value": "step",
+        "description": "step interpolation"
+       },
+       {
+        "value": "pulse",
+        "description": "pulse interpolation"
+       }
+      ]
      }
     },
     "GetLoopFlag": {
@@ -70612,7 +71220,21 @@
      "return": {
       "type": "VARIANT",
       "name": "type",
-      "description": "Type (string)[\"stop\" (stop calculation), \"edge\" (return Y corresponding to the edge of the range of X), \"extrapolation\" (calculate by extrapolation)]"
+      "description": "Type (string)[\"stop\" (stop calculation), \"edge\" (return Y corresponding to the edge of the range of X), \"extrapolation\" (calculate by extrapolation)]",
+      "values": [
+       {
+        "value": "stop",
+        "description": "stop calculation"
+       },
+       {
+        "value": "edge",
+        "description": "return Y corresponding to the edge of the range of X"
+       },
+       {
+        "value": "extrapolation",
+        "description": "calculate by extrapolation"
+       }
+      ]
      }
     },
     "GetPropFlag": {
@@ -70946,7 +71568,21 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Type (string)[\"linear\" (linear interpolation), \"step\" (step interpolation), \"pulse\" (pulse interpolation)]"
+       "description": "Type (string)[\"linear\" (linear interpolation), \"step\" (step interpolation), \"pulse\" (pulse interpolation)]",
+       "values": [
+        {
+         "value": "linear",
+         "description": "linear interpolation"
+        },
+        {
+         "value": "step",
+         "description": "step interpolation"
+        },
+        {
+         "value": "pulse",
+         "description": "pulse interpolation"
+        }
+       ]
       }
      ],
      "return": {
@@ -71010,7 +71646,17 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Type (string)[\"stop\" (stop calculation), \"edge\" (return Y corresponding to the edge of the range of X), extrapolation\" (calculate by extrapolation)]"
+       "description": "Type (string)[\"stop\" (stop calculation), \"edge\" (return Y corresponding to the edge of the range of X), extrapolation\" (calculate by extrapolation)]",
+       "values": [
+        {
+         "value": "stop",
+         "description": "stop calculation"
+        },
+        {
+         "value": "edge",
+         "description": "return Y corresponding to the edge of the range of X), extrapolation"
+        }
+       ]
       }
      ],
      "return": {
@@ -71384,7 +72030,21 @@
       {
        "type": "VARIANT",
        "name": "axis",
-       "description": "Axis direction (string)[\"x\" (X axis), \"y\" (Y axis), \"z\" (Z axis)]"
+       "description": "Axis direction (string)[\"x\" (X axis), \"y\" (Y axis), \"z\" (Z axis)]",
+       "values": [
+        {
+         "value": "x",
+         "description": "X axis"
+        },
+        {
+         "value": "y",
+         "description": "Y axis"
+        },
+        {
+         "value": "z",
+         "description": "Z axis"
+        }
+       ]
       },
       {
        "type": "VARIANT",
@@ -71410,7 +72070,21 @@
       {
        "type": "VARIANT",
        "name": "axis",
-       "description": "Axis direction (string)[\"x\" (X axis), \"y\" (Y axis), \"z\" (Z axis)]"
+       "description": "Axis direction (string)[\"x\" (X axis), \"y\" (Y axis), \"z\" (Z axis)]",
+       "values": [
+        {
+         "value": "x",
+         "description": "X axis"
+        },
+        {
+         "value": "y",
+         "description": "Y axis"
+        },
+        {
+         "value": "z",
+         "description": "Z axis"
+        }
+       ]
       },
       {
        "type": "VARIANT",
@@ -72520,7 +73194,17 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Mapping type (string) [\"fph\" (FPH file), \"csv\" (CSV file)]"
+       "description": "Mapping type (string) [\"fph\" (FPH file), \"csv\" (CSV file)]",
+       "values": [
+        {
+         "value": "fph",
+         "description": "FPH file"
+        },
+        {
+         "value": "csv",
+         "description": "CSV file"
+        }
+       ]
       },
       {
        "type": "VARIANT",
@@ -72541,7 +73225,37 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Type (string)[ \"const\" (constant value), \"table\" (table), \"formatted_script\" (formatted script), \"unformatted_script\" (unformatted script), \"user_function\" (user-defined function), \"mapping\" (mapping), \"mapping_cond\" (mapping with a condition)]"
+       "description": "Type (string)[ \"const\" (constant value), \"table\" (table), \"formatted_script\" (formatted script), \"unformatted_script\" (unformatted script), \"user_function\" (user-defined function), \"mapping\" (mapping), \"mapping_cond\" (mapping with a condition)]",
+       "values": [
+        {
+         "value": "const",
+         "description": "constant value"
+        },
+        {
+         "value": "table",
+         "description": "table"
+        },
+        {
+         "value": "formatted_script",
+         "description": "formatted script"
+        },
+        {
+         "value": "unformatted_script",
+         "description": "unformatted script"
+        },
+        {
+         "value": "user_function",
+         "description": "user-defined function"
+        },
+        {
+         "value": "mapping",
+         "description": "mapping"
+        },
+        {
+         "value": "mapping_cond",
+         "description": "mapping with a condition"
+        }
+       ]
       }
      ],
      "return": {
@@ -72644,7 +73358,17 @@
      "return": {
       "type": "VARIANT",
       "name": "retval",
-      "description": "Mapping type (string) [\"fph\" FPH file, \"csv\" CSV file]"
+      "description": "Mapping type (string) [\"fph\" FPH file, \"csv\" CSV file]",
+      "values": [
+       {
+        "value": "fph",
+        "description": "FPH file"
+       },
+       {
+        "value": "csv",
+        "description": "CSV file"
+       }
+      ]
      }
     },
     "GetReadOnlyFlag": {
@@ -72756,7 +73480,37 @@
      "return": {
       "type": "VARIANT",
       "name": "type",
-      "description": "Type (string)[ \"const\" (constant value), \"table\" (table), \"formatted_script\" (formatted script), \"unformatted_script\" (unformatted script), \"user_function\" (user-defined function), \"mapping\" (mapping), \"mapping_cond\" (mapping with a condition)]"
+      "description": "Type (string)[ \"const\" (constant value), \"table\" (table), \"formatted_script\" (formatted script), \"unformatted_script\" (unformatted script), \"user_function\" (user-defined function), \"mapping\" (mapping), \"mapping_cond\" (mapping with a condition)]",
+      "values": [
+       {
+        "value": "const",
+        "description": "constant value"
+       },
+       {
+        "value": "table",
+        "description": "table"
+       },
+       {
+        "value": "formatted_script",
+        "description": "formatted script"
+       },
+       {
+        "value": "unformatted_script",
+        "description": "unformatted script"
+       },
+       {
+        "value": "user_function",
+        "description": "user-defined function"
+       },
+       {
+        "value": "mapping",
+        "description": "mapping"
+       },
+       {
+        "value": "mapping_cond",
+        "description": "mapping with a condition"
+       }
+      ]
      }
     },
     "GetVariableKey": {
@@ -72987,7 +73741,29 @@
       {
        "type": "VARIANT",
        "name": "type",
-       "description": "Type (string)[ \"const\" (constant value), \"table\" (table), \"formatted_script\" (formatted script), \"unformatted_script\" (unformatted script), \"user_function\" (user-defined function)]"
+       "description": "Type (string)[ \"const\" (constant value), \"table\" (table), \"formatted_script\" (formatted script), \"unformatted_script\" (unformatted script), \"user_function\" (user-defined function)]",
+       "values": [
+        {
+         "value": "const",
+         "description": "constant value"
+        },
+        {
+         "value": "table",
+         "description": "table"
+        },
+        {
+         "value": "formatted_script",
+         "description": "formatted script"
+        },
+        {
+         "value": "unformatted_script",
+         "description": "unformatted script"
+        },
+        {
+         "value": "user_function",
+         "description": "user-defined function"
+        }
+       ]
       }
      ],
      "return": {

@@ -1539,6 +1539,51 @@ xenv」（实际写 `OCT_MESH.COMPLETE_PARALLEL`）。两者都源于**多 sette
 
 三处一并修（统一走 `bad_staged()`、支持 `D` 状态），并把「收录 N 个 / 删除 M 个」
 打进输出，使 dry-run 与实际暂存集可对照。
+
+---
+
+## 45. R31 更新（2026-09-15）—— 实测键回流面板 / 描述即词表 / 取值三态 / 一致性护栏
+
+### 45.1 OCT_MESH 6/6 回流面板（R31-1）：提案前提有误，已改正
+
+R31 提案写「6 键里只有 2 条接进面板」。**读码实测：`MesherFaceterBody` 已写 5 条**
+（`FACET_ANGLE`/`FACET_LENGTH_FACTOR`/`FACET_MAX_WIDTH_FACTOR`/`FACET_SPECIFY_EACH_REGION`/
+`COMPLETE_PARALLEL`），真正缺的只有 R30 才定谳的 `VOXEL_OCT_REFINE_TYPE`。
+这条同时暴露一个**编码翻译**问题：宿主 setter 说字符串枚举、xenv 落整数码。
+
+* 表格 `pphxml.VOXEL_OCT_REFINE_TYPES = {speed:1, shape:2, octree:3}`（R30 实测值）；
+* 面板读：码 → 名（未知码回落 `octree`）；面板写：名 → 码，**未知取值不落盘**；
+* 实机闭环（`tools/xenv_host_write_check.py` 新增 `WRITES_MORE`，支持非 FACET 段且
+  写入值/期望回读值分列）：写码 `2` → 宿主 `GetVoxelOctRefineType` 回读 **`shape`**，
+  `hits 4/4`、`29/29 err=0`、SNode/MDL/OCT 全在场（51.5 s，`_p12u_gate/r31_1_write.json`）。
+
+### 45.2 「描述即词表」行型（R31-2）：+166 条取值
+
+两类写法：`Type of connection (string)["default" (default), …]` 与
+`License mode "hpc" : HPC edition "lt" : …`。判定：**第一个引号前必须是类型标记
+（(string)/(BSTR)/(VARIANT)）或 label 词（mode/type/edition/…）**。
+实测 234 行 → **116 行词表 / 118 行散文或格式提示**（`Use "cycle_interval" to get …`、
+`Color (string "0xAABBGGRR")`）被挡。目录：取值 **1519 → 1757**、带取值参数 **340 → 410**、
+假参数仍 **0**。
+
+### 45.3 取值查询 API 是三态，不是白名单（R31-3）
+
+`automation/scflowpre_api.py`：`load_catalog`（缓存）/ `api_values` / `api_value_set` /
+`check_api_value` → **True / False / None**。
+
+> ★ **口径（新增）**：`None`（手册无词表）与 `False`（有词表但取值不在内）**必须分开**。
+> 手册有漏项（`octree` 即漏项），把「没词表」当「非法」会误杀宿主合法取值。
+
+### 45.4 一致性护栏（R31-4）：两条事故各钉一条，且已验证非空转
+
+`tests/test_snapshot_guards_r314.py`：
+
+1. `git_milestone.candidates()` 的「跳过」清单 ∩ `git ls-files` \(=\) ∅（R30-5 事故）；
+2. `cond_types.json` dispositions == 报告 dispositions + 族注记；报告每条 `registry_key`
+   证据里的「官方案例库实样 N 例」== `merged.json` 该类型的 `count`（受检 ≥80 类，R30-4 事故）。
+
+**非空转证据**：同一段比较逻辑跑**修复前的提交对** `dd4e278` → 报出 **3 处不一致**
+（CondPorousMedia 60/59、CondSource 80/79、CondSourceMass 9/8）；当前工作树 0 处。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

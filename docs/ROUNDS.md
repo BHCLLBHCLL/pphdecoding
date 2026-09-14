@@ -2162,28 +2162,114 @@ if k not in base_types and k not in have_before]`，并且只在 `to_add` 非空
 
 ---
 
-## R31 —— 提案（≈1.5 人日）
+## R31 —— 实测键回流面板 + 描述即词表 + 取值三态校验 + 一致性护栏（2026-09-15，✅ 已完成）
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R31-1** | **实测键回流面板** | 面板改一项 → 对应 xenv 键变化：离线比对 + 实机回读一致 | ✅ 离线 10 项测试 + **实机 4/4 回读命中**（29/29 err=0） |
+| **R31-2** | **描述内嵌取值行型** | 目录取值 +≥20，且不产生新假参数 | ✅ **+166 条取值**（1591 → 1757），假参数仍为 0 |
+| **R31-3** | **取值表暴露给 typed 桥** | 桥接层能对给定方法返回取值集合 | ✅ `api_values`/`api_value_set`/**三态** `check_api_value` |
+| **R31-4** | **快照 / 收录一致性护栏** | 人为改计数或让已跟踪文件超限均须变红 | ✅ 3 条护栏；拿修复前的提交对实测**报出 3 处不一致**（非空转） |
+
+### R31-1 实测键回流：提案前提**有误**，已按实测改正
+
+提案写的是「OCT_MESH 6 键里只有 2 条接进面板」。实际读码：`MesherFaceterBody`
+**已经写了 5 条**（`FACET_ANGLE`/`FACET_LENGTH_FACTOR`/`FACET_MAX_WIDTH_FACTOR`/
+`FACET_SPECIFY_EACH_REGION`/`COMPLETE_PARALLEL`），真正缺的只有 R30 才定谳的第 6 条
+`VOXEL_OCT_REFINE_TYPE`。本轮把它补齐，并顺带解决一个**编码翻译**问题：
+
+* 读：`VOXEL_OCT_REFINE_TYPE`（整数码）→ `pphxml.voxel_oct_refine_name` → 下拉框枚举名；
+* 写：枚举名 → `pphxml.voxel_oct_refine_code` → 整数码，**未知取值不落盘**
+  （宿主实测只认三个枚举名，大小写错/数值档都返回 False）。
+
+映射表落 `pphxml.VOXEL_OCT_REFINE_TYPES`（`speed=1 / shape=2 / octree=3`，来自 R30 实测）。
+
+**实机闭环**（`tools/xenv_host_write_check.py` 新增 `WRITES_MORE`：非 FACET 段、写入码 / 回读名
+分列两栏）：写 `OCT_MESH.VOXEL_OCT_REFINE_TYPE=2` → 宿主 `GetVoxelOctRefineType` 回读
+**"shape"**，`hits=4/4`、`29/29 err=0`、SNode/MDL/OCT 全在场（51.5 s）。
+
+### R31-2 「描述即词表」：+166 条取值
+
+手册有两种把取值塞进**描述格**的写法（R30 只处理了「整格是取值」）：
+
+```
+Type of connection (string)["default" (default), "connect" (connect), "disconnect" (disconnect)]
+License mode "hpc" : HPC edition "lt" : LT edition
+```
+
+判定条件按实测标定：**第一个引号之前必须出现类型标记**（`(string)`/`(BSTR)`/`(VARIANT)`）
+**或 label 词**（mode/type/edition/…）。实测 234 行里 **116 行**是词表、**118 行**是散文或格式提示
+（`Use "cycle_interval" to get cycle interval`、`Color (string "0xAABBGGRR")`）——后者被规则挡住。
+
+| 指标 | R30 | R31 |
+|---|---|---|
+| 取值总数 | 1519 | **1757**（桥接口径 1738） |
+| 带取值的参数/返回值 | 340 | **410** |
+| 假参数（name 带引号、type 空） | 0 | **0** |
+
+### R31-3 typed 桥的取值 API（三态，不是硬白名单）
+
+`automation/scflowpre_api.py`：`load_catalog`（进程内缓存）/ `api_values(cls, member, arg)`
+（`arg=None` 取首个有词表的参数、`"return"` 取返回值）/ `api_value_set` /
+`check_api_value` → **True / False / None**。
+
+> ★ **口径**：`None`（手册无词表）与 `False`（有词表但取值不在内）**必须分开** ——
+> 手册有漏项（`octree` 即漏项），把「没词表」当「非法」会误杀宿主合法取值。
+
+### R31-4 一致性护栏（两条事故各钉一条）
+
+`tests/test_snapshot_guards_r314.py`：
+
+1. **收录不得静默丢件**（R30-5）：`git_milestone.candidates()` 的「跳过」清单与
+   `git ls-files` **交集必须为空**；`schemas/*.json` 必须在放宽后的上限内且不被
+   `bad_staged` 剔除；
+2. **快照 / 账本 / 语料三者计数一致**（R30-4）：`cond_types.json` 的 dispositions ==
+   报告 dispositions + 族注记；报告每条 `registry_key` 证据里的「官方案例库实样 N 例」
+   == `merged.json` 里该类型的 `count`（受检 ≥80 类，防护栏空转）。
+
+**护栏非空转的证据**：把同一段比较逻辑拿去跑**修复前的提交对**（`dd4e278` 的 R8 快照
+vs 同提交的 `merged.json`）→ 报出 **3 处不一致**（CondPorousMedia 60/59、CondSource 80/79、
+CondSourceMass 9/8）；当前工作树 0 处。
+
+### 回归
+
+全量回归 **1286 passed / 4 skipped / 0 failed**（553.46 s；R30 收口时同口径为 1246，
+增量 = R30-5 的 8 + 本轮 4 个新模块 32，逐项对得上）。
+新增测试 4 个模块：`test_voxel_oct_refine_r311.py`（10）、`test_api_desc_values_r312.py`（10）、
+`test_api_values_r313.py`（8）、`test_snapshot_guards_r314.py`（4）；并强化
+`test_facet_host_keys_r85.py` 的契约（非 FACET 段实测键一并纳入）。
+
+### 证据
+
+`_p12u_gate/r31_1_write.json`（实机回读：写码 2 → 回读 shape，hits 4/4、29/29 err=0）、
+`_p12u_gate/r31/rule_probe.py`（描述即词表规则标定 116/118）、
+`_p12u_gate/r31/guard_mutation_check.py`（护栏在修复前提交对上报 3 处不一致）。
+
+---
+
+## R32 —— 提案（≈1.5 人日）
 
 ### 依据
 
-* R29/R30 把 `OCT_MESH` 6 键全部实测定谳，但**其中只有 2 条接进了面板写回路径**——
-  实测出来的键没有回流到产品面；
-* R30-3 让 **1591 条取值**进目录，但**还没有任何代码消费它**（写回仍不看取值合法性）；
-* 手册里还有一类取值没进目录：取值写在**参数描述文字里**的行型（如 Kicker
-  `MaximumNumberOfParallelizedProcess` 的 `"hpc"`/`"lt"`、`Doc.HitTest*` 的 `"meshing"`）。
+* R31-3 的 `values` 目前只有测试在消费，**面板还没用它**：`cb_vx_refine` 的三项是硬编码，
+  手册若更新取值不会自动跟进；
+* R31-2 把 118 行「疑似散文」全部挡在门外，其中**可能混着真词表**（未逐行分类）；
+* 实测键 19 条里，哪些键有面板写入口、哪些没有，**没有一张现成的账**（R31-1 的提案
+  前提出错就是因为这张账不存在）。
 
 ### 条目
 
 | # | 条目 | 做法 | 验收句 | 人日 |
 |---|---|---|---|---|
-| **R31-1** | **实测键回流面板** | 把 OCT_MESH 6 键接进 `nav_panels` 的 `MesherFaceterBody`/`OctBody` 写回（现在 2/6） | 面板改一项 → 对应 xenv 键变化：离线比对 + 实机 `xenv_host_write_check` 回读一致 | 0.5 |
-| **R31-2** | **描述内嵌取值行型** | 处理「取值写在 desc 里」的行型（`"hpc": HPC edition` 型） | 目录取值数 +≥20，且不产生新假参数 | 0.5 |
-| **R31-3** | **取值表暴露给 typed 桥** | `automation/scflowpre_api.py` 暴露 `values`（可查询取值集合/校验） | 桥接层能对给定方法返回取值集合 | 0.5 |
-| **R31-4** | **快照 / 收录一致性护栏** | ①把 R30-4 口径推广：`p12h_registry_report.json`/`p12c_registry_report.json`/`p12h_special6_report.json` 做「复算 == 已提交」断言；②把 R30-5 口径做成通用护栏：里程碑工具的「跳过」清单**不得包含已跟踪文件** | ≥3 个快照有复算测试；人为改一个计数、或让已跟踪文件超限，均须变红 | 0.5 |
+| **R32-1** | **实测键 → 面板写入口对账表** | 扫 `tools/*_check.py` 的 `WRITES`/`WRITES_MORE` + `nav_panels` 写调用，生成逐键归属 | 19 条键各有「写入口 / 无写入口」结论，缺口的键列成待办 | 0.5 |
+| **R32-2** | **下拉框由词表驱动** | `cb_vx_refine` 之类枚举控件改为 `api_values` 生成（标签取描述） | 目录新增取值即出现在控件里，且有测试 | 0.5 |
+| **R32-3** | **118 行散文/词表逐行分类** | 把被规则拒绝的 118 行导出人工分类，捞回真词表 | 分类表落盘；捞回的取值不产生假参数 | 0.5 |
 
 ### 明确不做
 
-* 不提取 Post / Solver / Monitor 类（非本仓域，`extract_vb_api_scflow.py` 的 `_FILE_PATTERNS` 既定口径）；
+* 不提取 Post / Solver / Monitor 类（非本仓域）；
 * 不为 `Set*` 写「自动挑取值」逻辑——取值选择是面板语义，不是目录语义。
 
 ---

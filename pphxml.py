@@ -158,6 +158,28 @@ def set_xenv_value(xenv: XenvSettings, section: str, key: str, value: str) -> No
     xenv.sections.setdefault(section, {})[key] = value
 
 
+#: OCT_MESH.VOXEL_OCT_REFINE_TYPE 的宿主编码（R30 单变量逐档实测，审计 §44.1）：
+#: API setter 取**字符串枚举**（大小写敏感、数值档一律返回 False），
+#: 而 main.xenv 落的是**整数码**。`octree` 手册未列，是 getter 读回发现的宿主默认值。
+VOXEL_OCT_REFINE_TYPES: dict[str, str] = {
+    "speed": "1",   # Speed-weighted
+    "shape": "2",   # Model shape-weighted
+    "octree": "3",  # 宿主默认（手册未列）
+}
+VOXEL_OCT_REFINE_CODES: dict[str, str] = {
+    v: k for k, v in VOXEL_OCT_REFINE_TYPES.items()}
+
+
+def voxel_oct_refine_code(name: Optional[str]) -> Optional[str]:
+    """枚举名 → xenv 码（未知名返回 None；调用方据此决定是否落盘）。"""
+    return VOXEL_OCT_REFINE_TYPES.get((name or "").strip().lower())
+
+
+def voxel_oct_refine_name(code: Optional[str]) -> Optional[str]:
+    """xenv 码 → 枚举名（未知码返回 None）。"""
+    return VOXEL_OCT_REFINE_CODES.get((code or "").strip())
+
+
 @dataclass
 class PrpDatabase:
     """main.prp：材料物性库。"""
