@@ -1438,6 +1438,96 @@ xenv」（实际写 `OCT_MESH.COMPLETE_PARALLEL`）。两者都源于**多 sette
 > 多 setter 同改只能用于「段落粗筛」，不得据以给出否证。
 
 宿主键累计 **18 条**。遗留 `VOXEL_OCT_REFINE_TYPE`（字符串档探针自身失败）→ R30-1。
+
+---
+
+## 44. R30 更新（2026-09-15）—— OCT_MESH 段 6/6 定谳 + 手册取值词表入目录
+
+### 44.1 `VOXEL_OCT_REFINE_TYPE` 定谳：字符串枚举，非数值
+
+单变量逐档（新工具 `tools/xenv_setter_probe.py`，base=`box.pph`，两轮共 9 档、`73/73`+`59/59`
+全 err=0）。每档**新取**一次 `GetMeshingGroupSetting`，只调一个 setter，记返回值 + getter 读回 +
+`SaveProject`，再逐档增量 diff `main.xenv`：
+
+| 调用 | setter 返回 | getter 读回 | `OCT_MESH.VOXEL_OCT_REFINE_TYPE` |
+|---|---|---|---|
+| （纯读） | — | `octree` | 3（基线） |
+| `SetVoxelOctRefineType("speed")` | True | speed | **1** |
+| `SetVoxelOctRefineType("shape")` | True | shape | **2** |
+| `SetVoxelOctRefineType("octree")` | True | octree | **3**（回到基线，可逆） |
+| `...("Speed")` / `...("SHAPE")` | **False** | 原值不变 | 不变 |
+| `...(0)` | **False** | 原值不变 | 不变 |
+
+编码 `speed=1 / shape=2 / octree=3`；**大小写敏感**、**只接受字符串**。
+**OCT_MESH 段 6 键 6/6 单变量定谳**（§43 五条 + 本条）——
+**宿主键累计 19 条**（§40 = 13 → §43 = 18 → 本节 +1）。
+
+### 44.2 根因：目录里没有取值词表（旧解析把取值行当参数）
+
+手册把枚举取值写成**续行**（首格为空、`cells[1] = "poly"`）。旧 `_parse_method_block`
+走「续行 → 新参数」分支，产出 `{"type": "", "name": "\"poly\"", "description": …}`：
+全库 **1205 条假参数 / 239 个方法**，取值词表在自家 schema 里不可见 —— 这是 R29 只能猜
+`"octree"`/`"voxel"` 的直接原因。
+
+修 `tools/extract_vb_api_scflow.py`：续行三型派发（枚举行 → `values` 挂到最近的参数/返回值；
+`(Note)` 行 → `note` + `note_ref`；其余 → 参数续行），并补两种行型（无表头参数行、整数枚举行）。
+重新生成目录：
+
+| 指标 | 修前 | 修后 |
+|---|---|---|
+| 假参数（name 带引号、type 空） | 1205 | **0** |
+| 取值词表条目 | 0 | **1591** |
+| 带取值的参数/返回值 | 0 | 340 |
+| `note` / `note_ref` | 0 / 0 | 690 / 73 |
+
+接住的手册行型与笔误（实测计数）：枚举 3 格 634、4 格 836、5 格 7、同格多值 12、全角引号
+`”GVEL”` 1、漏闭合引号 `"IRBN` 1；整数枚举行 52。副产：`Conditions.GetFPHVariableOutput`
+旧解析**丢了一个参数**（`(VARIANT)value` 行无 `[Argument]` 表头），现参数与 `0/1/2` 取值齐全。
+
+### ★ 口径（本节新增两条）
+
+> **同值档不算证据**：setter 被设成「恰好是该键现值」时 xenv 不动，既不能证明也不能否证；
+> 逐档探针必须**至少含一个与现值不同的取值**。（R29 对值 3 的「无变化」即踩此坑。）
+
+> **词表双源**：取值必须「**手册取值表** + **宿主 getter 读回**」两处对齐。手册会漏值——
+> `GetVoxelOctRefineType` 只列 `shape`/`speed`，宿主实测还有默认值 `octree`。
+
+§43 ★（键映射必须单变量逐档增量）与本节两条并列为**实机映射取证的强制口径**；
+载体：`tools/xenv_setter_probe.py`（档位语法 `SETTER=VALUE[:GETTER]`，字符串自动加引号——
+裸标识符会被 VBScript 当变量名，错误被 `On Error Resume Next` 吞掉 → 假否证）。
+
+### 44.3 派生数据非幂等（R30-4）：快照必须能从**已提交输入**复算
+
+复算 `schemas/merged.json` 时撞见 `tools/_p12c_cond_harvest.py merge` **非幂等**：
+连跑三次 `CondSource` 计数 79→80→81→82。根因是 `extend_merged_schema` 的**累加**语义
+（`target["count"] += …`）叠加「载荷=所有不在基线 pph 里的类型」——哨兵 `alias_evidence`
+永不为空（`CondFan/CondFix/Spray` 无 universe 落点），于是每次运行都重喂已入库类型。
+修法：载荷收敛为 `to_add`（既不在基线、也不在 merged.json 里），且仅在其非空时写盘。
+
+**由此暴露的既有红灯**（与本次修改无关）：`p12h_registry_report.json` 冻结于 R8，其
+`dispositions` 内的实样计数来自**当时未提交**的膨胀数据（9/60/80），而已提交的
+`merged.json` 是 8/59/79 —— **干净检出时 `test_p12h_reconcile` 的 round-trip 断言必红**；
+同测试另有一处写死 wizard 审结计数 25/1/1，而已提交的 `p12h_wizard_report.json` 只有 1 族。
+
+处置：以已提交输入重生成快照（`p12h_registry_report.json` + `cond_types.json` v8→v9，
+仅 3 条 evidence 计数与 version 变化），把写死计数改为**契约断言**，并新增
+`tests/test_cond_harvest_merge_r304.py` 钉住幂等。
+
+> ★ **口径（新增）**：任何被测试断言的**冻结快照**，必须能由**已提交**的输入复算得出；
+> 「工作树多跑一次生成器恰好对上」不算通过 —— 那是把未提交状态当成了事实。
+
+### 44.4 提交纪律把权威目录挡在门外（R30-5）
+
+`tools/git_milestone.py --dry-run` 的跳过清单里出现了
+`schemas/vb_api_catalog.json (2139148 B > 1 MB)`。追查发现更严重：该文件在 **HEAD 上就是
+1,979,841 B**，最后一次入库是 **2026-08-20（`0cecf53`, P9）** —— 此后每轮重新提取的目录
+**都没进仓库**，仓库里的 API 面一直落后于实际提取结果（本轮把 1591 条取值 + 690 条 Note
+补进目录时才发现）。
+
+修法：体量上限按路径区分 —— `schemas/*.json`（权威 schema）与 `docs/*.md`（文档）
+放宽到 **8 MB**；其余路径维持 1 MB（大运行产物仍不得入库）。改后跳过清单**清零**。
+`tests/test_git_milestone_size_r305.py` 钉住该口径，并带「目录当前体量必须在其上限内」
+的不变量（防止再次静默跳过）。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

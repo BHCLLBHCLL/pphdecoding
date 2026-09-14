@@ -1,0 +1,75 @@
+start
+s001=0
+app__alive=True err=0
+s002=0
+s003=0
+doc__alive=True err=0
+s004=0
+s005=0
+s006=0
+s007=0
+mg0__alive=True err=0
+s008=0
+mgs0__alive=True err=0
+s009=0
+get0_val=octree err=0
+s010=0
+s011=0
+s012=0
+s013=0
+mg1__alive=True err=0
+s014=0
+mgs1__alive=True err=0
+s015=0
+s016=0
+set1_ret=True err=0
+s017=0
+s018=0
+s019=0
+get1_val=speed err=0
+s020=0
+s021=0
+s022=0
+s023=0
+mg2__alive=True err=0
+s024=0
+mgs2__alive=True err=0
+s025=0
+s026=0
+set2_ret=True err=0
+s027=0
+s028=0
+s029=0
+get2_val=shape err=0
+s030=0
+s031=0
+s032=0
+s033=0
+mg3__alive=True err=0
+s034=0
+mgs3__alive=True err=0
+s035=0
+s036=0
+set3_ret=False err=0
+s037=0
+s038=0
+s039=0
+get3_val=shape err=0
+s040=0
+s041=0
+s042=0
+s043=0
+mg4__alive=True err=0
+s044=0
+mgs4__alive=True err=0
+s045=0
+s046=0
+set4_ret=False err=0
+s047=0
+s048=0
+s049=0
+get4_val=shape err=0
+s050=0
+s051=0
+s052=0
+end

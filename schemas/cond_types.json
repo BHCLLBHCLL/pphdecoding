@@ -1,5 +1,5 @@
 {
- "version": 8,
+ "version": 9,
  "sources": {
   "GUI": "scFLOWpreGUI_Bx64net.dll",
   "Cmd": "scFLOWpreCmd_Bx64net.dll"
@@ -2533,7 +2533,7 @@
    "bucket": "exact_key",
    "kind": "registry_key",
    "target": null,
-   "evidence": "官方案例库实样 60 例（schemas/merged.json conditions.types）；P12-C 收割链 keys_source：301 样例 PPH 全量扫描 + 宿主 CreateCond* 收割产物 main.xml（p12c_registry_report.json）"
+   "evidence": "官方案例库实样 59 例（schemas/merged.json conditions.types）；P12-C 收割链 keys_source：301 样例 PPH 全量扫描 + 宿主 CreateCond* 收割产物 main.xml（p12c_registry_report.json）"
   },
   "CondRadiationLamp": {
    "bucket": "exact_key",
@@ -2569,7 +2569,7 @@
    "bucket": "exact_key",
    "kind": "registry_key",
    "target": null,
-   "evidence": "官方案例库实样 80 例（schemas/merged.json conditions.types）；P12-C 收割链 keys_source：301 样例 PPH 全量扫描 + 宿主 CreateCond* 收割产物 main.xml（p12c_registry_report.json）"
+   "evidence": "官方案例库实样 79 例（schemas/merged.json conditions.types）；P12-C 收割链 keys_source：301 样例 PPH 全量扫描 + 宿主 CreateCond* 收割产物 main.xml（p12c_registry_report.json）"
   },
   "CondSourceDEM": {
    "bucket": "exact_key",
@@ -2581,7 +2581,7 @@
    "bucket": "exact_key",
    "kind": "registry_key",
    "target": null,
-   "evidence": "官方案例库实样 9 例（schemas/merged.json conditions.types）；P12-C 收割链 keys_source：301 样例 PPH 全量扫描 + 宿主 CreateCond* 收割产物 main.xml（p12c_registry_report.json）"
+   "evidence": "官方案例库实样 8 例（schemas/merged.json conditions.types）；P12-C 收割链 keys_source：301 样例 PPH 全量扫描 + 宿主 CreateCond* 收割产物 main.xml（p12c_registry_report.json）"
   },
   "CondSprayGeneration": {
    "bucket": "exact_key",

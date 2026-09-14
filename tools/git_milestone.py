@@ -10,6 +10,10 @@
 * 排除：*.pph / *.mdl / *.oct / *.gph / *.x_t / *.X_T / *.stl / *.fph /
   *.sph / *.l / *.dmp / *.prp / *.xenv / *.js / *.sctsnapshot 等二进制或
   大产物（哪怕被 git 跟踪）；单文件超过 1 MB 也跳过并告警。
+* **权威文本资产例外**（schemas/*.json、docs/*.md）上限放宽到 8 MB：
+  schemas/vb_api_catalog.json 在 R30 已达 2.14 MB，1 MB 上限会把它**静默跳过**
+  —— 实测该文件自 2026-08-20（0cecf53, P9）起就没再进过仓库，
+  目录更新一直躺在工作树里（R30-5）。
 
 注意：.gitignore 里有 tests/*，所以新增测试模块必须 git add -f。
 
@@ -67,6 +71,18 @@ EXCLUDE_EXT = {
 #: 允许的大体积上限（收录集都是文本；超过即视为误配）
 MAX_BYTES = 1_000_000
 
+#: 权威文本资产（schema/文档）放宽上限。理由见模块 docstring：1 MB 上限曾把
+#: 2.14 MB 的 vb_api_catalog.json 静默跳过，导致仓库里的目录停在 2026-08-20。
+BIG_TEXT_GLOBS = ("schemas/*.json", "docs/*.md")
+MAX_BYTES_BIG = 8_000_000
+
+
+def _size_limit(rel: str) -> int:
+    """按路径取体量上限（权威文本资产放宽）。"""
+    if any(fnmatch.fnmatch(rel, pat) for pat in BIG_TEXT_GLOBS):
+        return MAX_BYTES_BIG
+    return MAX_BYTES
+
 
 def _git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     # encoding 必须显式给：默认按 ANSI 代码页解码，git 输出里的 UTF-8
@@ -107,8 +123,10 @@ def candidates() -> tuple[list[str], list[str]]:
             skipped.append(rel + " (扩展名排除)")
             continue
         size = p.stat().st_size
-        if size > MAX_BYTES:
-            skipped.append(rel + " (" + str(size) + " B > 1 MB)")
+        limit = _size_limit(rel)
+        if size > limit:
+            skipped.append(rel + " (" + str(size) + " B > "
+                            + str(limit) + " B)")
             continue
         take.append(rel)
     for pat in FORCE_GLOBS:
@@ -116,7 +134,7 @@ def candidates() -> tuple[list[str], list[str]]:
             if not p.is_file():
                 continue
             rel = p.relative_to(ROOT).as_posix()
-            if _is_excluded(rel) or p.stat().st_size > MAX_BYTES:
+            if _is_excluded(rel) or p.stat().st_size > _size_limit(rel):
                 continue
             take.append(rel)
     return sorted(set(take)), sorted(set(skipped))

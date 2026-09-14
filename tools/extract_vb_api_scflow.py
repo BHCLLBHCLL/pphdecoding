@@ -11,9 +11,16 @@
 表内行：``[Explanation]``（说明）、``[Argument]``（参数，每参数一行：
 ``(VARIANT) name`` / ``:`` / 描述）、``[Return Value]``（返回值）。
 
+表内续行（首格为空）有三型，须分开处理（R30-3 实测）：
+
+* **枚举取值行**（``"poly" / Polyhedral mesher``）——同一行可能塞多值；
+* **Note 行**（``(Note) Refer to GetXxx ...``）——多为「取值见某 getter」的
+  交叉引用，是取到词表的唯一线索；
+* **参数续行**（``(BSTR)type / : / desc``）——才是真正的下一个参数。
+
 输出 ``schemas/vb_api_catalog.json``：类 → 方法/属性 → 签名、说明、
-参数表、返回值。该目录是 typed COM 桥（``scflowpre_api.py``）与
-VBS 生成器共用的权威 API 面。
+参数表（``arguments[].values`` 带取值词表）、返回值。该目录是 typed COM 桥
+（``scflowpre_api.py``）与 VBS 生成器共用的权威 API 面。
 
 用法::
 
@@ -62,6 +69,21 @@ _TABLE = re.compile(
 _SIGNATURE = re.compile(r"<dl><dd>([^<]*(?:<(?!/?dd)[^<]*)*)</dd></dl>")
 _NOTE = re.compile(r"<dl><dd><b>\(Note\)</b>(.*?)</dd></dl>", re.S)
 _ARG_CELL = re.compile(r"^\(([^)]+)\)\s*(.+)$")
+#: 取值格：手册用 "poly" 标注；全角引号 ”GVEL” 是手册笔误，一并接住。
+#: 用字符类拼接而非转义串 —— 免掉 \s / \" 混写带来的 SyntaxWarning。
+_QUOTES = "\"\u201c\u201d"
+#: 取值格 → 「"value" [: 描述]」连续切分（同格多值时靠 finditer 逐个取，
+#: 不能用 split —— split 会把匹配到的取值本身吃掉）
+_ENUM_DESC = re.compile(
+    "[" + _QUOTES + "]([^" + _QUOTES + "]+)[" + _QUOTES
+    + "]\\s*:?\\s*([^" + _QUOTES + "]*)")
+#: 整数取值行：手册把 0/1/2 型枚举写成「0 Initial calculation 1 Restart…」
+_NUM_DESC = re.compile(r"(\d+)\s*:?\s*([^\d]*?)(?=\s*\d+\s*:?\s|$)")
+#: 漏闭合引号（手册 "IRBN）：取值取到首个空白，余下当描述
+_ENUM_OPEN = re.compile(
+    "[" + _QUOTES + "]([^\\s" + _QUOTES + "]+)\\s*(.*)$")
+_NOTE_ROW = re.compile(r"\(Note\)\s*(.*)", re.S)
+_NOTE_HREF = re.compile(r'href="#([A-Za-z_]\w+)"')
 
 
 def _strip(s: str) -> str:
@@ -99,10 +121,76 @@ def _parse_method_block(body: str) -> dict:
             mode = "ret"
             if len(cells) >= 4:
                 _push_arg(entry, cells[1], cells[3], ret=True)
-        elif not head and mode == "arg" and len(cells) >= 3:
-            # 续行：[空] [(VARIANT) name] [:] [desc]
-            _push_arg(entry, cells[0] or cells[1], cells[-1])
+        elif head.startswith("(Note)"):
+            nm2 = _NOTE_ROW.match(head)
+            if nm2:
+                entry.setdefault("note", nm2.group(1).strip())
+        elif mode in ("arg", "ret") and len(cells) >= 3 \
+                and _ARG_CELL.match(head):
+            # 无 [Argument] 表头的参数行：cells[0] 直接是 (TYPE) name
+            _push_arg(entry, head, cells[-1], ret=(mode == "ret"))
+        elif not head:
+            _parse_continuation(entry, mode, cells, row)
     return entry
+
+
+def _parse_continuation(entry: dict, mode, cells: list, row: str) -> None:
+    """续行（首格为空）分三类：Note 行 / 枚举取值行 / 参数续行。
+
+    手册实测分布（359 份 HTML）：取值行 836 行 4 格、634 行 3 格、12 行
+    同格多值、7 行 5 格；Note 行 545 行。旧解析把取值行当成**新参数**
+    （name 带引号、type 空）——全库 1205 条假参数、239 个方法受影响，
+    正是 R29 只能靠猜取值词表（"octree"/"voxel" 全猜错）的原因。
+    """
+    first = next((c for c in cells if c), "")
+    nm = _NOTE_ROW.match(first)
+    if nm:
+        entry.setdefault("note", nm.group(1).strip())
+        href = _NOTE_HREF.search(row)
+        if href:
+            entry.setdefault("note_ref", href.group(1))
+        return
+    vals = _enum_values(cells[1]) if len(cells) > 1 else []
+    if not vals and len(cells) > 1 and not any(cells[2:]) \
+            and _NUM_DESC.match(cells[1].strip()):
+        vals = _numeric_values(cells[1])
+    if vals:
+        tail = [c for c in cells[2:] if c]
+        if tail:
+            vals[-1]["description"] = tail[-1]
+        _push_values(entry, mode, vals)
+        return
+    if mode == "arg" and len(cells) >= 3:
+        # 参数续行：[空] [(VARIANT) name] [:] [desc]
+        _push_arg(entry, cells[0] or cells[1], cells[-1])
+
+
+def _enum_values(cell: str) -> list:
+    """取值格 → [{"value", "description"}]（同格多值也拆开）。"""
+    text = cell.strip()
+    if text and text[0] in _QUOTES and text.count(text[0]) % 2:
+        # 漏闭合引号（Conditions.GetFPHVariableOutput 的 "IRBN）：取到首个空白
+        m = _ENUM_OPEN.match(text)
+        return ([{"value": m.group(1).strip(),
+                  "description": m.group(2).strip()}] if m else [])
+    return [{"value": m.group(1).strip(),
+             "description": m.group(2).strip()}
+            for m in _ENUM_DESC.finditer(text)]
+
+
+def _numeric_values(cell: str) -> list:
+    """整数取值格 → [{"value", "description"}]（同格多值也拆开）。"""
+    return [{"value": m.group(1), "description": m.group(2).strip()}
+            for m in _NUM_DESC.finditer(cell.strip())]
+
+
+def _push_values(entry: dict, mode, vals: list) -> None:
+    """枚举行挂到最近的参数/返回值上（无宿主行则挂条目级）。"""
+    target = entry.get("return") if mode == "ret" else None
+    if target is None and entry.get("arguments"):
+        target = entry["arguments"][-1]
+    (target if isinstance(target, dict) else entry).setdefault(
+        "values", []).extend(vals)
 
 
 def _push_arg(entry: dict, name_cell: str, desc: str, ret: bool = False) -> None:

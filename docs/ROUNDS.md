@@ -33,6 +33,9 @@ python tools/git_milestone.py --round R3 -m "<一句话主题>"
 * **不入库**：`*.pph` / `*.mdl` / `*.oct` / `*.gph` / `*.x_t` / `*.stl` / `*.fph` /
   `*.sph` / `*.l` / `*.dmp` / `*.prp` / `*.xenv` / `*.js` / `*.sctsnapshot` 等
   二进制与大运行产物（单文件 > 1 MB 也一律跳过并告警）—— 仓库不承担产物体量；
+* **例外（R30-5 起）**：`schemas/*.json` 与 `docs/*.md` 是**权威文本资产**，体量上限放宽到
+  **8 MB**。实测事故：`schemas/vb_api_catalog.json` 早已 1.98 MB，1 MB 上限把它**静默跳过**，
+  目录自 2026-08-20 起就没再进过仓库；
 * `.gitignore` 含 `tests/*`，新增测试模块**必须** `git add -f`，脚本已内置；
 * 提交信息形如 `feat: R3 <主题>`，正文写明纳入文件数与产物排除纪律；
 * 每轮收口时把该轮的「回归数字 + 证据路径」写进本轮执行记录，然后跑一次本命令。
@@ -2015,12 +2018,160 @@ R27 收敛判定后遗留的两件小收尾（OCT_MESH 段键、联动归因）�
 
 ---
 
-## R30 —— 提案（≈0.5 人日）
+## R30 —— OCT_MESH 段 6/6 定谳 + 手册取值词表入目录（2026-09-15，✅ 已完成）
 
-| # | 条目 | 验收句 | 人日 |
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
 |---|---|---|---|
-| **R30-1** | **`VOXEL_OCT_REFINE_TYPE` 收尾** | 用字符串取值（`octree`/`voxel`）与数值 0/1/2 各试一档（逐档增量法） | 该键有实测映射，或给出「候选取值全部无效」的确切表 | 0.5 |
-| **R30-2** | **单变量方法论入规范** | 把「键映射必须单变量逐档增量」写进审计文档口径区 | 规范区有该条且被本段引用 | — |
+| **R30-1** | **`VOXEL_OCT_REFINE_TYPE` 收尾** | 该键有实测映射，或给出「候选取值全部无效」的确切表 | ✅ **定谳：映射存在，取值是字符串枚举** |
+| **R30-2** | **单变量方法论入规范** | 规范区有该条且被本段引用 | ✅ 审计 §43 ★ 已入册，§44 交叉引用并补两条新口径 |
+| **R30-3** | **（本轮新发现）手册取值词表入目录** | 取值行不再被当成参数；词表可查 | ✅ 假参数 **1205 → 0**、取值 **0 → 1591** |
+| **R30-4** | **（本轮新发现）派生数据非幂等 + 快照脱钩** | 连续 merge 不再改数；冻结快照与已提交数据一致 | ✅ merge 幂等（连跑字节相同）+ 快照按**已提交输入**重生成、陈旧字面量改契约断言 |
+| **R30-5** | **（本轮新发现）提交纪律把权威目录挡在门外** | 权威 schema/文档不得因体量被静默跳过 | ✅ 实测目录自 2026-08-20 起从未入库（1 MB 上限）；上限按路径放宽到 8 MB，跳过清单清零 |
+
+### R30-1 实测：单变量逐档（新工具 `tools/xenv_setter_probe.py`）
+
+base = `box.pph`，两轮会话共 **9 档**，`73/73` 与 `59/59` 全 err=0（65.7 s + ≈60 s）：
+
+| 档 | 调用 | setter 返回 | getter 读回 | `OCT_MESH.VOXEL_OCT_REFINE_TYPE` |
+|---|---|---|---|---|
+| 纯读 | `GetVoxelOctRefineType` | — | `octree` | 3（基线） |
+| 1 | `SetVoxelOctRefineType("speed")` | True | speed | **3 → 1** |
+| 2 | `SetVoxelOctRefineType("shape")` | True | shape | **1 → 2** |
+| 3 | `SetVoxelOctRefineType("octree")` | True | octree | **2 → 3**（回到基线 → 可逆） |
+| 4 | `...("Speed")` | **False** | shape（原值不变） | 无变化 |
+| 5 | `...("SHAPE")` | **False** | octree（原值不变） | 无变化 |
+| 6 | `...(0)` | **False** | 原值不变 | 无变化 |
+
+结论：**取值大小写敏感**、**只接受字符串**，数值档一律返回 False 且不落盘；
+编码 `speed=1 / shape=2 / octree=3`。**OCT_MESH 段 6 键全部单变量定谳（6/6）**。
+
+**R29 的「值 3 无变化」是无信息档**（3 本就是该键现值）——不是否证；由此立新口径（见下）。
+
+### R30-3 根因修复：自家的目录里根本没有取值词表
+
+R29 之所以只能猜取值（猜 `"octree"`/`"voxel"` 全错），因为 `schemas/vb_api_catalog.json`
+**把手册的取值行当成了新参数**：手册把取值写成续行（首格为空、`cells[1] = "poly"`），
+旧解析 `_push_arg(cells[1], cells[-1])` 于是产出 `{"type": "", "name": "\"poly\""}` ——
+全库 **1205 条假参数、239 个方法**，词表在自家 schema 里不可见。
+
+修 `tools/extract_vb_api_scflow.py`：续行按三型派发（**枚举行 / Note 行 / 参数续行**），
+并补「无表头参数行」「整数枚举 `0 Initial calculation 1 Restart…`」两种行型。重新生成目录：
+
+| 指标 | 修前 | 修后 |
+|---|---|---|
+| 假参数（name 带引号、type 空） | 1205 | **0** |
+| 取值词表条目 | 0 | **1591**（340 个参数/返回值、321 个方法） |
+| Note / 手册内交叉引用（`note_ref`） | 0 / 0 | **690 / 73** |
+
+按实测接住的手册行型与笔误：3 格 / 4 格 / 5 格 / 同格多值（12 行）、全角引号 `”GVEL”`、
+漏闭合引号 `"IRBN`。副产：`Conditions.GetFPHVariableOutput` 旧解析**丢了一整个参数**
+（`(VARIANT)value` 无表头），现在参数与 `0/1/2` 取值齐全。
+
+### R30-4 派生数据非幂等：连跑三次 79 → 80 → 81 → 82
+
+R30 复算 `schemas/merged.json` 时撞见：`python tools/_p12c_cond_harvest.py merge` **每跑一次
+就把 CondSource 计数 +1**（实测 79→80→81→82）。根因两条：
+
+1. `schema_extract.extend_merged_schema` 是**累加**语义（`target["count"] += …`）；
+2. 收割 merge 的载荷是「**所有**不在基线 pph 里的类型」，而不是「本次新发现的类型」——
+   哨兵条件 `alias_evidence` 永不为空（`CondFan/CondFix/Spray` 三个别名类型没有 universe 落点），
+   于是每次运行都把**已入库**的类型再喂一遍。
+
+修法（`_p12c_cond_harvest.merge`）：载荷收敛为 `to_add = [k for k in htypes
+if k not in base_types and k not in have_before]`，并且只在 `to_add` 非空时写盘。
+实测：连跑两次**字节相同**、`to_add == []`。
+
+**连带暴露的真红灯（与本次修复无关，是 HEAD 上既有的）**：`p12h_registry_report.json`
+（R8 冻结快照）是用**当时工作树里被膨胀过一次**的 merged.json 生成的（9/60/80），
+而已提交的 merged.json 是未膨胀值（8/59/79）——**干净检出跑 `test_p12h_reconcile`
+必红**，之前没红只是因为工作树恰好「多跑了一次 merge」对上了。同类问题还有一处：
+该测试写死 wizard 审结计数 25/1/1，而**已提交的** `p12h_wizard_report.json` 只有 1 族。
+
+处置（口径：**快照必须能从已提交输入复算**）：
+
+* 用已提交输入重生成 `p12h_registry_report.json` + `schemas/cond_types.json`（v8 → v9，
+  仅 3 条 evidence 计数 60/80/9 → 59/79/8 与 version 变化）；
+* `test_wizard_batch_verdicts_recorded` 的写死计数 → **契约断言**（审结覆盖全部输入族、
+  取值在允许集内）——沿 R0「陈旧字面量断言改契约断言」口径；
+* 新增 `tests/test_cond_harvest_merge_r304.py`：双跑字节相同 / `to_add` 为空 /
+  `merge(merged_path=…)` 不得碰仓库里的 merged.json。
+
+---
+
+### R30-5 提交纪律的 1 MB 上限：权威目录被静默跳过
+
+`git_milestone.py --dry-run` 的「跳过」清单里出现了 `schemas/vb_api_catalog.json
+(2139148 B > 1 MB)` —— 一查更严重：**该文件在 HEAD 上就已经是 1,979,841 B**，
+最后一次入库是 **2026-08-20（`0cecf53`, P9）**。也就是说此后每一轮重新提取的
+目录**都没有进仓库**，仓库里的 API 面一直比实际提取结果旧。
+
+修法：体量上限按路径区分 —— `schemas/*.json`（权威 schema）与 `docs/*.md`（文档）
+放宽到 **8 MB**，其余路径维持 1 MB（防止误收大运行产物）。改后 `--dry-run` 的
+跳过清单**清零**。新增 `tests/test_git_milestone_size_r305.py` 钉住这条口径
+（含「目录当前体量必须在其上限内」的不变量）。
+
+---
+
+### ★ 口径（本轮新增两条）
+
+> **同值档不算证据**：setter 被设成「恰好是该键现值」时 xenv 自然不动，既不能证明也不能否证；
+> 逐档探针必须**至少包含一个与现值不同的取值**（R29 对值 3 的「无变化」正是踩了这条）。
+
+> **词表双源**：API 取值必须「**手册取值表** + **宿主 getter 读回**」两处对齐。手册会漏值 ——
+> `GetVoxelOctRefineType` 只列 `shape`/`speed`，而宿主实测还有 `octree`（且是默认值）。
+
+### 回归
+
+全量回归 **1246 passed / 4 skipped / 0 failed**（563.49 s）；另 R30-5 的
+`tests/test_git_milestone_size_r305.py` 在改后单独复跑 **4 passed**（`git_milestone` 无其他引用者，
+且改后 `--dry-run` 跳过清单清零）—— 合计 **1250 passed / 4 skipped / 0 failed**。
+两次全量之间的代码差异只有 `tools/git_milestone.py` 与新测试本身。
+
+新增测试：`tests/test_xenv_setter_probe_r301.py`（档位解析 / VBS 取值引号 / 每档只改一个 setter /
+逐档存档 / 增量 diff）与 `tests/test_api_catalog_values_r303.py`（取值格 4 类 / 行型派发 4 例 /
+目录不变量：假参数为零、取值 ≥1200、词表与 `note_ref` 逐条核对）。
+
+### 证据
+
+`_p12u_gate/r30/summary.json`（5 档）、`_p12u_gate/r30/summary2.json`（4 档）、
+`_p12u_gate/r30_voxel*/step*.pph`（逐档存档，可直接复算增量）、`_p12u_gate/r30/verify_catalog.py`（目录计数复算）。
+
+派生数据说明：`schemas/merged.json` 的 `CondSource` 79→80 来自**上一会话**的收割产物；
+本轮以离线 `tools/_p12c_cond_harvest.py merge` 复跑，确认当前文件是该收割的**不动点**（再跑不产生新变更）。
+
+### 宿主键进度
+
+累计 **19 条**（R28 的 13 → R29 +5 = 18 → R30 +1 = **19**），其中 **OCT_MESH 段 6/6**
+全部按单变量逐档法定谳（`FACET_LENGTH_FACTOR`/`FACET_ANGLE`/`FACET_MAX_WIDTH_FACTOR`/
+`FACET_SPECIFY_EACH_REGION`/`COMPLETE_PARALLEL`/`VOXEL_OCT_REFINE_TYPE`）。
+
+---
+
+## R31 —— 提案（≈1.5 人日）
+
+### 依据
+
+* R29/R30 把 `OCT_MESH` 6 键全部实测定谳，但**其中只有 2 条接进了面板写回路径**——
+  实测出来的键没有回流到产品面；
+* R30-3 让 **1591 条取值**进目录，但**还没有任何代码消费它**（写回仍不看取值合法性）；
+* 手册里还有一类取值没进目录：取值写在**参数描述文字里**的行型（如 Kicker
+  `MaximumNumberOfParallelizedProcess` 的 `"hpc"`/`"lt"`、`Doc.HitTest*` 的 `"meshing"`）。
+
+### 条目
+
+| # | 条目 | 做法 | 验收句 | 人日 |
+|---|---|---|---|---|
+| **R31-1** | **实测键回流面板** | 把 OCT_MESH 6 键接进 `nav_panels` 的 `MesherFaceterBody`/`OctBody` 写回（现在 2/6） | 面板改一项 → 对应 xenv 键变化：离线比对 + 实机 `xenv_host_write_check` 回读一致 | 0.5 |
+| **R31-2** | **描述内嵌取值行型** | 处理「取值写在 desc 里」的行型（`"hpc": HPC edition` 型） | 目录取值数 +≥20，且不产生新假参数 | 0.5 |
+| **R31-3** | **取值表暴露给 typed 桥** | `automation/scflowpre_api.py` 暴露 `values`（可查询取值集合/校验） | 桥接层能对给定方法返回取值集合 | 0.5 |
+| **R31-4** | **快照 / 收录一致性护栏** | ①把 R30-4 口径推广：`p12h_registry_report.json`/`p12c_registry_report.json`/`p12h_special6_report.json` 做「复算 == 已提交」断言；②把 R30-5 口径做成通用护栏：里程碑工具的「跳过」清单**不得包含已跟踪文件** | ≥3 个快照有复算测试；人为改一个计数、或让已跟踪文件超限，均须变红 | 0.5 |
+
+### 明确不做
+
+* 不提取 Post / Solver / Monitor 类（非本仓域，`extract_vb_api_scflow.py` 的 `_FILE_PATTERNS` 既定口径）；
+* 不为 `Set*` 写「自动挑取值」逻辑——取值选择是面板语义，不是目录语义。
 
 ---
 

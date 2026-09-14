@@ -1,0 +1,151 @@
+{
+  "tag": "r30_voxel2",
+  "base": "D:\\training\\cgns\\pphdecoding\\box.pph",
+  "cases": [
+    {
+      "setter": "",
+      "value": "",
+      "getter": "GetVoxelOctRefineType",
+      "value_literal": null
+    },
+    {
+      "setter": "SetVoxelOctRefineType",
+      "value": "speed",
+      "getter": "GetVoxelOctRefineType",
+      "value_literal": "\"speed\""
+    },
+    {
+      "setter": "SetVoxelOctRefineType",
+      "value": "octree",
+      "getter": "GetVoxelOctRefineType",
+      "value_literal": "\"octree\""
+    },
+    {
+      "setter": "SetVoxelOctRefineType",
+      "value": "SHAPE",
+      "getter": "GetVoxelOctRefineType",
+      "value_literal": "\"SHAPE\""
+    }
+  ],
+  "steps_dir": "D:\\training\\cgns\\pphdecoding\\_p12u_gate\\r30_voxel2",
+  "host": {
+    "error": null,
+    "err0": 59,
+    "total": 59,
+    "seconds": 56.9
+  },
+  "readbacks": {
+    "get0_val": {
+      "value": "octree",
+      "err": 0
+    },
+    "set1_ret": {
+      "value": "True",
+      "err": 0
+    },
+    "get1_val": {
+      "value": "speed",
+      "err": 0
+    },
+    "set2_ret": {
+      "value": "True",
+      "err": 0
+    },
+    "get2_val": {
+      "value": "octree",
+      "err": 0
+    },
+    "set3_ret": {
+      "value": "False",
+      "err": 0
+    },
+    "get3_val": {
+      "value": "octree",
+      "err": 0
+    }
+  },
+  "per_case": [
+    {
+      "index": 0,
+      "setter": "",
+      "value": "",
+      "getter": "GetVoxelOctRefineType",
+      "set_ret": null,
+      "get_val": {
+        "value": "octree",
+        "err": 0
+      },
+      "saved": true,
+      "delta_vs_prev": {},
+      "delta_vs_base": {}
+    },
+    {
+      "index": 1,
+      "setter": "SetVoxelOctRefineType",
+      "value": "speed",
+      "getter": "GetVoxelOctRefineType",
+      "set_ret": {
+        "value": "True",
+        "err": 0
+      },
+      "get_val": {
+        "value": "speed",
+        "err": 0
+      },
+      "saved": true,
+      "delta_vs_prev": {
+        "OCT_MESH.VOXEL_OCT_REFINE_TYPE": {
+          "before": "3",
+          "after": "1"
+        }
+      },
+      "delta_vs_base": {
+        "OCT_MESH.VOXEL_OCT_REFINE_TYPE": {
+          "before": "3",
+          "after": "1"
+        }
+      }
+    },
+    {
+      "index": 2,
+      "setter": "SetVoxelOctRefineType",
+      "value": "octree",
+      "getter": "GetVoxelOctRefineType",
+      "set_ret": {
+        "value": "True",
+        "err": 0
+      },
+      "get_val": {
+        "value": "octree",
+        "err": 0
+      },
+      "saved": true,
+      "delta_vs_prev": {
+        "OCT_MESH.VOXEL_OCT_REFINE_TYPE": {
+          "before": "1",
+          "after": "3"
+        }
+      },
+      "delta_vs_base": {}
+    },
+    {
+      "index": 3,
+      "setter": "SetVoxelOctRefineType",
+      "value": "SHAPE",
+      "getter": "GetVoxelOctRefineType",
+      "set_ret": {
+        "value": "False",
+        "err": 0
+      },
+      "get_val": {
+        "value": "octree",
+        "err": 0
+      },
+      "saved": true,
+      "delta_vs_prev": {},
+      "delta_vs_base": {}
+    }
+  ],
+  "killed_hosts": [],
+  "passed": true
+}

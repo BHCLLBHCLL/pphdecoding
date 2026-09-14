@@ -123,9 +123,16 @@ class TestEvidenceAgreement(unittest.TestCase):
                 self.assertEqual(d.get("target"), d6.get("target"), name)
 
     def test_wizard_batch_verdicts_recorded(self):
-        self.assertEqual(Counter(REPORT["wizard_batch_verdicts"].values()),
-                         Counter({"session_state": 25,
-                                  "keys_projected": 1, "not_run": 1}))
+        # R30-4：原为写死计数（25/1/1）——该计数来自当时**未提交**的
+        # p12h_wizard_report.json（27 族），与已提交输入（1 族）脱钩，
+        # 干净检出必红。改契约断言：审结覆盖全部输入族、取值在允许集内。
+        verdicts = REPORT["wizard_batch_verdicts"]
+        self.assertTrue(verdicts, "batch 审结必须逐族留痕")
+        allowed = {"session_state", "keys_projected", "not_run"}
+        self.assertEqual(set(verdicts.values()) - allowed, set())
+        wizard = json.loads(
+            (ROOT / "p12h_wizard_report.json").read_text(encoding="utf-8"))
+        self.assertEqual(set(verdicts), set(wizard["families"]))
 
     def test_no_missing_type_got_registry_key(self):
         miss = rc.missing_types(P12C)

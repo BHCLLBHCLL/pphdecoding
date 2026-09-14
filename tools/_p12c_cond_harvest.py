@@ -256,9 +256,15 @@ def merge(baseline: Path = BASELINE, out_pph: Path = OUT,
         "alias_evidence": alias_evidence,
     }
 
-    if new_in_universe or alias_evidence:
-        extra = {"conditions": {"types": {k: htypes[k] for k in htypes
-                                          if k not in base_types}}}
+    # 只写「merged.json 里还没有」的类型：extend_merged_schema 是**累加**语义
+    # （target["count"] += ...），把已入库的类型再喂一次就会凭空涨数——
+    # R30 实测连跑三次 79→80→81→82，派生数据不可信（R30-4 修）。
+    to_add = sorted(k for k in htypes
+                    if k not in base_types and k not in have_before)
+    report["to_add"] = to_add
+
+    if to_add:
+        extra = {"conditions": {"types": {k: htypes[k] for k in to_add}}}
         merged = extend_merged_schema(load_schema_json(merged_path), extra)
         write_schema_json(merged, merged_path)
         _, _u, have_after = load_registries()
