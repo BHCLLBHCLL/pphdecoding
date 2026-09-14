@@ -49,6 +49,26 @@ class TestSizeLimit(unittest.TestCase):
     def test_relaxed_limit_is_above_one_mb(self):
         self.assertGreater(self.gm.MAX_BYTES_BIG, self.gm.MAX_BYTES)
 
+    def test_bad_staged_uses_path_aware_limit(self):
+        """暂存后的二次筛选也必须走 _size_limit（这里曾把目录 reset 出去）。"""
+        self.assertEqual(self.gm.bad_staged(["schemas/vb_api_catalog.json"]),
+                         [])
+        self.assertEqual(self.gm.bad_staged(["tools/git_milestone.py"]), [])
+
+    def test_bad_staged_flags_binaries(self):
+        self.assertEqual(self.gm.bad_staged(["box.pph"]), ["box.pph"])
+
+    def test_bad_staged_ignores_deleted_paths(self):
+        """删除的文件不存在 —— 不得因 stat() 失败或体积判断被剔除。"""
+        self.assertEqual(
+            self.gm.bad_staged(["tools/_r305_no_such_file.py"]), [])
+
+    def test_candidates_reports_deletions(self):
+        take, skipped, deleted = self.gm.candidates()
+        self.assertIsInstance(take, list)
+        self.assertIsInstance(skipped, list)
+        self.assertIsInstance(deleted, list)
+
     def test_catalog_fits_under_its_limit(self):
         """不变量：权威目录的**当前**体量必须在上限内（否则又会被静默跳过）。"""
         p = ROOT / "schemas" / "vb_api_catalog.json"

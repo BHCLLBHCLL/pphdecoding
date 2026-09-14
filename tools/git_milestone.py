@@ -99,8 +99,30 @@ def _is_excluded(rel: str) -> bool:
     return rel.endswith("_part.mdl") or rel.endswith("_ridge.mdl")
 
 
-def candidates() -> tuple[list[str], list[str]]:
-    """返回 (收录文件, 跳过告警)。只收 git 视角下「有改动」的文件。"""
+def bad_staged(staged: list[str]) -> list[str]:
+    """暂存集里越界的文件（扩展名排除 / 超上限）。
+
+    不存在但已暂存的路径（= 删除）不算越界 —— R30-5 实测：旧实现在这里用
+    `MAX_BYTES` 硬编码再筛一遍，于是 2.14 MB 的 `schemas/vb_api_catalog.json`
+    刚 `git add` 进来就被 `git reset` 剔除，**提交成功但目录没进仓库**
+    （同一条纪律在两个地方各写了一遍，改了一处漏了另一处）。
+    """
+    out = []
+    for f in staged:
+        p = ROOT / f
+        if _is_excluded(f) or (p.is_file()
+                               and p.stat().st_size > _size_limit(f)):
+            out.append(f)
+    return out
+
+
+def candidates() -> tuple[list[str], list[str], list[str]]:
+    """返回 (收录文件, 跳过告警, 待删除)。
+
+    只收 git 视角下「有改动」的文件；**删除**也要收（旧实现 `if not p.is_file():
+    continue` 把删除整个丢掉，`tools/_r17_dual_ours.py` 这类升级后清理的
+    一次性脚本因此永远提交不掉）。
+    """
     try:
         status = _git("status", "--porcelain",
                       "--untracked-files=all").stdout.splitlines()
@@ -108,9 +130,11 @@ def candidates() -> tuple[list[str], list[str]]:
         raise SystemExit("git status 失败: " + (exc.stderr or ""))
     take: list[str] = []
     skipped: list[str] = []
+    deleted: list[str] = []
     for line in status:
         if len(line) < 4:
             continue
+        code = line[:2]
         rel = line[3:].strip().strip(chr(34))
         if " -> " in rel:
             rel = rel.split(" -> ", 1)[1]
@@ -118,6 +142,8 @@ def candidates() -> tuple[list[str], list[str]]:
             continue
         p = ROOT / rel
         if not p.is_file():
+            if "D" in code and not _is_excluded(rel):
+                deleted.append(rel)
             continue
         if _is_excluded(rel):
             skipped.append(rel + " (扩展名排除)")
@@ -137,7 +163,8 @@ def candidates() -> tuple[list[str], list[str]]:
             if _is_excluded(rel) or p.stat().st_size > _size_limit(rel):
                 continue
             take.append(rel)
-    return sorted(set(take)), sorted(set(skipped))
+    return (sorted(set(take)), sorted(set(skipped)),
+            sorted(set(deleted)))
 
 
 def main(argv=None) -> int:
@@ -149,27 +176,29 @@ def main(argv=None) -> int:
     ap.add_argument("--no-push", action="store_true")
     args = ap.parse_args(argv)
 
-    take, skipped = candidates()
-    print("[milestone] 收录 " + str(len(take)) + " 个文件")
+    take, skipped, deleted = candidates()
+    print("[milestone] 收录 " + str(len(take)) + " 个文件，"
+          + "删除 " + str(len(deleted)) + " 个")
     for rel in take:
         print("   + " + rel)
+    for rel in deleted:
+        print("   - " + rel + " (删除)")
     if skipped:
         print("[milestone] 跳过 " + str(len(skipped)) + " 个：")
         for rel in skipped[:20]:
             print("   - " + rel)
-    if not take:
+    if not take and not deleted:
         print("[milestone] 无改动可提交")
         return 0
     if args.dry_run:
         return 0
 
-    _git("add", "-f", "--", *take)
+    _git("add", "-f", "--", *(take + deleted))
     staged = _git("diff", "--cached", "--name-only").stdout.split()
     if not staged:
         print("[milestone] 暂存区为空，放弃提交")
         return 0
-    bad = [f for f in staged if _is_excluded(f)
-           or (ROOT / f).stat().st_size > MAX_BYTES]
+    bad = bad_staged(staged)
     if bad:
         _git("reset", "-q", "--", *bad, check=False)
         print("[milestone] 从暂存区剔除越界文件：" + ", ".join(bad))

@@ -1525,9 +1525,20 @@ xenv」（实际写 `OCT_MESH.COMPLETE_PARALLEL`）。两者都源于**多 sette
 补进目录时才发现）。
 
 修法：体量上限按路径区分 —— `schemas/*.json`（权威 schema）与 `docs/*.md`（文档）
-放宽到 **8 MB**；其余路径维持 1 MB（大运行产物仍不得入库）。改后跳过清单**清零**。
+放宽到 **8 MB**；其余路径维持 1 MB（大运行产物仍不得入库）。
 `tests/test_git_milestone_size_r305.py` 钉住该口径，并带「目录当前体量必须在其上限内」
 的不变量（防止再次静默跳过）。
+
+**同一纪律在三处各写了一遍，第一版只改了一处**，于是复现了同类事故：
+
+| # | 位置 | 后果 |
+|---|---|---|
+| 1 | `candidates()` 收录筛 | 只体现在 `--dry-run` 的「跳过」清单里（可见） |
+| 2 | `main()` 暂存后二次体积筛（硬编码 `MAX_BYTES`） | **`git add` 后又被 `git reset` 剔除**：提交与推送都成功，目录却没进仓库 |
+| 3 | `candidates()` 的 `if not p.is_file(): continue` | **删除**永远提交不掉（`tools/_r17_dual_ours.py` 类清理遗留） |
+
+三处一并修（统一走 `bad_staged()`、支持 `D` 状态），并把「收录 N 个 / 删除 M 个」
+打进输出，使 dry-run 与实际暂存集可对照。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。
