@@ -1647,6 +1647,44 @@ R32-3 的护栏（`Conditions.GetAnalysisType` 的 30 条取值必须挂在参�
 
 手册笔误两个取值 `"'protectd1"` / `"'orthogonality"`（引号内多一个单引号）：
 只在账上显式声明「待实机确认」→ R33-1，**不猜真值**。
+
+---
+
+## 47. R33 更新（2026-09-15）—— 手册词表三路对拍 / 取值守卫 / 缺口终态
+
+### 47.1 笔误定谳：宿主**自己写出的** XML 是判据（R33-1）
+
+扫官方算例库 151 个工程的 `main.xml`：`<stability_type><name>protectd1</name>`（**755 处**）、
+`<stabilitygeom_type><name>orthogonality</name>`（**151 处**）—— 手册的 `"'protectd1"` 是笔误。
+提取期修正（`_VALUE_FIXES`），手册原文保留在 `manual_value`；修正后取值形状体检 0 条可疑。
+
+### 47.2 三路对拍：语料 2 组 + 实机 3 组（R33-3）
+
+新工具 `tools/api_value_corpus_diff.py`（语料 = 宿主写出的 `<xxx_type><name>VALUE</name>`）：
+
+| 容器 ↔ 目录成员 | 手册 | 语料 | 结论 |
+|---|---|---|---|
+| `stability_type` ↔ `GetPresetStabilityParam.param` | 2 | 2 | 一致 |
+| `stabilitygeom_type` ↔ `GetPresetStabilityParamGeom.param` | 4 | **5** | **手册漏项 `elem_volume`** → 按语料入库（`source: host-corpus`） |
+
+实机对拍（单会话 8 档、120/120 err=0）：`ChangeMesher`/`ChangeSurfMesher`/
+`SetVoxelOctRefineType` 的手册取值全部被接受且 getter 回读同值；臆造取值全部被拒。
+
+> 附口径实证：`ChangeSurfMesher("facet_base")` 的 xenv 增量**为空**（该档恰等于现值）——
+> 「同值档不算证据」（§30/R30 口径）的又一次实证；判据 = setter 返回值 + getter 回读。
+
+### 47.3 取值守卫进 typed 桥派发路径（R33-2）
+
+`ComObject._check_values`：派发前校验位置参数里的字符串取值。三态：`True` 放行；
+`False` **默认只告警（照常派发）**、`strict_values=True` 才抛 `ApiValueError`（**派发前**拦下）；
+`None` 不管。默认不拦的理由同 §45.3（手册是子集，`octree` 即漏项）。
+类名接线走 `TYPED_CLASSES`（`wire_api_classes()` 17 个类），不读 2 MB 目录 → 零 import 成本。
+
+### 47.4 缺口终态（R33-4）
+
+`known_gaps` 升级为 `known_gap_status`：`FACET.INTERSECTION_DETECTION_DEPTH` =
+`no-panel-surface`（`terminal: true` + 理由 + 轮次）—— 缺口不许停在"待办"，
+测试要求「缺口 ↔ 终态一一对应」。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

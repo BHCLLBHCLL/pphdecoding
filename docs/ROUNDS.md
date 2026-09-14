@@ -2353,24 +2353,105 @@ getter 名不靠猜：由目录里 `Set<X>` → `Get<X>` 自动配对（唯一�
 
 ---
 
-## R33 —— 提案（≈1.5 人日）
+## R33 —— 手册词表三路对拍 + 取值守卫入派发路径 + 缺口终态（2026-09-15，✅ 已完成）
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R33-1** | **手册笔误取值定谳** | 两个取值有实测结论，账本更新 | ✅ 宿主 XML 定谳（755 / 151 处），提取期修正 + 保留 `manual_value` |
+| **R33-2** | **取值校验入写回路径** | 非法取值被拦下且有测试；`None` 不误杀 | ✅ typed 桥派发前校验（默认告警 / `strict` 抛错），**17 个类自动接线** |
+| **R33-3** | **词表对拍（手册 vs 宿主）** | ≥1 组差异入库或全部一致 | ✅ 语料对拍 **2 组全一致** + 实机 **3 组全一致**；发现并入库 **1 条手册漏项 `elem_volume`** |
+| **R33-4** | **写入口缺口收口** | 该键有终态（不是"待办"） | ✅ `no-panel-surface` 终态（`terminal: true` + 理由 + 轮次） |
+
+### R33-1 笔误定谳：拿**宿主自己写出的** main.xml 当判据
+
+R32-3 留下的两个可疑取值（`"'protectd1"` / `"'orthogonality"`，引号内多一个单引号）没有靠猜，
+而是扫官方算例库 **151 个工程**的 `main.xml`：
+
+```xml
+<stability_type><name>protectd1</name>…          <!-- 755 处 -->
+<stabilitygeom_type><name>orthogonality</name>…  <!-- 151 处 -->
+```
+
+→ 手册是笔误，真值就是 `protectd1` / `orthogonality`。提取期修正（`_VALUE_FIXES`），
+并把手册原文保留在 `manual_value` 字段（回溯「手册原文如此」）。修正后取值形状体检
+**0 条可疑**（此前 2 条）。
+
+### R33-3 三路对拍：语料 2 组 + 实机 3 组
+
+**语料对拍**（新工具 `tools/api_value_corpus_diff.py`：语料 = 宿主写出的
+`<xxx_type><name>VALUE</name>`，取值容器即"宿主承认的取值"）：
+
+| 容器 ↔ 目录成员 | 手册 | 语料 | 结论 |
+|---|---|---|---|
+| `stability_type` ↔ `GetPresetStabilityParam.param` | 2 | 2 | **完全一致** |
+| `stabilitygeom_type` ↔ `GetPresetStabilityParamGeom.param` | 4 | **5** | **手册漏项 `elem_volume`** → 已按语料入库（`source: host-corpus`） |
+
+入库后复跑：两组都 `agree=True`，语料独有 **0** 条。
+
+**实机对拍**（`tools/xenv_setter_probe.py`，单会话 8 档、120/120 err=0）：
+`ChangeMesher`(`poly`/`oct`)、`ChangeSurfMesher`(`facet_base`/`solid_base`)、
+`SetVoxelOctRefineType`(`shape`/`speed`) —— 手册取值**全部被宿主接受**且 getter 回读同值；
+两个臆造取值 `polyhedral`/`facet` **全部被拒**（返回 False、getter 不动）。
+
+> 附一条口径实证：`ChangeSurfMesher("facet_base")` 的 xenv 增量是 **空**（该档恰好等于现值）
+> —— 正是 R30 定的「同值档不算证据」；判据要看 setter 返回值 + getter 回读，不能只看 diff。
+
+### R33-2 取值守卫接进 typed 桥的**派发路径**
+
+`ComObject._check_values`：派发前按目录词表校验位置参数里的**字符串**取值，三态：
+
+* `True` → 放行（静默）；
+* `False` → **默认只记 `value_warnings`，照常派发**；`strict_values=True` 才抛 `ApiValueError`
+  且**在派发之前**拦下；
+* `None`（手册无词表）→ 完全不管。
+
+为什么默认不拦：手册是**子集**（R30 实测宿主还认 `octree`），把"不在词表"当"非法"会误杀合法取值。
+类名接线走既有 `TYPED_CLASSES` 注册表（`wire_api_classes()` → **17 个类**），零 import 成本
+（不读 2 MB 目录，只在真校验时懒加载）。
+
+### R33-4 缺口终态
+
+`schemas/host_keys.json` 的 `known_gaps` 条目升级为带终态的 `known_gap_status`：
+`FACET.INTERSECTION_DETECTION_DEPTH` = `no-panel-surface`（`terminal: true`，理由 + 轮次），
+即**永不加控件**，只保留可写通道。测试要求「缺口 ↔ 终态一一对应且都有理由」——
+缺口不许停在"待办"。
+
+### 回归
+
+全量回归 **1338 passed / 4 skipped / 0 failed**（560.57 s；R32 收口同口径 1318，
+增量 +20 = 本轮两个新模块 8 + 12，逐项对得上）。
+新增测试 2 个模块：`test_api_value_guard_r332.py`（8）、
+`test_corpus_value_evidence_r333.py`（12）；并按 R33-1 口径更新
+`test_manual_variants_r323.py` 的笔误断言（从"未决遗留"改为"已修正"）。
+
+### 证据
+
+`_p12u_gate/r33/corpus_diff.json`（151 工程语料对拍，2 组全一致、语料独有 0）、
+`_p12u_gate/r33/enum_probe.json`（实机 8 档 120/120 err=0，手册取值全接受 / 臆造全拒）、
+`schemas/host_keys.json`（缺口终态）。
+
+---
+
+## R34 —— 提案（≈1.5 人日）
 
 ### 依据
 
-* R32-3 剩两个手册笔误取值（`'protectd1` / `'orthogonality`）**没敢猜**；
-* R31-3 的三态校验 API 仍只有测试在用，**写回路径没接**（面板/VBS 生成器照写不误）；
-* R32-3 证明「手册是子集」在两个方向都成立（取值漏项、成员漏项），但**只抽查过 1 组**
-  （`GetVoxelOctRefineType` 的 `octree`）；
-* R32-1 的 1 条写入口缺口（`INTERSECTION_DETECTION_DEPTH`）只是"声明"，没有结论。
+* R33-2 的守卫只覆盖 **typed 桥**；VBS 直写通道（`automation/vbs_bridge.py` + 大量
+  `tools/_p12*.py` 生成器）仍照写不误；
+* R33-3 的语料对拍只覆盖到 **2 个取值容器**（151 个工程里只识别出 `stability*` 两种
+  `<xxx_type><name>` 结构）—— 覆盖面远小于语料实际包含的枚举；
+* R32-3 捞出 **4177 条 return**，但 typed 桥的包装方法只覆盖高频类的一部分，
+  「目录有、桥没有」的落差没有账。
 
 ### 条目
 
 | # | 条目 | 做法 | 验收句 | 人日 |
 |---|---|---|---|---|
-| **R33-1** | **手册笔误取值实机确认** | 对 `Conditions` 的 stability param 取值做宿主往返（setter/getter 或写键+回读） | 两个取值有实测结论（真值或「宿主也不认」），账本更新 | 0.5 |
-| **R33-2** | **取值校验接入写回路径** | 面板/VBS 生成器落盘前用 `check_api_value` 三态校验（`None` 不拦） | 非法取值被拦下且有测试；`None` 不误杀 | 0.5 |
-| **R33-3** | **词表抽样对拍（手册 vs 宿主）** | 随机抽 ≥3 个字符串枚举方法，实机 setter+getter 往返，找「手册漏项/多项」 | ≥1 组差异入库或全部一致（结论落盘） | 0.5 |
-| **R33-4** | **写入口缺口收口** | `INTERSECTION_DETECTION_DEPTH`：加控件 / 或永久标注「无面板面」并写进 NYI 清单 | 该键在账本里有终态（不是"待办"） | — |
+| **R34-1** | **语料对拍扩面** | 在语料里找出更多「容器 ↔ 目录成员」可对拍组（含 xenv 侧），目标 ≥5 组 | ≥5 组有结论；新差异入库或无差异（结论落盘） | 0.5 |
+| **R34-2** | **VBS 通道取值校验** | 在 VBS 生成侧（调用构造点）用 `check_api_value` 三态校验 | 非法取值在生成期即告警/拦下，且有测试 | 0.5 |
+| **R34-3** | **目录 ↔ 桥接落差账** | 按类统计「目录成员数 vs typed 包装方法数」，列缺口 | 有逐类账目；缺口清单进 R35 提案 | 0.5 |
 
 ### 明确不做
 

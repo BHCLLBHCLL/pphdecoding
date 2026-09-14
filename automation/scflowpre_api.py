@@ -104,12 +104,31 @@ def _invoke(obj, name: str, *args):
 # ============================================================================
 
 
+class ApiValueError(ValueError):
+    """取值不在手册词表内（仅在 `strict_values=True` 时抛出）。"""
+
+
+#: 最近一次派发里的取值告警（R33-2）。三态口径：**无词表 = None 不算告警**。
+value_warnings: list = []
+
+
+def clear_value_warnings() -> None:
+    del value_warnings[:]
+
+
 class ComObject:
     """泛型晚绑定 COM 包装（cabdecoding ComObject 模式）。
 
     :meth:`call` 经 ``_FlagAsMethod`` 调任意手册成员；属性走
     :meth:`prop` / :meth:`set_prop`；:attr:`raw` 暴露底层 dispatch。
+
+    R33-2 起：派发前按目录词表校验**字符串取值**（三态，见 :meth:`_check_values`）。
     """
+
+    #: 目录类名（由 `wire_api_classes` 按 `TYPED_CLASSES` 接线；None=未接线）
+    api_class: Optional[str] = None
+    #: True → 取值越界抛 :class:`ApiValueError`；False（默认）→ 只记告警
+    strict_values: bool = False
 
     def __init__(self, obj):
         self._obj = obj
@@ -119,8 +138,38 @@ class ComObject:
         return self._obj
 
     def call(self, name: str, *args):
-        """按方法调用（``_FlagAsMethod`` 先行）。"""
+        """按方法调用（``_FlagAsMethod`` 先行），派发前做取值校验。"""
+        self._check_values(name, args)
         return _invoke(self._obj, name, *args)
+
+    def _check_values(self, name: str, args) -> None:
+        """按目录词表校验位置参数里的字符串取值（R33-2）。
+
+        为什么默认**只告警不拦**：手册是子集 —— R30 实测 `GetVoxelOctRefineType`
+        只列 `shape`/`speed`，宿主还认 `octree`；把「不在词表」当「非法」直接抛
+        会误杀宿主合法取值。要严格取值域的场景可置 `strict_values=True`。
+        """
+        _ensure_api_wiring()
+        cls = self.api_class
+        if not cls or not args:
+            return
+        entry = _member_entry(cls, name)
+        if not entry:
+            return
+        for i, a in enumerate(entry.get("arguments") or []):
+            if i >= len(args) or not a.get("values"):
+                continue
+            val = args[i]
+            if not isinstance(val, str):
+                continue
+            if check_api_value(cls, name, val, a.get("name")) is False:
+                msg = (cls + "." + name + " 参数 " + str(a.get("name"))
+                       + " 取值 " + repr(val) + " 不在手册词表内（"
+                       + str(len(a["values"]))
+                       + " 项；目录 schemas/vb_api_catalog.json）")
+                if self.strict_values:
+                    raise ApiValueError(msg)
+                value_warnings.append(msg)
 
     def prop(self, name: str, default=None):
         """读 COM 属性（失败返回 default）。"""
@@ -1549,6 +1598,27 @@ def check_api_value(cls: str, member: str, value: str,
     if not values:
         return None
     return str(value) in values
+
+
+#: 接线开关（TYPED_CLASSES 是静态表，接线不读 2 MB 目录 → 零 import 成本）
+_API_WIRED = False
+
+
+def wire_api_classes() -> int:
+    """把目录类名接到 typed 包装类上（`TYPED_CLASSES` 是唯一映射源）。"""
+    n = 0
+    for name, klass in TYPED_CLASSES.items():
+        if getattr(klass, "api_class", None) != name:
+            klass.api_class = name
+            n += 1
+    return n
+
+
+def _ensure_api_wiring() -> None:
+    global _API_WIRED
+    if not _API_WIRED:
+        wire_api_classes()
+        _API_WIRED = True
 
 
 def catalog_coverage(catalog: dict) -> dict[str, str]:

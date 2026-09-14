@@ -42318,8 +42318,10 @@
        "description": "Parameter to be set (string)",
        "values": [
         {
-         "value": "'protectd1",
-         "description": "Validity of normal vector of element face"
+         "value": "protectd1",
+         "description": "Validity of normal vector of element face",
+         "manual_value": "'protectd1",
+         "fix_evidence": "宿主 main.xml <name>protectd1</name>，755 处"
         },
         {
          "value": "protectd2",
@@ -42374,8 +42376,10 @@
        "description": "Parameter to be set (string)",
        "values": [
         {
-         "value": "'orthogonality",
-         "description": "Orthogonality of element surface"
+         "value": "orthogonality",
+         "description": "Orthogonality of element surface",
+         "manual_value": "'orthogonality",
+         "fix_evidence": "宿主 main.xml <name>orthogonality</name>，151 处"
         },
         {
          "value": "skewness",
@@ -42388,6 +42392,11 @@
         {
          "value": "foldaround_elem",
          "description": "Element detected by element pair in contact with wall surface so as to wrap around wall surface"
+        },
+        {
+         "value": "elem_volume",
+         "description": "（宿主语料补充：stabilitygeom_type 的 name 取值）",
+         "source": "host-corpus"
         }
        ]
       },

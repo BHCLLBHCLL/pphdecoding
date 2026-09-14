@@ -1,0 +1,49 @@
+{
+ "files": 151,
+ "errors": 0,
+ "parents": {
+  "stability_type": 2,
+  "stabilitygeom_type": 5
+ },
+ "links": [
+  {
+   "parent": "stability_type",
+   "member": "Conditions.GetPresetStabilityParam.param",
+   "manual": [
+    "protectd1",
+    "protectd2"
+   ],
+   "corpus": [
+    "protectd1",
+    "protectd2"
+   ],
+   "only_manual": [],
+   "only_corpus": [],
+   "agree": true
+  },
+  {
+   "parent": "stabilitygeom_type",
+   "member": "Conditions.GetPresetStabilityParamGeom.param",
+   "manual": [
+    "elem_volume",
+    "face_flatness",
+    "foldaround_elem",
+    "orthogonality",
+    "skewness"
+   ],
+   "corpus": [
+    "elem_volume",
+    "face_flatness",
+    "foldaround_elem",
+    "orthogonality",
+    "skewness"
+   ],
+   "only_manual": [],
+   "only_corpus": [],
+   "agree": true
+  }
+ ],
+ "corpus_only_global": [],
+ "manual_value_count": 936,
+ "corpus_value_count": 7
+}

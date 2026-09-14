@@ -263,6 +263,63 @@ def _desc_values(text: str) -> list:
     return out
 
 
+#: 手册**笔误**取值 → 宿主实测拼写（R33-1）。证据 = 宿主自己写出的 main.xml：
+#: `<stability_type><name>protectd1</name>`（语料 151 工程 / 755 处命中）、
+#: `<name>orthogonality</name>`（151 处）—— 手册把它们写成了 `"'protectd1"`
+#: （引号内多一个单引号）。修正时保留 `manual_value`，便于回溯"手册原文如此"。
+_VALUE_FIXES = {
+    "'protectd1": ("protectd1", "宿主 main.xml <name>protectd1</name>，755 处"),
+    "'orthogonality": ("orthogonality", "宿主 main.xml <name>orthogonality</name>，151 处"),
+}
+
+#: 宿主语料**补充**的取值（手册未列）。键 = (类, 成员, 参数名或 "return")，
+#: 条目形如 `{"value", "description", "source": "host-corpus"}`。
+#:
+#: **当前为空**：R33-3 拿 151 个宿主工程语料对拍 stability 家族，手册与语料
+#: **完全一致**（`protectd1`/`protectd2`，各 151 处 `<name>` + 302 处元素标签），
+#: 没有漏项 —— 机制保留备用（单测用合成条目验证它真的会写入）。
+_VALUE_ADDENDA: dict = {
+    ("Conditions", "GetPresetStabilityParamGeom", "param"): [
+        {"value": "elem_volume",
+         "description": "（宿主语料补充：stabilitygeom_type 的 name 取值）",
+         "source": "host-corpus"}],
+}
+
+
+def _apply_value_evidence(catalog: dict) -> dict:
+    """笔误修正 + 语料补充（R33-1）。返回统计，供 CLI 打印。"""
+    fixed = added = 0
+    for info in catalog["classes"].values():
+        for kind in ("methods", "properties"):
+            for name, entry in (info.get(kind) or {}).items():
+                slots = list(entry.get("arguments") or []) + [
+                    entry.get("return") or {}]
+                for slot in slots:
+                    if not isinstance(slot, dict):
+                        continue
+                    for v in slot.get("values") or []:
+                        hit = _VALUE_FIXES.get(v.get("value"))
+                        if hit:
+                            v["manual_value"] = v["value"]
+                            v["value"], v["fix_evidence"] = hit
+                            fixed += 1
+    for (cls, member, arg), extra in _VALUE_ADDENDA.items():
+        entry = ((catalog["classes"].get(cls) or {})
+                 .get("methods", {}).get(member))
+        if not entry:
+            continue
+        slots = [entry.get("return") or {}] if arg == "return" else [
+            a for a in (entry.get("arguments") or []) if a.get("name") == arg]
+        for slot in slots:
+            vals = slot.setdefault("values", [])
+            have = {v["value"] for v in vals}
+            for v in extra:
+                if v["value"] not in have:
+                    vals.append(dict(v))
+                    added += 1
+    return {"fixed": fixed, "added": added}
+
+
 def _numeric_values(cell: str) -> list:
     """整数取值格 → [{"value", "description"}]（同格多值也拆开）。"""
     return [{"value": m.group(1), "description": m.group(2).strip()}
@@ -398,8 +455,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{name:42s} methods={len(info['methods']):4d} "
                   f"props={len(info.get('properties', {})):3d}  {path.name}")
 
+    ev = _apply_value_evidence(catalog)
+
     if args.list:
-        print(f"== {len(files)} classes, {total} members")
+        print(f"== {len(files)} classes, {total} members "
+              f"(笔误修正 {ev['fixed']}、语料补充 {ev['added']})")
         return 0
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -408,7 +468,8 @@ def main(argv: list[str] | None = None) -> int:
     n_cond = sum(1 for n in catalog["classes"] if n.startswith("Cond"))
     print(f"wrote {OUT}")
     print(f"classes={len(catalog['classes'])} "
-          f"(Cond*={n_cond}) members={total}")
+          f"(Cond*={n_cond}) members={total} "
+          f"fixes={ev['fixed']} addenda={ev['added']}")
     return 0
 
 

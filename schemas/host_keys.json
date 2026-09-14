@@ -143,12 +143,17 @@
  "known_gaps": [
   "FACET.INTERSECTION_DETECTION_DEPTH"
  ],
- "known_gap_reasons": {
-  "FACET.INTERSECTION_DETECTION_DEPTH": "面板无对应控件：该值是 MDL 相交检测深度预算（SetIntersectionDetectionDepth 实测映射），Facet Accuracy 页不暴露 → R32 记录为可接受缺口，R33 决定「加控件」或「永久标注无面板面」。"
- },
  "coverage_note": "R32-1 实测：18 条键中 17 条有面板写入口（全部经 MesherFaceterBody），唯一缺口见 known_gaps；本账由 tools/host_key_coverage.py 执行面板 apply() 得到，不写死。",
  "undocumented_setters": [
   "SetIntersectionDetectionDepth"
  ],
- "undocumented_note": "宿主实有、手册全无：tools/xenv_setter_probe.py 单会话重核（R32-1）里 SetIntersectionDetectionDepth=9 返回 True 且增量恰为 FACET.INTERSECTION_DETECTION_DEPTH（R26 首次实测、R32 复现）。目录 199 类与全库 HTML 均无 'IntersectionDetection' 字样 → 手册是**子集**，反向取证（实机）不可省。"
+ "undocumented_note": "宿主实有、手册全无：tools/xenv_setter_probe.py 单会话重核（R32-1）里 SetIntersectionDetectionDepth=9 返回 True 且增量恰为 FACET.INTERSECTION_DETECTION_DEPTH（R26 首次实测、R32 复现）。目录 199 类与全库 HTML 均无 'IntersectionDetection' 字样 → 手册是**子集**，反向取证（实机）不可省。",
+ "known_gap_status": {
+  "FACET.INTERSECTION_DETECTION_DEPTH": {
+   "status": "no-panel-surface",
+   "terminal": true,
+   "round": "R33-4",
+   "reason": "面板无对应概念：该值只在 MDL/BAM 的相交检测预算里使用，Facet Accuracy 页不暴露（其联动键 USE_INTERSECTION_DETECTION_DEPTH_AS_CLOSED_VOLUME_DETECTION_DEPTH 同样不在面板语义内）。终态 = 永不加控件，仅保留可写通道（xenv 直写 + 键已实测）。"
+  }
+ }
 }

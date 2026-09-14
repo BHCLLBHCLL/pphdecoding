@@ -182,15 +182,16 @@ class TestCatalogAfterR323(unittest.TestCase):
         got = self._values("Conditions", "GetAnalysisType", "type")
         self.assertGreaterEqual(len(got), 30)
 
-    def test_declared_manual_typo_values(self):
-        """手册笔误留下的两个取值：`"\'protectd1"` / `"\'orthogonality"`
-        （引号内多一个单引号）。**不猜**其真值 —— 只在账上显式声明，
-        待实机确认（候选 R33 项）。"""
-        typos = [("Conditions", "GetPresetStabilityParam", "'protectd1"),
-                 ("Conditions", "GetPresetStabilityParamGeom",
-                  "'orthogonality")]
-        for cls, name, want in typos:
-            self.assertIn(want, self._values(cls, name, "param"))
+    def test_manual_typos_are_corrected_not_guessed(self):
+        """R32-3 遗留的两个手册笔误取值：R33-1 用宿主写出的 main.xml 定谳
+        （`<name>protectd1</name>` 755 处 / `<name>orthogonality</name>` 151 处），
+        已在提取期修正；**不再是**未决项（详见 test_corpus_value_evidence_r333.py）。"""
+        self.assertIn("protectd1",
+                      self._values("Conditions", "GetPresetStabilityParam",
+                                   "param"))
+        self.assertNotIn("'protectd1",
+                         self._values("Conditions", "GetPresetStabilityParam",
+                                      "param"))
 
     def test_no_bogus_arguments(self):
         bad = [(c, m, a.get("name"))

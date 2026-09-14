@@ -189,8 +189,13 @@
  "known_gaps": [
   "FACET.INTERSECTION_DETECTION_DEPTH"
  ],
- "known_gap_reasons": {
-  "FACET.INTERSECTION_DETECTION_DEPTH": "面板无对应控件：该值是 MDL 相交检测深度预算（SetIntersectionDetectionDepth 实测映射），Facet Accuracy 页不暴露 → R32 记录为可接受缺口，R33 决定「加控件」或「永久标注无面板面」。"
+ "known_gap_status": {
+  "FACET.INTERSECTION_DETECTION_DEPTH": {
+   "status": "no-panel-surface",
+   "terminal": true,
+   "round": "R33-4",
+   "reason": "面板无对应概念：该值只在 MDL/BAM 的相交检测预算里使用，Facet Accuracy 页不暴露（其联动键 USE_INTERSECTION_DETECTION_DEPTH_AS_CLOSED_VOLUME_DETECTION_DEPTH 同样不在面板语义内）。终态 = 永不加控件，仅保留可写通道（xenv 直写 + 键已实测）。"
+  }
  },
  "body_errors": {}
 }

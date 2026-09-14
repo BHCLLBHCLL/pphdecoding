@@ -124,7 +124,7 @@ def report(*, use_qt: bool = True) -> dict:
         "rows": rows,
         "gaps": gaps,
         "known_gaps": ledger.get("known_gaps") or [],
-        "known_gap_reasons": ledger.get("known_gap_reasons") or {},
+        "known_gap_status": ledger.get("known_gap_status") or {},
         "body_errors": errors,
     }
 
@@ -148,8 +148,9 @@ def main(argv=None) -> int:
               + json.dumps(data["body_errors"], ensure_ascii=False))
     print("[coverage] 缺口（无面板写入口）: " + json.dumps(data["gaps"]))
     print("[coverage] 已声明缺口: " + json.dumps(data["known_gaps"]))
-    for gid, why in (data.get("known_gap_reasons") or {}).items():
-        print("   - " + gid + " :: " + why)
+    for gid, info in (data.get("known_gap_status") or {}).items():
+        print("   - " + gid + " [" + str(info.get("status")) + "] :: "
+              + str(info.get("reason")))
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)
         args.json.write_text(json.dumps(data, ensure_ascii=False, indent=1),
