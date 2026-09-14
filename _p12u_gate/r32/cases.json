@@ -1,0 +1,204 @@
+{
+ "ledger": [
+  [
+   "SetFacetSimpleChordTol",
+   "0.25",
+   "FACET.SIMPLE_CHORD_TOLERANCE"
+  ],
+  [
+   "SetFacetSimpleMaxAngle",
+   "8.0",
+   "FACET.SIMPLE_MAX_ANGLE"
+  ],
+  [
+   "SetFacetSimpleMaxWidth",
+   "9.0",
+   "FACET.SIMPLE_MAX_WIDTH"
+  ],
+  [
+   "SetFacetUseDetailMaxWidth",
+   "false",
+   "FACET.USE_DETAIL_MAX_WIDTH"
+  ],
+  [
+   "SetFacetUseSimpleSetting",
+   "false",
+   "FACET.USE_SIMPLE_SETTING"
+  ],
+  [
+   "SetMDLMethod",
+   "0",
+   "FACET.MDL_METHOD"
+  ],
+  [
+   "SetFacetDetailChordAngle",
+   "20.0",
+   "FACET.DETAIL_CHORD_ANGLE"
+  ],
+  [
+   "SetAFFaceterLengthFactor",
+   "0.3",
+   "FACET.SOLID_BASE_LENGTH_FACTOR"
+  ],
+  [
+   "SetIntersectionDetectionDepth",
+   "9",
+   "FACET.INTERSECTION_DETECTION_DEPTH"
+  ],
+  [
+   "SetAFFaceterMinimumAngle",
+   "12.0",
+   "FACET.SOLID_BASE_MINIMUM_ANGLE"
+  ],
+  [
+   "SetAFFaceterLengthFactorForOctree",
+   "0.3",
+   "FACET.SOLID_BASE_LENGTH_FACTOR_FOR_OCTREE"
+  ],
+  [
+   "SetAFFaceterMinimumAngleForOctree",
+   "8.0",
+   "FACET.SOLID_BASE_MINIMUM_ANGLE_FOR_OCTREE"
+  ],
+  [
+   "SetSolidFacetLengthFactor",
+   "0.7",
+   "OCT_MESH.FACET_LENGTH_FACTOR"
+  ],
+  [
+   "SetSolidFacetAngle",
+   "9.0",
+   "OCT_MESH.FACET_ANGLE"
+  ],
+  [
+   "SetSolidFacetMaxWidthFactor",
+   "7.0",
+   "OCT_MESH.FACET_MAX_WIDTH_FACTOR"
+  ],
+  [
+   "SetSolidFacetSpecifyEachRegionFlag",
+   "true",
+   "OCT_MESH.FACET_SPECIFY_EACH_REGION"
+  ],
+  [
+   "SetCompleteParallelFlag",
+   "true",
+   "OCT_MESH.COMPLETE_PARALLEL"
+  ],
+  [
+   "SetVoxelOctRefineType",
+   "speed",
+   "OCT_MESH.VOXEL_OCT_REFINE_TYPE"
+  ]
+ ],
+ "cases": [
+  {
+   "setter": "SetFacetSimpleChordTol",
+   "value": "0.25",
+   "getter": "GetFacetSimpleChordTol",
+   "expect_key": "FACET.SIMPLE_CHORD_TOLERANCE"
+  },
+  {
+   "setter": "SetFacetSimpleMaxAngle",
+   "value": "8.0",
+   "getter": "GetFacetSimpleMaxAngle",
+   "expect_key": "FACET.SIMPLE_MAX_ANGLE"
+  },
+  {
+   "setter": "SetFacetSimpleMaxWidth",
+   "value": "9.0",
+   "getter": "GetFacetSimpleMaxWidth",
+   "expect_key": "FACET.SIMPLE_MAX_WIDTH"
+  },
+  {
+   "setter": "SetFacetUseDetailMaxWidth",
+   "value": "false",
+   "getter": "GetFacetUseDetailMaxWidth",
+   "expect_key": "FACET.USE_DETAIL_MAX_WIDTH"
+  },
+  {
+   "setter": "SetFacetUseSimpleSetting",
+   "value": "false",
+   "getter": "GetFacetUseSimpleSetting",
+   "expect_key": "FACET.USE_SIMPLE_SETTING"
+  },
+  {
+   "setter": "SetMDLMethod",
+   "value": "0",
+   "getter": "GetMDLMethod",
+   "expect_key": "FACET.MDL_METHOD"
+  },
+  {
+   "setter": "SetFacetDetailChordAngle",
+   "value": "20.0",
+   "getter": "GetFacetDetailChordAngle",
+   "expect_key": "FACET.DETAIL_CHORD_ANGLE"
+  },
+  {
+   "setter": "SetAFFaceterLengthFactor",
+   "value": "0.3",
+   "getter": "GetAFFaceterLengthFactor",
+   "expect_key": "FACET.SOLID_BASE_LENGTH_FACTOR"
+  },
+  {
+   "setter": "SetIntersectionDetectionDepth",
+   "value": "9",
+   "getter": null,
+   "expect_key": "FACET.INTERSECTION_DETECTION_DEPTH"
+  },
+  {
+   "setter": "SetAFFaceterMinimumAngle",
+   "value": "12.0",
+   "getter": "GetAFFaceterMinimumAngle",
+   "expect_key": "FACET.SOLID_BASE_MINIMUM_ANGLE"
+  },
+  {
+   "setter": "SetAFFaceterLengthFactorForOctree",
+   "value": "0.3",
+   "getter": "GetAFFaceterLengthFactorForOctree",
+   "expect_key": "FACET.SOLID_BASE_LENGTH_FACTOR_FOR_OCTREE"
+  },
+  {
+   "setter": "SetAFFaceterMinimumAngleForOctree",
+   "value": "8.0",
+   "getter": "GetAFFaceterMinimumAngleForOctree",
+   "expect_key": "FACET.SOLID_BASE_MINIMUM_ANGLE_FOR_OCTREE"
+  },
+  {
+   "setter": "SetSolidFacetLengthFactor",
+   "value": "0.7",
+   "getter": "GetSolidFacetLengthFactor",
+   "expect_key": "OCT_MESH.FACET_LENGTH_FACTOR"
+  },
+  {
+   "setter": "SetSolidFacetAngle",
+   "value": "9.0",
+   "getter": "GetSolidFacetAngle",
+   "expect_key": "OCT_MESH.FACET_ANGLE"
+  },
+  {
+   "setter": "SetSolidFacetMaxWidthFactor",
+   "value": "7.0",
+   "getter": "GetSolidFacetMaxWidthFactor",
+   "expect_key": "OCT_MESH.FACET_MAX_WIDTH_FACTOR"
+  },
+  {
+   "setter": "SetSolidFacetSpecifyEachRegionFlag",
+   "value": "true",
+   "getter": "GetSolidFacetSpecifyEachRegionFlag",
+   "expect_key": "OCT_MESH.FACET_SPECIFY_EACH_REGION"
+  },
+  {
+   "setter": "SetCompleteParallelFlag",
+   "value": "true",
+   "getter": "GetCompleteParallelFlag",
+   "expect_key": "OCT_MESH.COMPLETE_PARALLEL"
+  },
+  {
+   "setter": "SetVoxelOctRefineType",
+   "value": "speed",
+   "getter": "GetVoxelOctRefineType",
+   "expect_key": "OCT_MESH.VOXEL_OCT_REFINE_TYPE"
+  }
+ ]
+}

@@ -1,0 +1,258 @@
+start
+s001=0
+app__alive=True err=0
+s002=0
+s003=0
+doc__alive=True err=0
+s004=0
+s005=0
+s006=0
+s007=0
+mg0__alive=True err=0
+s008=0
+mgs0__alive=True err=0
+s009=0
+s010=0
+set0_ret= err=0
+s011=0
+s012=0
+s013=0
+get0_val=0.25 err=0
+s014=0
+s015=0
+s016=0
+s017=0
+mg1__alive=True err=0
+s018=0
+mgs1__alive=True err=0
+s019=0
+s020=0
+set1_ret= err=0
+s021=0
+s022=0
+s023=0
+get1_val=8 err=0
+s024=0
+s025=0
+s026=0
+s027=0
+mg2__alive=True err=0
+s028=0
+mgs2__alive=True err=0
+s029=0
+s030=0
+set2_ret= err=0
+s031=0
+s032=0
+s033=0
+get2_val=9 err=0
+s034=0
+s035=0
+s036=0
+s037=0
+mg3__alive=True err=0
+s038=0
+mgs3__alive=True err=0
+s039=0
+s040=0
+set3_ret= err=0
+s041=0
+s042=0
+s043=0
+get3_val=False err=0
+s044=0
+s045=0
+s046=0
+s047=0
+mg4__alive=True err=0
+s048=0
+mgs4__alive=True err=0
+s049=0
+s050=0
+set4_ret= err=0
+s051=0
+s052=0
+s053=0
+get4_val=False err=0
+s054=0
+s055=0
+s056=0
+s057=0
+mg5__alive=True err=0
+s058=0
+mgs5__alive=True err=0
+s059=0
+s060=0
+set5_ret= err=0
+s061=0
+s062=0
+s063=0
+get5_val=0 err=0
+s064=0
+s065=0
+s066=0
+s067=0
+mg6__alive=True err=0
+s068=0
+mgs6__alive=True err=0
+s069=0
+s070=0
+set6_ret= err=0
+s071=0
+s072=0
+s073=0
+get6_val=20 err=0
+s074=0
+s075=0
+s076=0
+s077=0
+mg7__alive=True err=0
+s078=0
+mgs7__alive=True err=0
+s079=0
+s080=0
+set7_ret= err=0
+s081=0
+s082=0
+s083=0
+get7_val=0.3 err=0
+s084=0
+s085=0
+s086=0
+s087=0
+mg8__alive=True err=0
+s088=0
+mgs8__alive=True err=0
+s089=0
+s090=0
+set8_ret=True err=0
+s091=0
+s092=0
+s093=0
+s094=0
+mg9__alive=True err=0
+s095=0
+mgs9__alive=True err=0
+s096=0
+s097=0
+set9_ret= err=0
+s098=0
+s099=0
+s100=0
+get9_val=12 err=0
+s101=0
+s102=0
+s103=0
+s104=0
+mg10__alive=True err=0
+s105=0
+mgs10__alive=True err=0
+s106=0
+s107=0
+set10_ret= err=0
+s108=0
+s109=0
+s110=0
+get10_val=0.3 err=0
+s111=0
+s112=0
+s113=0
+s114=0
+mg11__alive=True err=0
+s115=0
+mgs11__alive=True err=0
+s116=0
+s117=0
+set11_ret= err=0
+s118=0
+s119=0
+s120=0
+get11_val=8 err=0
+s121=0
+s122=0
+s123=0
+s124=0
+mg12__alive=True err=0
+s125=0
+mgs12__alive=True err=0
+s126=0
+s127=0
+set12_ret= err=0
+s128=0
+s129=0
+s130=0
+get12_val=0.7 err=0
+s131=0
+s132=0
+s133=0
+s134=0
+mg13__alive=True err=0
+s135=0
+mgs13__alive=True err=0
+s136=0
+s137=0
+set13_ret= err=0
+s138=0
+s139=0
+s140=0
+get13_val=9 err=0
+s141=0
+s142=0
+s143=0
+s144=0
+mg14__alive=True err=0
+s145=0
+mgs14__alive=True err=0
+s146=0
+s147=0
+set14_ret= err=0
+s148=0
+s149=0
+s150=0
+get14_val=7 err=0
+s151=0
+s152=0
+s153=0
+s154=0
+mg15__alive=True err=0
+s155=0
+mgs15__alive=True err=0
+s156=0
+s157=0
+set15_ret= err=0
+s158=0
+s159=0
+s160=0
+get15_val=True err=0
+s161=0
+s162=0
+s163=0
+s164=0
+mg16__alive=True err=0
+s165=0
+mgs16__alive=True err=0
+s166=0
+s167=0
+set16_ret= err=0
+s168=0
+s169=0
+s170=0
+get16_val=True err=0
+s171=0
+s172=0
+s173=0
+s174=0
+mg17__alive=True err=0
+s175=0
+mgs17__alive=True err=0
+s176=0
+s177=0
+set17_ret=True err=0
+s178=0
+s179=0
+s180=0
+get17_val=speed err=0
+s181=0
+s182=0
+s183=0
+end

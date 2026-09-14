@@ -1584,6 +1584,69 @@ R31 提案写「6 键里只有 2 条接进面板」。**读码实测：`MesherFa
 
 **非空转证据**：同一段比较逻辑跑**修复前的提交对** `dd4e278` → 报出 **3 处不一致**
 （CondPorousMedia 60/59、CondSource 80/79、CondSourceMass 9/8）；当前工作树 0 处。
+
+---
+
+## 46. R32 更新（2026-09-15）—— 实测键账本 / 词表驱动控件 / 手册变体归一
+
+### 46.1 账本：先把「19 条」这个数改对（`schemas/host_keys.json`）
+
+文档里所有 `SECTION.KEY` 逐条回溯证据后，可复算的是 **18 条**（FACET 12 + OCT_MESH 6）：
+R6-5 4 + R10-3 3 + R26 2 + R27 3 + R29 5 + R30 1。旧口径「19」把 R6-5 的
+`SetFacetUseAbsoluteValue`（审计 §21.1 原文即「未变化 / 未证实」）也计成了键，
+此后每轮在错误基数上叠加（8/10/13/18/19 全部 +1）。**账本从此是唯一口径**，
+每条含 setter / 轮次 / 证据文件，`tools/host_key_coverage.py` 逐条给写入口结论。
+
+**单会话重核**（`tools/xenv_setter_probe.py`，18 档、256/256 err=0、71.3 s）：
+每档 `delta_vs_prev` **恰好**是账本里那一把键。getter 名由目录自动配对
+（`Set<X>`→`Get<X>`），不靠猜。
+
+**写入口对账**（执行面板 `apply()` 后读 xenv，不扫源码）：18 条里 **17 条**有写入口；
+本轮补上缺的 `FACET.USE_DETAIL_MAX_WIDTH`（R6-5 实测键却一直没有控件）；
+剩 1 条 `FACET.INTERSECTION_DETECTION_DEPTH` 记入账本 `known_gaps` + 理由 ——
+**缺口必须显式声明**，新增缺口不许静默（工具以「gaps == known_gaps」判通过）。
+
+> ★ **新发现（反向漏项）**：`SetIntersectionDetectionDepth` **宿主实有、手册全无**
+> （目录 199 类与全库 HTML 均无 `IntersectionDetection` 字样；实机返回 True 且落键）。
+> R30 发现的是「取值漏项」，这一条是**成员漏项** —— 手册是子集，双向都成立。
+
+### 46.2 枚举控件由词表驱动，两层分工（R32-2）
+
+`nav_panels._voxel_refine_items()`：**可写白名单** = 实测编码表；**标签** = 目录描述。
+目录新增「有实测码」的取值会自动进控件；「有值无码」不进（写不出去）。
+
+### 46.3 「描述即词表」的拒行分类与两条窄规则（R32-3）
+
+118 行拒行的分类：格式提示 88、Note 段落 16、带 2+ 取值 10、单取值 4。新增：
+
+* 描述里**任何位置**先出现完整类型标记 **且 ≥2 个取值**；
+* 括号内逗号分隔列表（含全角 `（…）`）。
+
+**两次过宽/污染，都被随后的体检抓出**：第一版混进 63 条颜色占位 `"0xAABBGGRR"`
+→ 加格式提示过滤；Note 段落污染 `Doc.SewSheets`（`"not in part mode,"`）→ Note 判散文。
+收口：取值 **1757 → 1801**，格式提示 0、假参数 0。
+
+**口径变更**：`Conditions.GetRadiationVFRETimingParam` 的 `Use "cycle_interval" to get
+cycle interval` 经复核**是**词表（两个选择子 + 完整类型标记），R31-2 用错反例，
+R32-3 换成 Note 文本作反例。
+
+### 46.4 表头变体归一：+1942 条返回值（本轮最大一笔）
+
+解析器只认 `[Return Value]`（大写 V），而手册里 `[Return value]` 有 **4280 行**
+（另 `[Arguments]`/`[Return]` 各 50、拼写错与日文变体若干）——
+**近一半方法的返回值连同其取值词表被静默丢弃**。归一后 **+1942 条 return、0 丢失**；
+目录现值 4455 条目 / 4177 有 return / 5604 参数 / 1801 取值
+（形状体检：仅 2 条手册笔误，其余全是标识符样）。
+
+**自踩一坑并被护栏拦住**：`_head_kind` 参数正则写成 `argi`（兼容错拼 `[Argiment]`），
+把正常拼写 `[Argument]` 整类漏掉，表现为取值从参数「消失」（挪到条目级）；
+R32-3 的护栏（`Conditions.GetAnalysisType` 的 30 条取值必须挂在参数 `type` 上）把它抓出，
+修正是把 `argu` 加回正则。
+
+### 46.5 遗留（不猜）
+
+手册笔误两个取值 `"'protectd1"` / `"'orthogonality"`（引号内多一个单引号）：
+只在账上显式声明「待实机确认」→ R33-1，**不猜真值**。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

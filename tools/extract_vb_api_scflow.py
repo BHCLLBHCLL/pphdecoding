@@ -69,6 +69,27 @@ _TABLE = re.compile(
 _SIGNATURE = re.compile(r"<dl><dd>([^<]*(?:<(?!/?dd)[^<]*)*)</dd></dl>")
 _NOTE = re.compile(r"<dl><dd><b>\(Note\)</b>(.*?)</dd></dl>", re.S)
 _ARG_CELL = re.compile(r"^\(([^)]+)\)\s*(.+)$")
+#: 表头归一（R32-3 实测变体）：`[Return Value]` 4617 行 vs `[Return value]` **4280 行**
+#: —— 旧实现只认大写 V，等于**静默丢掉近一半方法的返回值**（连同其取值词表）。
+#: 另有 `[Arguments]`(50) / `[Return]`(50) / 拼写错 `[Argiment]` `[Resturn Value]`
+#: `[Return Value]]` `[Explnation]` `[Explanetion]` `[xplanation]` 与日文 `[引数]`
+#: `[戻り値]` `[戻り値/Return value]`；`[Description]` 只出现在类级表，方法块内为 0。
+_HEAD_EXPL = re.compile(r"xpl|説明", re.I)
+_HEAD_ARG = re.compile(r"argu|argi|引数", re.I)
+_HEAD_RET = re.compile(r"return|resturn|戻り値", re.I)
+
+
+def _head_kind(head: str):
+    """表头 → 'expl' / 'arg' / 'ret' / None（大小写、拼写、日文变体都归一）。"""
+    if not head.startswith("["):
+        return None
+    if _HEAD_EXPL.search(head):
+        return "expl"
+    if _HEAD_ARG.search(head):
+        return "arg"
+    if _HEAD_RET.search(head):
+        return "ret"
+    return None
 #: 取值格：手册用 "poly" 标注；全角引号 ”GVEL” 是手册笔误，一并接住。
 #: 用字符类拼接而非转义串 —— 免掉 \s / \" 混写带来的 SyntaxWarning。
 _QUOTES = "\"\u201c\u201d"
@@ -84,6 +105,24 @@ _DESC_PREFIX = re.compile(
     r"(?:\((?:BSTR|VARIANT|string)[^)]*\)"
     r"|\b(?:mode|type|edition|format|method|option|key|setting|flag)\b)"
     r"[\s\[:,，(]*(?:\[[^\]]*)?$", re.I)
+#: R32-3 增补两条（把误拒的真词表捞回来，实测各带一批）：
+#: ① 描述里**任何位置**先出现完整类型标记 —— 手册常把取值写在条件从句之后
+#:    （`Direction of region (string) If coordinate definition type is plane
+#:    "positive_side" …`）；`Color (string "0xAABBGGRR")` 这类格式提示的
+#:    右括号在引号**之后**，因此不匹配。
+_DESC_MARKER_ANY = re.compile(r"\((?:BSTR|VARIANT|string)[^)]*\)", re.I)
+#: 格式提示（**不是**取值）：颜色串 `"0xAABBGGRR"` 之类。R32-3 第一版放宽后
+#: 混进 63 条（`Doc.AddTemporaryDrawingObject*` 的颜色占位），故：格式提示一律剔除。
+_FORMAT_HINT = re.compile(r"0x[0-9A-Fa-f]{4,}|AABBGGRR")
+#: Note 段落是散文：`(Note) Failure occurs in the following cases: "not in part mode,"`
+#: 这类引号串不是取值（R32-3 实测污染了 `Doc.SewSheets` 的返回值）。
+_NOTE_PROSE = re.compile(r"\(Note\)", re.I)
+#: ② 括号内逗号分隔的取值列表（`("none", "low", "medium", "high")`；
+#: 手册还有全角括号/全角逗号变体：`（"summary", "detail", "solverComand"）`）。
+_DESC_PAREN_LIST = re.compile(
+    "[\\(（]\\s*[" + _QUOTES + "][^" + _QUOTES + "]+[" + _QUOTES
+    + "]\\s*(?:[,，]\\s*[" + _QUOTES + "][^" + _QUOTES + "]+[" + _QUOTES
+    + "]\\s*)+[,，)\\)）]")
 #: 整数取值行：手册把 0/1/2 型枚举写成「0 Initial calculation 1 Restart…」
 _NUM_DESC = re.compile(r"(\d+)\s*:?\s*([^\d]*?)(?=\s*\d+\s*:?\s|$)")
 #: 漏闭合引号（手册 "IRBN）：取值取到首个空白，余下当描述
@@ -117,14 +156,15 @@ def _parse_method_block(body: str) -> dict:
         if not cells:
             continue
         head = cells[0]
-        if "[Explanation]" in head:
+        kind = _head_kind(head)
+        if kind == "expl":
             mode = "expl"
             entry["explanation"] = " ".join(c for c in cells[1:] if c)
-        elif "[Argument]" in head:
+        elif kind == "arg":
             mode = "arg"
             if len(cells) >= 4:
                 _push_arg(entry, cells[1], cells[3])
-        elif "[Return Value]" in head:
+        elif kind == "ret":
             mode = "ret"
             if len(cells) >= 4:
                 _push_arg(entry, cells[1], cells[3], ret=True)
@@ -205,12 +245,22 @@ def _desc_values(text: str) -> list:
     """
     if not text.strip() or text.strip()[0] in _QUOTES:
         return []
-    head = text.split('"')[0] if '"' in text else text
-    if not _DESC_PREFIX.search(head):
+    if _NOTE_PROSE.search(text):
         return []
-    return [{"value": m.group(1).strip(),
-             "description": _clean_desc(m.group(2))}
-            for m in _ENUM_DESC.finditer(text)]
+    head = text.split('"')[0] if '"' in text else text
+    found = list(_ENUM_DESC.finditer(text))
+    # 放宽分支要求 ≥2 个取值：单个引号串多半是格式提示（`Color as "0xAABBGGRR"`）
+    if not (_DESC_PREFIX.search(head)
+            or (_DESC_MARKER_ANY.search(head) and len(found) >= 2)
+            or _DESC_PAREN_LIST.search(text)):
+        return []
+    out = []
+    for m in found:
+        val, desc = m.group(1).strip(), _clean_desc(m.group(2))
+        if _FORMAT_HINT.search(val + " " + desc):
+            continue
+        out.append({"value": val, "description": desc})
+    return out
 
 
 def _numeric_values(cell: str) -> list:

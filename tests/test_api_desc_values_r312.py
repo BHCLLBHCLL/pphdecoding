@@ -58,10 +58,16 @@ class TestDescValuesRule(unittest.TestCase):
             '(BSTR)type License mode "hpc" : HPC edition "lt" : LT edition')
         self.assertEqual([v["value"] for v in got], ["hpc", "lt"])
 
-    def test_prose_is_not_a_vocabulary(self):
+    def test_note_prose_is_not_a_vocabulary(self):
+        """R32-3 口径修正：Note 段落永远是散文（实测污染过 `Doc.SewSheets`）。
+
+        注：原先拿 `Use "cycle_interval" to get cycle interval` 当反例，R32-3 判定
+        它**是**词表（两个选择子 + 完整类型标记），见 §46.3 —— 反例换成 Note 文本。
+        """
         self.assertEqual(self.ex._desc_values(
-            '(VARIANT)value Use "cycle_interval" to get cycle interval '
-            'Use "time_interval" to get time interval'), [])
+            '(VARIANT)retval True (successful), False (failed) (Note) Failure '
+            'occurs in the following cases: "not in part mode," '
+            '"no part exists in the argument,"'), [])
 
     def test_format_hint_is_not_a_vocabulary(self):
         self.assertEqual(self.ex._desc_values(
@@ -87,7 +93,9 @@ class TestCatalogAfterR312(unittest.TestCase):
                          ["default", "connect", "disconnect"])
 
     def test_prose_and_hint_rows_have_no_values(self):
-        for cls, member in (("Conditions", "GetRadiationVFRETimingParam"),
+        # R32-3：GetRadiationVFRETimingParam 已判定为**真词表**（cycle_interval /
+        # time_interval），反例改用 Note 段落（SewSheets）与颜色格式提示。
+        for cls, member in (("Doc", "SewSheets"),
                             ("Doc", "GetBkColor"),
                             ("Doc", "GetDefaultSolidPartColor")):
             e = self._member(cls, member)

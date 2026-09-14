@@ -1,0 +1,148 @@
+[
+ {
+  "file": "Scf_vb_Preprocessor_MeshingGroup_Class.h",
+  "method": "GetOctBasePolyParam",
+  "mode": "ret",
+  "desc": "(Note) Parameters obtained by this method is used when type of other parameters of mesh setting is \"detail setting\".",
+  "tokens": [
+   "detail setting"
+  ],
+  "shape": "note"
+ },
+ {
+  "file": "Scf_vb_Preprocessor_MeshingGroup_Class.h",
+  "method": "GetPolyConvParam",
+  "mode": "ret",
+  "desc": "(Note) Parameters obtained by this method is used when type of other parameters of mesh setting is \"detail setting\".",
+  "tokens": [
+   "detail setting"
+  ],
+  "shape": "note"
+ },
+ {
+  "file": "Scf_vb_Preprocessor_MeshingGroup_Class.h",
+  "method": "GetPolyPrismParam",
+  "mode": "ret",
+  "desc": "(Note) Parameters obtained by this method is used when type of other parameters of mesh setting is \"detail setting\".",
+  "tokens": [
+   "detail setting"
+  ],
+  "shape": "note"
+ },
+ {
+  "file": "Scf_vb_Preprocessor_MeshingGroup_Class.h",
+  "method": "GetSurfParam",
+  "mode": "ret",
+  "desc": "(Note) Parameters obtained by this method is used when type of other parameters of mesh setting is \"detail setting\".",
+  "tokens": [
+   "detail setting"
+  ],
+  "shape": "note"
+ },
+ {
+  "file": "Scf_vb_Preprocessor_MeshingGroup_Class.h",
+  "method": "GetSweepParam",
+  "mode": "arg",
+  "desc": "(Note) Parameters obtained by this method is used when type of other parameters of mesh setting is \"detail setting\".",
+  "tokens": [
+   "detail setting"
+  ],
+  "shape": "note"
+ },
+ {
+  "file": "Scf_vb_Preprocessor_MeshingGroup_Class.h",
+  "method": "GetTetraParam",
+  "mode": "ret",
+  "desc": "(Note) Parameters obtained by this method is used when type of other parameters of mesh setting is \"detail setting\".",
+  "tokens": [
+   "detail setting"
+  ],
+  "shape": "note"
+ },
+ {
+  "file": "Scf_vb_Preprocessor_NumericalRegion_Clas",
+  "method": "GetSide",
+  "mode": "ret",
+  "desc": "(Note) Directions of region obtained by side are as follows: If coordinate definition type is plane \"positive_side\" (positive direction of the region), \"negative_side\" (negative direction) If coordinate definition type is cuboid \"inside\" (inside the cuboid), \"outside\" (outside)",
+  "tokens": [
+   "positive_side",
+   "negative_side",
+   "inside",
+   "outside"
+  ],
+  "shape": "note"
+ },
+ {
+  "file": "Scf_vb_Preprocessor_MeshingGroup_Class.h",
+  "method": "GetOctBasePolyParam",
+  "mode": "ret",
+  "desc": "(Note) Parameters obtained by this method is used when type of other parameters of mesh setting is \"detail setting\".",
+  "tokens": [
+   "detail setting"
+  ],
+  "shape": "note"
+ },
+ {
+  "file": "Scf_vb_Preprocessor_MeshingGroup_Class.h",
+  "method": "GetPolyConvParam",
+  "mode": "ret",
+  "desc": "(Note) Parameters obtained by this method is used when type of other parameters of mesh setting is \"detail setting\".",
+  "tokens": [
+   "detail setting"
+  ],
+  "shape": "note"
+ },
+ {
+  "file": "Scf_vb_Preprocessor_MeshingGroup_Class.h",
+  "method": "GetPolyPrismParam",
+  "mode": "ret",
+  "desc": "(Note) Parameters obtained by this method is used when type of other parameters of mesh setting is \"detail setting\".",
+  "tokens": [
+   "detail setting"
+  ],
+  "shape": "note"
+ },
+ {
+  "file": "Scf_vb_Preprocessor_MeshingGroup_Class.h",
+  "method": "GetSurfParam",
+  "mode": "ret",
+  "desc": "(Note) Parameters obtained by this method is used when type of other parameters of mesh setting is \"detail setting\".",
+  "tokens": [
+   "detail setting"
+  ],
+  "shape": "note"
+ },
+ {
+  "file": "Scf_vb_Preprocessor_MeshingGroup_Class.h",
+  "method": "GetSweepParam",
+  "mode": "arg",
+  "desc": "(Note) Parameters obtained by this method is used when type of other parameters of mesh setting is \"detail setting\".",
+  "tokens": [
+   "detail setting"
+  ],
+  "shape": "note"
+ },
+ {
+  "file": "Scf_vb_Preprocessor_MeshingGroup_Class.h",
+  "method": "GetTetraParam",
+  "mode": "ret",
+  "desc": "(Note) Parameters obtained by this method is used when type of other parameters of mesh setting is \"detail setting\".",
+  "tokens": [
+   "detail setting"
+  ],
+  "shape": "note"
+ },
+ {
+  "file": "Scf_vb_Preprocessor_NumericalRegion_Clas",
+  "method": "GetSide",
+  "mode": "ret",
+  "desc": "(Note) Directions of region obtained by side are as follows: If coordinate definition type is plane \"positive_side\" (positive direction of the region), \"negative_side\" (negative direction) If coordinate definition type is cuboid \"inside\" (inside the cuboid), \"outside\" (outside)",
+  "tokens": [
+   "positive_side",
+   "negative_side",
+   "inside",
+   "outside"
+  ],
+  "shape": "note"
+ }
+]

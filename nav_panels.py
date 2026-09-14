@@ -1880,6 +1880,36 @@ class ModifyPartsBody(_Body):
         return True
 
 
+#: 目录缺席时的回落标签（GUI 不得因 schema 缺失而不可用）
+_VOXEL_REFINE_FALLBACK = {"octree": "Octree (host default)"}
+
+
+def _voxel_refine_items() -> list[tuple[str, str]]:
+    """八分细化类型下拉项（R32-2）。
+
+    规则（两层各司其职）：
+
+    * **可写白名单** = 实测编码表 `pphxml.VOXEL_OCT_REFINE_TYPES` —— 没有实测码的
+      取值写不出去，列进控件只会让用户选到无效项；
+    * **标签** = 目录词表 `GetVoxelOctRefineType` 的描述（手册口径），
+      目录缺该值（如宿主默认 `octree`）时用回落标签。
+
+    目录新增「有实测码」的取值时会自动出现在控件里；新增无码取值不会
+    （这是有意的：见审计 §46.2）。
+    """
+    labels: dict = {}
+    try:
+        from automation import scflowpre_api as api
+        for v in api.api_values("MeshingGroupSetting", "GetVoxelOctRefineType",
+                                "return"):
+            labels[v["value"]] = v["description"] or v["value"]
+    except Exception:  # noqa: BLE001
+        labels = {}
+    return [(labels.get(name)
+             or _VOXEL_REFINE_FALLBACK.get(name, name), name)
+            for name in pphxml.VOXEL_OCT_REFINE_TYPES]
+
+
 def _mf_combo(items: list[tuple[str, str]]) -> QComboBox:
     cb = QComboBox()
     for label, data in items:
@@ -2011,11 +2041,8 @@ class MesherFaceterBody(_Body):
                       self.cb_oct_include)
         # R31-1：R30 实测的宿主编码是字符串枚举（speed/shape/octree），
         # xenv 落整数码 —— 面板留枚举名，写盘时经 pphxml 映射成码。
-        self.cb_vx_refine = _mf_combo([
-            ("Model shape-weighted", "shape"),
-            ("Speed-weighted", "speed"),
-            ("Octree (host default)", "octree"),
-        ])
+        # R32-2：条目改由**目录词表**驱动（可写白名单仍是实测编码表）。
+        self.cb_vx_refine = _mf_combo(_voxel_refine_items())
         self._add_row(mesher, "oct_refine",
                       "Octant refinement type when octree is created",
                       self.cb_vx_refine)
@@ -2142,6 +2169,11 @@ class MesherFaceterBody(_Body):
                       "Angle precision for the whole model (for octree)",
                       self.sp_sb_oct_ang, "deg")
 
+        # R32-1：R6-5 实测键 FACET.USE_DETAIL_MAX_WIDTH 此前没有写入口；
+        # 宿主语义是「是否使用 detail 的最大边长」（布尔 setter 精确落盘）。
+        self.chk_d_width = QCheckBox("Use detail maximum edge length")
+        self._add_row(acc, "d_use_width", "Use detail maximum edge length",
+                      self.chk_d_width)
         self._add_row(acc, "d_width", "Maximum edge length",
                       self.sp_d_width)
         self._add_row(acc, "d_chord", "Maximum chordal divergence from curve",
@@ -2234,8 +2266,9 @@ class MesherFaceterBody(_Body):
         self._hide("sb_ang", "sb_len", "sb_edge", "sb_tiny",
                    show=show_sb)
         self._hide("sb_oct_len", "sb_oct_ang", show=show_sb_oct)
-        self._hide("d_width", "d_chord", "d_chord_ang", "d_surf", "d_surf_ang",
-                   show=show_detail)
+        self._hide("d_use_width", "d_width", "d_chord", "d_chord_ang",
+                   "d_surf", "d_surf_ang", show=show_detail)
+        self.sp_d_width.setEnabled(self.chk_d_width.isChecked())
 
         # help
         if not poly:
@@ -2324,6 +2357,9 @@ class MesherFaceterBody(_Body):
         self.sp_d_surf.setValue(_f("FACET", "DETAIL_SURF_TOLERANCE", 0))
         self.sp_d_surf_ang.setValue(_f("FACET", "DETAIL_SURF_ANGLE", 10))
         self.sp_d_width.setValue(_f("FACET", "DETAIL_MAX_WIDTH", 0))
+        self.chk_d_width.setChecked(
+            (xenv.get("FACET", "USE_DETAIL_MAX_WIDTH", "true")
+             or "true").lower() == "true")
 
         self.sp_oct_ang.setValue(_f("OCT_MESH", "FACET_ANGLE", 5))
         self.sp_oct_reduce.setValue(_f("OCT_MESH", "FACET_LENGTH_FACTOR", 0.25))
@@ -2401,6 +2437,10 @@ class MesherFaceterBody(_Body):
         )
         for k, val in pairs:
             pphxml.set_xenv_value(xenv, "FACET", k, val)
+        # 已实测键（R6-5）：布尔 setter 精确落盘，不做推导
+        pphxml.set_xenv_value(
+            xenv, "FACET", "USE_DETAIL_MAX_WIDTH",
+            "true" if self.chk_d_width.isChecked() else "false")
 
         pphxml.set_xenv_value(
             xenv, "OCT_MESH", "FACET_ANGLE",

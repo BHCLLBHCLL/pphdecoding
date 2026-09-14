@@ -1,0 +1,1 @@
+{"ts": "2026-09-15T01:17:51", "flow": "r32_keys", "attempt": 1, "outcome": "ok", "reason": "worker returned", "log": "r32_keys.log", "log_bytes": 3049, "idle_s": 0.0, "elapsed_s": 40.0, "vbs_bytes": 22096}

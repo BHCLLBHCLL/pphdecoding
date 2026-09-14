@@ -1,0 +1,196 @@
+{
+ "ledger_count": 18,
+ "ledger_duplicates": [],
+ "host_readback_count": 4,
+ "panel_written_count": 17,
+ "rows": [
+  {
+   "id": "FACET.SIMPLE_CHORD_TOLERANCE",
+   "round": "R6-5",
+   "setter": "SetFacetSimpleChordTol",
+   "evidence": "audit §21.1",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": false
+  },
+  {
+   "id": "FACET.SIMPLE_MAX_ANGLE",
+   "round": "R6-5",
+   "setter": "SetFacetSimpleMaxAngle",
+   "evidence": "_p12u_gate/r6_5_keys.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": true
+  },
+  {
+   "id": "FACET.SIMPLE_MAX_WIDTH",
+   "round": "R6-5",
+   "setter": "SetFacetSimpleMaxWidth",
+   "evidence": "_p12u_gate/r6_5_keys.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": false
+  },
+  {
+   "id": "FACET.USE_DETAIL_MAX_WIDTH",
+   "round": "R6-5",
+   "setter": "SetFacetUseDetailMaxWidth",
+   "evidence": "_p12u_gate/r6_5_keys.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": false
+  },
+  {
+   "id": "FACET.USE_SIMPLE_SETTING",
+   "round": "R10-3",
+   "setter": "SetFacetUseSimpleSetting",
+   "evidence": "_p12u_gate/r10_3_keys.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": true
+  },
+  {
+   "id": "FACET.MDL_METHOD",
+   "round": "R10-3",
+   "setter": "SetMDLMethod",
+   "evidence": "_p12u_gate/r10_3_keys.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": true
+  },
+  {
+   "id": "FACET.DETAIL_CHORD_ANGLE",
+   "round": "R10-3",
+   "setter": "SetFacetDetailChordAngle",
+   "evidence": "_p12u_gate/r10_3_keys.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": false
+  },
+  {
+   "id": "FACET.SOLID_BASE_LENGTH_FACTOR",
+   "round": "R26",
+   "setter": "SetAFFaceterLengthFactor",
+   "evidence": "_p12u_gate/r26_1_keys.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": false
+  },
+  {
+   "id": "FACET.INTERSECTION_DETECTION_DEPTH",
+   "round": "R26",
+   "setter": "SetIntersectionDetectionDepth",
+   "evidence": "_p12u_gate/r26_1_keys.json",
+   "panel_bodies": [],
+   "host_readback": false
+  },
+  {
+   "id": "FACET.SOLID_BASE_MINIMUM_ANGLE",
+   "round": "R27",
+   "setter": "SetAFFaceterMinimumAngle",
+   "evidence": "_p12u_gate/r27_1_keys.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": false
+  },
+  {
+   "id": "FACET.SOLID_BASE_LENGTH_FACTOR_FOR_OCTREE",
+   "round": "R27",
+   "setter": "SetAFFaceterLengthFactorForOctree",
+   "evidence": "_p12u_gate/r27_1_keys.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": false
+  },
+  {
+   "id": "FACET.SOLID_BASE_MINIMUM_ANGLE_FOR_OCTREE",
+   "round": "R27",
+   "setter": "SetAFFaceterMinimumAngleForOctree",
+   "evidence": "_p12u_gate/r27_1_keys.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": false
+  },
+  {
+   "id": "OCT_MESH.FACET_LENGTH_FACTOR",
+   "round": "R29",
+   "setter": "SetSolidFacetLengthFactor",
+   "evidence": "_p12u_gate/r29/summary.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": false
+  },
+  {
+   "id": "OCT_MESH.FACET_ANGLE",
+   "round": "R29",
+   "setter": "SetSolidFacetAngle",
+   "evidence": "_p12u_gate/r29/summary.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": false
+  },
+  {
+   "id": "OCT_MESH.FACET_MAX_WIDTH_FACTOR",
+   "round": "R29",
+   "setter": "SetSolidFacetMaxWidthFactor",
+   "evidence": "_p12u_gate/r29/summary.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": false
+  },
+  {
+   "id": "OCT_MESH.FACET_SPECIFY_EACH_REGION",
+   "round": "R29",
+   "setter": "SetSolidFacetSpecifyEachRegionFlag",
+   "evidence": "_p12u_gate/r29/summary.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": false
+  },
+  {
+   "id": "OCT_MESH.COMPLETE_PARALLEL",
+   "round": "R29",
+   "setter": "SetCompleteParallelFlag",
+   "evidence": "_p12u_gate/r29/summary.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": false
+  },
+  {
+   "id": "OCT_MESH.VOXEL_OCT_REFINE_TYPE",
+   "round": "R30",
+   "setter": "SetVoxelOctRefineType",
+   "evidence": "_p12u_gate/r30/summary.json",
+   "panel_bodies": [
+    "MesherFaceterBody"
+   ],
+   "host_readback": true
+  }
+ ],
+ "gaps": [
+  "FACET.INTERSECTION_DETECTION_DEPTH"
+ ],
+ "known_gaps": [
+  "FACET.INTERSECTION_DETECTION_DEPTH"
+ ],
+ "known_gap_reasons": {
+  "FACET.INTERSECTION_DETECTION_DEPTH": "面板无对应控件：该值是 MDL 相交检测深度预算（SetIntersectionDetectionDepth 实测映射），Facet Accuracy 页不暴露 → R32 记录为可接受缺口，R33 决定「加控件」或「永久标注无面板面」。"
+ },
+ "body_errors": {}
+}

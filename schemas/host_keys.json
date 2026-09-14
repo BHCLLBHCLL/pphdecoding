@@ -1,0 +1,154 @@
+{
+ "version": 1,
+ "note": "宿主 main.xenv 键 ↔ COM setter 实测账本（R32-1）。面板写入口不写死，由 tools/host_key_coverage.py 执行各面板 apply() 得出。",
+ "sources": [
+  "docs/CODE_STATE_AUDIT_20260906.md §21.1/§25.3/§40/§41/§43/§44.1",
+  "_p12u_gate/r6_5_keys.json",
+  "_p12u_gate/r10_3_keys.json",
+  "_p12u_gate/r26_1_keys.json",
+  "_p12u_gate/r27_1_keys.json",
+  "_p12u_gate/r29/summary.json",
+  "_p12u_gate/r30/summary.json",
+  "_p12u_gate/r32/keys_reverify.json"
+ ],
+ "counting_note": "R6-5 4 + R10-3 3 + R26 2 + R27 3 + R29 5 + R30 1 = 18 条。文档旧口径「19 条」把 R6-5 的**未证实 setter**（SetFacetUseAbsoluteValue，§21.1 记为「未变化」）也计成了键 —— R32-1 更正（见审计 §46.1）。",
+ "keys": [
+  {
+   "section": "FACET",
+   "key": "SIMPLE_CHORD_TOLERANCE",
+   "setter": "SetFacetSimpleChordTol",
+   "round": "R6-5",
+   "evidence": "audit §21.1"
+  },
+  {
+   "section": "FACET",
+   "key": "SIMPLE_MAX_ANGLE",
+   "setter": "SetFacetSimpleMaxAngle",
+   "round": "R6-5",
+   "evidence": "_p12u_gate/r6_5_keys.json"
+  },
+  {
+   "section": "FACET",
+   "key": "SIMPLE_MAX_WIDTH",
+   "setter": "SetFacetSimpleMaxWidth",
+   "round": "R6-5",
+   "evidence": "_p12u_gate/r6_5_keys.json"
+  },
+  {
+   "section": "FACET",
+   "key": "USE_DETAIL_MAX_WIDTH",
+   "setter": "SetFacetUseDetailMaxWidth",
+   "round": "R6-5",
+   "evidence": "_p12u_gate/r6_5_keys.json"
+  },
+  {
+   "section": "FACET",
+   "key": "USE_SIMPLE_SETTING",
+   "setter": "SetFacetUseSimpleSetting",
+   "round": "R10-3",
+   "evidence": "_p12u_gate/r10_3_keys.json"
+  },
+  {
+   "section": "FACET",
+   "key": "MDL_METHOD",
+   "setter": "SetMDLMethod",
+   "round": "R10-3",
+   "evidence": "_p12u_gate/r10_3_keys.json"
+  },
+  {
+   "section": "FACET",
+   "key": "DETAIL_CHORD_ANGLE",
+   "setter": "SetFacetDetailChordAngle",
+   "round": "R10-3",
+   "evidence": "_p12u_gate/r10_3_keys.json"
+  },
+  {
+   "section": "FACET",
+   "key": "SOLID_BASE_LENGTH_FACTOR",
+   "setter": "SetAFFaceterLengthFactor",
+   "round": "R26",
+   "evidence": "_p12u_gate/r26_1_keys.json"
+  },
+  {
+   "section": "FACET",
+   "key": "INTERSECTION_DETECTION_DEPTH",
+   "setter": "SetIntersectionDetectionDepth",
+   "round": "R26",
+   "evidence": "_p12u_gate/r26_1_keys.json"
+  },
+  {
+   "section": "FACET",
+   "key": "SOLID_BASE_MINIMUM_ANGLE",
+   "setter": "SetAFFaceterMinimumAngle",
+   "round": "R27",
+   "evidence": "_p12u_gate/r27_1_keys.json"
+  },
+  {
+   "section": "FACET",
+   "key": "SOLID_BASE_LENGTH_FACTOR_FOR_OCTREE",
+   "setter": "SetAFFaceterLengthFactorForOctree",
+   "round": "R27",
+   "evidence": "_p12u_gate/r27_1_keys.json"
+  },
+  {
+   "section": "FACET",
+   "key": "SOLID_BASE_MINIMUM_ANGLE_FOR_OCTREE",
+   "setter": "SetAFFaceterMinimumAngleForOctree",
+   "round": "R27",
+   "evidence": "_p12u_gate/r27_1_keys.json"
+  },
+  {
+   "section": "OCT_MESH",
+   "key": "FACET_LENGTH_FACTOR",
+   "setter": "SetSolidFacetLengthFactor",
+   "round": "R29",
+   "evidence": "_p12u_gate/r29/summary.json"
+  },
+  {
+   "section": "OCT_MESH",
+   "key": "FACET_ANGLE",
+   "setter": "SetSolidFacetAngle",
+   "round": "R29",
+   "evidence": "_p12u_gate/r29/summary.json"
+  },
+  {
+   "section": "OCT_MESH",
+   "key": "FACET_MAX_WIDTH_FACTOR",
+   "setter": "SetSolidFacetMaxWidthFactor",
+   "round": "R29",
+   "evidence": "_p12u_gate/r29/summary.json"
+  },
+  {
+   "section": "OCT_MESH",
+   "key": "FACET_SPECIFY_EACH_REGION",
+   "setter": "SetSolidFacetSpecifyEachRegionFlag",
+   "round": "R29",
+   "evidence": "_p12u_gate/r29/summary.json"
+  },
+  {
+   "section": "OCT_MESH",
+   "key": "COMPLETE_PARALLEL",
+   "setter": "SetCompleteParallelFlag",
+   "round": "R29",
+   "evidence": "_p12u_gate/r29/summary.json"
+  },
+  {
+   "section": "OCT_MESH",
+   "key": "VOXEL_OCT_REFINE_TYPE",
+   "setter": "SetVoxelOctRefineType",
+   "round": "R30",
+   "evidence": "_p12u_gate/r30/summary.json"
+  }
+ ],
+ "known_gaps": [
+  "FACET.INTERSECTION_DETECTION_DEPTH"
+ ],
+ "known_gap_reasons": {
+  "FACET.INTERSECTION_DETECTION_DEPTH": "面板无对应控件：该值是 MDL 相交检测深度预算（SetIntersectionDetectionDepth 实测映射），Facet Accuracy 页不暴露 → R32 记录为可接受缺口，R33 决定「加控件」或「永久标注无面板面」。"
+ },
+ "coverage_note": "R32-1 实测：18 条键中 17 条有面板写入口（全部经 MesherFaceterBody），唯一缺口见 known_gaps；本账由 tools/host_key_coverage.py 执行面板 apply() 得到，不写死。",
+ "undocumented_setters": [
+  "SetIntersectionDetectionDepth"
+ ],
+ "undocumented_note": "宿主实有、手册全无：tools/xenv_setter_probe.py 单会话重核（R32-1）里 SetIntersectionDetectionDepth=9 返回 True 且增量恰为 FACET.INTERSECTION_DETECTION_DEPTH（R26 首次实测、R32 复现）。目录 199 类与全库 HTML 均无 'IntersectionDetection' 字样 → 手册是**子集**，反向取证（实机）不可省。"
+}
