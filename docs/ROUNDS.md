@@ -1978,6 +1978,52 @@ R27 收敛判定后遗留的两件小收尾（OCT_MESH 段键、联动归因）�
 
 ---
 
+---
+
+## R29 —— OCT_MESH 段 6 键**穷举实测**：5/6 有写入口，推翻 R28/R26 两条推断（2026-09-14）
+
+### 执行记录
+
+候选 setter 来自**官方 API 目录** `schemas/vb_api_catalog.json` 的 `MeshingGroupSetting`（36 个 setter）。
+**单次宿主会话内逐档**改一个 setter 并 `SaveProject` 存档（74/74 err=0），再**逐档增量 diff** `main.xenv`：
+
+| setter | 值 | 增量变化键 | 归属 |
+|---|---|---|---|
+| `SetSolidFacetLengthFactor` | 0.7 | **`OCT_MESH.FACET_LENGTH_FACTOR`** | ✅ |
+| `SetSolidFacetAngle` | 9.0 | **`OCT_MESH.FACET_ANGLE`** | ✅ |
+| `SetSolidFacetMaxWidthFactor` | 7.0 | **`OCT_MESH.FACET_MAX_WIDTH_FACTOR`** | ✅ |
+| `SetSolidFacetSpecifyEachRegionFlag` | True | **`OCT_MESH.FACET_SPECIFY_EACH_REGION`** | ✅ |
+| `SetCompleteParallelFlag` | True | **`OCT_MESH.COMPLETE_PARALLEL`** | ✅ **推翻 R26 的否证** |
+| `SetVoxelOctRefineType` | 3 | （无变化） | ❌ 仍未找到入口 |
+
+**两条推断被推翻**：
+
+1. **R28「OCT_MESH 段无可用写入口」不成立** —— 实际 **5/6 键有明确 setter**；
+2. **R26「`SetCompleteParallelFlag` 不写 xenv」不成立** —— 它确实写 `OCT_MESH.COMPLETE_PARALLEL`。
+
+**方法论结论（写入规范）**：多 setter 同改会**掩盖增量归属**（R26/R28 的「否证」正是这么来的）；
+键映射必须**单变量、逐档、增量 diff** —— 本轮的逐档存档法一次会话即可穷举整段。
+
+**宿主键累计 13 → 18 条**。
+
+**遗留**：`VOXEL_OCT_REFINE_TYPE`（xenv 现值 3） —— 数值 3 无效；字符串形式（`"octree"`/`"voxel"`）
+那一档因 VBS 未生成日志而**未取得证据**（探针自身失败，非否证）→ R30-1 重做。
+
+### 回归
+
+全量回归 **1217 passed / 4 skipped / 0 failed**（569.57 s；与 R28 持平 —— 本轮为实机穷举，未改代码）。
+
+---
+
+## R30 —— 提案（≈0.5 人日）
+
+| # | 条目 | 验收句 | 人日 |
+|---|---|---|---|
+| **R30-1** | **`VOXEL_OCT_REFINE_TYPE` 收尾** | 用字符串取值（`octree`/`voxel`）与数值 0/1/2 各试一档（逐档增量法） | 该键有实测映射，或给出「候选取值全部无效」的确切表 | 0.5 |
+| **R30-2** | **单变量方法论入规范** | 把「键映射必须单变量逐档增量」写进审计文档口径区 | 规范区有该条且被本段引用 | — |
+
+---
+
 ## R 轮次模板（后续轮次照此填写）
 
 ```

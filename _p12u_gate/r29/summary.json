@@ -1,0 +1,173 @@
+{
+  "error": null,
+  "err0": 74,
+  "total": 74,
+  "seconds": 54.8,
+  "cases": [
+    {
+      "setter": "SetSolidFacetLengthFactor",
+      "value": 0.7,
+      "target_key": "OCT_MESH.FACET_LENGTH_FACTOR",
+      "set_err": 0,
+      "save_err": 0,
+      "delta_vs_prev": {
+        "OCT_MESH.FACET_LENGTH_FACTOR": {
+          "before": "0.5",
+          "after": "0.69999999999999996"
+        }
+      },
+      "delta_vs_base": {
+        "OCT_MESH.FACET_LENGTH_FACTOR": {
+          "before": "0.5",
+          "after": "0.69999999999999996"
+        }
+      }
+    },
+    {
+      "setter": "SetSolidFacetAngle",
+      "value": 9.0,
+      "target_key": "OCT_MESH.FACET_ANGLE",
+      "set_err": 0,
+      "save_err": 0,
+      "delta_vs_prev": {
+        "OCT_MESH.FACET_ANGLE": {
+          "before": "5",
+          "after": "9"
+        }
+      },
+      "delta_vs_base": {
+        "OCT_MESH.FACET_LENGTH_FACTOR": {
+          "before": "0.5",
+          "after": "0.69999999999999996"
+        },
+        "OCT_MESH.FACET_ANGLE": {
+          "before": "5",
+          "after": "9"
+        }
+      }
+    },
+    {
+      "setter": "SetSolidFacetMaxWidthFactor",
+      "value": 7.0,
+      "target_key": "OCT_MESH.FACET_MAX_WIDTH_FACTOR",
+      "set_err": 0,
+      "save_err": 0,
+      "delta_vs_prev": {
+        "OCT_MESH.FACET_MAX_WIDTH_FACTOR": {
+          "before": "5",
+          "after": "7"
+        }
+      },
+      "delta_vs_base": {
+        "OCT_MESH.FACET_LENGTH_FACTOR": {
+          "before": "0.5",
+          "after": "0.69999999999999996"
+        },
+        "OCT_MESH.FACET_ANGLE": {
+          "before": "5",
+          "after": "9"
+        },
+        "OCT_MESH.FACET_MAX_WIDTH_FACTOR": {
+          "before": "5",
+          "after": "7"
+        }
+      }
+    },
+    {
+      "setter": "SetSolidFacetSpecifyEachRegionFlag",
+      "value": true,
+      "target_key": "OCT_MESH.FACET_SPECIFY_EACH_REGION",
+      "set_err": 0,
+      "save_err": 0,
+      "delta_vs_prev": {
+        "OCT_MESH.FACET_SPECIFY_EACH_REGION": {
+          "before": "false",
+          "after": "true"
+        }
+      },
+      "delta_vs_base": {
+        "OCT_MESH.FACET_LENGTH_FACTOR": {
+          "before": "0.5",
+          "after": "0.69999999999999996"
+        },
+        "OCT_MESH.FACET_ANGLE": {
+          "before": "5",
+          "after": "9"
+        },
+        "OCT_MESH.FACET_MAX_WIDTH_FACTOR": {
+          "before": "5",
+          "after": "7"
+        },
+        "OCT_MESH.FACET_SPECIFY_EACH_REGION": {
+          "before": "false",
+          "after": "true"
+        }
+      }
+    },
+    {
+      "setter": "SetCompleteParallelFlag",
+      "value": true,
+      "target_key": "OCT_MESH.COMPLETE_PARALLEL",
+      "set_err": 0,
+      "save_err": 0,
+      "delta_vs_prev": {
+        "OCT_MESH.COMPLETE_PARALLEL": {
+          "before": "false",
+          "after": "true"
+        }
+      },
+      "delta_vs_base": {
+        "OCT_MESH.FACET_LENGTH_FACTOR": {
+          "before": "0.5",
+          "after": "0.69999999999999996"
+        },
+        "OCT_MESH.FACET_ANGLE": {
+          "before": "5",
+          "after": "9"
+        },
+        "OCT_MESH.FACET_MAX_WIDTH_FACTOR": {
+          "before": "5",
+          "after": "7"
+        },
+        "OCT_MESH.FACET_SPECIFY_EACH_REGION": {
+          "before": "false",
+          "after": "true"
+        },
+        "OCT_MESH.COMPLETE_PARALLEL": {
+          "before": "false",
+          "after": "true"
+        }
+      }
+    },
+    {
+      "setter": "SetVoxelOctRefineType",
+      "value": 3,
+      "target_key": "OCT_MESH.VOXEL_OCT_REFINE_TYPE",
+      "set_err": 0,
+      "save_err": 0,
+      "delta_vs_prev": {},
+      "delta_vs_base": {
+        "OCT_MESH.FACET_LENGTH_FACTOR": {
+          "before": "0.5",
+          "after": "0.69999999999999996"
+        },
+        "OCT_MESH.FACET_ANGLE": {
+          "before": "5",
+          "after": "9"
+        },
+        "OCT_MESH.FACET_MAX_WIDTH_FACTOR": {
+          "before": "5",
+          "after": "7"
+        },
+        "OCT_MESH.FACET_SPECIFY_EACH_REGION": {
+          "before": "false",
+          "after": "true"
+        },
+        "OCT_MESH.COMPLETE_PARALLEL": {
+          "before": "false",
+          "after": "true"
+        }
+      }
+    }
+  ]
+}

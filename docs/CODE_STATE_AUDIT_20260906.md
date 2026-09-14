@@ -1412,6 +1412,32 @@ R27-1（51/51 err=0）新增 3 条实测键：`FACET.SOLID_BASE_MINIMUM_ANGLE` /
 
 R27 遗留的两件收尾均以否证/归因收口 → 七面全部「已修复 / 已定性」、宿主键 13 条实测 + 2 条否证、
 **无新的可验证条目** → 按目标约定（至 R40 或不再有可验证的新 R* 条目）**终止**。
+
+---
+
+## 43. R29 更新（2026-09-14）—— OCT_MESH 段穷举实测：5/6 可写，推翻两条旧推断
+
+候选 setter 取自官方 API 目录（`MeshingGroupSetting`，36 个）。**单会话逐档**改一个 setter + `SaveProject`
+（74/74 err=0），逐档**增量** diff `main.xenv`：
+
+| setter | 增量键 |
+|---|---|
+| `SetSolidFacetLengthFactor` | `OCT_MESH.FACET_LENGTH_FACTOR` |
+| `SetSolidFacetAngle` | `OCT_MESH.FACET_ANGLE` |
+| `SetSolidFacetMaxWidthFactor` | `OCT_MESH.FACET_MAX_WIDTH_FACTOR` |
+| `SetSolidFacetSpecifyEachRegionFlag` | `OCT_MESH.FACET_SPECIFY_EACH_REGION` |
+| `SetCompleteParallelFlag` | `OCT_MESH.COMPLETE_PARALLEL`（**推翻 §40 的否证**） |
+| `SetVoxelOctRefineType`(3) | 无变化（未找到入口） |
+
+**被推翻的推断**：§42 的「OCT_MESH 段无可用写入口」（实际 5/6 可写）、§40 的「`CompleteParallelFlag` 不写
+xenv」（实际写 `OCT_MESH.COMPLETE_PARALLEL`）。两者都源于**多 setter 同改掩盖增量归属**。
+
+### ★ 口径（新增）：键映射必须单变量逐档增量
+
+> 任何「setter ↔ 宿主键」映射，必须**一次只改一个 setter**、**逐档 SaveProject**、**逐档增量 diff**；
+> 多 setter 同改只能用于「段落粗筛」，不得据以给出否证。
+
+宿主键累计 **18 条**。遗留 `VOXEL_OCT_REFINE_TYPE`（字符串档探针自身失败）→ R30-1。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

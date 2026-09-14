@@ -1,0 +1,25 @@
+{
+  "error": null,
+  "err0": 0,
+  "total": 0,
+  "seconds": 231.8,
+  "cases": [
+    {
+      "setter": "SetVoxelOctRefineType",
+      "value": "\"octree\"",
+      "target_key": "OCT_MESH.VOXEL_OCT_REFINE_TYPE",
+      "set_err": null,
+      "save_err": null,
+      "delta_vs_prev": {},
+      "delta_vs_base": {}
+    },
+    {
+      "setter": "SetVoxelOctRefineType",
+      "value": "\"voxel\"",
+      "target_key": "OCT_MESH.VOXEL_OCT_REFINE_TYPE",
+      "set_err": null,
+      "save_err": null,
+      "missing": true
+    }
+  ]
+}
