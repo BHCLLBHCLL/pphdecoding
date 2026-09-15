@@ -1,0 +1,513 @@
+{
+ "pairs": 41,
+ "targets": [
+  "Doc",
+  "MeshingGroup",
+  "MeshingGroupSetting",
+  "Octree",
+  "OctParam",
+  "Conditions",
+  "Env",
+  "MDLWizard",
+  "HybridParam"
+ ],
+ "verdicts": [
+  {
+   "class": "CondActranBoundaryNonReflection",
+   "heading": "SetInfiniteElementsAxis",
+   "signature": "GetInfiniteElementsAxis",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "CondBladeShape",
+   "heading": "EditChordLength",
+   "signature": "EditChoordLength",
+   "heading_state": "resolved",
+   "signature_state": "unknown_name",
+   "verdict": "heading"
+  },
+  {
+   "class": "CondBoundaryFlowIO",
+   "heading": "GetEnvironmentParam",
+   "signature": "GetParam",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "CondBoundaryFlowIO",
+   "heading": "GetPassiveScalarIndividualInflowType",
+   "signature": "GetMixedGasInflowType",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "CondInitialShapeModify",
+   "heading": "AddMorphingRegion",
+   "signature": "AddMorphingCalcFaceRegion",
+   "heading_state": "resolved",
+   "signature_state": "unknown_name",
+   "verdict": "heading"
+  },
+  {
+   "class": "CondOutputCSV",
+   "heading": "GetOutputTimingParam",
+   "signature": "GetOutputTimingType",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "CondOutputLFileTurbo",
+   "heading": "ClearOutletBladeRegions",
+   "signature": "ClearOutletRegions",
+   "heading_state": "unknown_name",
+   "signature_state": "resolved",
+   "verdict": "signature"
+  },
+  {
+   "class": "CondOutputTimeSeries",
+   "heading": "GetCSVOutputTimingParam",
+   "signature": "GetCSVOutputTimingType",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Conditions",
+   "heading": "SetContactThicknessDefault",
+   "signature": "SetContactTicknessDefault",
+   "heading_state": "resolved",
+   "signature_state": "unknown_name",
+   "verdict": "heading"
+  },
+  {
+   "class": "Conditions",
+   "heading": "SetDiffusionOptionParam",
+   "signature": "SetMeshOptionParam",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Doc",
+   "heading": "CreateDiscontinuousMeshingGroupWitouthMovingPart",
+   "signature": "CreateDiscontinuousMeshingGroupWithoutMovingPart",
+   "heading_state": "unknown_name",
+   "signature_state": "resolved",
+   "verdict": "signature"
+  },
+  {
+   "class": "Doc",
+   "heading": "GetSelectedSEdges",
+   "signature": "GetSelectedSFaces",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Doc",
+   "heading": "GetVPartInformation",
+   "signature": "GetSPartInformation",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Doc",
+   "heading": "ImprintEdgeToFace",
+   "signature": "ImprintEdgeToBody",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Doc",
+   "heading": "OutputPartsList",
+   "signature": "OpenPropFile",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Doc",
+   "heading": "SelectMeshFaceFromVFaces",
+   "signature": "SelectMeshFaceFromVFace",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Doc",
+   "heading": "SetMeshDisplaySid",
+   "signature": "SetMeshDisplaySide",
+   "heading_state": "unknown_name",
+   "signature_state": "resolved",
+   "verdict": "signature"
+  },
+  {
+   "class": "Doc",
+   "heading": "SetVMDLEdgeDisplayMode",
+   "signature": "SetMeshDisplaySide",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Env",
+   "heading": "SetParallelMeshingFlag",
+   "signature": "GetParallelMeshingFlag",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Env",
+   "heading": "SetZipLevel",
+   "signature": "GetZipLevel",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "HybridParam",
+   "heading": "SetSimpleLayerNum",
+   "signature": "GetSimpleLayerNum",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "HybridParam",
+   "heading": "SetSimpleOctRatio",
+   "signature": "GetSimpleOctRatio",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "MDLWizard",
+   "heading": "MultiEntityCo_GetSNode",
+   "signature": "MultiEntityCo_SNode",
+   "heading_state": "resolved",
+   "signature_state": "unknown_name",
+   "verdict": "heading"
+  },
+  {
+   "class": "MDLWizard",
+   "heading": "SetValidAutoRemoveTinyFace",
+   "signature": "IsAutoRemoveTinyFaceValid",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "MeshingGroup",
+   "heading": "DoesOctMeshCVolElementExist",
+   "signature": "DoesOctMeshCVollementExist",
+   "heading_state": "unknown_name",
+   "signature_state": "resolved",
+   "verdict": "signature"
+  },
+  {
+   "class": "MeshingGroup",
+   "heading": "SetSelectMeshFacesFromMDLFaces",
+   "signature": "SetSelectMeshFacesFromMDLFace",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "MeshingGroup",
+   "heading": "ShowEachTypeMeshEelem",
+   "signature": "ShowEachTypeMeshEelemregion",
+   "heading_state": "resolved",
+   "signature_state": "unknown_name",
+   "verdict": "heading"
+  },
+  {
+   "class": "MeshingGroupSetting",
+   "heading": "SetMDLMethod",
+   "signature": "GetMDLMethod",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "OctParam",
+   "heading": "SetMinSize",
+   "signature": "SetMeshNum",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "SpecialRegion",
+   "heading": "SetIsContactAngleSet",
+   "signature": "SetContactAngle",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  }
+ ],
+ "object_probe": {
+  "Doc": "no:com_error",
+  "Application": "no:com_error",
+  "Conditions": "no:com_error",
+  "MeshingGroup": "no:com_error",
+  "MeshingGroupSetting": "no:com_error",
+  "Env": "no:com_error",
+  "HybridParam": "no:com_error",
+  "MDLWizard": "no:com_error",
+  "SpecialRegion": "no:com_error",
+  "CondActranBoundaryNonReflection": "no:com_error",
+  "CondBladeShape": "no:com_error",
+  "CondBoundaryFlowIO": "no:com_error",
+  "CondInitialShapeModify": "no:com_error",
+  "CondOutputCSV": "no:com_error",
+  "CondOutputLFileTurbo": "no:com_error",
+  "CondOutputTimeSeries": "no:com_error",
+  "OctParam": "no:com_error"
+ },
+ "pairs_unreachable": [
+  {
+   "class": "ClosedVolume",
+   "heading": "SelectFace",
+   "signature": "SetSelectFaces",
+   "reason": "无实例"
+  },
+  {
+   "class": "CondBoussinesqBaseTemp",
+   "heading": "IsBuoyancyConsideredInCurrentSetting",
+   "signature": "GetConsiderBuoyancyFlag",
+   "reason": "无实例"
+  },
+  {
+   "class": "CondCoSim",
+   "heading": "CreateCoSimRegionVolume",
+   "signature": "CreateCoSimRegionSurface",
+   "reason": "无实例"
+  },
+  {
+   "class": "CondCoSimRegion",
+   "heading": "GetType",
+   "signature": "GetRegionType",
+   "reason": "无实例"
+  },
+  {
+   "class": "CondCoSimRegion",
+   "heading": "RemoveRegion",
+   "signature": "RemoveFromRegion",
+   "reason": "无实例"
+  },
+  {
+   "class": "CondMapForStructure",
+   "heading": "SetPIDPartCorresp",
+   "signature": "SetLoadIDFaceRegionCorresp",
+   "reason": "无实例"
+  },
+  {
+   "class": "MapCond",
+   "heading": "SetParam2",
+   "signature": "SetParam",
+   "reason": "无实例"
+  },
+  {
+   "class": "Octree",
+   "heading": "GetMeshingGroup",
+   "signature": "GetMeshingGroupet",
+   "reason": "无实例"
+  },
+  {
+   "class": "Octree",
+   "heading": "GetOctInfoConsideringMesherType",
+   "signature": "GetOctInfo",
+   "reason": "无实例"
+  },
+  {
+   "class": "PropItem",
+   "heading": "GetRefpropTableParam",
+   "signature": "GetRefpropFluid",
+   "reason": "无实例"
+  },
+  {
+   "class": "PropItem",
+   "heading": "SetRefpropTableParam",
+   "signature": "SetRefpropFluid",
+   "reason": "无实例"
+  }
+ ],
+ "with_mdl": true,
+ "projects": [
+  "D:\\training\\cradle\\CradleCFD_2025.2_scFLOW_Example_a\\Exercise\\exB01-1_intake_manifold.pph",
+  "D:\\training\\cradle\\CradleCFD_2025.2_scFLOW_Example_a\\Exercise\\exA26-1_ldc.pph"
+ ],
+ "obtained_via": {
+  "SpecialRegion": "chain:doc.GetSpecialRegions",
+  "CondActranBoundaryNonReflection": "CreateCondActranBoundaryNonReflection",
+  "CondBladeShape": "CreateCondBladeShape",
+  "CondBoundaryFlowIO": "CreateCondBoundaryFlowIO",
+  "CondInitialShapeModify": "CreateCondInitialShapeModify",
+  "CondOutputCSV": "CreateCondOutputCSV",
+  "CondOutputLFileTurbo": "CreateCondOutputLFileTurbo",
+  "CondOutputTimeSeries": "CreateCondOutputTimeSeries",
+  "HybridParam": "GetHybridParam",
+  "OctParam": "GetOctParam"
+ },
+ "chain_errors": {
+  "CondMapForStructure": "None -> 空对象（工程里没有该对象）",
+  "ClosedVolume": "None -> 空对象（工程里没有该对象）",
+  "PropItem": "None -> 空对象（工程里没有该对象）",
+  "MapCond": "None -> 空对象（工程里没有该对象）",
+  "CondBoussinesqBaseTemp": "None -> 空对象（工程里没有该对象）",
+  "CondCoSim": "None -> 空对象（工程里没有该对象）",
+  "CondCoSimRegion": "None -> 空对象（工程里没有该对象）",
+  "Octree": "GetOctree -> 空对象（工程里没有该对象）"
+ },
+ "empty_objects": [
+  "Octree",
+  "ClosedVolume",
+  "CondBoussinesqBaseTemp",
+  "CondCoSim",
+  "CondCoSimRegion",
+  "CondMapForStructure",
+  "MapCond",
+  "Octree",
+  "PropItem",
+  "Octree",
+  "ClosedVolume",
+  "CondBoussinesqBaseTemp",
+  "CondCoSim",
+  "CondCoSimRegion",
+  "CondMapForStructure",
+  "MapCond",
+  "Octree",
+  "PropItem"
+ ],
+ "mdl_probe": {
+  "begin": "ok",
+  "wizard": "ComObject",
+  "CreateMDL": "None",
+  "mdl_raw_is_none": true
+ },
+ "call_errors": {
+  "GetAllMapCondNames": "com_error: (-2147352570, '未知名称。', None, None)",
+  "CreateCondMapForStructure": "com_error: (-2147352570, '未知名称。', None, None)",
+  "QueryCondMapForStructureByName": "com_error: (-2147352570, '未知名称。', None, None)",
+  "CreateCondBoussinesqBaseTemp": "com_error: (-2147352570, '未知名称。', None, None)"
+ },
+ "availability": {
+  "Application": {
+   "total": 23,
+   "resolved": 23,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondActranBoundaryNonReflection": {
+   "total": 8,
+   "resolved": 8,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondBladeShape": {
+   "total": 14,
+   "resolved": 14,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondBoundaryFlowIO": {
+   "total": 122,
+   "resolved": 119,
+   "unknown": 3,
+   "errors": 0
+  },
+  "CondInitialShapeModify": {
+   "total": 24,
+   "resolved": 23,
+   "unknown": 1,
+   "errors": 0
+  },
+  "CondOutputCSV": {
+   "total": 23,
+   "resolved": 23,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputLFileTurbo": {
+   "total": 16,
+   "resolved": 16,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputTimeSeries": {
+   "total": 30,
+   "resolved": 28,
+   "unknown": 2,
+   "errors": 0
+  },
+  "Conditions": {
+   "total": 606,
+   "resolved": 606,
+   "unknown": 0,
+   "errors": 0
+  },
+  "Doc": {
+   "total": 424,
+   "resolved": 423,
+   "unknown": 1,
+   "errors": 0
+  },
+  "Env": {
+   "total": 161,
+   "resolved": 161,
+   "unknown": 0,
+   "errors": 0
+  },
+  "HybridParam": {
+   "total": 9,
+   "resolved": 9,
+   "unknown": 0,
+   "errors": 0
+  },
+  "MDLWizard": {
+   "total": 78,
+   "resolved": 78,
+   "unknown": 0,
+   "errors": 0
+  },
+  "MeshingGroup": {
+   "total": 173,
+   "resolved": 170,
+   "unknown": 3,
+   "errors": 0
+  },
+  "MeshingGroupSetting": {
+   "total": 104,
+   "resolved": 103,
+   "unknown": 1,
+   "errors": 0
+  },
+  "OctParam": {
+   "total": 18,
+   "resolved": 18,
+   "unknown": 0,
+   "errors": 0
+  },
+  "SpecialRegion": {
+   "total": 40,
+   "resolved": 39,
+   "unknown": 1,
+   "errors": 0
+  }
+ },
+ "killed_hosts": [],
+ "seconds": 32.6,
+ "tally": {
+  "both": 21,
+  "heading": 5,
+  "signature": 4
+ }
+}

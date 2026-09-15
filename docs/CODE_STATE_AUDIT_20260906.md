@@ -1989,6 +1989,33 @@ VBS 生成（取值 + 纠名）、面板写 xenv（实测键账本 + 枚举白�
 
 每条 NYI 落 `terminal`：**3 `host-interface-absent` + 6 `needs-gui-flow`** ——
 后者是 MDL/材料/CoSim 流程的产物，只打开工程拿不到，**明确不做**，不留"待办"。
+
+---
+
+## 57. R43 更新（2026-09-15）—— 普查覆盖率口径 + 探针侧错误归零
+
+### 57.1 覆盖率三桶互斥（R43-1）
+
+`schemas/host_member_availability.json` 的 `coverage`：
+
+| 桶 | 数 | 含义 |
+|---|---|---|
+| `classes_swept` | **17**（成员 1873/4455） | 取到实例并逐成员解析过 |
+| `empty_objects` | **8** | 试过但只有空壳 —— 正是 R41/R42 的 NYI 类 |
+| `unswept_classes` | **174** | **从未尝试**（≠ 已实现） |
+
+17 + 8 + 174 = 199 ✓（测试守恒）。契约门输出 `coverage` 与 `probe_errors`。
+
+### 57.2 探针侧错误 28 → 0：空壳对象不许进 ctx（R43-2）
+
+28 条 `error:AttributeError(NoneType)` 全在 `Octree`：官方算例里 `mg.GetOctree()`
+返回**空壳**（工程未建八叉树），而 ctx 把它当对象收下 → 每个成员都报错，
+**噪声差点埋掉真结论**。修法：`_empty()` 判空壳、**不收进 ctx**、
+在 `coverage.empty_objects` 里留名归因。
+
+**顺带修掉 2 个假阳性**：属性键带类型后缀（`Visible(BOOL)`/`UserControl(BOOL)`），
+宿主认的是括号前那段 —— 不剥后缀会把已实现属性误报成"宿主未实现"（unknown 12 → 14）。
+剥后缀后回到 **12**，目录里两条误标 `host_absent` 自动清除。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

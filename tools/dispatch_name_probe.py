@@ -417,6 +417,12 @@ def main(argv=None) -> int:
     pid = host_boot.cold_boot()
     print("[r35-1] cold boot pid=" + str(pid), flush=True)
     ctx: dict = {}
+    # R43-2：普查状态按**优先级**累积（resolved > unknown_name > error）。
+    # 多工程会话里，先取到的对象在 OpenProject 换工程后会变成空对象
+    # （实测 Octree 的 28 个成员全报 AttributeError(NoneType)）——
+    # 所以普查必须**逐工程**做，不能让旧工程的实例拖到最后再查。
+    sweep_acc: dict = {}
+    sweep_prio = {"resolved": 3, "unknown_name": 2}
     # 走仓内桥的附着逻辑：ROT 附着失败会自动回退 Dispatch（实测裸
     # GetActiveObject 会 MK_E_UNAVAILABLE = -2147221021）
     sess = api.ScFlowpreSession()
@@ -430,6 +436,13 @@ def main(argv=None) -> int:
     if not ok:
         result["context_error"] = "session.connect 失败: " + str(api.last_error)
         print("[r35-1] " + str(result["context_error"]))
+    def _empty(obj) -> bool:
+        """对象是否**空壳**（ComObject 包了个 None / None 本身）。"""
+        if obj is None:
+            return True
+        unwrapped = _unwrap(getattr(obj, "raw", obj))
+        return unwrapped is None
+
     def _raw(obj):
         """拆 typed 包装 + **拆 tuple/数组**。
 
@@ -451,6 +464,11 @@ def main(argv=None) -> int:
                 raise RuntimeError("no document")
             if "Doc" not in ctx:
                 ctx["Doc"] = _raw(doc)
+            if "Application" not in ctx:
+                try:
+                    ctx["Application"] = _raw(sess.app)   # R43-1：白捡一类
+                except Exception:  # noqa: BLE001
+                    pass
             # 顺序要紧：未打开工程时 GetConditions 抛 DISP_E_MEMBERNOTFOUND
             # （实测 -2147352573「找不到成员」），会把后面的实例全挡掉。
             # 另：**不要用裸 CDispatch 链式调用** —— win32com 会把未 flag 的方法
@@ -476,10 +494,18 @@ def main(argv=None) -> int:
             ctx.setdefault("MeshingGroup", _raw(mg))
             ctx.setdefault("MeshingGroupSetting",
                            _raw(mg.GetMeshingGroupSetting()))
-            try:
-                ctx.setdefault("Octree", _raw(mg.GetOctree()))
-            except Exception:  # noqa: BLE001
-                pass
+            if _empty(ctx.get("Octree")):
+                # 空对象（工程里还没建八叉树）不要占位 —— 留着它，后面的工程
+                # 才有机会提供一个真对象（R43：ldc 里 GetOctree() 是空壳，
+                # 导致 Octree 的 28 个成员全部报 AttributeError(NoneType)）
+                try:
+                    cand = _raw(mg.GetOctree())
+                    if not _empty(cand):
+                        ctx["Octree"] = cand
+                    else:
+                        result.setdefault("empty_objects", []).append("Octree")
+                except Exception:  # noqa: BLE001
+                    pass
             for name, getter in (("OctParam", "GetOctParam"),
                                  ("Env", "GetEnv"),
                                  ("HybridParam", "GetPresetHybridParam")):
@@ -551,11 +577,42 @@ def main(argv=None) -> int:
                 if ctx.get(cls) is not None:
                     continue
                 obj, how = _obtain(cls, conds_typed, doc, mg)
-                if obj is not None:
-                    ctx[cls] = _raw(obj)      # 必须走 _raw：它会拆 tuple（R38-1）
+                cand = _raw(obj) if obj is not None else None
+                # 空壳（ComObject 包了个 None）**不能**收进 ctx：
+                # 收下之后普查会对它的每个成员报 AttributeError(NoneType)，
+                # 28 条噪声把真结论埋掉（R43 实测 Octree）
+                if cand is None or _empty(cand):
+                    # 空壳/空结果：**记下来**，否则这个类在普查里"消失"就没归因
+                    result.setdefault("empty_objects", []).append(cls)
+                    errors[cls] = (str(how) + " -> 空对象（工程里没有该对象）")
+                else:
+                    ctx[cls] = cand       # _raw 会拆 tuple（R38-1）
                     via[cls] = how
                     print("   + " + cls + " <- " + str(how), flush=True)
             result["mdl_probe"] = inter.get("mdl_probe") or {}
+            # R43-2：**每个工程**都把当前 ctx 普查一遍，状态按优先级累积
+            if args.sweep:
+                cat_all = json.loads(CATALOG.read_text(encoding="utf-8"))
+                empty_objs: list = result.setdefault("empty_objects", [])
+                for cls, obj in list(ctx.items()):
+                    if _empty(obj):
+                        empty_objs.append(cls)
+                        continue
+                    cinfo = cat_all["classes"].get(cls) or {}
+                    for kind in ("methods", "properties"):
+                        for mem, entry in (cinfo.get(kind) or {}).items():
+                            # 属性键可能带类型后缀（`Visible(BOOL)`）——
+                            # 宿主认的是括号前那段；不剥后缀会把**已实现**的属性
+                            # 误判成"宿主未实现"（R43 实测 2 例）
+                            disp = (entry.get("dispatch_name")
+                                    or entry.get("signature_name")
+                                    or mem.split("(", 1)[0])
+                            st = _resolve(obj, disp)
+                            slot = sweep_acc.setdefault(cls, {})
+                            old = slot.get(mem)
+                            if old is None or (sweep_prio.get(st, 0)
+                                               > sweep_prio.get(old, 0)):
+                                slot[mem] = st
             result.setdefault("call_errors", {}).update(
                 inter.get("call_errors") or {})
             if all(ctx.get(c) is not None for c in wanted):
@@ -570,50 +627,63 @@ def main(argv=None) -> int:
         if ctx.get(cls) is None:
             errors.setdefault(
                 cls, "各工程的 Get*/Create*/Query* 都未产出实例（见 object_probe）")
-    # R42-1：成员可用性普查 —— 手册成员在宿主上到底有没有实现。
-    # 判据仍是 GetIDsOfNames（只解析名字，不调用），所以对任何已取到实例的类都安全。
+    # R42-1 / R43-1：成员可用性普查（逐工程累积，见 sweep_acc）+ 覆盖率口径。
     if args.sweep:
         cat = json.loads(CATALOG.read_text(encoding="utf-8"))
-        avail: dict = {}
-        for cls, obj in sorted(ctx.items()):
-            info = cat["classes"].get(cls) or {}
-            members: dict = {}
-            for kind in ("methods", "properties"):
-                for mem, entry in (info.get(kind) or {}).items():
-                    disp = (entry.get("dispatch_name")
-                            or entry.get("signature_name") or mem)
-                    members[mem] = {"dispatch": disp,
-                                    "state": _resolve(obj, disp)}
-            if members:
-                resolved = sum(1 for m in members.values()
-                               if m["state"] == "resolved")
-                unknown = sorted(m for m, v in members.items()
-                                 if v["state"] == "unknown_name")
-                avail[cls] = {"total": len(members), "resolved": resolved,
-                              "unknown": unknown,
-                              "members": members}
+        classes_total = len(cat["classes"])
+        members_total = sum(len(i.get("methods") or {})
+                            + len(i.get("properties") or {})
+                            for i in cat["classes"].values())
+        per_class: dict = {}
+        for cls, states in sorted(sweep_acc.items()):
+            unknown = sorted(m for m, st in states.items()
+                             if st == "unknown_name")
+            errs = sorted(m for m, st in states.items()
+                          if str(st).startswith("error:"))
+            per_class[cls] = {"total": len(states),
+                              "resolved": sum(1 for st in states.values()
+                                               if st == "resolved"),
+                              "unknown": unknown, "errors": errs}
+        swept_members = sum(v["total"] for v in per_class.values())
+        empty_set = set(result.get("empty_objects") or [])
+        # 三桶互斥：已普查 / 试过但拿不到对象（empty_objects）/ 从未尝试（unswept）
+        unswept = sorted(set(cat["classes"]) - set(per_class) - empty_set)
         result["availability"] = {c: {"total": v["total"],
                                       "resolved": v["resolved"],
-                                      "unknown": len(v["unknown"])}
-                                  for c, v in avail.items()}
+                                      "unknown": len(v["unknown"]),
+                                      "errors": len(v["errors"])}
+                                  for c, v in per_class.items()}
         sweep_path = ROOT / "schemas" / "host_member_availability.json"
         sweep_path.write_text(json.dumps({
             "source": "tools/dispatch_name_probe.py --sweep（GetIDsOfNames）",
-            "note": "state=unknown_name ⇒ 宿主**未实现**该成员（手册有、宿主无）",
+            "note": ("state=unknown_name ⇒ 宿主**未实现**该成员；"
+                     "error:* ⇒ 探针侧问题（对象为空/过时），**不得**当宿主否证；"
+                     "未出现在本表的类 = **未普查**（不等于已实现）"),
+            "coverage": {"classes_swept": len(per_class),
+                         "empty_objects": sorted(empty_set),
+                         "classes_total": classes_total,
+                         "members_swept": swept_members,
+                         "members_total": members_total,
+                         "unswept_classes": unswept},
             "classes": {c: {"total": v["total"], "resolved": v["resolved"],
-                            "unknown": v["unknown"]}
-                        for c, v in avail.items()},
-            "availability": {c: {m: v["state"] for m, v in d["members"].items()}
-                             for c, d in avail.items()},
+                            "unknown": v["unknown"],
+                            "errors": v["errors"]}
+                        for c, v in per_class.items()},
+            "availability": {c: dict(states)
+                             for c, states in sweep_acc.items()},
         }, ensure_ascii=False, indent=1), encoding="utf-8")
-        print("[r42] 普查 " + str(len(avail)) + " 类 → "
-              + str(sweep_path.name) + "；未实现成员合计 "
-              + str(sum(len(v["unknown"]) for v in avail.values())), flush=True)
-        for cls, v in sorted(avail.items()):
-            if v["unknown"]:
-                print("   " + cls + " 未实现 " + str(len(v["unknown"])) + "/"
-                      + str(v["total"]) + ": " + json.dumps(v["unknown"][:6]),
-                      flush=True)
+        n_unknown = sum(len(v["unknown"]) for v in per_class.values())
+        n_err = sum(len(v["errors"]) for v in per_class.values())
+        print("[r43] 普查 " + str(len(per_class)) + "/" + str(classes_total)
+              + " 类、" + str(swept_members) + "/" + str(members_total)
+              + " 成员 → " + sweep_path.name + "；未实现 " + str(n_unknown)
+              + "，探针侧错误 " + str(n_err), flush=True)
+        for cls, v in sorted(per_class.items()):
+            if v["unknown"] or v["errors"]:
+                print("   " + cls + " unknown=" + str(len(v["unknown"]))
+                      + " errors=" + str(len(v["errors"]))
+                      + " " + json.dumps((v["unknown"] + v["errors"])[:6],
+                                          ensure_ascii=False), flush=True)
 
     for name, obj in ctx.items():
         result["object_probe"][name] = _has_type_info(obj)

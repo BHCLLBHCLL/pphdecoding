@@ -143,9 +143,19 @@ def check_host_absent() -> dict:
         for kind in ("methods", "properties"):
             for mem, e in (info.get(kind) or {}).items():
                 all_members.setdefault(mem, []).append(bool(e.get("host_absent")))
+    # R43：普查证据同时要看**探针侧错误必须为 0**（error:* 是对象为空/过时，不得当结论）
+    probe_errors = 0
+    coverage: dict = {}
+    av_path = ROOT / "schemas" / "host_member_availability.json"
+    if av_path.is_file():
+        ev = json.loads(av_path.read_text(encoding="utf-8"))
+        coverage = ev.get("coverage") or {}
+        probe_errors = sum(len(v.get("errors") or [])
+                           for v in (ev.get("classes") or {}).values())
     absent = [mem for mem, flags in all_members.items() if all(flags)]
     if not absent:
-        return {"absent_members": 0, "references": [], "ok": True}
+        return {"absent_members": 0, "references": [], "coverage": coverage,
+                "probe_errors": probe_errors, "ok": probe_errors == 0}
     hits = []
     roots = [ROOT / "tools", ROOT / "automation"]
     files = [p for r in roots for p in r.glob("*.py")]
@@ -162,7 +172,9 @@ def check_host_absent() -> dict:
             if mem in src:
                 hits.append(path.name + " -> " + mem)
     return {"absent_members": len(absent), "references": hits[:10],
-            "reference_count": len(hits), "ok": not hits}
+            "reference_count": len(hits), "coverage": coverage,
+            "probe_errors": probe_errors,
+            "ok": not hits and probe_errors == 0}
 
 
 CHECKS = (("catalog", check_catalog), ("ledger", check_ledger),
