@@ -1916,6 +1916,46 @@ VBS 生成（取值 + 纠名）、面板写 xenv（实测键账本 + 枚举白�
 
 → **目标达成**：四条支线均达可复验终态；剩余三面属产品限制 / 外部缺陷 / 需多步 GUI 流程，
 不再有"可验证且成本合理"的新 R* 条目。
+
+---
+
+## 55. R41 更新（2026-09-15）—— 9 条 NYI 推进：机制级结论 + `unknown` 归零
+
+### 55.1 三条"宿主无此接口"的硬证据（反向漏项第二例）
+
+用泛型 `call()` 试手册外的创建器（物化包装只覆盖目录里有的成员），拿到
+`DISP_E_UNKNOWNNAME`：
+
+| 尝试的成员 | 结果 |
+|---|---|
+| `CreateCondMapForStructure` / `QueryCondMapForStructureByName` | 未知名称 |
+| `GetAllMapCondNames` | 未知名称 |
+| `CreateCondBoussinesqBaseTemp` | 未知名称 |
+
+→ 手册列了这些类，**宿主却没实现对应创建/查询接口**。R32-1 的
+`SetIntersectionDetectionDepth` 是"宿主有、手册无"；这里是"手册有、宿主无" ——
+**双向漏项都拿到了实例**。
+
+### 55.2 其余 5 条：前置对象阻塞（原因逐条落册）
+
+`ClosedVolume`：`mdl_probe` = `{begin: ok, wizard: ComObject, CreateMDL: None, mdl_raw_is_none: true}`
+—— `wizard.CreateMDL` 调过之后 `GetMDL()` 仍为空；`PropItem` 需闭空间/材料；
+`CondCoSim`/`CondCoSimRegion` 在 ldc / exA16-2 / exA25-1 三个 CoSim 算例里
+`GetCondCoSim()` 都返回空。
+
+### 55.3 三个探针缺陷（"假否证"同族，逐个修掉）
+
+1. `errors.setdefault` → **旧失败文本盖住新结论**；改为覆盖；
+2. `_try` 存实例**未拆 tuple** → `'tuple' object has no attribute 'call'`；改为 `_unwrap`；
+3. **空 tuple 被当成对象**：`GetCondCoSim()` 返回 `()` 表示"没有该条件"，而 `_unwrap`
+   只判类型不判空 → 空元组一路传到名字解析 → 记成 `unknown`。
+   **空容器 = 没拿到对象**（已加单测）。
+
+### 55.4 判据升级：最强证据优先
+
+`dispatch_account.py` 现按 **宿主无接口(UNKNOWNNAME) > 实例已取到但解析失败 > 未取到实例**
+排序原因，并落 `host_interface_absent` 字段 ——"手册有、宿主机没有"变成**机器可查**。
+本轮 `unknown` **归零**（R39-2 的验收项至此真正达成）。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

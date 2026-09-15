@@ -91,8 +91,14 @@ class TestRecursiveUnwrap(unittest.TestCase):
         self.assertIs(self.probe._unwrap([obj]), obj)
         self.assertIs(self.probe._unwrap(obj), obj)
 
-    def test_empty_tuple_stays(self):
-        self.assertEqual(self.probe._unwrap(()), ())
+    def test_empty_tuple_means_no_object(self):
+        """R41 口径修正：**空 tuple = 没拿到对象**，返回 None。
+
+        R39 时写的是"空 tuple 保持原样"，结果 `GetCondCoSim()` 在"没有 CoSim 条件"
+        时返回的 `()` 被当成对象存下来，一路传到名字解析变成 `AttributeError(tuple)`
+        → 记成 `unknown`（假否证的第三个变体）。
+        """
+        self.assertIsNone(self.probe._unwrap(()))
 
     def test_first_unwraps_nested(self):
         class _Obj:

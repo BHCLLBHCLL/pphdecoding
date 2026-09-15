@@ -11,9 +11,9 @@
    "signature": "SetSelectFaces",
    "kind": "methods",
    "state": "nyi",
-   "reason": "mg.GetMDL() 底层返回 None（ComObject 包了个空对象）：闭空间必须建立在 MDL 之上 —— 该工程尚未完成 MDL/BAM 建模流程",
+   "reason": "chain:wizard.CreateMDL → mdl.GetClosedVolumes -> 返回空（工程里没有该对象）",
    "recipe": "Set coord_part = cvol.GetCoordinatesSpecifiedPartLinkedToMesh(id)",
-   "evidence": "_p12u_gate\\r40\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
   },
   {
    "class": "CondActranBoundaryNonReflection",
@@ -57,9 +57,12 @@
    "signature": "GetConsiderBuoyancyFlag",
    "kind": "methods",
    "state": "nyi",
-   "reason": "chain:Create+QueryByName -> AttributeError: 'ScFlowpreConditions' object has no attribute 'CreateCondBoussinesqBaseTemp'",
+   "reason": "宿主无此接口：CreateCondBoussinesqBaseTemp → DISP_E_UNKNOWNNAME（手册未列、宿主也未实现）",
+   "host_interface_absent": [
+    "CreateCondBoussinesqBaseTemp"
+   ],
    "recipe": "Set boussinesqbasetemp = conds.QueryCondBoussinesqBaseTempByName(“name”)",
-   "evidence": "_p12u_gate\\r40\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
   },
   {
    "class": "CondCoSim",
@@ -67,9 +70,9 @@
    "signature": "CreateCoSimRegionSurface",
    "kind": "methods",
    "state": "nyi",
-   "reason": "实例已取到（chain:conds.GetCondCoSim）但名字解析失败：该对象形态不支持 GetIDsOfNames（探针侧限制，非宿主否证）",
+   "reason": "chain:conds.CreateCondCoSim(name,0,0) -> 返回空（工程里没有该对象）",
    "recipe": "Set condcosim = conds.CreateCondCoSim(\"name\", apptype, interfacetype)",
-   "evidence": "_p12u_gate\\r40\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
   },
   {
    "class": "CondCoSimRegion",
@@ -77,9 +80,9 @@
    "signature": "GetRegionType",
    "kind": "methods",
    "state": "nyi",
-   "reason": "chain:GetCoSimRegions()[0].GetOwner -> AttributeError: 'tuple' object has no attribute 'GetCoSimRegions'",
+   "reason": "前置对象 CondCoSim 未取到（见其条目）——GetOwner() 需要 CoSim 区域实例",
    "recipe": "Set condcosim = cosim_region.GetOwner()",
-   "evidence": "_p12u_gate\\r40\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
   },
   {
    "class": "CondCoSimRegion",
@@ -87,9 +90,9 @@
    "signature": "RemoveFromRegion",
    "kind": "methods",
    "state": "nyi",
-   "reason": "chain:GetCoSimRegions()[0].GetOwner -> AttributeError: 'tuple' object has no attribute 'GetCoSimRegions'",
+   "reason": "前置对象 CondCoSim 未取到（见其条目）——GetOwner() 需要 CoSim 区域实例",
    "recipe": "Set condcosim = cosim_region.GetOwner()",
-   "evidence": "_p12u_gate\\r40\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
   },
   {
    "class": "CondInitialShapeModify",
@@ -106,9 +109,13 @@
    "signature": "SetLoadIDFaceRegionCorresp",
    "kind": "methods",
    "state": "nyi",
-   "reason": "CreateCondMapForStructure -> AttributeError: 'ScFlowpreConditions' object has no attribute 'CreateCondMapForStructure'",
+   "reason": "宿主无此接口：CreateCondMapForStructure, QueryCondMapForStructureByName → DISP_E_UNKNOWNNAME（手册未列、宿主也未实现）",
+   "host_interface_absent": [
+    "CreateCondMapForStructure",
+    "QueryCondMapForStructureByName"
+   ],
    "recipe": "Set value = condmapforstr.GetValue(valueKey)",
-   "evidence": "_p12u_gate\\r40\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
   },
   {
    "class": "CondOutputCSV",
@@ -287,9 +294,12 @@
    "signature": "SetParam",
    "kind": "methods",
    "state": "nyi",
-   "reason": "前置对象 CondMapForStructure 未取到 —— MapCond 只能由它的 GetValue(key) 产出",
+   "reason": "宿主无此接口：GetAllMapCondNames → DISP_E_UNKNOWNNAME（手册未列、宿主也未实现）",
+   "host_interface_absent": [
+    "GetAllMapCondNames"
+   ],
    "recipe": "Set value = mapcond.GetValue(valueKey)",
-   "evidence": "_p12u_gate\\r40\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
   },
   {
    "class": "MeshingGroup",
@@ -362,7 +372,7 @@
    "state": "nyi",
    "reason": "前置对象 CondInitial 未取到；且工程未注册材料 —— PropItem 经 CondInitial.GetPhaseMaterial 产出",
    "recipe": "（手册未给实例配方）",
-   "evidence": "_p12u_gate\\r40\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
   },
   {
    "class": "PropItem",
@@ -372,7 +382,7 @@
    "state": "nyi",
    "reason": "前置对象 CondInitial 未取到；且工程未注册材料 —— PropItem 经 CondInitial.GetPhaseMaterial 产出",
    "recipe": "（手册未给实例配方）",
-   "evidence": "_p12u_gate\\r40\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
   },
   {
    "class": "SpecialRegion",
@@ -387,8 +397,7 @@
  "verdict_tally": {
   "both": 21,
   "heading": 5,
-  "unknown": 1,
   "signature": 4
  },
- "evidence": "_p12u_gate\\r40\\name_verdicts.json"
+ "evidence": "_p12u_gate\\r41\\name_verdicts.json"
 }

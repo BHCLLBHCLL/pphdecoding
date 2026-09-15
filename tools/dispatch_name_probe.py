@@ -139,7 +139,9 @@ def _unwrap(obj, depth: int = 4):
     —— 只拆一层仍拿到 tuple，于是名字解析抛 AttributeError，
     被误判成"宿主不认"（R38/R39 两次踩到，都是假否证）。
     """
-    while depth and isinstance(obj, (tuple, list)) and obj:
+    while depth and isinstance(obj, (tuple, list)):
+        if not obj:
+            return None      # **空 tuple = "没拿到对象"**，不是"拿到了一个空容器"
         obj = obj[0]
         depth -= 1
     return obj
@@ -170,10 +172,12 @@ def _chains(doc, conds, mg, obtained: dict, inter: dict,
             errors[cls] = how + " -> " + type(exc).__name__ + ": " + str(exc)
             return
         if obj is not None:
-            out[cls] = obj
+            out[cls] = _unwrap(obj)     # R41：多返回值成员给的是 tuple，必须先拆
             obtained[cls] = how
         else:
-            errors.setdefault(cls, how + " -> 返回空（工程里没有该对象）")
+            # **覆盖**而不是 setdefault：前面的尝试（如工程循环里的 MDL 检查）留下的
+            # 原因会被后来的真实失败盖住 —— R41 实测：留着旧文本会得出错误结论
+            errors[cls] = how + " -> 返回空（工程里没有该对象）"
 
     # 数组型 getter → 取第一个
     _try("ClosedVolume", lambda: _first(doc.GetClosedVolumes(False)),
@@ -181,6 +185,39 @@ def _chains(doc, conds, mg, obtained: dict, inter: dict,
     _try("ClosedVolume", lambda: _first(doc.GetClosedVolumes(True)),
          "chain:doc.GetClosedVolumes(True)")
     # R38-1：闭空间其实是 **MDL** 侧的东西（doc.GetClosedVolumes 在只开工程时为空）
+    calls = inter.setdefault("call_errors", {})
+
+    def _call(host, name, *args):
+        """统一走泛型 `call()`：**手册未必收录的成员**（如 CreateCondBoussinesqBaseTemp）
+        只能这样试 —— 物化包装只覆盖目录里有的成员（R41）。
+
+        "成员不存在"与"返回空"必须分清：前者是 `com_error`（宿主没有该接口），
+        后者是"有接口但这台机器上没有对象"。故把异常记进 `call_errors`。
+        """
+        try:
+            return _unwrap(host.call(name, *args))
+        except Exception as exc:  # noqa: BLE001
+            calls[name] = type(exc).__name__ + ": " + str(exc)[:90]
+            return None
+
+    def _make_mdl():
+        """R41：拿到 MDL 的关键一步是 `MDLWizard.CreateMDL`（此前只在 R40 里 Begin 了向导）。"""
+        diag = inter.setdefault("mdl_probe", {})
+        try:
+            mg.BeginMDLWizard()
+            diag["begin"] = "ok"
+        except Exception as exc:  # noqa: BLE001
+            diag["begin"] = type(exc).__name__ + ": " + str(exc)
+        wiz = _unwrap(mg.GetMDLWizard())
+        diag["wizard"] = type(wiz).__name__ if wiz is not None else None
+        if wiz is not None:
+            got = _call(wiz, "CreateMDL")
+            diag["CreateMDL"] = "None" if got is None else repr(got)[:40]
+        mdl = mg.GetMDL()
+        raw = getattr(mdl, "raw", None)
+        diag["mdl_raw_is_none"] = raw is None
+        return mdl if raw is not None else None
+
     def _mdl_cvol():
         mdl = mg.GetMDL()
         for getter, args in (("GetClosedVolumes", ()),
@@ -197,6 +234,71 @@ def _chains(doc, conds, mg, obtained: dict, inter: dict,
         return None
 
     _try("ClosedVolume", _mdl_cvol, "chain:mg.GetMDL().GetClosedVolumes")
+    # R41：MDL 建立 → 闭空间 → **闭空间的材料项**就是 PropItem
+    def _mdl_chain():
+        mdl = _make_mdl()
+        if mdl is None:
+            return None
+        for getter, args in (("GetClosedVolumes", ()),
+                             ("QueryClosedVolumeByIndex", (0,))):
+            res = _call(mdl, getter, *args)
+            if res is not None:
+                return res
+        _call(mdl, "SelectAllFace", True)
+        made = _call(mdl, "CreateClosedVolumeFromSelectedFace", "R41cvol")
+        if made is not None:
+            return made
+        return _call(mdl, "QueryClosedVolumeByIndex", 0)
+
+    _try("ClosedVolume", _mdl_chain, "chain:wizard.CreateMDL → mdl.GetClosedVolumes")
+
+    def _cvol_propitem():
+        cvol = out.get("ClosedVolume")
+        if cvol is None:
+            return None
+        for getter in ("GetMaterial", "GetPhaseMaterial"):
+            got = _call(cvol, getter)
+            if got is not None:
+                return got
+        return None
+
+    _try("PropItem", _cvol_propitem, "chain:ClosedVolume.GetMaterial")
+
+    # R41：MapCond 有直建接口（Doc.CreateMapCond / QueryMapCondByName）
+    def _mapcond_direct():
+        for name, args in (("CreateMapCond", ()),
+                           ("GetUnusedMapCondName", ("R41map",))):
+            got = _call(doc, name, *args)
+            if got is not None and name == "CreateMapCond":
+                return got
+        names = _call(doc, "GetAllMapCondNames")
+        first = _first(names) if names is not None else None
+        if first:
+            return _call(doc, "QueryMapCondByName", first)
+        return None
+
+    _try("MapCond", _mapcond_direct, "chain:Doc.CreateMapCond")
+
+    # R41：CondMapForStructure 的手册无创建器 —— 用泛型 call 试手册外成员
+    def _cmap_direct():
+        got = _call(conds, "CreateCondMapForStructure", "R41cms")
+        if got is not None:
+            return got
+        return _call(conds, "QueryCondMapForStructureByName", "R41cms")
+
+    _try("CondMapForStructure", _cmap_direct,
+         "chain:conds.call(CreateCondMapForStructure)")
+
+    # R41：CondBoussinesqBaseTemp 同样无创建器（手册只有 QueryByName）
+    def _bouss_direct():
+        got = _call(conds, "CreateCondBoussinesqBaseTemp", "R41bouss")
+        if got is not None:
+            return got
+        return _call(conds, "QueryCondBoussinesqBaseTempByName", "R41bouss")
+
+    _try("CondBoussinesqBaseTemp", _bouss_direct,
+         "chain:conds.call(Create/QueryCondBoussinesqBaseTemp)")
+
     # R38-1：PropItem 也可以从多相条件的材料项拿
     def _propitem_cond():
         for maker, getter in (("GetCondMultiphaseHandling", "GetPrimaryMaterial"),
@@ -235,10 +337,10 @@ def _chains(doc, conds, mg, obtained: dict, inter: dict,
             _cosim = None
 
     def _cosim_region():
-        reg = _first(_cosim.GetCoSimRegions())
+        reg = _first(_call(_cosim, "GetCoSimRegions"))
         if reg is None:
             return None
-        return _unwrap(reg.GetOwner())
+        return _call(reg, "GetOwner")
 
     if _cosim is not None:
         _try("CondCoSimRegion", _cosim_region, "chain:GetCoSimRegions()[0].GetOwner")
@@ -389,7 +491,7 @@ def main(argv=None) -> int:
                     ctx["MDLWizard"] = _raw(mg.GetMDLWizard())
                 except Exception:  # noqa: BLE001
                     pass
-            if args.with_mdl and "ClosedVolume" not in ctx:
+            if False and args.with_mdl and "ClosedVolume" not in ctx:   # R41：交给 _chains
                 # R40-1：闭空间不是"打开工程就有"——它在 MDL 里由面区域生成。
                 # 这里走最省事的一条：MDL 选全部面 → 由选中面建闭空间。
                 try:
@@ -449,6 +551,9 @@ def main(argv=None) -> int:
                     ctx[cls] = _raw(obj)      # 必须走 _raw：它会拆 tuple（R38-1）
                     via[cls] = how
                     print("   + " + cls + " <- " + str(how), flush=True)
+            result["mdl_probe"] = inter.get("mdl_probe") or {}
+            result.setdefault("call_errors", {}).update(
+                inter.get("call_errors") or {})
             if all(ctx.get(c) is not None for c in wanted):
                 break                      # 全拿到就不必再开工程
         except Exception as exc:  # noqa: BLE001

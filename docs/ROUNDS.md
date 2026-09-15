@@ -2906,6 +2906,75 @@ R40 已执行完毕，按第二个条件逐面复核：
 
 ---
 
+## R41 —— 9 条 NYI 推进：从"取不到实例"到"机制级结论"（2026-09-15，用户点单）
+
+### 结果：数量仍是 9，但**性质变了**
+
+| 类 | 条数 | 终态（本轮实测） |
+|---|---|---|
+| `CondBoussinesqBaseTemp` | 1 | ⛔ **宿主无此接口**：`CreateCondBoussinesqBaseTemp` → `DISP_E_UNKNOWNNAME`（手册未列、宿主也未实现） |
+| `CondMapForStructure` | 1 | ⛔ **宿主无此接口**：`CreateCondMapForStructure` / `QueryCondMapForStructureByName` 均 `DISP_E_UNKNOWNNAME` |
+| `MapCond` | 1 | ⛔ **宿主无此接口**：`GetAllMapCondNames` 亦 `DISP_E_UNKNOWNNAME`（手册的 map API 在本机不存在） |
+| `ClosedVolume` | 1 | ⛔ **MDL 不可得**：`wizard.CreateMDL` 调用后 `GetMDL()` 仍为空（`mdl_probe` 落盘） |
+| `PropItem` | 2 | ⛔ **前置缺失**：需闭空间/材料（`CondInitial.GetPhaseMaterial` 空） |
+| `CondCoSim` / `CondCoSimRegion` | 3 | ⛔ **工程无 CoSim 条件**：`GetCondCoSim()` 返回空（ldc/A16-2/A25-1 三个 CoSim 算例都试过） |
+
+**另一项达成**：`unknown` **归零** —— R39-2 的验收项（"归零或给出实证"）这轮才真正落地。
+
+### 修掉的三个探针缺陷（都是"假否证"同族）
+
+1. **`errors.setdefault` 让旧的失败文本盖住新结论** —— 工程循环里 MDL 检查写下的原因
+   一直留着，把后面真实尝试的结果盖掉，读证据会得出错误结论；
+2. **`_try` 存实例时没拆 tuple** —— 后续 `host.call` 报 `'tuple' object has no attribute 'call'`；
+3. **空 tuple 被当成对象** —— `GetCondCoSim()` 在"没有 CoSim 条件"时返回 `()`，
+   而 `_unwrap` 只判"是不是 tuple"不判空，于是存进去一个空元组，
+   一路传到名字解析变成 `AttributeError(tuple)` → 记成 `unknown`。
+   **空容器 = 没拿到对象**，这条已写进 `_unwrap` 并加单测。
+
+### 判据升级：最强证据优先
+
+`dispatch_account.py` 现在按 **宿主无接口（DISP_E_UNKNOWNNAME） > 实例已取到但解析失败 >
+未取到实例** 的优先级给原因，并在行里落 `host_interface_absent` 字段 ——
+这样"手册有、宿主机没有"的条目是**机器可查**的，而不是一句"取不到"。
+
+### 回归
+
+全量回归 **1441 passed / 4 skipped / 0 failed**（570.61 s；R40 收口同口径 1431，
+增量 +10 = 本轮新模块 10）。首轮跑出 1 条红是 `test_r39_evidence.py::test_empty_tuple_stays`
+—— 它断言的正是 R41 推翻的旧口径（空 tuple 保持原样），已按新口径改写并注明原因。
+新增测试 1 个模块：`test_r41_evidence.py`（10）。
+
+### 证据
+
+`_p12u_gate/r41/name_verdicts.json`（4 工程运行 + `call_errors` + `mdl_probe`）、
+`schemas/dispatch_account.json`（9 条 NYI 的机制级原因 + `host_interface_absent`）。
+
+---
+
+## R42 —— 提案（≈1 人日）
+
+### 依据
+
+* 本轮证实 4 个创建/查询接口**宿主没有**，但它们仍留在目录里（消费者无从得知）；
+* 本仓代码里是否引用了这些不可用成员，**没有查过**；
+* 剩余 5 条（闭空间/材料/CoSim 区域）需要在**有 MDL/材料的工程**上跑完整流程，
+  属于"要么投入 GUI 自动化、要么承认做不到"的取舍。
+
+### 条目
+
+| # | 条目 | 做法 | 验收句 | 人日 |
+|---|---|---|---|---|
+| **R42-1** | **不可用成员入册** | 把 `call_errors` 里的 `DISP_E_UNKNOWNNAME` 结论写进目录（`host_absent`） | 目录可区分"手册有/宿主无"；契约门查一条 | 0.25 |
+| **R42-2** | **仓内引用自检** | 扫全仓是否调用了 `host_absent` 的成员 | 有结论（引用 0 或列出并修） | 0.25 |
+| **R42-3** | **剩余 5 条的取舍** | 明确写"需要 GUI 流程，不做"或投入 `--with-mdl` 的完整向导自动化 | 5 条有终态口径（不悬空） | 0.5 |
+
+### 明确不做
+
+* 不提取 Post / Solver / Monitor 类（非本仓域）；
+* 不为 `Set*` 写「自动挑取值」逻辑——取值选择是面板语义，不是目录语义。
+
+---
+
 ## R 轮次模板（后续轮次照此填写）
 
 ```

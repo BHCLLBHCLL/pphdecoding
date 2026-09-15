@@ -61,6 +61,14 @@ def latest_evidence() -> dict:
     return data
 
 
+def _short(cls: str) -> str:
+    return cls[4:] if cls.startswith("Cond") else cls
+
+
+def _norm(s: str) -> str:
+    return "".join(ch for ch in (s or "").lower() if ch.isalnum())
+
+
 def account(cat: dict | None = None, table: dict | None = None,
             evidence: dict | None = None) -> dict:
     cat = cat or json.loads(CATALOG.read_text(encoding="utf-8"))
@@ -84,6 +92,22 @@ def account(cat: dict | None = None, table: dict | None = None,
             continue
         info = cat["classes"].get(cls) or {}
         obtained = (ev.get("obtained_via") or {}).get(cls)
+        # 最强证据优先：宿主**没有这个接口**（DISP_E_UNKNOWNNAME）比"返回空"硬得多
+        calls = ev.get("call_errors") or {}
+        stem = _norm(_short(cls))
+        absent = sorted(n for n, err in calls.items()
+                        if stem and stem in _norm(n)
+                        and ("未知名称" in err or "UNKNOWNNAME" in err.upper()))
+        if absent:
+            rows.append({
+                **pair, "state": "nyi",
+                "reason": ("宿主无此接口：" + ", ".join(absent)
+                           + " → DISP_E_UNKNOWNNAME（手册未列、宿主也未实现）"),
+                "host_interface_absent": absent,
+                "recipe": info.get("instance") or "（手册未给实例配方）",
+                "evidence": ev.get("_path"),
+            })
+            continue
         if obtained:
             # 实例拿到了、名字仍解析不出来 → 是**探针侧**的限制（对象形态），
             # 不能说成"宿主不认"（R38/R39 两次假否证都出在这里）
