@@ -1,0 +1,394 @@
+{
+ "counts": {
+  "total": 41,
+  "verdict": 32,
+  "nyi": 9
+ },
+ "rows": [
+  {
+   "class": "ClosedVolume",
+   "heading": "SelectFace",
+   "signature": "SetSelectFaces",
+   "kind": "methods",
+   "state": "nyi",
+   "reason": "chain:doc.GetClosedVolumes -> 返回空（工程里没有该对象）",
+   "recipe": "Set coord_part = cvol.GetCoordinatesSpecifiedPartLinkedToMesh(id)",
+   "evidence": "_p12u_gate\\r39\\name_verdicts.json"
+  },
+  {
+   "class": "CondActranBoundaryNonReflection",
+   "heading": "SetInfiniteElementsAxis",
+   "signature": "GetInfiniteElementsAxis",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SetInfiniteElementsAxis",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "CondBladeShape",
+   "heading": "EditChordLength",
+   "signature": "EditChoordLength",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "EditChordLength",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "CondBoundaryFlowIO",
+   "heading": "GetEnvironmentParam",
+   "signature": "GetParam",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "GetEnvironmentParam",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "CondBoundaryFlowIO",
+   "heading": "GetPassiveScalarIndividualInflowType",
+   "signature": "GetMixedGasInflowType",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "GetPassiveScalarIndividualInflowType",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "CondBoussinesqBaseTemp",
+   "heading": "IsBuoyancyConsideredInCurrentSetting",
+   "signature": "GetConsiderBuoyancyFlag",
+   "kind": "methods",
+   "state": "nyi",
+   "reason": "chain:Create+QueryByName -> AttributeError: 'ScFlowpreConditions' object has no attribute 'CreateCondBoussinesqBaseTemp'",
+   "recipe": "Set boussinesqbasetemp = conds.QueryCondBoussinesqBaseTempByName(“name”)",
+   "evidence": "_p12u_gate\\r39\\name_verdicts.json"
+  },
+  {
+   "class": "CondCoSim",
+   "heading": "CreateCoSimRegionVolume",
+   "signature": "CreateCoSimRegionSurface",
+   "kind": "methods",
+   "state": "nyi",
+   "reason": "实例已取到（chain:conds.GetCondCoSim）但名字解析失败：该对象形态不支持 GetIDsOfNames（探针侧限制，非宿主否证）",
+   "recipe": "Set condcosim = conds.CreateCondCoSim(\"name\", apptype, interfacetype)",
+   "evidence": "_p12u_gate\\r39\\name_verdicts.json"
+  },
+  {
+   "class": "CondCoSimRegion",
+   "heading": "GetType",
+   "signature": "GetRegionType",
+   "kind": "methods",
+   "state": "nyi",
+   "reason": "chain:GetCoSimRegions()[0].GetOwner -> AttributeError: 'tuple' object has no attribute 'GetCoSimRegions'",
+   "recipe": "Set condcosim = cosim_region.GetOwner()",
+   "evidence": "_p12u_gate\\r39\\name_verdicts.json"
+  },
+  {
+   "class": "CondCoSimRegion",
+   "heading": "RemoveRegion",
+   "signature": "RemoveFromRegion",
+   "kind": "methods",
+   "state": "nyi",
+   "reason": "chain:GetCoSimRegions()[0].GetOwner -> AttributeError: 'tuple' object has no attribute 'GetCoSimRegions'",
+   "recipe": "Set condcosim = cosim_region.GetOwner()",
+   "evidence": "_p12u_gate\\r39\\name_verdicts.json"
+  },
+  {
+   "class": "CondInitialShapeModify",
+   "heading": "AddMorphingRegion",
+   "signature": "AddMorphingCalcFaceRegion",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "AddMorphingRegion",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "CondMapForStructure",
+   "heading": "SetPIDPartCorresp",
+   "signature": "SetLoadIDFaceRegionCorresp",
+   "kind": "methods",
+   "state": "nyi",
+   "reason": "CreateCondMapForStructure -> AttributeError: 'ScFlowpreConditions' object has no attribute 'CreateCondMapForStructure'",
+   "recipe": "Set value = condmapforstr.GetValue(valueKey)",
+   "evidence": "_p12u_gate\\r39\\name_verdicts.json"
+  },
+  {
+   "class": "CondOutputCSV",
+   "heading": "GetOutputTimingParam",
+   "signature": "GetOutputTimingType",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "GetOutputTimingParam",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "CondOutputLFileTurbo",
+   "heading": "ClearOutletBladeRegions",
+   "signature": "ClearOutletRegions",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "ClearOutletRegions",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "CondOutputTimeSeries",
+   "heading": "GetCSVOutputTimingParam",
+   "signature": "GetCSVOutputTimingType",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "GetCSVOutputTimingParam",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "Conditions",
+   "heading": "SetContactThicknessDefault",
+   "signature": "SetContactTicknessDefault",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SetContactThicknessDefault",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "Conditions",
+   "heading": "SetDiffusionOptionParam",
+   "signature": "SetMeshOptionParam",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SetDiffusionOptionParam",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "Doc",
+   "heading": "CreateDiscontinuousMeshingGroupWitouthMovingPart",
+   "signature": "CreateDiscontinuousMeshingGroupWithoutMovingPart",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "CreateDiscontinuousMeshingGroupWithoutMovingPart",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "Doc",
+   "heading": "GetSelectedSEdges",
+   "signature": "GetSelectedSFaces",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "GetSelectedSEdges",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "Doc",
+   "heading": "GetVPartInformation",
+   "signature": "GetSPartInformation",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "GetVPartInformation",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "Doc",
+   "heading": "ImprintEdgeToFace",
+   "signature": "ImprintEdgeToBody",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "ImprintEdgeToFace",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "Doc",
+   "heading": "OutputPartsList",
+   "signature": "OpenPropFile",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "OutputPartsList",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "Doc",
+   "heading": "SelectMeshFaceFromVFaces",
+   "signature": "SelectMeshFaceFromVFace",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SelectMeshFaceFromVFaces",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "Doc",
+   "heading": "SetMeshDisplaySid",
+   "signature": "SetMeshDisplaySide",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SetMeshDisplaySide",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "Doc",
+   "heading": "SetVMDLEdgeDisplayMode",
+   "signature": "SetMeshDisplaySide",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SetVMDLEdgeDisplayMode",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "Env",
+   "heading": "SetParallelMeshingFlag",
+   "signature": "GetParallelMeshingFlag",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SetParallelMeshingFlag",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "Env",
+   "heading": "SetZipLevel",
+   "signature": "GetZipLevel",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SetZipLevel",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "HybridParam",
+   "heading": "SetSimpleLayerNum",
+   "signature": "GetSimpleLayerNum",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SetSimpleLayerNum",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "HybridParam",
+   "heading": "SetSimpleOctRatio",
+   "signature": "GetSimpleOctRatio",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SetSimpleOctRatio",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "MDLWizard",
+   "heading": "MultiEntityCo_GetSNode",
+   "signature": "MultiEntityCo_SNode",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "MultiEntityCo_GetSNode",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "MDLWizard",
+   "heading": "SetValidAutoRemoveTinyFace",
+   "signature": "IsAutoRemoveTinyFaceValid",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SetValidAutoRemoveTinyFace",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "MapCond",
+   "heading": "SetParam2",
+   "signature": "SetParam",
+   "kind": "methods",
+   "state": "nyi",
+   "reason": "前置对象 CondMapForStructure 未取到 —— MapCond 只能由它的 GetValue(key) 产出",
+   "recipe": "Set value = mapcond.GetValue(valueKey)",
+   "evidence": "_p12u_gate\\r39\\name_verdicts.json"
+  },
+  {
+   "class": "MeshingGroup",
+   "heading": "DoesOctMeshCVolElementExist",
+   "signature": "DoesOctMeshCVollementExist",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "DoesOctMeshCVollementExist",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "MeshingGroup",
+   "heading": "SetSelectMeshFacesFromMDLFaces",
+   "signature": "SetSelectMeshFacesFromMDLFace",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SetSelectMeshFacesFromMDLFaces",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "MeshingGroup",
+   "heading": "ShowEachTypeMeshEelem",
+   "signature": "ShowEachTypeMeshEelemregion",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "ShowEachTypeMeshEelem",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "MeshingGroupSetting",
+   "heading": "SetMDLMethod",
+   "signature": "GetMDLMethod",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SetMDLMethod",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "OctParam",
+   "heading": "SetMinSize",
+   "signature": "SetMeshNum",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SetMinSize",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "Octree",
+   "heading": "GetMeshingGroup",
+   "signature": "GetMeshingGroupet",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "GetMeshingGroup",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "Octree",
+   "heading": "GetOctInfoConsideringMesherType",
+   "signature": "GetOctInfo",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "GetOctInfoConsideringMesherType",
+   "source": "verdict:GetIDsOfNames"
+  },
+  {
+   "class": "PropItem",
+   "heading": "GetRefpropTableParam",
+   "signature": "GetRefpropFluid",
+   "kind": "methods",
+   "state": "nyi",
+   "reason": "chain:MultiphaseHandling.GetPrimaryMaterial -> 返回空（工程里没有该对象）",
+   "recipe": "（手册未给实例配方）",
+   "evidence": "_p12u_gate\\r39\\name_verdicts.json"
+  },
+  {
+   "class": "PropItem",
+   "heading": "SetRefpropTableParam",
+   "signature": "SetRefpropFluid",
+   "kind": "methods",
+   "state": "nyi",
+   "reason": "chain:MultiphaseHandling.GetPrimaryMaterial -> 返回空（工程里没有该对象）",
+   "recipe": "（手册未给实例配方）",
+   "evidence": "_p12u_gate\\r39\\name_verdicts.json"
+  },
+  {
+   "class": "SpecialRegion",
+   "heading": "SetIsContactAngleSet",
+   "signature": "SetContactAngle",
+   "kind": "methods",
+   "state": "verdict",
+   "resolved": "SetIsContactAngleSet",
+   "source": "verdict:GetIDsOfNames"
+  }
+ ],
+ "verdict_tally": {
+  "both": 21,
+  "heading": 5,
+  "unknown": 1,
+  "signature": 4
+ },
+ "evidence": "_p12u_gate\\r39\\name_verdicts.json"
+}

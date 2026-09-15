@@ -1843,6 +1843,36 @@ Doc 14.1%，WrappingGroup/NumericalRegion/SubmeshSurfaceRegion 100%。
 
 `_apply_name_verdicts()` 在提取期写入 `dispatch_name`/`dispatch_source`（**32 条**）；
 `vbs_bridge.name_corrections()` 改为**先读目录**、裁定表回退 —— 只读目录的消费者也能纠名。
+
+---
+
+## 53. R39 更新（2026-09-15）—— 分歧总账 / 解析稳健化 / 契约门
+
+### 53.1 41 处分歧的总账：每条都有终态（R39-1）
+
+`tools/dispatch_account.py` 合成三份来源（目录 41 处分歧 + 类级 `instance` 配方、
+实机裁定表、驱动证据的 `chain_errors`）→ **41 = 32 裁定 + 9 NYI**，NYI 每条带
+**原因 + 配方**（例：`ClosedVolume.SelectFace`「`doc.GetClosedVolumes` 返回空：
+闭空间要经 MDL 建模流程产生」，配方 `cvol.GetCoordinatesSpecifiedPartLinkedToMesh(id)`）。
+口径：**"待办"不是终态**。
+
+### 53.2 假否证根治：递归拆包 + 形态诊断（R39-2）
+
+R38 只拆一层 tuple；`conds.GetCondCoSim()` **还套一层** → 仍抛 `AttributeError`。
+本轮 `_unwrap()` 递归拆到 4 层 + `unknown` 时记 `object_type`/`object_repr`。
+
+> ★ **口径**：实例拿到了、名字却解析不出来 → **探针侧限制**，**不得写成"宿主不认"**。
+> 总账该条即如此表述（"该对象形态不支持 GetIDsOfNames（探针侧限制，非宿主否证）"）。
+> R38/R39 两次假否证同根：**容器形态未拆净**。
+
+### 53.3 契约门：一条命令查完 R29–R39 的不变量（R39-3）
+
+`tools/api_contract_check.py` 六项全 PASS：目录（假参数 0 / 取值形状 0 / dispatch_name 32）、
+账本（18 键、缺口 ↔ 终态）、总账（41 = 32+9）、桥接（覆盖 0.996 / 未知包装 0）、
+语料（39 链接 0 缺口）、守卫三态（None/False/True）。
+
+> 本轮把原 R39-3「optional 标记提取」**换掉**：标注全库仅 14 文件 41 处且多在域外，
+> 收益极低；而散落的不变量缺一个统一入口 —— 换成契约门更值。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

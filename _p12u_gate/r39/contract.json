@@ -1,0 +1,46 @@
+{
+ "all_ok": true,
+ "checks": {
+  "catalog": {
+   "bogus_args": 0,
+   "non_identifier_values": [],
+   "non_identifier_count": 0,
+   "dispatch_names": 32,
+   "ok": true
+  },
+  "ledger": {
+   "keys": 18,
+   "gaps": [
+    "FACET.INTERSECTION_DETECTION_DEPTH"
+   ],
+   "gaps_without_status": [],
+   "gaps_without_terminal": [],
+   "ok": true
+  },
+  "account": {
+   "total": 41,
+   "verdict": 32,
+   "nyi": 9,
+   "nyi_without_reason": 0,
+   "ok": true
+  },
+  "bridge": {
+   "coverage": 0.996,
+   "wrapped": 1759,
+   "unknown_wrapped": [],
+   "ok": true
+  },
+  "corpus": {
+   "evidence": "corpus_diff_attr.json",
+   "links": 39,
+   "links_with_gap": [],
+   "ok": true
+  },
+  "guard": {
+   "none_state": null,
+   "invalid": false,
+   "valid": true,
+   "ok": true
+  }
+ }
+}

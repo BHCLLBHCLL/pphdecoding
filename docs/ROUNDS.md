@@ -2759,22 +2759,85 @@ Post/Kicker 类），拿 `len(args) != expected` 判会把 `OpenProject(path)` �
 
 ---
 
-## R39 —— 提案（≈1.5 人日）
+## R39 —— 分歧总账 + 解析稳健化 + 契约门（2026-09-15，✅ 已完成）
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R39-1** | **未裁定 9 条收口** | 41 条全有终态，不留"待办" | ✅ 总账 `schemas/dispatch_account.json`：**41 = 32 裁定 + 9 NYI**，NYI 每条带**原因 + 配方** |
+| **R39-2** | **`unknown` 稳解析** | 归零，或给出实证 | ✅ 递归拆包 + **对象形态诊断**；`CondCoSim` 那条实证为**探针侧限制**（实例已取到），总账如实标注 |
+| **R39-3** | ~~optional 标记~~ → **契约门** | 一条命令查完不变量 | ✅ `tools/api_contract_check.py` 六项全 PASS（目录/账本/总账/桥接/语料/守卫） |
+
+> 本轮把 R39-3 从「optional 标记提取」**换成「契约门」**：optional 标注全库只有
+> 14 个文件 41 处、且多在本仓域外的 Post/Kicker 类，提取收益极低；而 R29–R39
+> 散落了十几条不变量，缺一个"一条命令跑完"的入口。
+
+### R39-1 总账：41 处全有终态
+
+`tools/dispatch_account.py` 把三份来源合成一张表：目录（41 处分歧清单 + 类级
+`instance` 配方）、裁定表（实机 `GetIDsOfNames`）、最近一次驱动证据（`chain_errors`
+里的"为什么取不到"）。结果：
+
+* **32 条已裁定**（记宿主真正接受的名字）；
+* **9 条终态 NYI**，每条带原因与配方，例如
+  `ClosedVolume.SelectFace` → 「`doc.GetClosedVolumes` 返回空：闭空间要经 MDL 建模流程产生」，
+  配方 = `Set coord_part = cvol.GetCoordinatesSpecifiedPartLinkedToMesh(id)`；
+  `MapCond` → 「前置 `CondMapForStructure` 未取到 —— MapCond 只能由它的 `GetValue(key)` 产出」。
+
+### R39-2 假否证根治：递归拆包 + 形态诊断
+
+R38 只拆**一层** tuple；实测 `conds.GetCondCoSim()` 还套了一层 → 名字解析仍抛
+`AttributeError`。本轮 `_unwrap()` **递归拆到 4 层**，并在 `unknown` 判定时记录
+`object_type`/`object_repr`。
+
+**关键口径**：实例拿到了、名字却解析不出来 → 那是**探针侧限制**，
+**不得写成"宿主不认"**。总账里该条即据此表述（"该对象形态不支持 GetIDsOfNames
+（探针侧限制，非宿主否证）"）。这是 R38/R39 两次假否证的共同根因。
+
+### R39-3 契约门：一条命令查完
+
+`python tools/api_contract_check.py` 六项：
+
+| 检查 | 结果 |
+|---|---|
+| 目录：假参数 / 取值形状 / `dispatch_name` | PASS（0 / 0 / 32 条） |
+| 账本：18 条键、缺口 ↔ 终态一一对应 | PASS（1 缺口带终态） |
+| 总账：41 = 32 + 9，NYI 全带原因 | PASS |
+| 桥接：目录成员覆盖率、包装可追溯 | PASS（0.996，未知包装 0） |
+| 语料：名字同源链接无手册漏项 | PASS（39 链接，0 缺口） |
+| 取值守卫三态 | PASS（None / False / True 各就位） |
+
+### 回归
+
+全量回归 **1423 passed / 4 skipped / 0 failed**（554.62 s；R38 收口同口径 1414，
+增量 +9 = 本轮新模块 9，逐项对得上）。
+新增测试 1 个模块：`test_r39_evidence.py`（9）。
+
+### 证据
+
+`schemas/dispatch_account.json`（41 行总账）、`_p12u_gate/r39/name_verdicts.json`
+（驱动运行：31 裁定 + 形态诊断）、`_p12u_gate/r39/contract.json`（契约门输出）。
+
+---
+
+## R40 —— 提案（≈1.5 人日）
 
 ### 依据
 
-* R38-1 证明**换工程解决不了**剩余 9 条：对象只在 MDL/材料/映射流程之后才存在 →
-  要么走一遍那些流程，要么**把 9 条写成终态 NYI 清单**（避免无限追）；
-* `CondCoSim` 那条仍是 `unknown`（解析过程报错），解析方式还能更稳；
-* arity 现在"少不报"，而手册里确实有 41 处 optional 标记没被利用。
+* 总账里 9 条 NYI **配方已给但没走流程**——其中 `ClosedVolume` 最可控
+  （`mg.BeginMDLWizard` → `MDL.CreateClosedVolumeFromFaceRegion` 造一个即可）；
+* 契约门目前只在测试里被调用一次，**没进常规回归入口**（`run_all_tests.py`）；
+* 守卫（取值/名字/参数个数）散在 typed 桥与 VBS 生成器，**没有覆盖率盘点**：
+  本仓还有多少写路径（面板写 xenv、工具直写、`_p12*.py` 生成器）没被守到。
 
 ### 条目
 
 | # | 条目 | 做法 | 验收句 | 人日 |
 |---|---|---|---|---|
-| **R39-1** | **未裁定 9 条收口** | 二选一：走 MDL/材料流程造对象补裁定；或写成终态清单（含配方） | 41 条全有终态（已裁定 / NYI+配方），不再留"待办" | 0.5 |
-| **R39-2** | **`unknown` 那条的稳解析** | 对 `_oleobj_` 直接做 `GetIDsOfNames`（必要时先 `_FlagAsMethod`） | `unknown` 归零或给出"该对象不支持名字解析"的实证 | 0.5 |
-| **R39-3** | **optional 标记提取** | 从手册文本抓 41 处 optional，落成 `optional` 参数标记 | arity 在 strict 下也能判"少参数"，且不误报 | 0.5 |
+| **R40-1** | **走 MDL 流程补闭空间裁定** | 探针加 `--with-mdl`：`BeginMDLWizard` → `CreateClosedVolumeFromFaceRegion` → 裁定 `ClosedVolume` 那条 | 该条从 NYI 转裁定，或给出"造不出来"的确切原因 | 0.5 |
+| **R40-2** | **契约门进回归入口** | 把 `api_contract_check` 接进 `run_all_tests.py`（或作为 pytest 前置） | 回归跑完即知契约是否仍成立 | 0.25 |
+| **R40-3** | **守卫覆盖盘点** | 统计各类写路径（typed 桥 / VBS / 面板 / 工具）是否受守卫保护 | 有逐路径表；缺口进 R41 | 0.5 |
 
 ### 明确不做
 

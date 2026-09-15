@@ -53,16 +53,38 @@ def mismatches() -> list:
 
 
 def _resolve(obj, name: str) -> str:
-    """名字能否在该对象上解析（DISPID 命中 / UNKNOWNNAME / 其它错误）。"""
+    """名字能否在该对象上解析（DISPID 命中 / UNKNOWNNAME / 其它错误）。
+
+    R39-2：三条路依次试 —— `_oleobj_.GetIDsOfNames`（标准）→ 裸对象自带
+    `GetIDsOfNames`（少数包装）→ `pythoncom` 直接按 IID 取 IDispatch。
+    全部失败时把**对象类型**一并报出来（否则只能看到 AttributeError，无从判断）。
+    """
+    import pythoncom
+    target = getattr(obj, "_oleobj_", None)
+    if target is None:
+        target = obj if hasattr(obj, "GetIDsOfNames") else None
+    if target is not None:
+        try:
+            target.GetIDsOfNames(name)
+            return "resolved"
+        except Exception as exc:  # noqa: BLE001
+            low = str(exc).lower()
+            if "unknown" in low or "-2147352570" in low:
+                return "unknown_name"
+            if type(exc).__name__ != "AttributeError":
+                return "error:" + type(exc).__name__
     try:
-        import pythoncom
-        dispid = obj._oleobj_.GetIDsOfNames(name)
-        return "resolved" if dispid is not None else "resolved"
+        disp = pythoncom.ObjectFromLresult if False else None  # noqa: F841
+        ptr = getattr(obj, "_oleobj_", None)
+        if ptr is not None:
+            disp = ptr.QueryInterface(pythoncom.IID_IDispatch)
+            disp.GetIDsOfNames(name)
+            return "resolved"
     except Exception as exc:  # noqa: BLE001
         low = str(exc).lower()
         if "unknown" in low or "-2147352570" in low:
             return "unknown_name"
-        return "error:" + type(exc).__name__
+    return "error:AttributeError(" + type(obj).__name__ + ")"
 
 
 def _has_type_info(obj) -> str:
@@ -106,10 +128,24 @@ def _obtain(cls: str, conds, doc, mg):
     return None, None
 
 
+def _unwrap(obj, depth: int = 4):
+    """递归拆 tuple/数组（取首元素，最多 `depth` 层）。
+
+    win32com 对"多返回值"成员返回 tuple；实测 `conds.GetCondCoSim()` 还会**套一层**
+    —— 只拆一层仍拿到 tuple，于是名字解析抛 AttributeError，
+    被误判成"宿主不认"（R38/R39 两次踩到，都是假否证）。
+    """
+    while depth and isinstance(obj, (tuple, list)) and obj:
+        obj = obj[0]
+        depth -= 1
+    return obj
+
+
 def _first(obj):
     try:
         if hasattr(obj, "__getitem__") and len(obj):
-            return obj[0]
+            return _unwrap(obj[0]) if isinstance(obj[0], (tuple, list)) \
+                else obj[0]
     except Exception:  # noqa: BLE001
         pass
     return None
@@ -141,11 +177,6 @@ def _chains(doc, conds, mg, obtained: dict, inter: dict,
     _try("ClosedVolume", lambda: _first(doc.GetClosedVolumes(True)),
          "chain:doc.GetClosedVolumes(True)")
     # R38-1：闭空间其实是 **MDL** 侧的东西（doc.GetClosedVolumes 在只开工程时为空）
-    def _unwrap(obj):
-        if isinstance(obj, (tuple, list)) and obj:
-            return obj[0]
-        return obj
-
     def _mdl_cvol():
         mdl = mg.GetMDL()
         for getter, args in (("GetClosedVolumes", ()),
@@ -200,9 +231,7 @@ def _chains(doc, conds, mg, obtained: dict, inter: dict,
             _cosim = None
 
     def _cosim_region():
-        regions = _unwrap(_cosim.GetCoSimRegions())
-        reg = _first(regions if not isinstance(regions, (tuple, list))
-                     else regions)
+        reg = _first(_cosim.GetCoSimRegions())
         if reg is None:
             return None
         return _unwrap(reg.GetOwner())
@@ -295,10 +324,7 @@ def main(argv=None) -> int:
         tuple，直接拿去 `GetIDsOfNames` 会抛 AttributeError（'tuple' object has no
         attribute ...），于是把**能解析的名字误判成 neither** —— 假否证。
         """
-        obj = getattr(obj, "raw", obj)
-        if isinstance(obj, (tuple, list)) and obj:
-            obj = obj[0]
-        return obj
+        return _unwrap(getattr(obj, "raw", obj))
 
     doc = sess.doc                          # typed 包装：内部走 _FlagAsMethod
     wanted = sorted({p["class"] for p in pairs})
@@ -416,6 +442,10 @@ def main(argv=None) -> int:
                 v["verdict"] = "unknown"
             else:
                 v["verdict"] = "neither"
+            if v["verdict"] == "unknown":
+                # 诊断：把对象形态记下来（"tuple 未拆包"这类假否证就是靠它定位的）
+                v["object_type"] = type(obj).__name__
+                v["object_repr"] = repr(obj)[:80]
             result["verdicts"].append(v)
     if not args.keep_host:
         result["killed_hosts"] = host_boot.kill_all_hosts()
