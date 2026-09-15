@@ -2829,7 +2829,9 @@
       "name": "retval",
       "description": "True(successful), False(failed)"
      },
-     "signature_name": "GetInfiniteElementsAxis"
+     "signature_name": "GetInfiniteElementsAxis",
+     "dispatch_name": "SetInfiniteElementsAxis",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "SetInfiniteElementsOrigin": {
      "signature": "retval=actranboundnrbc.SetInfiniteElementsOrigin(origin)",
@@ -3745,7 +3747,9 @@
       "name": "retval",
       "description": "True(successful), False(failed)"
      },
-     "signature_name": "EditChoordLength"
+     "signature_name": "EditChoordLength",
+     "dispatch_name": "EditChordLength",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "EditCrossSectionPos": {
      "signature": "retval=classname.EditCrossSectionPos(index, val)",
@@ -4849,7 +4853,9 @@
       "name": "retval",
       "description": "True (successful), False (failed)"
      },
-     "signature_name": "GetParam"
+     "signature_name": "GetParam",
+     "dispatch_name": "GetEnvironmentParam",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "GetFlowIOType": {
      "signature": "retval=boundaryflowio.GetFlowIOType()",
@@ -5150,7 +5156,9 @@
        }
       ]
      },
-     "signature_name": "GetMixedGasInflowType"
+     "signature_name": "GetMixedGasInflowType",
+     "dispatch_name": "GetPassiveScalarIndividualInflowType",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "GetPassiveScalarInflowType": {
      "signature": "retval=boundflowio.GetPassiveScalarInflowType ()",
@@ -14178,7 +14186,9 @@
       "name": "retval",
       "description": "True (successful), False (failed)"
      },
-     "signature_name": "AddMorphingCalcFaceRegion"
+     "signature_name": "AddMorphingCalcFaceRegion",
+     "dispatch_name": "AddMorphingRegion",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "ClearMorphingRegion": {
      "signature": "retval=initial_shape_modify.ClearMorphingRegion()",
@@ -18845,7 +18855,9 @@
       "description": "True (successful), False (failed)"
      },
      "note": "Available keywords and the values to be obtained are as follows:",
-     "signature_name": "GetOutputTimingType"
+     "signature_name": "GetOutputTimingType",
+     "dispatch_name": "GetOutputTimingParam",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "GetOutputTimingType": {
      "signature": "retval=outputcsv.GetOutputTimingType",
@@ -23422,7 +23434,9 @@
       "name": "retval",
       "description": "True (successful), False (failed)"
      },
-     "signature_name": "ClearOutletRegions"
+     "signature_name": "ClearOutletRegions",
+     "dispatch_name": "ClearOutletRegions",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "GetBladeRegions": {
      "signature": "array=outputlfileturbo.GetBladeRegions()",
@@ -25471,7 +25485,9 @@
     },
     "GetCSVOutputTimingParam": {
      "signature": "retval=outputtimeseries.GetCSVOutputTimingType(key,val)",
-     "signature_name": "GetCSVOutputTimingType"
+     "signature_name": "GetCSVOutputTimingType",
+     "dispatch_name": "GetCSVOutputTimingParam",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "GetCSVOutputTimingType": {
      "signature": "retval = outputtimeseries.GetCSVOutputTimingType",
@@ -45247,7 +45263,9 @@
       "description": ""
      },
      "note": "Refer to GetContactThicknessDefault for contact types.",
-     "signature_name": "SetContactTicknessDefault"
+     "signature_name": "SetContactTicknessDefault",
+     "dispatch_name": "SetContactThicknessDefault",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "SetCoSimMoveParam": {
      "signature": "retval=conditions.SetCoSimMoveParam(key, val)"
@@ -45433,7 +45451,9 @@
       "name": "retval",
       "description": "True (successful), False (failed)"
      },
-     "signature_name": "SetMeshOptionParam"
+     "signature_name": "SetMeshOptionParam",
+     "dispatch_name": "SetDiffusionOptionParam",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "SetDiscontinuousOption": {
      "signature": "retval=conditions.SetDiscontinuousOption(key, value)"
@@ -50357,7 +50377,9 @@
       "name": "meshgroup",
       "description": "MeshingGroup class"
      },
-     "signature_name": "CreateDiscontinuousMeshingGroupWithoutMovingPart"
+     "signature_name": "CreateDiscontinuousMeshingGroupWithoutMovingPart",
+     "dispatch_name": "CreateDiscontinuousMeshingGroupWithoutMovingPart",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "CreateFaceRegion": {
      "signature": "Set face_region=doc.CreateFaceRegion(name)",
@@ -52787,7 +52809,9 @@
       "name": "retval",
       "description": "List of selected edges (ISEdge array)"
      },
-     "signature_name": "GetSelectedSFaces"
+     "signature_name": "GetSelectedSFaces",
+     "dispatch_name": "GetSelectedSEdges",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "GetSelectedSFaces": {
      "signature": "retval=doc.GetSelectedSFaces(bTargetVisible, bExcludePartForSubmesh)",
@@ -53450,7 +53474,9 @@
       "name": "retv",
       "description": "Information (string)"
      },
-     "signature_name": "GetSPartInformation"
+     "signature_name": "GetSPartInformation",
+     "dispatch_name": "GetVPartInformation",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "GetVParts": {
      "signature": "retval=doc.GetVParts",
@@ -54072,7 +54098,9 @@
       "name": "retval",
       "description": "True (successful), False (failed)"
      },
-     "signature_name": "ImprintEdgeToBody"
+     "signature_name": "ImprintEdgeToBody",
+     "dispatch_name": "ImprintEdgeToFace",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "InterruptWorker": {
      "signature": "retval=doc.InterruptWorker",
@@ -54825,7 +54853,9 @@
       "name": "retval",
       "description": "True (successful), False (failed)"
      },
-     "signature_name": "OpenPropFile"
+     "signature_name": "OpenPropFile",
+     "dispatch_name": "OutputPartsList",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "PreviewMDLFaceRegion": {
      "signature": "doc.PreviewMDLFaceRegion regions",
@@ -56159,7 +56189,9 @@
       "name": "None",
       "description": ""
      },
-     "signature_name": "SelectMeshFaceFromVFace"
+     "signature_name": "SelectMeshFaceFromVFace",
+     "dispatch_name": "SelectMeshFaceFromVFaces",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "SelectPatterns": {
      "signature": "retval=doc.SelectPatterns(patterns, patternbodies)",
@@ -56276,7 +56308,9 @@
       "name": "None",
       "description": ""
      },
-     "signature_name": "SetMeshDisplaySide"
+     "signature_name": "SetMeshDisplaySide",
+     "dispatch_name": "SetMeshDisplaySide",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "SetModeMesh": {
      "signature": "retval=doc.SetModeMesh",
@@ -57155,7 +57189,9 @@
       "name": "retval",
       "description": "True(successful), False(failed)"
      },
-     "signature_name": "SetMeshDisplaySide"
+     "signature_name": "SetMeshDisplaySide",
+     "dispatch_name": "SetVMDLEdgeDisplayMode",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "SetWorkDir": {
      "signature": "doc.SetWorkDir folder",
@@ -59857,7 +59893,9 @@
       "name": "None",
       "description": ""
      },
-     "signature_name": "GetParallelMeshingFlag"
+     "signature_name": "GetParallelMeshingFlag",
+     "dispatch_name": "SetParallelMeshingFlag",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "SetPartSelectionMode": {
      "signature": "env.SetPartSelectionMode mode",
@@ -60298,7 +60336,9 @@
       "name": "retval",
       "description": "True(successful), False(failed)"
      },
-     "signature_name": "GetZipLevel"
+     "signature_name": "GetZipLevel",
+     "dispatch_name": "SetZipLevel",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "ShowNaviBuildModel": {
      "signature": "env.ShowNaviBuildModel flag",
@@ -64138,7 +64178,9 @@
       "name": "None",
       "description": ""
      },
-     "signature_name": "GetSimpleLayerNum"
+     "signature_name": "GetSimpleLayerNum",
+     "dispatch_name": "SetSimpleLayerNum",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "SetSimpleOctRatio": {
      "signature": "hybridparam.GetSimpleOctRatio(ratio)",
@@ -64155,7 +64197,9 @@
       "name": "None",
       "description": ""
      },
-     "signature_name": "GetSimpleOctRatio"
+     "signature_name": "GetSimpleOctRatio",
+     "dispatch_name": "SetSimpleOctRatio",
+     "dispatch_source": "verdict:GetIDsOfNames"
     }
    }
   },
@@ -66676,7 +66720,9 @@
       "name": "snode",
       "description": "SNode class"
      },
-     "signature_name": "MultiEntityCo_SNode"
+     "signature_name": "MultiEntityCo_SNode",
+     "dispatch_name": "MultiEntityCo_GetSNode",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "ReconfigureAutoRemoveTinyFace": {
      "signature": "mdlwizard.ReconfigureAutoRemoveTinyFace",
@@ -66942,7 +66988,9 @@
       "name": "retval",
       "description": "True (successful), False (failed)"
      },
-     "signature_name": "IsAutoRemoveTinyFaceValid"
+     "signature_name": "IsAutoRemoveTinyFaceValid",
+     "dispatch_name": "SetValidAutoRemoveTinyFace",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "TinyFace_GetCenters": {
      "signature": "retval=mdlwizard.TinyFace_GetCenters(index)",
@@ -67911,7 +67959,9 @@
       "name": "retval",
       "description": "True (Exist), False (Does not exist)"
      },
-     "signature_name": "DoesOctMeshCVollementExist"
+     "signature_name": "DoesOctMeshCVollementExist",
+     "dispatch_name": "DoesOctMeshCVollementExist",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "DoesOctMeshSNodeElementExist": {
      "signature": "retval=meshgroup.DoesOctMeshSNodeElementExist(name)",
@@ -70180,7 +70230,9 @@
       "name": "None",
       "description": ""
      },
-     "signature_name": "SetSelectMeshFacesFromMDLFace"
+     "signature_name": "SetSelectMeshFacesFromMDLFace",
+     "dispatch_name": "SetSelectMeshFacesFromMDLFaces",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "SetVisible": {
      "signature": "retval=meshgroup.SetVisible(flag)",
@@ -70271,7 +70323,9 @@
       "name": "None",
       "description": ""
      },
-     "signature_name": "ShowEachTypeMeshEelemregion"
+     "signature_name": "ShowEachTypeMeshEelemregion",
+     "dispatch_name": "ShowEachTypeMeshEelem",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "ShowMarkedMesh": {
      "signature": "meshgroup.ShowMarkedMesh",
@@ -71738,7 +71792,9 @@
       "name": "None",
       "description": ""
      },
-     "signature_name": "GetMDLMethod"
+     "signature_name": "GetMDLMethod",
+     "dispatch_name": "SetMDLMethod",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "SetOctLengthParamItr": {
      "signature": "retval=meshset.SetOctLengthParamItr(itr)",
@@ -73286,7 +73342,9 @@
       "name": "None",
       "description": ""
      },
-     "signature_name": "SetMeshNum"
+     "signature_name": "SetMeshNum",
+     "dispatch_name": "SetMinSize",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "SetOctType": {
      "signature": "octparam.SetOctType(type)",
@@ -73383,7 +73441,9 @@
       "name": "meshing_group",
       "description": "MeshingGroup class"
      },
-     "signature_name": "GetMeshingGroupet"
+     "signature_name": "GetMeshingGroupet",
+     "dispatch_name": "GetMeshingGroup",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "GetOctantCountByGroup": {
      "signature": "retval=octree.GetOctantCountByGroup(group)",
@@ -73444,7 +73504,9 @@
       "description": "0(Tetra mesher), 1(Polyhedral mesher), 2(Voxel Fitting mesher)"
      },
      "note": "The number of displayed octant and node number predicted from displayed octant are valid only when the mdl has been imported.",
-     "signature_name": "GetOctInfo"
+     "signature_name": "GetOctInfo",
+     "dispatch_name": "GetOctInfoConsideringMesherType",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "GetOctLevelSize": {
      "signature": "size_list=octree.GetOctLevelSize",
@@ -80789,7 +80851,9 @@
       "name": "retval",
       "description": "True (successful), False (failed)"
      },
-     "signature_name": "SetContactAngle"
+     "signature_name": "SetContactAngle",
+     "dispatch_name": "SetIsContactAngleSet",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "SetIsDynamicContactAngleSet": {
      "signature": "retval=specialregion.SetIsDynamicContactAngleSet(value)",

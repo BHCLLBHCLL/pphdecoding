@@ -1816,6 +1816,33 @@ Doc 14.1%，WrappingGroup/NumericalRegion/SubmeshSurfaceRegion 100%。
 `signature_arity()`：`(path, flag)`→2、`SetX flag`→1、`GetParam(key value)`→2、
 `GetMesher()`→0、无签名→None。默认**只告警**（手册有可选参数，硬拦会误杀），
 `strict_values=True` 才在派发前抛。
+
+---
+
+## 52. R38 更新（2026-09-15）—— 多工程裁定 / arity 口径 / 裁定名入目录
+
+### 52.1 多工程单会话：换工程没换到对象，但换出两个真问题（R38-1）
+
+`--project` 可重复 → 一个会话里轮换 `exA26-1_ldc`（CoSim）、`exB01-1_intake_manifold`
+（闭空间标记最多）等，已取到的类不重复取。结果合并覆盖仍 **32/41**、未裁定仍 9 条
+（6 个类）——**换工程解决不了**：这些对象在"只打开工程"的状态下不存在。
+
+> ★ **第五次同族事故（假否证）**：`conds.GetCondCoSim()`/`GetCoSimRegions()` 返回
+> **tuple**，未拆包就送 `GetIDsOfNames` → `AttributeError` → 探针把**能解析的名字判成
+> `neither`**。修法两条：① `_raw` 拆 tuple/数组；② **口径分清** —— 解析过程报错记
+> `unknown`（探针侧问题），只有"确实查无此名"才是 `neither`（宿主事实）。
+> 另加**兜底原因**：没实例又没链式错误的类补「各工程 Get*/Create*/Query* 都未产出实例」，
+> 未裁定不许静默。
+
+### 52.2 arity 口径：多则报、少不报（R38-2）
+
+依据：手册 optional 标注**极稀疏**（全库 14 文件 41 处，多在本仓域外的 Post/Kicker）。
+故 `len(args) > expected` 才报；少传交给宿主判。
+
+### 52.3 裁定名入目录（R38-3）
+
+`_apply_name_verdicts()` 在提取期写入 `dispatch_name`/`dispatch_source`（**32 条**）；
+`vbs_bridge.name_corrections()` 改为**先读目录**、裁定表回退 —— 只读目录的消费者也能纠名。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

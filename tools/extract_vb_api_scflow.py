@@ -379,6 +379,35 @@ _VALUE_ADDENDA: dict = {
 }
 
 
+#: 名字实机裁定表（R35/R36 由 tools/dispatch_name_probe.py 产出）
+NAME_VERDICTS = ROOT / "schemas" / "name_verdicts.json"
+
+
+def _apply_name_verdicts(catalog: dict) -> int:
+    """把实机裁定的**派发名**灌进目录（R38-3）。
+
+    裁定表里 `resolved` 给出"宿主真正接受的名字"（目录键 / 签名名之一）。
+    灌进条目后，**只读目录**的消费者（代码生成、VBS 校验、将来的工具）就能拿到纠名，
+    不必再单独读表。文件不存在时跳过（不阻断提取）。
+    """
+    import json as _json
+    try:
+        table = _json.loads(NAME_VERDICTS.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return 0
+    n = 0
+    for cls, members in (table.get("resolved") or {}).items():
+        info = catalog["classes"].get(cls) or {}
+        for heading, resolved in members.items():
+            entry = (info.get("methods") or {}).get(heading)
+            if entry is None:
+                continue
+            entry["dispatch_name"] = resolved
+            entry["dispatch_source"] = "verdict:GetIDsOfNames"
+            n += 1
+    return n
+
+
 def _apply_value_evidence(catalog: dict) -> dict:
     """笔误修正 + 语料补充（R33-1）。返回统计，供 CLI 打印。"""
     fixed = added = 0
@@ -552,10 +581,12 @@ def main(argv: list[str] | None = None) -> int:
                   f"props={len(info.get('properties', {})):3d}  {path.name}")
 
     ev = _apply_value_evidence(catalog)
+    ev["dispatch_names"] = _apply_name_verdicts(catalog)
 
     if args.list:
         print(f"== {len(files)} classes, {total} members "
-              f"(笔误修正 {ev['fixed']}、语料补充 {ev['added']})")
+              f"(笔误修正 {ev['fixed']}、语料补充 {ev['added']}、"
+              f"派发名 {ev['dispatch_names']})")
         return 0
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -565,7 +596,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"wrote {OUT}")
     print(f"classes={len(catalog['classes'])} "
           f"(Cond*={n_cond}) members={total} "
-          f"fixes={ev['fixed']} addenda={ev['added']}")
+          f"fixes={ev['fixed']} addenda={ev['added']} "
+          f"dispatch_names={ev['dispatch_names']}")
     return 0
 
 

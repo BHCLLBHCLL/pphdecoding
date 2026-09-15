@@ -157,11 +157,14 @@ class ComObject:
         entry = _member_entry(cls, name)
         if not entry:
             return
-        # 参数**个数**（R37-3）：手册签名给了期望值，不符就点名（默认只告警）
+        # 参数**个数**（R37-3，R38-2 收紧口径）：**多则报、少不报**。
+        # 手册对"可选参数"的标注极稀疏（全库仅 14 个文件 41 处，且多在 Post/Kicker），
+        # 拿 `len(args) != expected` 判会把 `OpenProject(path)` 这类
+        # "省略可选尾参"的正常调用报成错 —— 少参数交给宿主判，多参数一定是错。
         expected = signature_arity(entry.get("signature"))
-        if expected is not None and len(args) != expected:
+        if expected is not None and len(args) > expected:
             msg = (cls + "." + name + " 参数个数 " + str(len(args))
-                   + " ≠ 手册签名 " + str(expected) + "（"
+                   + " > 手册签名 " + str(expected) + "（"
                    + str(entry.get("signature")) + "）")
             if self.strict_values:
                 raise ApiValueError(msg)
@@ -1723,7 +1726,8 @@ def materialize_catalog_wrappers() -> int:
             # 实测 20 对里 4 对**只有标题名**能解析（如
             # Conditions.SetContactThicknessDefault vs SetContactTicknessDefault），
             # 所以不能一律用签名名。
-            dispatch = ((verdicts.get(cls_name) or {}).get(member)
+            dispatch = (entry.get("dispatch_name")
+                        or (verdicts.get(cls_name) or {}).get(member)
                         or entry.get("signature_name") or member)
             doc = ("目录物化包装（R35-3）：派发 " + dispatch
                    + "；签名 " + str(entry.get("signature") or "-"))

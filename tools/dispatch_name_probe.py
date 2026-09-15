@@ -140,6 +140,48 @@ def _chains(doc, conds, mg, obtained: dict, inter: dict,
          "chain:doc.GetClosedVolumes")
     _try("ClosedVolume", lambda: _first(doc.GetClosedVolumes(True)),
          "chain:doc.GetClosedVolumes(True)")
+    # R38-1：闭空间其实是 **MDL** 侧的东西（doc.GetClosedVolumes 在只开工程时为空）
+    def _unwrap(obj):
+        if isinstance(obj, (tuple, list)) and obj:
+            return obj[0]
+        return obj
+
+    def _mdl_cvol():
+        mdl = mg.GetMDL()
+        for getter, args in (("GetClosedVolumes", ()),
+                             ("QueryClosedVolumeByIndex", (0,)),
+                             ("GetStoredClosedVolumes", (False,))):
+            try:
+                res = (getattr(mdl, getter)(*args) if args
+                       else getattr(mdl, getter)())
+            except Exception:  # noqa: BLE001
+                continue
+            first = _first(res) if args == () else res
+            if first is not None:
+                return first
+        return None
+
+    _try("ClosedVolume", _mdl_cvol, "chain:mg.GetMDL().GetClosedVolumes")
+    # R38-1：PropItem 也可以从多相条件的材料项拿
+    def _propitem_cond():
+        for maker, getter in (("GetCondMultiphaseHandling", "GetPrimaryMaterial"),
+                              ("CreateCondMultiphaseHandling",
+                               "GetPrimaryMaterial"),
+                              ("GetCondMultiphaseMaterial", "GetPhaseMaterial")):
+            try:
+                cond = getattr(conds, maker)("R38mh")
+            except Exception:  # noqa: BLE001
+                continue
+            try:
+                obj = getattr(cond, getter)()
+            except Exception:  # noqa: BLE001
+                continue
+            if obj is not None:
+                return obj
+        return None
+
+    _try("PropItem", _propitem_cond,
+         "chain:MultiphaseHandling.GetPrimaryMaterial")
     _try("SpecialRegion", lambda: _first(doc.GetSpecialRegions()),
          "chain:doc.GetSpecialRegions")
     # CondCoSim 需要 (name, apptype, interfacetype) 三个参数
@@ -147,11 +189,23 @@ def _chains(doc, conds, mg, obtained: dict, inter: dict,
          "chain:conds.CreateCondCoSim(name,0,0)")
     # CondCoSimRegion：从 CoSim 条件拿区域，再 GetOwner()
     _cosim = out.get("CondCoSim")
+    if _cosim is None:
+        # R38-1：工程里可能已有 CoSim 条件（ldc 类算例），直接用现成的
+        try:
+            _cosim = _unwrap(conds.GetCondCoSim())
+            if _cosim is not None:
+                out["CondCoSim"] = _cosim
+                obtained["CondCoSim"] = "chain:conds.GetCondCoSim"
+        except Exception:  # noqa: BLE001
+            _cosim = None
 
     def _cosim_region():
-        regions = _cosim.GetCoSimRegions()
-        reg = _first(regions)
-        return reg.GetOwner() if reg is not None else None
+        regions = _unwrap(_cosim.GetCoSimRegions())
+        reg = _first(regions if not isinstance(regions, (tuple, list))
+                     else regions)
+        if reg is None:
+            return None
+        return _unwrap(reg.GetOwner())
 
     if _cosim is not None:
         _try("CondCoSimRegion", _cosim_region, "chain:GetCoSimRegions()[0].GetOwner")
@@ -206,11 +260,15 @@ def _chains(doc, conds, mg, obtained: dict, inter: dict,
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="标题名 vs 签名名 实机裁定")
     ap.add_argument("--json", type=Path, default=None)
+    ap.add_argument("--project", type=Path, action="append", default=None,
+                    help="用哪个工程建实例，可重复（R38-1：不同工程提供不同对象）")
     ap.add_argument("--keep-host", action="store_true")
     args = ap.parse_args(argv)
     pairs = mismatches()
+    projects = args.project or [BOX]
     result = {"pairs": len(pairs), "targets": TARGETS, "verdicts": [],
-              "object_probe": {}, "pairs_unreachable": []}
+              "object_probe": {}, "pairs_unreachable": [],
+              "projects": [str(p) for p in projects]}
     import automation.host_boot as host_boot
     from automation import scflowpre_api as api
     t0 = time.time()
@@ -220,6 +278,7 @@ def main(argv=None) -> int:
     # 走仓内桥的附着逻辑：ROT 附着失败会自动回退 Dispatch（实测裸
     # GetActiveObject 会 MK_E_UNAVAILABLE = -2147221021）
     sess = api.ScFlowpreSession()
+    verdicts_by_class: dict = {}
     ok = False
     for _ in range(6):
         if sess.connect():
@@ -230,80 +289,102 @@ def main(argv=None) -> int:
         result["context_error"] = "session.connect 失败: " + str(api.last_error)
         print("[r35-1] " + str(result["context_error"]))
     def _raw(obj):
-        return getattr(obj, "raw", obj)
+        """拆 typed 包装 + **拆 tuple/数组**。
 
-    try:
-        doc = sess.doc                      # typed 包装：内部走 _FlagAsMethod 派发
-        if doc is None:
-            raise RuntimeError("no document")
-        ctx["Doc"] = _raw(doc)
-        # 顺序要紧：未打开工程时 GetConditions 抛 DISP_E_MEMBERNOTFOUND
-        # （实测 -2147352573「找不到成员」），会把后面的实例全挡掉。
-        # 另：**不要用裸 CDispatch 链式调用** —— win32com 会把未 flag 的方法
-        # 当属性读，实测 QueryMeshingGroupByIndex(0) 抛
-        # "TypeError: 'bool' object is not callable"（R35-1 第二次踩）。
-        doc.OpenProject(str(BOX))          # typed 包装只收 path（flag 缺省 False）
-        doc.WaitForWorker()
-        conds_typed = doc.GetConditions()      # typed：实例构建要走它的 call()
-        ctx["Conditions"] = _raw(conds_typed)
-        # 这些"中间对象"给链式实例用（CondMapForStructure → MapCond 等）
-        via = result.setdefault("obtained_via", {})
-        inter: dict = {}          # COM 对象另放：evidence 必须可 JSON 序列化
+        实测（R38-1）：`conds.GetCondCoSim()` / `GetCoSimRegions()` 这类返回的是
+        tuple，直接拿去 `GetIDsOfNames` 会抛 AttributeError（'tuple' object has no
+        attribute ...），于是把**能解析的名字误判成 neither** —— 假否证。
+        """
+        obj = getattr(obj, "raw", obj)
+        if isinstance(obj, (tuple, list)) and obj:
+            obj = obj[0]
+        return obj
+
+    doc = sess.doc                          # typed 包装：内部走 _FlagAsMethod
+    wanted = sorted({p["class"] for p in pairs})
+    via = result.setdefault("obtained_via", {})
+    errors = result.setdefault("chain_errors", {})
+    # R38-1：**一个会话里轮换多个工程** —— 不同工程提供不同对象（闭空间/材料/CoSim），
+    # 已取到的类不再重复取（ctx 只增不减），未取到的继续在下一个工程里试。
+    for proj in projects:
         try:
-            inter["cmap"] = conds_typed.CreateCondMapForStructure("R37map")
-            via["CondMapForStructure"] = "CreateCondMapForStructure"
-        except Exception as exc:  # noqa: BLE001
-            result.setdefault("chain_errors", {})[
-                "CondMapForStructure"] = ("CreateCondMapForStructure -> "
-                                          + type(exc).__name__ + ": "
-                                          + str(exc))
-        try:
-            inter["condinitial"] = conds_typed.CreateCondInitial("R37init")
-        except Exception:  # noqa: BLE001
-            pass
-        mg = doc.QueryMeshingGroupByIndex(0)
-        ctx["MeshingGroup"] = _raw(mg)
-        ctx["MeshingGroupSetting"] = _raw(mg.GetMeshingGroupSetting())
-        ctx["Octree"] = _raw(mg.GetOctree())
-        for name, getter in (("OctParam", "GetOctParam"),
-                             ("Env", "GetEnv"),
-                             ("HybridParam", "GetPresetHybridParam")):
+            if doc is None:
+                raise RuntimeError("no document")
+            if "Doc" not in ctx:
+                ctx["Doc"] = _raw(doc)
+            # 顺序要紧：未打开工程时 GetConditions 抛 DISP_E_MEMBERNOTFOUND
+            # （实测 -2147352573「找不到成员」），会把后面的实例全挡掉。
+            # 另：**不要用裸 CDispatch 链式调用** —— win32com 会把未 flag 的方法
+            # 当属性读（实测 QueryMeshingGroupByIndex(0) 抛 TypeError）。
+            doc.OpenProject(str(proj))
+            doc.WaitForWorker()
+            print("[r38] 打开工程 " + Path(proj).name, flush=True)
+            conds_typed = doc.GetConditions()   # typed：实例构建要走它的 call()
+            ctx.setdefault("Conditions", _raw(conds_typed))
+            inter: dict = {}   # COM 对象另放：evidence 必须可 JSON 序列化
             try:
-                ctx[name] = _raw(getattr(doc, getter)())
+                inter["cmap"] = conds_typed.CreateCondMapForStructure("R38map")
+                via["CondMapForStructure"] = "CreateCondMapForStructure"
+            except Exception as exc:  # noqa: BLE001
+                errors["CondMapForStructure"] = (
+                    "CreateCondMapForStructure -> " + type(exc).__name__
+                    + ": " + str(exc))
+            try:
+                inter["condinitial"] = conds_typed.CreateCondInitial("R38init")
             except Exception:  # noqa: BLE001
                 pass
-        try:
-            mg.BeginMDLWizard()
-            ctx["MDLWizard"] = _raw(mg.GetMDLWizard())
-        except Exception:  # noqa: BLE001
-            pass
-    except Exception as exc:  # noqa: BLE001
-        result["context_error"] = type(exc).__name__ + ": " + str(exc)
-        print("[r35-1] 取实例失败: " + str(result["context_error"]))
+            mg = doc.QueryMeshingGroupByIndex(0)
+            ctx.setdefault("MeshingGroup", _raw(mg))
+            ctx.setdefault("MeshingGroupSetting",
+                           _raw(mg.GetMeshingGroupSetting()))
+            try:
+                ctx.setdefault("Octree", _raw(mg.GetOctree()))
+            except Exception:  # noqa: BLE001
+                pass
+            for name, getter in (("OctParam", "GetOctParam"),
+                                 ("Env", "GetEnv"),
+                                 ("HybridParam", "GetPresetHybridParam")):
+                if name in ctx:
+                    continue
+                try:
+                    ctx[name] = _raw(getattr(doc, getter)())
+                except Exception:  # noqa: BLE001
+                    pass
+            if "MDLWizard" not in ctx:
+                try:
+                    mg.BeginMDLWizard()
+                    ctx["MDLWizard"] = _raw(mg.GetMDLWizard())
+                except Exception:  # noqa: BLE001
+                    pass
+            # R37-1：链式实例（数组型 getter / 多参数 Create / 二级 GetOwner）
+            for cls, obj in _chains(doc, conds_typed, mg, via, inter,
+                                    errors).items():
+                if cls not in ctx:
+                    ctx[cls] = _raw(obj)
+                    print("   + " + cls + " <- chain", flush=True)
+            # R36-1：名字家族试取（typed host：裸 CDispatch 会静默全失败）
+            for cls in wanted:
+                if ctx.get(cls) is not None:
+                    continue
+                obj, how = _obtain(cls, conds_typed, doc, mg)
+                if obj is not None:
+                    ctx[cls] = _raw(obj)      # 必须走 _raw：它会拆 tuple（R38-1）
+                    via[cls] = how
+                    print("   + " + cls + " <- " + str(how), flush=True)
+            if all(ctx.get(c) is not None for c in wanted):
+                break                      # 全拿到就不必再开工程
+        except Exception as exc:  # noqa: BLE001
+            result.setdefault("context_errors", []).append(
+                Path(proj).name + ": " + type(exc).__name__ + ": " + str(exc))
+            print("[r38] 工程 " + Path(proj).name + " 取实例失败: "
+                  + type(exc).__name__ + ": " + str(exc), flush=True)
+    # 没拿到实例、也没留下链式错误的类，补一条**兜底原因**（不许静默）
+    for cls in wanted:
+        if ctx.get(cls) is None:
+            errors.setdefault(
+                cls, "各工程的 Get*/Create*/Query* 都未产出实例（见 object_probe）")
     for name, obj in ctx.items():
         result["object_probe"][name] = _has_type_info(obj)
-        print("   " + name + " GetTypeInfo: " + result["object_probe"][name],
-              flush=True)
-    # R37-1：链式实例（数组型 getter / 需要多参数的 Create / 二级 GetOwner）
-    for cls, obj in _chains(doc, conds_typed, mg,
-                            result.setdefault("obtained_via", {}),
-                            inter,
-                            result.setdefault("chain_errors", {})).items():
-        ctx[cls] = _raw(obj)
-        print("   + " + cls + " <- chain", flush=True)
-
-    # R36-1：把上一轮「无实例」的类补上（尽力而为，取不到如实记录）
-    wanted = sorted({p["class"] for p in pairs})
-    for cls in wanted:
-        if ctx.get(cls) is not None:
-            continue
-        # 注意：host 必须传 **typed** 包装 —— 裸 CDispatch 的 getattr 会被
-        # win32com 当属性读（R36-1 第三次踩同一个坑），实例构建全部静默失败。
-        obj, how = _obtain(cls, conds_typed, doc, mg)
-        if obj is not None:
-            ctx[cls] = getattr(obj, "raw", obj)
-            result.setdefault("obtained_via", {})[cls] = how
-            print("   + " + cls + " <- " + str(how), flush=True)
     by_class: dict = {}
     for p in pairs:
         by_class.setdefault(p["class"], []).append(p)
@@ -328,6 +409,11 @@ def main(argv=None) -> int:
                 v["verdict"] = "signature"
             elif v["heading_state"] == v["signature_state"] == "resolved":
                 v["verdict"] = "both"
+            elif (str(v["heading_state"]).startswith("error:")
+                  or str(v["signature_state"]).startswith("error:")):
+                # 解析本身就报错（对象形态/取法问题）→ **不能**算"宿主不认"，
+                # 否则就是探针侧缺陷造出的假否证（R38-1 实测：tuple 未拆包）
+                v["verdict"] = "unknown"
             else:
                 v["verdict"] = "neither"
             result["verdicts"].append(v)

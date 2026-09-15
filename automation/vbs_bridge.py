@@ -75,12 +75,25 @@ def name_corrections() -> dict:
     来自 `schemas/name_verdicts.json`（R35/R36 实机 `GetIDsOfNames` 裁定）：
     实测 4 处「只有签名名能解析」—— 生成器若按目录键发出去**必然失败**。
     """
+    out: dict = {}
+    # 首选**目录**里的 `dispatch_name`（R38-3 起提取期灌入：只读目录的消费者也能纠名）
+    try:
+        from automation.scflowpre_api import load_catalog
+        for info in load_catalog()["classes"].values():
+            for key, entry in (info.get("methods") or {}).items():
+                resolved = entry.get("dispatch_name")
+                if resolved and resolved != key:
+                    out[key] = resolved
+    except Exception:  # noqa: BLE001
+        pass
+    if out:
+        return out
+    # 回退：裁定表
     try:
         from automation.scflowpre_api import load_name_verdicts
         table = load_name_verdicts()
     except Exception:  # noqa: BLE001
         return {}
-    out: dict = {}
     for members in table.values():
         for key, resolved in members.items():
             if resolved != key:
