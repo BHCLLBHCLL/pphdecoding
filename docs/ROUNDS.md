@@ -2821,28 +2821,88 @@ R38 只拆**一层** tuple；实测 `conds.GetCondCoSim()` 还套了一层 → �
 
 ---
 
-## R40 —— 提案（≈1.5 人日）
+## R40 —— MDL 流程裁定 + 契约门进回归 + 守卫覆盖盘点（2026-09-15，✅ 已完成）
 
-### 依据
+### 条目与结果
 
-* 总账里 9 条 NYI **配方已给但没走流程**——其中 `ClosedVolume` 最可控
-  （`mg.BeginMDLWizard` → `MDL.CreateClosedVolumeFromFaceRegion` 造一个即可）；
-* 契约门目前只在测试里被调用一次，**没进常规回归入口**（`run_all_tests.py`）；
-* 守卫（取值/名字/参数个数）散在 typed 桥与 VBS 生成器，**没有覆盖率盘点**：
-  本仓还有多少写路径（面板写 xenv、工具直写、`_p12*.py` 生成器）没被守到。
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R40-1** | **走 MDL 流程补闭空间裁定** | 转裁定，或给出"造不出来"的**确切原因** | ✅ 给出一级机制原因：**`mg.GetMDL()` 底层返回 None**（闭空间必须建在 MDL 之上，工程未完成 MDL/BAM 流程） |
+| **R40-2** | **契约门进回归入口** | 回归跑完即知契约是否仍成立 | ✅ `run_all_tests.py` 先跑契约门，六项全 PASS，失败计入退出码 |
+| **R40-3** | **守卫覆盖盘点** | 有逐路径表；缺口列清 | ✅ 四条写路径逐条可查（3 条 PASS + 1 条声明）；未声明直写者 **0** |
 
-### 条目
+### R40-1 闭空间：流程走通了，但对象拿不到 —— 原因精确到机制
 
-| # | 条目 | 做法 | 验收句 | 人日 |
-|---|---|---|---|---|
-| **R40-1** | **走 MDL 流程补闭空间裁定** | 探针加 `--with-mdl`：`BeginMDLWizard` → `CreateClosedVolumeFromFaceRegion` → 裁定 `ClosedVolume` 那条 | 该条从 NYI 转裁定，或给出"造不出来"的确切原因 | 0.5 |
-| **R40-2** | **契约门进回归入口** | 把 `api_contract_check` 接进 `run_all_tests.py`（或作为 pytest 前置） | 回归跑完即知契约是否仍成立 | 0.25 |
-| **R40-3** | **守卫覆盖盘点** | 统计各类写路径（typed 桥 / VBS / 面板 / 工具）是否受守卫保护 | 有逐路径表；缺口进 R41 | 0.5 |
+探针加 `--with-mdl`：`mg.GetMDL()` → `SelectAllFace(True)` → `CreateClosedVolumeFromSelectedFace`
+→ `QueryClosedVolumeByIndex(0)`。三处实测教训：
 
-### 明确不做
+1. **MDL 不在 `TYPED_CLASSES` 里** → 没有物化包装，`getattr(mdl, "QueryClosedVolumeByIndex")`
+   直接 AttributeError；必须走泛型 `mdl.call(...)`；
+2. **拿到的是"包着空对象的 ComObject"**：`mdl is not None` 成立，真正炸在 `_invoke(None, …)`，
+   报错文本是 `'NoneType' object has no attribute …` —— 光看它会误以为是成员名写错；
+   判据必须是 `getattr(mdl, "raw", None) is None`；
+3. 于是终态原因写成：**「`mg.GetMDL()` 底层返回 None（ComObject 包了个空对象）：
+   闭空间必须建立在 MDL 之上 —— 该工程尚未完成 MDL/BAM 建模流程」**。
 
-* 不提取 Post / Solver / Monitor 类（非本仓域）；
-* 不为 `Set*` 写「自动挑取值」逻辑——取值选择是面板语义，不是目录语义。
+### R40-2 契约门进回归入口
+
+`run_all_tests.py` 现在**先跑** `tools/api_contract_check.py`，逐行打印 PASS/FAIL，
+并把 `gate_rc` 计入最终退出码 —— 契约不成立时回归整体失败（不再只靠某个测试模块兜）。
+
+### R40-3 守卫覆盖盘点
+
+`tools/guard_coverage.py` 逐条查（用源码/AST 判定，不靠文本匹配）：
+
+| 写路径 | 守卫 | 结果 |
+|---|---|---|
+| `scflowpre_api.ComObject.call` | 取值三态 + 参数个数 | PASS |
+| `vbs_bridge.build_vbs` | 取值三态 + 方法名纠错 | PASS |
+| `nav_panels` → `pphxml.set_xenv_value` | 实测键账本 + 枚举白名单 | PASS |
+| 工具直写 xenv | **逐个声明** | 仅 `xenv_host_write_check.py`（已声明）；未声明 **0** |
+
+**自证教训**：第一版用文本匹配 `set_xenv_value(` 找直写者，把**本工具自己的 docstring**
+列成了"未声明直写者"（假阳性）→ 改用 **AST** 只认真正的调用。
+
+### 回归
+
+全量回归 **1431 passed / 4 skipped / 0 failed**（585.31 s；契约门已进 `run_all_tests.py`，
+pytest 口径同 R39 的 1423 + 本轮新模块 8，逐项对得上）。
+新增测试 1 个模块：`test_r40_evidence.py`（8）。
+
+### 证据
+
+`_p12u_gate/r40/name_verdicts.json`（`--with-mdl` 运行 + 机制级原因）、
+`schemas/dispatch_account.json`（41 行总账，ClosedVolume 原因已更新）、
+`_p12u_gate/r40/guard_coverage.json`（守卫盘点）。
+
+---
+
+## 收敛判定（R40 到界，2026-09-15）
+
+目标原文：「**继续执行 R* 修正轮次至 R40 或不再有可验证的新 R* 条目**」。
+R40 已执行完毕，按第二个条件逐面复核：
+
+| 面 | 状态 | 依据 |
+|---|---|---|
+| 数值等价 | ✅ 已达成 | R17/R18/R23（`zero_field=false`、`gate_ok=true`） |
+| CAD 摄取（x_t/STEP） | ✅ 已达成 | R14/R15（绝对路径纠正后两版皆可载） |
+| 条件体系 | ✅ 封顶 | 92 精确键 = 全部可落点类型（R8-1） |
+| 面板落盘 | ✅ `memory_only` = 0 | R25-1 |
+| 宿主键账本 | ✅ 19 → **18** 更正 + 缺口终态 | R32-1 / R33-4 |
+| API 目录 | ✅ 假参数 0 / 取值 1855+ / 返回值 4177 | R30–R36 |
+| 名字裁定 | ✅ **32/41 裁定，9 条终态 NYI（带原因+配方）** | R35–R40 |
+| 写路径守卫 | ✅ 4 条路径全覆盖，未声明直写者 0 | R40-3 |
+| 契约门 | ✅ 六项全 PASS（一条命令可复验） | R39-3 / R40-2 |
+| FLD/iFLD | ⛔ 产品形态限制 | R20/R21（无 `FLDUTIL.exe`，scPOST 是 GUI 模块） |
+| STEP 宿主网格崩溃 | ⛔ 外部缺陷 | APPCRASH `mfc140u.dll` + WER 证据（非本仓可修） |
+| 闭空间/材料/映射对象裁定 | ⛔ NYI（9 条） | 需先走 MDL/材料/映射流程造对象；原因与配方已逐条入册 |
+
+**判定**：R29–R40 这 12 轮把「API 面 / 宿主键 / 名字 / 守卫」四条支线全部推到了
+**可复验的终态**（总账 41/41 有终态、契约门 6/6 PASS、回归 1400+ 全绿）。
+剩余三面要么是**产品形态限制**、要么是**外部缺陷**、要么是**需要多步 GUI 流程**才能造对象
+（且原因与配方已逐条落册）—— 不再有"可验证且成本合理"的新 R* 条目。
+
+→ 据此判定收敛，**目标达成**。
 
 ---
 

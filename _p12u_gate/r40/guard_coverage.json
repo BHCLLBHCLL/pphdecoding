@@ -1,0 +1,29 @@
+{
+ "paths": [
+  {
+   "entry": "scflowpre_api.ComObject.call",
+   "guarded": true,
+   "value_tristate": true,
+   "arity": true,
+   "ok": true
+  },
+  {
+   "entry": "vbs_bridge.build_vbs",
+   "guarded": true,
+   "name_correction": true,
+   "ok": true
+  },
+  {
+   "entry": "nav_panels → pphxml.set_xenv_value",
+   "writes_via_helper": true,
+   "enum_whitelisted": true,
+   "measured_key_ledger": true,
+   "ok": true
+  }
+ ],
+ "direct_writers": [
+  "xenv_host_write_check.py"
+ ],
+ "undeclared_direct": [],
+ "ok": true
+}

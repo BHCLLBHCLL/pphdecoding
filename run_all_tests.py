@@ -18,9 +18,26 @@ ROOT = Path(__file__).resolve().parent
 PY = sys.executable
 
 
+def contract_gate() -> int:
+    """R40-2：先跑 API 面契约门（目录/账本/总账/桥接/语料/守卫六项）。
+
+    契约门查的是"跨模块不变量"，测试模块各查各的；放在最前面，
+    一进门就知道 API 面是否仍自洽（失败不阻断跑测试，但计入结论）。
+    """
+    r = subprocess.run([PY, "-B", str(ROOT / "tools" / "api_contract_check.py")],
+                       cwd=str(ROOT), capture_output=True, timeout=600)
+    text = (r.stdout + r.stderr).decode("utf-8", "replace")
+    for ln in text.splitlines():
+        if "PASS" in ln or "FAIL" in ln or ln.startswith("SUMMARY"):
+            print("  " + ln.strip())
+    print(f"[{' ok ' if r.returncode == 0 else 'FAIL'}] api_contract_check\n")
+    return r.returncode
+
+
 def main() -> int:
     mods = sorted(p.stem for p in (ROOT / "tests").glob("test_*.py"))
     print(f"{len(mods)} test modules; runner = {PY}\n")
+    gate_rc = contract_gate()
     failed: list[str] = []
     crashed: list[str] = []
     stats = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
@@ -56,7 +73,9 @@ def main() -> int:
           f"{len(failed)} failed modules, {len(crashed)} crashed modules")
     for m in failed + crashed:
         print(f"  - {m}")
-    return 1 if (failed or crashed) else 0
+    if gate_rc != 0:
+        print("  - api_contract_check（契约门未过）")
+    return 1 if (failed or crashed or gate_rc != 0) else 0
 
 
 if __name__ == "__main__":

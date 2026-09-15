@@ -1873,6 +1873,49 @@ R38 只拆一层 tuple；`conds.GetCondCoSim()` **还套一层** → 仍抛 `Att
 
 > 本轮把原 R39-3「optional 标记提取」**换掉**：标注全库仅 14 文件 41 处且多在域外，
 > 收益极低；而散落的不变量缺一个统一入口 —— 换成契约门更值。
+
+---
+
+## 54. R40 更新（2026-09-15）—— MDL 流程 / 契约门进回归 / 守卫盘点 + **收敛判定**
+
+### 54.1 闭空间：流程走通但对象拿不到，原因精确到机制（R40-1）
+
+`--with-mdl` 走 `mg.GetMDL() → SelectAllFace(True) → CreateClosedVolumeFromSelectedFace
+→ QueryClosedVolumeByIndex(0)`。三处实测教训：
+
+1. **MDL 不在 `TYPED_CLASSES`** → 无物化包装，`getattr` 直接 AttributeError，必须走泛型
+   `mdl.call(...)`；
+2. **拿到的是"包着空对象的 ComObject"**：`mdl is not None` 成立，炸在 `_invoke(None, …)`，
+   报错文本 `'NoneType' object has no attribute …` 会误导成"成员名写错"——
+   判据必须看 `getattr(mdl, "raw", None) is None`；
+3. 终态原因：**「`mg.GetMDL()` 底层返回 None（ComObject 包了个空对象）：闭空间必须建立在
+   MDL 之上 —— 该工程尚未完成 MDL/BAM 建模流程」**。
+
+### 54.2 契约门进回归入口（R40-2）
+
+`run_all_tests.py` 先跑 `tools/api_contract_check.py`（六项），`gate_rc` 计入退出码。
+
+### 54.3 守卫覆盖盘点（R40-3）
+
+`tools/guard_coverage.py`：四条写路径逐条可查 —— typed 桥（取值三态 + 参数个数）、
+VBS 生成（取值 + 纠名）、面板写 xenv（实测键账本 + 枚举白名单）、工具直写（逐个声明，
+未声明 0）。**自证教训**：第一版用文本匹配找直写者，把本工具自己的 docstring 列成
+"未声明直写者"（假阳性）→ 改用 **AST**。
+
+### 54.4 ★ 收敛判定（R40 到界）
+
+| 面 | 状态 |
+|---|---|
+| 数值等价 / CAD 摄取 / 条件封顶 / 面板落盘 | ✅ 已达成（R14/R15、R17/R18/R23、R8-1、R25-1） |
+| 宿主键账本（18 条 + 缺口终态）/ API 目录（假参数 0） | ✅ R32-1 / R33-4 / R30–R36 |
+| 名字裁定（32/41）+ 9 条终态 NYI | ✅ R35–R40（逐条带原因+配方） |
+| 写路径守卫（4 条）+ 契约门（6 项） | ✅ R40-3 / R39-3 / R40-2 |
+| FLD/iFLD | ⛔ 产品形态限制（R20/R21） |
+| STEP 宿主网格崩溃 | ⛔ 外部缺陷（APPCRASH `mfc140u.dll` + WER） |
+| 闭空间/材料/映射对象裁定（9 条） | ⛔ NYI：需多步 GUI 流程造对象，原因与配方已入册 |
+
+→ **目标达成**：四条支线均达可复验终态；剩余三面属产品限制 / 外部缺陷 / 需多步 GUI 流程，
+不再有"可验证且成本合理"的新 R* 条目。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

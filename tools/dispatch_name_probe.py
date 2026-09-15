@@ -128,6 +128,10 @@ def _obtain(cls: str, conds, doc, mg):
     return None, None
 
 
+class _MdlUnavailable(RuntimeError):
+    """MDL 对象不可得（R40-1：闭空间只能建在 MDL 之上）。"""
+
+
 def _unwrap(obj, depth: int = 4):
     """递归拆 tuple/数组（取首元素，最多 `depth` 层）。
 
@@ -291,12 +295,15 @@ def main(argv=None) -> int:
     ap.add_argument("--json", type=Path, default=None)
     ap.add_argument("--project", type=Path, action="append", default=None,
                     help="用哪个工程建实例，可重复（R38-1：不同工程提供不同对象）")
+    ap.add_argument("--with-mdl", action="store_true",
+                    help="R40-1：走 MDL 流程造闭空间（选全部面 → 建闭空间）再裁定")
     ap.add_argument("--keep-host", action="store_true")
     args = ap.parse_args(argv)
     pairs = mismatches()
     projects = args.project or [BOX]
     result = {"pairs": len(pairs), "targets": TARGETS, "verdicts": [],
               "object_probe": {}, "pairs_unreachable": [],
+              "with_mdl": bool(args.with_mdl),
               "projects": [str(p) for p in projects]}
     import automation.host_boot as host_boot
     from automation import scflowpre_api as api
@@ -382,6 +389,51 @@ def main(argv=None) -> int:
                     ctx["MDLWizard"] = _raw(mg.GetMDLWizard())
                 except Exception:  # noqa: BLE001
                     pass
+            if args.with_mdl and "ClosedVolume" not in ctx:
+                # R40-1：闭空间不是"打开工程就有"——它在 MDL 里由面区域生成。
+                # 这里走最省事的一条：MDL 选全部面 → 由选中面建闭空间。
+                try:
+                    mdl = mg.GetMDL()
+                    # 注意：拿到的是**包着空对象的 ComObject**，不是 None 本身 ——
+                    # 于是 mdl is not None 成立，真正炸在 _invoke(None, ...)，
+                    # 报错文本是 "'NoneType' object has no attribute ..."，
+                    # 光看它会误以为是成员名写错（R40-1 实测）。必须看底层 raw。
+                    if mdl is None or getattr(mdl, "raw", None) is None:
+                        errors["ClosedVolume"] = (
+                            "mg.GetMDL() 底层返回 None（ComObject 包了个空对象）："
+                            "闭空间必须建立在 MDL 之上 —— 该工程尚未完成 MDL/BAM 建模流程")
+                        raise _MdlUnavailable()
+                    # 注意：MDL 不在 TYPED_CLASSES 里 → 没有物化包装，
+                    # 必须走泛型 call()（R40-1 实测：getattr 直接 AttributeError）
+                    steps = (("mdl.call(SelectAllFace, True)",
+                              lambda: mdl.call("SelectAllFace", True)),
+                             ("mdl.call(CreateClosedVolumeFromSelectedFace)",
+                              lambda: mdl.call(
+                                  "CreateClosedVolumeFromSelectedFace",
+                                  "R40cvol")),
+                             ("mdl.call(QueryClosedVolumeByIndex, 0)",
+                              lambda: mdl.call("QueryClosedVolumeByIndex", 0)))
+                    for step, fn in steps:
+                        try:
+                            res = _unwrap(fn())
+                        except Exception as exc:  # noqa: BLE001
+                            errors["ClosedVolume"] = (
+                                step + " -> " + type(exc).__name__ + ": "
+                                + str(exc))
+                            continue
+                        if res is not None and not isinstance(res, bool):
+                            ctx["ClosedVolume"] = _raw(res)
+                            via["ClosedVolume"] = "chain:" + step
+                            errors.pop("ClosedVolume", None)
+                            print("   + ClosedVolume <- " + step, flush=True)
+                            break
+                        errors["ClosedVolume"] = step + " -> 返回空/布尔"
+                except _MdlUnavailable:
+                    pass                      # 原因已写进 errors
+                except Exception as exc:  # noqa: BLE001
+                    errors["ClosedVolume"] = ("mdl 流程 -> "
+                                              + type(exc).__name__ + ": "
+                                              + str(exc))
             # R37-1：链式实例（数组型 getter / 多参数 Create / 二级 GetOwner）
             for cls, obj in _chains(doc, conds_typed, mg, via, inter,
                                     errors).items():
