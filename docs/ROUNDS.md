@@ -2975,6 +2975,93 @@ R40 已执行完毕，按第二个条件逐面复核：
 
 ---
 
+## R42 —— 成员可用性入册 + 仓内引用自检 + NYI 终态（2026-09-15，✅ 已完成）
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R42-1** | **不可用成员入册** | 目录可区分"手册有/宿主无" | ✅ 普查 **17 类、1000+ 成员** → **12 个宿主未实现**，全部入册 `host_absent` |
+| **R42-2** | **仓内引用自检** | 有结论（引用 0 或列出并修） | ✅ 抓到 1 处**死代码**（`MeshingGroupSetting.GetInternalUnit` 手写包装）→ 删除；检查自身修掉 1 处假阳性 |
+| **R42-3** | **剩余 NYI 取舍** | 5 条有终态口径 | ✅ 9 条 NYI 全部带 `terminal`：**3 宿主无接口 / 6 需要 GUI 流程**（明确不做） |
+
+### R42-1 成员可用性普查：手册列了、宿主没实现的 **12 处**
+
+探针加 `--sweep`：对**已取到实例**的类，用 `GetIDsOfNames` 逐个解析手册成员
+（只解析名字、不调用方法，零副作用）→ 写 `schemas/host_member_availability.json`。
+实测 12 个成员 `DISP_E_UNKNOWNNAME`：
+
+| 类 | 未实现成员 |
+|---|---|
+| `CondBoundaryFlowIO` | `GetMassVolumePressureInflowDirectionType`（**名字带零宽空格**）、`GetPbmFuncType`、`SetPbmFuncType` |
+| `CondOutputTimeSeries` | `GetProjectonType`、`SetProjectonType`（手册拼写错，与 `Projection` 不同） |
+| `MeshingGroup` | `GetDiscontinuous`、`SetDiscontinuous`、`ReplaceMDLMode` |
+| `Doc` / `MeshingGroupSetting` / `SpecialRegion` / `CondInitialShapeModify` | `GetAllMapCondNames` / `GetInternalUnit` / `ImportCSV` / `RemoveMorphingRegion` |
+
+两个附带发现：
+* **零宽空格**（`\u200b`）藏在成员名里 —— 这种名字**永远调不通**（手册数据卫生问题）；
+* `GetProjectonType` 是手册拼写错（与 R34-3 的 41 处标题/签名分歧同类，但这次是**两边都错**）。
+
+入册方式：提取期 `_apply_host_absent()` 读普查结果 → 目录条目带 `host_absent` +
+`host_absent_evidence`（**12 条**）；同时 `materialize_catalog_wrappers()` **跳过**它们
+（不再造出注定失败的方法 —— typed 桥覆盖 1759 → 1754，这个下降是正确的）。
+
+### R42-2 仓内引用自检：抓到死代码 + 修掉检查自身的假阳性
+
+契约门加第 7 项检查（`host_absent`），首跑就红：
+
+* **真阳性**：`automation/scflowpre_api.py` 手写了 `MeshingGroupSetting.GetInternalUnit`
+  包装 —— 宿主没有该成员，调用必然 `com_error` → **删除**（并在原位留注说明）；
+* **假阳性**：`ImportCSV` 被报"引用未实现成员"，但它在 `SpecialRegion` 未实现、
+  在别的类里是实现了的 → 判据改为**只在无歧义时判**（同名成员全部类都 absent 才算）。
+
+修完后：未实现成员 8 条无歧义、**仓内引用 0**、契约门 **7 项全 PASS**。
+
+### R42-3 NYI 终态
+
+`dispatch_account.py` 给每条 NYI 落 `terminal`：
+**3 条 `host-interface-absent`**（宿主没接口）+ **6 条 `needs-gui-flow`**
+（闭空间/PropItem/CoSim 区域是 MDL/材料/CoSim 流程的产物，只打开工程拿不到）——
+**明确不做，不留"待办"**。
+
+### 回归
+
+全量回归 **1451 passed / 4 skipped / 0 failed**（582.38 s；R41 收口同口径 1441，
+增量 +10 = 本轮新模块 10，逐项对得上）。
+新增测试 1 个模块：`test_r42_evidence.py`（10）。
+
+### 证据
+
+`schemas/host_member_availability.json`（普查：17 类逐成员状态）、
+`schemas/dispatch_account.json`（9 条 NYI 的 `terminal`）、
+`_p12u_gate/r42/contract.json`（契约门 7 项全 PASS）。
+
+---
+
+## R43 —— 提案（≈0.5 人日）
+
+### 依据
+
+* 普查只覆盖**已取到实例**的 17 类（1000+ 成员）；目录共 199 类 —— 其余类的成员
+  是"未普查"而非"已实现"，这个口径差别值得写清；
+* 普查里出现少量 `error:*`（如 `Octree.CreateCurvatureArray` 报空对象），
+  说明"对象形态"还会影响普查，**不能**当成宿主未实现；
+* `host_absent` 目前只在目录与契约门里可见，**面板/工具侧没有提示**。
+
+### 条目
+
+| # | 条目 | 做法 | 验收句 | 人日 |
+|---|---|---|---|---|
+| **R43-1** | **普查覆盖率口径** | 在证据里区分"已普查/未普查"，并统计覆盖率 | 覆盖率数字可复算；未普查类列清 | 0.25 |
+| **R43-2** | **`error:*` 状态收敛** | 查清 `Octree.CreateCurvatureArray` 这类空对象解析错误 | 每条 `error:*` 有归因，或归零 | 0.25 |
+
+### 明确不做
+
+* 不提取 Post / Solver / Monitor 类（非本仓域）；
+* 不为 `Set*` 写「自动挑取值」逻辑——取值选择是面板语义，不是目录语义。
+
+---
+
 ## R 轮次模板（后续轮次照此填写）
 
 ```

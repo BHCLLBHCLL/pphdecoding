@@ -24,6 +24,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+CATALOG = ROOT / "schemas" / "vb_api_catalog.json"
 sys.path.insert(0, str(ROOT))
 
 import console_utf8  # noqa: E402
@@ -397,6 +398,9 @@ def main(argv=None) -> int:
     ap.add_argument("--json", type=Path, default=None)
     ap.add_argument("--project", type=Path, action="append", default=None,
                     help="用哪个工程建实例，可重复（R38-1：不同工程提供不同对象）")
+    ap.add_argument("--sweep", action="store_true",
+                    help="R42-1：对已取到实例的类做**成员可用性普查**"
+                         "（GetIDsOfNames 逐个解析，零副作用）")
     ap.add_argument("--with-mdl", action="store_true",
                     help="R40-1：走 MDL 流程造闭空间（选全部面 → 建闭空间）再裁定")
     ap.add_argument("--keep-host", action="store_true")
@@ -566,6 +570,51 @@ def main(argv=None) -> int:
         if ctx.get(cls) is None:
             errors.setdefault(
                 cls, "各工程的 Get*/Create*/Query* 都未产出实例（见 object_probe）")
+    # R42-1：成员可用性普查 —— 手册成员在宿主上到底有没有实现。
+    # 判据仍是 GetIDsOfNames（只解析名字，不调用），所以对任何已取到实例的类都安全。
+    if args.sweep:
+        cat = json.loads(CATALOG.read_text(encoding="utf-8"))
+        avail: dict = {}
+        for cls, obj in sorted(ctx.items()):
+            info = cat["classes"].get(cls) or {}
+            members: dict = {}
+            for kind in ("methods", "properties"):
+                for mem, entry in (info.get(kind) or {}).items():
+                    disp = (entry.get("dispatch_name")
+                            or entry.get("signature_name") or mem)
+                    members[mem] = {"dispatch": disp,
+                                    "state": _resolve(obj, disp)}
+            if members:
+                resolved = sum(1 for m in members.values()
+                               if m["state"] == "resolved")
+                unknown = sorted(m for m, v in members.items()
+                                 if v["state"] == "unknown_name")
+                avail[cls] = {"total": len(members), "resolved": resolved,
+                              "unknown": unknown,
+                              "members": members}
+        result["availability"] = {c: {"total": v["total"],
+                                      "resolved": v["resolved"],
+                                      "unknown": len(v["unknown"])}
+                                  for c, v in avail.items()}
+        sweep_path = ROOT / "schemas" / "host_member_availability.json"
+        sweep_path.write_text(json.dumps({
+            "source": "tools/dispatch_name_probe.py --sweep（GetIDsOfNames）",
+            "note": "state=unknown_name ⇒ 宿主**未实现**该成员（手册有、宿主无）",
+            "classes": {c: {"total": v["total"], "resolved": v["resolved"],
+                            "unknown": v["unknown"]}
+                        for c, v in avail.items()},
+            "availability": {c: {m: v["state"] for m, v in d["members"].items()}
+                             for c, d in avail.items()},
+        }, ensure_ascii=False, indent=1), encoding="utf-8")
+        print("[r42] 普查 " + str(len(avail)) + " 类 → "
+              + str(sweep_path.name) + "；未实现成员合计 "
+              + str(sum(len(v["unknown"]) for v in avail.values())), flush=True)
+        for cls, v in sorted(avail.items()):
+            if v["unknown"]:
+                print("   " + cls + " 未实现 " + str(len(v["unknown"])) + "/"
+                      + str(v["total"]) + ": " + json.dumps(v["unknown"][:6]),
+                      flush=True)
+
     for name, obj in ctx.items():
         result["object_probe"][name] = _has_type_info(obj)
     by_class: dict = {}

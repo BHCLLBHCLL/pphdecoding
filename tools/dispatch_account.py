@@ -101,6 +101,7 @@ def account(cat: dict | None = None, table: dict | None = None,
         if absent:
             rows.append({
                 **pair, "state": "nyi",
+                "terminal": "host-interface-absent",
                 "reason": ("宿主无此接口：" + ", ".join(absent)
                            + " → DISP_E_UNKNOWNNAME（手册未列、宿主也未实现）"),
                 "host_interface_absent": absent,
@@ -111,12 +112,16 @@ def account(cat: dict | None = None, table: dict | None = None,
         if obtained:
             # 实例拿到了、名字仍解析不出来 → 是**探针侧**的限制（对象形态），
             # 不能说成"宿主不认"（R38/R39 两次假否证都出在这里）
+            terminal = "probe-limitation"
             reason = ("实例已取到（" + str(obtained) + "）但名字解析失败："
                       "该对象形态不支持 GetIDsOfNames（探针侧限制，非宿主否证）")
         else:
+            # R42-3：其余 NYI 的终态口径 —— 对象是**流程产物**（MDL/材料/CoSim），
+            # 只打开工程拿不到；要覆盖必须跑多步 GUI 向导。**明确不做**，不留"待办"。
+            terminal = "needs-gui-flow"
             reason = errors.get(cls, "未取到实例（原因未记录）")
         rows.append({
-            **pair, "state": "nyi", "reason": reason,
+            **pair, "state": "nyi", "terminal": terminal, "reason": reason,
             "recipe": info.get("instance") or "（手册未给实例配方）",
             "evidence": ev.get("_path"),
         })

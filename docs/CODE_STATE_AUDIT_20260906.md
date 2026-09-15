@@ -1956,6 +1956,39 @@ VBS 生成（取值 + 纠名）、面板写 xenv（实测键账本 + 枚举白�
 `dispatch_account.py` 现按 **宿主无接口(UNKNOWNNAME) > 实例已取到但解析失败 > 未取到实例**
 排序原因，并落 `host_interface_absent` 字段 ——"手册有、宿主机没有"变成**机器可查**。
 本轮 `unknown` **归零**（R39-2 的验收项至此真正达成）。
+
+---
+
+## 56. R42 更新（2026-09-15）—— 成员可用性入册 / 仓内引用自检 / NYI 终态
+
+### 56.1 普查：手册列了、宿主没实现的 12 处（R42-1）
+
+`--sweep` 对已取到实例的类逐个解析手册成员（`GetIDsOfNames`，只解析不调用，零副作用）：
+
+| 类 | 未实现成员 |
+|---|---|
+| `CondBoundaryFlowIO` | `GetMassVolumePressureInflowDirectionType`（**名字含零宽空格 U+200B**）、`GetPbmFuncType`、`SetPbmFuncType` |
+| `CondOutputTimeSeries` | `GetProjectonType`、`SetProjectonType`（手册拼写错） |
+| `MeshingGroup` | `GetDiscontinuous`、`SetDiscontinuous`、`ReplaceMDLMode` |
+| `Doc`/`MeshingGroupSetting`/`SpecialRegion`/`CondInitialShapeModify` | `GetAllMapCondNames`/`GetInternalUnit`/`ImportCSV`/`RemoveMorphingRegion` |
+
+> 两个数据卫生发现：**零宽空格藏在成员名里**（该名字永远调不通）；
+> `GetProjectonType` 是**两边都错**的拼写（R34-3 的 41 处是"标题 vs 签名"分歧，这次两边一致地错）。
+
+入册：`_apply_host_absent()` → 目录 `host_absent`（12 条）+ 证据字段；
+`materialize_catalog_wrappers()` **跳过**这些成员（typed 桥覆盖 1759 → 1754，下降正确）。
+
+### 56.2 引用自检：死代码 + 检查自身假阳性（R42-2）
+
+契约门第 7 项首跑就红：**真阳性** = `ScFlowpreMeshingGroupSetting.GetInternalUnit`
+手写包装（宿主无此成员，调用必 `com_error`）→ 删除；
+**假阳性** = `ImportCSV`（在 `SpecialRegion` 未实现、别的类实现了）→ 判据改为
+**只在无歧义时判**（同名成员在所有类都 absent 才算）。修完：8 条无歧义、**引用 0**、门 7/7 PASS。
+
+### 56.3 NYI 终态（R42-3）
+
+每条 NYI 落 `terminal`：**3 `host-interface-absent` + 6 `needs-gui-flow`** ——
+后者是 MDL/材料/CoSim 流程的产物，只打开工程拿不到，**明确不做**，不留"待办"。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

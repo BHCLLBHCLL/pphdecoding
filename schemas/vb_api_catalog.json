@@ -5066,7 +5066,9 @@
         "description": "Direction vector (Cylindrical coordinates)"
        }
       ]
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "GetMixedGasInflowType": {
      "signature": "retval=boundflowio.GetMixedGasInflowType ()",
@@ -5226,7 +5228,9 @@
         "description": "Log-normal distribution function"
        }
       ]
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "GetPBMType": {
      "signature": "retval=boundaryflowio.GetPBMType",
@@ -6493,7 +6497,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "SetPBMType": {
      "signature": "retval=boundaryflowio.SetPBMType(type)",
@@ -14439,7 +14445,9 @@
      }
     },
     "RemoveMorphingRegion": {
-     "signature": "retval=initial_shape_modify.RemoveMorphingRegion(name)"
+     "signature": "retval=initial_shape_modify.RemoveMorphingRegion(name)",
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "SetAngularChange": {
      "signature": "retval=initial_shape_modify.SetAngularChange(angular change)",
@@ -25665,7 +25673,9 @@
         "description": "Specify the region"
        }
       ]
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "GetTargetFluidRegion": {
      "signature": "retval=outputtimeseries.GetTargetFluidRegion",
@@ -25890,7 +25900,9 @@
       "name": "retval",
       "description": "True (successful), False (failed)"
      },
-     "note": "Refer to SetProjectonType for output types."
+     "note": "Refer to SetProjectonType for output types.",
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "SetTargetMaterial": {
      "signature": "retval=outputtimeseries.SetTargetMaterial(name)",
@@ -51782,7 +51794,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "List of mapping condition names (string array)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "GetAllPartsBoundingBox": {
      "signature": "doc.GetAllPartsBoundingBox bbox bExcludePartForSubmesh",
@@ -68142,7 +68156,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (Discontinuous mesh), False(Not discontinuous mesh)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "GetDiscontinuousMeshingGroup": {
      "signature": "Set static_meshgroup=meshgroup.GetDiscontinuousMeshingGroup",
@@ -69723,7 +69739,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True(successful), False(failed)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "SaveCmbFile": {
      "signature": "retval=meshgroup.SaveCmbFile(path, type)",
@@ -69974,7 +69992,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "SetExpand": {
      "signature": "meshgroup.SetExpand(bExpand)",
@@ -70895,7 +70915,9 @@
       "type": "VARIANT",
       "name": "unit",
       "description": "Internal unit of length(string)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "GetInvalidTolerance": {
      "signature": "retval=meshset.GetInvalidTolerance",
@@ -80680,7 +80702,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "IsRadiationField": {
      "signature": "retval=specialregion.IsRadiationField",

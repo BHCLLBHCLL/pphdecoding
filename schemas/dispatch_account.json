@@ -11,9 +11,10 @@
    "signature": "SetSelectFaces",
    "kind": "methods",
    "state": "nyi",
+   "terminal": "needs-gui-flow",
    "reason": "chain:wizard.CreateMDL → mdl.GetClosedVolumes -> 返回空（工程里没有该对象）",
    "recipe": "Set coord_part = cvol.GetCoordinatesSpecifiedPartLinkedToMesh(id)",
-   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r42\\name_verdicts.json"
   },
   {
    "class": "CondActranBoundaryNonReflection",
@@ -57,12 +58,13 @@
    "signature": "GetConsiderBuoyancyFlag",
    "kind": "methods",
    "state": "nyi",
+   "terminal": "host-interface-absent",
    "reason": "宿主无此接口：CreateCondBoussinesqBaseTemp → DISP_E_UNKNOWNNAME（手册未列、宿主也未实现）",
    "host_interface_absent": [
     "CreateCondBoussinesqBaseTemp"
    ],
    "recipe": "Set boussinesqbasetemp = conds.QueryCondBoussinesqBaseTempByName(“name”)",
-   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r42\\name_verdicts.json"
   },
   {
    "class": "CondCoSim",
@@ -70,9 +72,10 @@
    "signature": "CreateCoSimRegionSurface",
    "kind": "methods",
    "state": "nyi",
+   "terminal": "needs-gui-flow",
    "reason": "chain:conds.CreateCondCoSim(name,0,0) -> 返回空（工程里没有该对象）",
    "recipe": "Set condcosim = conds.CreateCondCoSim(\"name\", apptype, interfacetype)",
-   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r42\\name_verdicts.json"
   },
   {
    "class": "CondCoSimRegion",
@@ -80,9 +83,10 @@
    "signature": "GetRegionType",
    "kind": "methods",
    "state": "nyi",
+   "terminal": "needs-gui-flow",
    "reason": "前置对象 CondCoSim 未取到（见其条目）——GetOwner() 需要 CoSim 区域实例",
    "recipe": "Set condcosim = cosim_region.GetOwner()",
-   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r42\\name_verdicts.json"
   },
   {
    "class": "CondCoSimRegion",
@@ -90,9 +94,10 @@
    "signature": "RemoveFromRegion",
    "kind": "methods",
    "state": "nyi",
+   "terminal": "needs-gui-flow",
    "reason": "前置对象 CondCoSim 未取到（见其条目）——GetOwner() 需要 CoSim 区域实例",
    "recipe": "Set condcosim = cosim_region.GetOwner()",
-   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r42\\name_verdicts.json"
   },
   {
    "class": "CondInitialShapeModify",
@@ -109,13 +114,14 @@
    "signature": "SetLoadIDFaceRegionCorresp",
    "kind": "methods",
    "state": "nyi",
+   "terminal": "host-interface-absent",
    "reason": "宿主无此接口：CreateCondMapForStructure, QueryCondMapForStructureByName → DISP_E_UNKNOWNNAME（手册未列、宿主也未实现）",
    "host_interface_absent": [
     "CreateCondMapForStructure",
     "QueryCondMapForStructureByName"
    ],
    "recipe": "Set value = condmapforstr.GetValue(valueKey)",
-   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r42\\name_verdicts.json"
   },
   {
    "class": "CondOutputCSV",
@@ -294,12 +300,13 @@
    "signature": "SetParam",
    "kind": "methods",
    "state": "nyi",
+   "terminal": "host-interface-absent",
    "reason": "宿主无此接口：GetAllMapCondNames → DISP_E_UNKNOWNNAME（手册未列、宿主也未实现）",
    "host_interface_absent": [
     "GetAllMapCondNames"
    ],
    "recipe": "Set value = mapcond.GetValue(valueKey)",
-   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r42\\name_verdicts.json"
   },
   {
    "class": "MeshingGroup",
@@ -370,9 +377,10 @@
    "signature": "GetRefpropFluid",
    "kind": "methods",
    "state": "nyi",
+   "terminal": "needs-gui-flow",
    "reason": "前置对象 CondInitial 未取到；且工程未注册材料 —— PropItem 经 CondInitial.GetPhaseMaterial 产出",
    "recipe": "（手册未给实例配方）",
-   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r42\\name_verdicts.json"
   },
   {
    "class": "PropItem",
@@ -380,9 +388,10 @@
    "signature": "SetRefpropFluid",
    "kind": "methods",
    "state": "nyi",
+   "terminal": "needs-gui-flow",
    "reason": "前置对象 CondInitial 未取到；且工程未注册材料 —— PropItem 经 CondInitial.GetPhaseMaterial 产出",
    "recipe": "（手册未给实例配方）",
-   "evidence": "_p12u_gate\\r41\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r42\\name_verdicts.json"
   },
   {
    "class": "SpecialRegion",
@@ -399,5 +408,5 @@
   "heading": 5,
   "signature": 4
  },
- "evidence": "_p12u_gate\\r41\\name_verdicts.json"
+ "evidence": "_p12u_gate\\r42\\name_verdicts.json"
 }

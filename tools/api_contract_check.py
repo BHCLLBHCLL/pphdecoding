@@ -132,7 +132,41 @@ def check_guard() -> dict:
             "ok": none_state is None and bad is False and good is True}
 
 
+def check_host_absent() -> dict:
+    """R42-2：仓内**不得**引用宿主未实现的成员（引用了就是"注定调不通"）。"""
+    import subprocess
+    cat = json.loads(CATALOG.read_text(encoding="utf-8"))
+    # 只在**无歧义**时才判：同名成员若在别的类里是实现了的（如 `ImportCSV`），
+    # 单看名字会把正常引用误判成"引用未实现成员"（第一版就这么假阳性了一次）
+    all_members: dict = {}
+    for info in cat["classes"].values():
+        for kind in ("methods", "properties"):
+            for mem, e in (info.get(kind) or {}).items():
+                all_members.setdefault(mem, []).append(bool(e.get("host_absent")))
+    absent = [mem for mem, flags in all_members.items() if all(flags)]
+    if not absent:
+        return {"absent_members": 0, "references": [], "ok": True}
+    hits = []
+    roots = [ROOT / "tools", ROOT / "automation"]
+    files = [p for r in roots for p in r.glob("*.py")]
+    files += [p for p in ROOT.glob("*.py")]
+    for path in files:
+        if path.name in ("extract_vb_api_scflow.py", "api_contract_check.py",
+                         "dispatch_name_probe.py", "dispatch_account.py"):
+            continue          # 生成器/门/探针自己会提到这些名字（发现它们的正是它们）
+        try:
+            src = path.read_text(encoding="utf-8", errors="replace")
+        except Exception:  # noqa: BLE001
+            continue
+        for mem in absent:
+            if mem in src:
+                hits.append(path.name + " -> " + mem)
+    return {"absent_members": len(absent), "references": hits[:10],
+            "reference_count": len(hits), "ok": not hits}
+
+
 CHECKS = (("catalog", check_catalog), ("ledger", check_ledger),
+          ("host_absent", check_host_absent),
           ("account", check_account), ("bridge", check_bridge),
           ("corpus", check_corpus), ("guard", check_guard))
 

@@ -1501,9 +1501,9 @@ class ScFlowpreMeshingGroupSetting(ComObject):
         return self.call("SetInvalidTolerance", tol)
 
     # --- 单位 / 归属 ---
-    def GetInternalUnit(self) -> Any:
-        return self.call("GetInternalUnit")
-
+    # 注：`GetInternalUnit` 原在此处有手写包装，R42 成员可用性普查发现
+    # 宿主**未实现**该成员（GetIDsOfNames → DISP_E_UNKNOWNNAME）→ 已删除。
+    # 系统侧同时改为：物化包装跳过 `host_absent` 成员（不再造出调不通的方法）。
     def GetMeshingGroup(self) -> ScFlowpreMeshingGroup:
         return ScFlowpreMeshingGroup(self.call("GetMeshingGroup"))
 
@@ -1721,6 +1721,10 @@ def materialize_catalog_wrappers() -> int:
             if member.startswith("_") or member in existing:
                 continue
             if not member.isidentifier():
+                continue
+            if entry.get("host_absent"):
+                # R42-1：宿主**没有**这个成员（GetIDsOfNames → DISP_E_UNKNOWNNAME）
+                # —— 造出包装只会让调用方拿到 com_error，跳过。
                 continue
             # 派发名优先级（R35-1 实机裁定 > 签名 > 目录键）：
             # 实测 20 对里 4 对**只有标题名**能解析（如

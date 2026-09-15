@@ -408,6 +408,36 @@ def _apply_name_verdicts(catalog: dict) -> int:
     return n
 
 
+#: 成员可用性普查结果（R42-1，由 tools/dispatch_name_probe.py --sweep 产出）
+HOST_AVAILABILITY = ROOT / "schemas" / "host_member_availability.json"
+
+
+def _apply_host_absent(catalog: dict) -> int:
+    """把「手册有、宿主**未实现**」的成员标进目录（R42-1）。
+
+    证据 = `GetIDsOfNames` 普查（只解析名字、不调用方法，零副作用）；
+    `state == unknown_name` 即 `DISP_E_UNKNOWNNAME` —— 宿主没有这个成员。
+    这样消费者（含代码生成、人工查目录）能一眼看出"这条调不通"。
+    """
+    import json as _json
+    try:
+        data = _json.loads(HOST_AVAILABILITY.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return 0
+    n = 0
+    for cls, states in (data.get("availability") or {}).items():
+        info = catalog["classes"].get(cls) or {}
+        for kind in ("methods", "properties"):
+            for mem, entry in (info.get(kind) or {}).items():
+                if states.get(mem) == "unknown_name":
+                    entry["host_absent"] = True
+                    entry["host_absent_evidence"] = (
+                        "GetIDsOfNames → DISP_E_UNKNOWNNAME"
+                        "（tools/dispatch_name_probe.py --sweep）")
+                    n += 1
+    return n
+
+
 def _apply_value_evidence(catalog: dict) -> dict:
     """笔误修正 + 语料补充（R33-1）。返回统计，供 CLI 打印。"""
     fixed = added = 0
@@ -582,6 +612,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ev = _apply_value_evidence(catalog)
     ev["dispatch_names"] = _apply_name_verdicts(catalog)
+    ev["host_absent"] = _apply_host_absent(catalog)
 
     if args.list:
         print(f"== {len(files)} classes, {total} members "
@@ -597,7 +628,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"classes={len(catalog['classes'])} "
           f"(Cond*={n_cond}) members={total} "
           f"fixes={ev['fixed']} addenda={ev['added']} "
-          f"dispatch_names={ev['dispatch_names']}")
+          f"dispatch_names={ev['dispatch_names']} "
+          f"host_absent={ev['host_absent']}")
     return 0
 
 
