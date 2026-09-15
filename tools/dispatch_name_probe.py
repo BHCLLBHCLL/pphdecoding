@@ -106,6 +106,103 @@ def _obtain(cls: str, conds, doc, mg):
     return None, None
 
 
+def _first(obj):
+    try:
+        if hasattr(obj, "__getitem__") and len(obj):
+            return obj[0]
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _chains(doc, conds, mg, obtained: dict, inter: dict,
+            errors: dict) -> dict:
+    """链式实例（R37-1）：手册类级 `instance` 给了配方，但形态各异，逐条实现。
+
+    每条的失败都**不致命**：取不到就不进 ctx，最终如实记为「未裁定 + 原因」。
+    """
+    out: dict = {}
+
+    def _try(cls, fn, how):
+        try:
+            obj = fn()
+        except Exception as exc:  # noqa: BLE001
+            errors[cls] = how + " -> " + type(exc).__name__ + ": " + str(exc)
+            return
+        if obj is not None:
+            out[cls] = obj
+            obtained[cls] = how
+        else:
+            errors.setdefault(cls, how + " -> 返回空（工程里没有该对象）")
+
+    # 数组型 getter → 取第一个
+    _try("ClosedVolume", lambda: _first(doc.GetClosedVolumes(False)),
+         "chain:doc.GetClosedVolumes")
+    _try("ClosedVolume", lambda: _first(doc.GetClosedVolumes(True)),
+         "chain:doc.GetClosedVolumes(True)")
+    _try("SpecialRegion", lambda: _first(doc.GetSpecialRegions()),
+         "chain:doc.GetSpecialRegions")
+    # CondCoSim 需要 (name, apptype, interfacetype) 三个参数
+    _try("CondCoSim", lambda: conds.CreateCondCoSim("R37cosim", 0, 0),
+         "chain:conds.CreateCondCoSim(name,0,0)")
+    # CondCoSimRegion：从 CoSim 条件拿区域，再 GetOwner()
+    _cosim = out.get("CondCoSim")
+
+    def _cosim_region():
+        regions = _cosim.GetCoSimRegions()
+        reg = _first(regions)
+        return reg.GetOwner() if reg is not None else None
+
+    if _cosim is not None:
+        _try("CondCoSimRegion", _cosim_region, "chain:GetCoSimRegions()[0].GetOwner")
+    else:
+        errors["CondCoSimRegion"] = ("前置对象 CondCoSim 未取到（见其条目）——"
+                                     "GetOwner() 需要 CoSim 区域实例")
+    # MapCond：CondMapForStructure.GetValue(key)
+    _cmap = inter.get("cmap")
+
+    def _mapcond():
+        for key in ("default", "1", "map", "value"):
+            try:
+                obj = _cmap.GetValue(key)
+            except Exception:  # noqa: BLE001
+                continue
+            if obj is not None:
+                return obj
+        return None
+
+    if _cmap is not None:
+        _try("MapCond", _mapcond, "chain:CondMapForStructure.GetValue(key)")
+    else:
+        errors["MapCond"] = ("前置对象 CondMapForStructure 未取到 —— "
+                             "MapCond 只能由它的 GetValue(key) 产出")
+    # PropItem：CondInitial.GetPhaseMaterial（材料属性项）
+    _condinitial = inter.get("condinitial")
+
+    def _propitem():
+        for getter in ("GetPhaseMaterial", "GetPrimaryMaterial"):
+            try:
+                obj = getattr(_condinitial, getter)()
+            except Exception:  # noqa: BLE001
+                continue
+            if obj is not None:
+                return obj
+        return None
+
+    if _condinitial is not None:
+        _try("PropItem", _propitem, "chain:CondInitial.GetPhaseMaterial")
+    else:
+        errors["PropItem"] = ("前置对象 CondInitial 未取到；且工程未注册材料 —— "
+                              "PropItem 经 CondInitial.GetPhaseMaterial 产出")
+    # CondBoussinesqBaseTemp：先建同名条件，再按名查
+    def _bouss():
+        conds.CreateCondBoussinesqBaseTemp("R37bouss")
+        return conds.QueryCondBoussinesqBaseTempByName("R37bouss")
+
+    _try("CondBoussinesqBaseTemp", _bouss, "chain:Create+QueryByName")
+    return out
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="标题名 vs 签名名 实机裁定")
     ap.add_argument("--json", type=Path, default=None)
@@ -149,6 +246,21 @@ def main(argv=None) -> int:
         doc.WaitForWorker()
         conds_typed = doc.GetConditions()      # typed：实例构建要走它的 call()
         ctx["Conditions"] = _raw(conds_typed)
+        # 这些"中间对象"给链式实例用（CondMapForStructure → MapCond 等）
+        via = result.setdefault("obtained_via", {})
+        inter: dict = {}          # COM 对象另放：evidence 必须可 JSON 序列化
+        try:
+            inter["cmap"] = conds_typed.CreateCondMapForStructure("R37map")
+            via["CondMapForStructure"] = "CreateCondMapForStructure"
+        except Exception as exc:  # noqa: BLE001
+            result.setdefault("chain_errors", {})[
+                "CondMapForStructure"] = ("CreateCondMapForStructure -> "
+                                          + type(exc).__name__ + ": "
+                                          + str(exc))
+        try:
+            inter["condinitial"] = conds_typed.CreateCondInitial("R37init")
+        except Exception:  # noqa: BLE001
+            pass
         mg = doc.QueryMeshingGroupByIndex(0)
         ctx["MeshingGroup"] = _raw(mg)
         ctx["MeshingGroupSetting"] = _raw(mg.GetMeshingGroupSetting())
@@ -172,6 +284,14 @@ def main(argv=None) -> int:
         result["object_probe"][name] = _has_type_info(obj)
         print("   " + name + " GetTypeInfo: " + result["object_probe"][name],
               flush=True)
+    # R37-1：链式实例（数组型 getter / 需要多参数的 Create / 二级 GetOwner）
+    for cls, obj in _chains(doc, conds_typed, mg,
+                            result.setdefault("obtained_via", {}),
+                            inter,
+                            result.setdefault("chain_errors", {})).items():
+        ctx[cls] = _raw(obj)
+        print("   + " + cls + " <- chain", flush=True)
+
     # R36-1：把上一轮「无实例」的类补上（尽力而为，取不到如实记录）
     wanted = sorted({p["class"] for p in pairs})
     for cls in wanted:

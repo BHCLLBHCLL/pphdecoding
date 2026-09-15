@@ -1786,6 +1786,36 @@ Doc 14.1%，WrappingGroup/NumericalRegion/SubmeshSurfaceRegion 100%。
 
 目录 16 条属性全部物化成 Python property：**名字取括号前那段**（`Visible(BOOL)` → `Visible`，
 宿主认的也是这段），读经 `prop()`、写经 `set_prop()`，已存在者不覆盖。
+
+---
+
+## 51. R37 更新（2026-09-15）—— 链式实例 / VBS 纠名 / 参数个数
+
+### 51.1 链式实例：+1，其余 9 条给**确切原因**（R37-1）
+
+`_chains()` 按手册 `instance` 配方实现链式取实例；本机 `box.pph` 只有
+`SpecialRegion` 拿到（`doc.GetSpecialRegions()[0]`，裁定 `both`）→ **32/41**。
+其余 9 条逐类落 `chain_errors`：`ClosedVolume`（`GetClosedVolumes` **返回空**）、
+`CondCoSim`（`CreateCondCoSim` 返回空）、`PropItem`（`CondInitial.GetPhaseMaterial()` 空，
+工程未注册材料）、`CondBoussinesqBaseTemp`（目录**无** `CreateCondBoussinesqBaseTemp`）、
+`CondCoSimRegion`/`MapCond`/`CondMapForStructure`（前置对象缺失）。
+
+> ★ **结论**：这 9 条不是工序问题，而是**本机工程缺对象** → R38-1 换官方算例工程补。
+> **第四次踩坑**：`obtained_via` 里塞了 COM 对象 → `json.dumps` 抛
+> `TypeError: Object of type CDispatch is not JSON serializable`；证据结构只能放可序列化值。
+
+### 51.2 VBS 通道按裁定表纠名（R37-2）
+
+`vbs_bridge.name_corrections()`（读 `schemas/name_verdicts.json`）+
+`validate_actions` 扫方法名 → 命中即报「应改用 Y」，`strict` 抛 `ApiValueError`。
+堵的是真实故障：**4 处「只有签名名能解析」**的对，VBS 生成器按目录键发出去必然失败
+（typed 桥已被物化包装兜住，VBS 直写没有）。
+
+### 51.3 参数个数校验（R37-3）
+
+`signature_arity()`：`(path, flag)`→2、`SetX flag`→1、`GetParam(key value)`→2、
+`GetMesher()`→0、无签名→None。默认**只告警**（手册有可选参数，硬拦会误杀），
+`strict_values=True` 才在派发前抛。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

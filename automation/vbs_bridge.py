@@ -65,6 +65,29 @@ def _method_value_set(method: str) -> set:
     return out
 
 
+#: VBS 里「`Obj.Method`」的方法名（R37-2 名字纠错用）
+VBS_CALL_NAME = re.compile(r"\.([A-Za-z_]\w*)")
+
+
+def name_corrections() -> dict:
+    """目录键 → 宿主真正接受的名字（仅收"改了才调得通"的那些）。
+
+    来自 `schemas/name_verdicts.json`（R35/R36 实机 `GetIDsOfNames` 裁定）：
+    实测 4 处「只有签名名能解析」—— 生成器若按目录键发出去**必然失败**。
+    """
+    try:
+        from automation.scflowpre_api import load_name_verdicts
+        table = load_name_verdicts()
+    except Exception:  # noqa: BLE001
+        return {}
+    out: dict = {}
+    for members in table.values():
+        for key, resolved in members.items():
+            if resolved != key:
+                out[key] = resolved
+    return out
+
+
 def validate_actions(actions: list) -> list:
     """扫动作行里的字符串实参，按目录词表三态校验（返回告警列表）。
 
@@ -74,7 +97,14 @@ def validate_actions(actions: list) -> list:
     """
     out = []
     cache: dict = {}
+    fixes = name_corrections()
     for action in actions:
+        # 名字纠错（R37-2）：目录键调不通的对，直接在生成期点名
+        for method in VBS_CALL_NAME.findall(str(action)):
+            fixed = fixes.get(method)
+            if fixed:
+                out.append(method + " 在宿主上不存在（手册标题拼写），应改用 "
+                           + fixed)
         for method, literal in VBS_CALL_LITERAL.findall(str(action)):
             if not IDENT_LITERAL.match(literal):
                 continue

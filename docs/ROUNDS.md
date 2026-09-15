@@ -2640,22 +2640,84 @@ win32com 当属性读，第一版 `_obtain` 因此**静默全失败**（表现�
 
 ---
 
-## R37 —— 提案（≈1.5 人日）
+## R37 —— 链式实例裁定 + VBS 纠名 + 参数个数校验（2026-09-15，✅ 已完成）
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R37-1** | **链式实例补裁定** | 覆盖 41/41，或每条未覆盖给出确切原因 | ⚠️ **32/41**（+1：`SpecialRegion`）；余 **9 条逐一给出确切原因**（`chain_errors` 落盘） |
+| **R37-2** | **VBS 通道按裁定表纠名** | 生成期指出/纠正，有测试 | ✅ 4 处「签名胜」的目录键在生成期被点名「应改用 X」，`strict` 抛错 |
+| **R37-3** | **参数个数校验** | 个数不符在派发前拦下/告警 | ✅ 按签名解析 arity（三种形态都覆盖），默认告警、`strict` 派发前拦下 |
+
+### R37-1 链式实例：+1，其余 9 条给原因
+
+`_chains()` 实现了手册 `instance` 字段里的链式配方：数组型 getter 取首元素、
+多参数 `Create`、二级 `GetOwner`、`CondMapForStructure.GetValue` 等。
+本机 `box.pph` 工程资源有限，**只有 `SpecialRegion` 拿到**
+（`doc.GetSpecialRegions()[0]` → 裁定 `both`）。其余 9 条的原因（`chain_errors`）：
+
+| 类 | 确切原因 |
+|---|---|
+| `ClosedVolume` | `doc.GetClosedVolumes(False/True)` **返回空** —— 该工程没有闭空间 |
+| `CondCoSim` | `conds.CreateCondCoSim(name,0,0)` 返回空（CoSim 条件需要 co-simulation 配置） |
+| `PropItem` | `CondInitial.GetPhaseMaterial()` 返回空 —— 工程未注册材料 |
+| `CondBoussinesqBaseTemp` | 目录里**没有** `CreateCondBoussinesqBaseTemp`（只能按名查已有条件） |
+| `CondCoSimRegion` / `MapCond` | **前置对象缺失**（`CondCoSim` / `CondMapForStructure` 未取到） |
+| `CondMapForStructure` | `CreateCondMapForStructure` 抛错（同上：需映射条件前置） |
+
+→ 结论明确：**这 9 条不是工序问题，而是"本机工程缺对象"**；换一个含闭空间/材料/
+CoSim 的官方算例工程即可补 → R38-2。
+
+**第四次踩坑（已入注释）**：`obtained_via` 里塞了 COM 对象 → `json.dumps` 抛
+`TypeError: Object of type CDispatch is not JSON serializable`。证据结构必须只放可序列化值。
+
+### R37-2 VBS 名字纠错
+
+`vbs_bridge.name_corrections()` 从 `schemas/name_verdicts.json` 取「目录键 → 宿主接受名」，
+`validate_actions` 扫描 `Obj.Method` 形态的方法名：命中即报
+「X 在宿主上不存在（手册标题拼写），应改用 Y」。`build_vbs(strict_values=True)` 抛
+`ApiValueError`。**这条堵住的是真实故障**：4 处「只有签名名能解析」的对，
+生成器按目录键发出去必然失败（typed 桥已被物化包装兜住，VBS 直写没有）。
+
+### R37-3 参数个数校验
+
+`signature_arity()` 解析手册签名：`(path, flag)` → 2、`SetX flag` → 1、
+`GetParam(key value)` → 2（空格分隔）、`GetMesher()` → 0、无签名 → None（不判）。
+`_check_values` 在派发前比对个数：默认**只告警**（手册有可选参数，硬拦会误杀），
+`strict_values=True` 才抛。
+
+### 回归
+
+全量回归 **1404 passed / 4 skipped / 0 failed**（550.35 s；R36 收口同口径 1392，
+增量 +12 = 本轮新模块 12，逐项对得上）。arity 校验按默认"只告警"落地，全量回归无新增失败。
+新增测试 1 个模块：`test_r37_evidence.py`（12）。
+
+### 证据
+
+`_p12u_gate/r37/name_verdicts.json`（32 裁定 + `chain_errors` 逐类原因）、
+`schemas/name_verdicts.json`（17 类裁定表）。
+
+---
+
+## R38 —— 提案（≈1.5 人日）
 
 ### 依据
 
-* 仍有 **10 处未裁定**，且都有手册给的链式实例配方（未做只是工序问题）；
-* 名字裁定的结论**只回灌了 typed 桥**：VBS 生成通道仍按目录键写字面量，
-  而 **4 处"签名胜"** 的对用目录键发出去必然失败；
-* 物化包装只校验**取值**，参数**个数**不符要等宿主报错才发现（`_check_values` 不看 arity）。
+* R37-1 的 9 条未裁定**不是工序问题而是"工程缺对象"** —— 换个含闭空间/材料/CoSim 的
+  官方算例工程就能补；
+* arity 校验默认只告警，因为手册里有**可选参数**（如 `OpenProject(path, flag)`），
+  但我们没有"哪些参数可选"的口径；
+* 裁定表只存在 `schemas/name_verdicts.json`，**目录里没有** `dispatch_name` ——
+  任何只读目录的消费者（含将来的代码生成）拿不到纠名信息。
 
 ### 条目
 
 | # | 条目 | 做法 | 验收句 | 人日 |
 |---|---|---|---|---|
-| **R37-1** | **链式实例补裁定** | 按手册 `instance` 配方建 `PropItem`/`MapCond`/`ClosedVolume`/`SpecialRegion`/`CondCoSimRegion` 等 | 裁定覆盖 41/41（或每条未覆盖给出确切原因） | 0.5 |
-| **R37-2** | **VBS 通道按裁定表纠名** | `build_vbs` 校验时用裁定表：目录键调不通的（4 处签名胜）要纠名或告警 | 生成期指出/纠正，有测试 | 0.5 |
-| **R37-3** | **物化包装的参数个数校验** | 按目录签名解析 arity，调用前比对（`*args` 泛收也要挡明显错） | 个数不符在派发前拦下/告警，有测试 | 0.5 |
+| **R38-1** | **换工程补裁定** | 从官方算例库挑含闭空间/材料/CoSim 的 PPH，跑同一裁定 | 未裁定数 9 → ≤3；新裁定入表 | 0.5 |
+| **R38-2** | **可选参数口径** | 从手册文本里找"可选"标记（`Note. This is optional` 等），落成 `optional_args` | arity 校验据此**不误报**，且真错仍告警 | 0.5 |
+| **R38-3** | **裁定表回灌目录** | 提取期把裁定/签名名写进目录条目（`dispatch_name`） | 只读目录即可拿到纠名；有测试 | 0.5 |
 
 ### 明确不做
 

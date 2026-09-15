@@ -65,10 +65,13 @@
   },
   "OctParam": {
    "SetMinSize": "SetMinSize"
+  },
+  "SpecialRegion": {
+   "SetIsContactAngleSet": "SetIsContactAngleSet"
   }
  },
  "tally": {
-  "both": 21,
+  "both": 22,
   "heading": 6,
   "signature": 4
  }

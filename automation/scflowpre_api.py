@@ -32,6 +32,7 @@ Note）。ProgID：``scFLOWpre_Bx64net.Application.2025``。
 
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -151,10 +152,21 @@ class ComObject:
         """
         _ensure_api_wiring()
         cls = self.api_class
-        if not cls or not args:
+        if not cls:
             return
         entry = _member_entry(cls, name)
         if not entry:
+            return
+        # 参数**个数**（R37-3）：手册签名给了期望值，不符就点名（默认只告警）
+        expected = signature_arity(entry.get("signature"))
+        if expected is not None and len(args) != expected:
+            msg = (cls + "." + name + " 参数个数 " + str(len(args))
+                   + " ≠ 手册签名 " + str(expected) + "（"
+                   + str(entry.get("signature")) + "）")
+            if self.strict_values:
+                raise ApiValueError(msg)
+            value_warnings.append(msg)
+        if not args:
             return
         for i, a in enumerate(entry.get("arguments") or []):
             if i >= len(args):
@@ -1650,6 +1662,28 @@ def load_name_verdicts(path: Optional[Path] = None) -> dict:
         return json.loads(p.read_text(encoding="utf-8")).get("resolved") or {}
     except Exception:  # noqa: BLE001
         return {}
+
+
+def signature_arity(sig: Optional[str]) -> Optional[int]:
+    """从目录签名解析**位置参数个数**（R37-3）；解析不出来返回 None（不判）。
+
+    两种形态都见得到：`retval=doc.OpenProject(path, flag)`（逗号分隔）与
+    `meshset.SetTinyFaceRelativeFlag flag` / `GetParam(key value)`（空格分隔）。
+    """
+    if not sig:
+        return None
+    text = str(sig).strip()
+    m = re.search(r"\(([^)]*)\)\s*$", text)
+    if m:
+        body = m.group(1).strip()
+        if not body:
+            return 0
+        parts = [p for p in body.split(",") if p.strip()]
+        if len(parts) == 1 and len(parts[0].split()) > 1:
+            parts = parts[0].split()
+        return len(parts)
+    tail = text.split()
+    return 1 if len(tail) >= 2 else 0
 
 
 def _make_catalog_wrapper(dispatch: str, doc: str, name: str,
