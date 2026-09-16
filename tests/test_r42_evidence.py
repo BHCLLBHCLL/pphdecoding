@@ -123,9 +123,15 @@ class TestCatalogHostAbsent(unittest.TestCase):
 
     def test_other_classes_keep_their_own_member(self):
         """同名成员可能只在**部分类**未实现（`ImportCSV` → SpecialRegion +
-        CondPorousMedia），别的类（FaceRegion/NumericalRegion）的实现必须保留。"""
+        CondPorousMedia…），别的类（FaceRegion/NumericalRegion）的实现必须保留。
+
+        R45 把这条从"当前事实集合相等"改成**单调下界**：扩面每多普查一个类，
+        未实现该成员的类就可能多一个（实测从 2 个涨到 6 个），但已确认的两个
+        必须一直在，且**解析得到**的类不许被标。
+        """
         absent = {c for c, m in self._absent() if m == "ImportCSV"}
-        self.assertEqual(absent, {"SpecialRegion", "CondPorousMedia"})
+        self.assertTrue({"SpecialRegion", "CondPorousMedia"}.issubset(absent),
+                        absent)
         for cls in ("FaceRegion", "NumericalRegion"):
             entry = (self.cat["classes"].get(cls) or {}).get("methods", {}).get(
                 "ImportCSV")
@@ -153,13 +159,18 @@ class TestNyiTerminal(unittest.TestCase):
     def test_every_nyi_has_a_terminal_kind(self):
         data = self.mod.account()
         nyi = [r for r in data["rows"] if r["state"] == "nyi"]
-        self.assertEqual(len(nyi), 9)
+        # R45：口径改为**只减不增**（9 = R42 收口基线）。扩面会把 NYI 里那些
+        # "取不到对象"的对裁定掉 —— 实测 9 → 6（自动配方取到了对象），
+        # 但绝不允许凭空多出无法裁定的条目。
+        self.assertLessEqual(len(nyi), 9)
         kinds = {}
         for row in nyi:
             self.assertIn("terminal", row, row["heading"])
             kinds[row["terminal"]] = kinds.get(row["terminal"], 0) + 1
-        self.assertEqual(kinds.get("host-interface-absent", 0), 3)
-        self.assertEqual(kinds.get("needs-gui-flow", 0), 6)
+        self.assertLessEqual(kinds.get("host-interface-absent", 0), 3)
+        self.assertLessEqual(kinds.get("needs-gui-flow", 0), 6)
+        # 总数 = 有终态的（不许有既无终态又算不出的条目）
+        self.assertEqual(len(nyi), sum(kinds.values()))
 
     def test_committed_account_matches(self):
         saved = json.loads(ACCOUNT.read_text(encoding="utf-8"))

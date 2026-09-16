@@ -2048,3 +2048,55 @@ VBS 生成（取值 + 纠名）、面板写 xenv（实测键账本 + 枚举白�
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。
+
+---
+
+## 59. R45 更新（2026-09-15）—— 自动配方扩面（146 类）+ 三个假证据闸门 + 提示进产品面
+
+### 59.1 覆盖 84 → 146 类（R45-1）
+
+| 指标 | R44 | R45 |
+|---|---|---|
+| 已普查类 | 84 | **146**（/199，73.4%） |
+| 已普查成员 | 2793 | **3855**（/4455） |
+| 未实现成员（条目/名字） | 16 / 13 | **25 / 17** |
+| 探针侧错误 | 0 | **0** |
+
+取实例不再靠逐条手写链条，而是**生成候选计划**（`auto_plans()`，纯函数、离线可单测）：
+① 类级 `instance` 配方（手册给的取法，参数照抄，含 `[in](BSTR)ProgID` 这类前缀参数的还原）；
+② 目录里声明在已持有宿主（`Doc`/`Conditions`/`MeshingGroup`/`Env`/`Application`…）上的
+`Create*/Get*/Query*`；③ 宿主独有成员的名字家族穷举。参数按阶梯退让。
+**66 类**由自动配方取得。
+
+### 59.2 三个假证据闸门（R45-1b，本轮主要发现）
+
+| 事故 | 假结论 | 闸门 |
+|---|---|---|
+| 会话 `Application` 被别名成 `Kicker.Application` | 9 个成员 8 个 `unknown_name` → 8 条假的"宿主未实现" | 别名清空 + **验身**：会话对象实为目录 `Application` 类（unknown 比率 0.00） |
+| 配方给的是**别家对象**（`CondOversetGap` 页写 `CreateCondSpray`） | 别人的成员全判未实现 | `identity_ok()`：类**独有成员**解析率 ≥ 半数才算拿到；否掉的进 `identity_rejected` |
+| 对象过时/别名错导致整类失败 | 整类假否证 | `sweep_class_verdict()`：整类未知过半（成员 ≥4）→ **整类不记**，停在"未普查" |
+
+另修两处假阳性：标题/签名对（`ClosedVolume.SelectFace`：派发名不通时回退成员键名，
+证据 `resolved_via_member_key`）；自动配方错误**不并入** `call_errors`
+（多宿主同名尝试会把"接口有、对象没造出来"误判成 host-interface-absent，
+隔离前 NYI 终态曾从 3+6 漂成 6+0）。
+
+### 59.3 覆盖率四桶（R45-1c）
+
+手册页**零成员**的类（`CondALECancel`/`ParticleRegion`…）单列
+`no_member_classes`：146 已普查 + 4 取不到实例 + 10 无成员 + 39 未尝试 = **199** ✅。
+同时修掉 `empty_objects` 与已普查的**重叠**（早期工程空、后面工程拿到 → 199 数出 201）。
+
+### 59.4 提示进产品面（R45-2）与常规入口（R45-3）
+
+`automation.scflowpre_api.object_hints()` / `host_absent_members()`（缺证据文件返回空、不崩）
++ `docs/NYI_INVENTORY.md` 自动生成节「宿主侧能力边界」（取不到实例的类 + 25 条未实现成员）
++ `tools/host_member_sweep.py`（默认 5 工程、`--budget`、`--min-classes` 非零退出、`--report-only`）。
+提示表升为模块级**知识** `EMPTY_HINTS`（已取到的 `ClosedVolume`/`Octree` 不再出现在当轮证据，
+但知识留存）。
+
+### 59.5 附带
+
+目录 `host_absent` 16 → **25 条**（16 类）；分歧总账已裁定 32 → **35**、NYI 9 → **6**
+（终态 1 host-interface-absent + 5 needs-gui-flow）。
+

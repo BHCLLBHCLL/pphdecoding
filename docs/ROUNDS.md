@@ -3145,28 +3145,136 @@ interfacetype)` 也能试到）→ **78 个条件实例**一次建成，随后�
 
 ---
 
-## R45 —— 提案（≈1 人日）
+## R45 —— 自动配方扩面 + 提示进产品面 + 普查常规入口（2026-09-15，✅ 已完成）
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R45-1** | **自动配方扩面** | 覆盖类数 84 → ≥110 | ✅ **146 类**（/199，73.4%）；成员 2793 → **3855**（/4455） |
+| **R45-2** | **提示进产品面** | 面板或文档一处可查 + 测试 | ✅ `scflowpre_api.object_hints()`/`host_absent_members()` + `docs/NYI_INVENTORY.md` 自动生成节（同源，测试对账） |
+| **R45-3** | **普查常规入口** | 一条命令可复算（含覆盖率） | ✅ `tools/host_member_sweep.py`（`--report-only` 不起宿主；覆盖低于 `--min-classes` 非零退出） |
+
+### R45-1 自动配方：给**每一类**生成候选，而不是逐条手写
+
+不再一条条补链式配方，而是把"拿实例"变成**可生成的计划**（`tools/dispatch_name_probe.py`，
+纯函数 `auto_plans()`，离线可单测）：
+
+| 优先级 | 来源 | 例 |
+|---|---|---|
+| ① | 类级 `instance` **配方**（手册亲自给的取法，参数也照抄） | `Set dtsr = conditions.CreateCondDTSR("name")` → `CreateCondDTSR("R45CondDTSR")` |
+| ② | 目录里**声明在已持有宿主上**的构造/取用成员 | `Doc.CreateFaceRegion` / `Doc.GetProjectSetting` / `Conditions.GetCondCavitation` |
+| ③ | 宿主独有成员（手册是子集）——只在 `Conditions`/`Doc`/`MeshingGroup` 上泛试 | `Create<S>`/`Get<S>`/`Query<S>ByName`… 名字家族穷举 |
+
+参数按阶梯退让（`(name,)` → `(name,0,0)` → `(name,0)` → `()` → `(name,False)` → `(name,"default")`），
+并优先用**手册签名里的参数名**给实参（`[in](BSTR)ProgID` → 真的传本机 ProgID）。
+
+结果：**66 类**由自动配方一次取得（其余靠已有链条/条件批量实例），覆盖 84 → **146 类**、成员 2793 → **3855**。
+
+### R45-1b 三个"假证据"闸门（本轮的主要发现）
+
+扩面把三处**会伪造结论**的路径暴露了出来，全部当场修掉——它们的共同后果都是
+"把别人的成员写成宿主未实现"（假否证，比没普查更有害）：
+
+| # | 事故 | 后果 | 修法 |
+|---|---|---|---|
+| ① | 把会话 `Application` 对象**别名**成 `Kicker.Application` | 那 9 个成员 **8 个** `unknown_name`；`GetApplicationLaunchSetting` 之类会被入册成"宿主未实现" | **别名留空**（实测会话对象就是目录 `Application` 类：23 成员、unknown 比率 **0.00**），并写明"别名必须过验身" |
+| ② | 配方写的是**别的类**（`CondOversetGap` 那页给的是 `CreateCondSpray`） | 拿错对象 → 它的独有成员全判未实现 | **验身**：`identity_ok()` 用该类**独有成员**的解析率把关（≥ 半数），否掉的配方记进 `identity_rejected`（实测否掉 10 条：`Condition <- Doc.GetConditions`，集合对象不是单个 `Condition`） |
+| ③ | 别名/对象**过时**时整类解析失败 | 整类假否证 | **验身后置闸**：`sweep_class_verdict()` —— 整类未知过半（且成员 ≥4）就**整类不记**，停在"未普查"（宁可没结论，不要假结论） |
+
+另修两处**假阳性**（把能用的说成不可用）：
+
+* `ClosedVolume.SelectFace`：标题名能用、签名名 `SetSelectFaces` 不认 —— 派发名不通时
+  **回退试成员键名**（证据 `resolved_via_member_key`）；
+* 自动配方的调用错误**不再并进** `call_errors`：它会在多个宿主上试同一个名字
+  （`CreateCondCoSim` 在 `Doc` 上当然没有），并进去会把 CondCoSim 这类"接口有、对象还没造出来"
+  的条目误判成 `host-interface-absent`（实测过：NYI 终态从 3+6 漂成 6+0，隔离后回到 **1+5**）。
+
+### R45-1c 覆盖率口径：三桶 → 四桶
+
+手册页**一个成员都没有**的类（`CondALECancel`/`ParticleRegion`…）取到对象也"没成员可查"：
+算进 `classes_swept` 会把覆盖率说虚，算"未普查"又不实。故单列一桶：
+
+| 桶 | 数量 |
+|---|---|
+| 已普查 | **146** |
+| 取不到实例（各带前置提示） | **4**（`CondBoussinesqBaseTemp`/`CondCoSim`/`CondCoSimRegion`/`PropItem`） |
+| 取到但手册无成员 | **10** |
+| 从未尝试 | **39** |
+| 合计 | **199** ✅ |
+
+顺带修掉一次**桶重叠**（同一类在早期工程里是空的、后面工程拿到了真对象，
+`empty_objects` 与已普查重叠 → 199 类数出 201）：已普查的类不再算"取不到实例"。
+
+### R45-2 提示进产品面（同一份证据，三个可查面）
+
+| 面 | 内容 |
+|---|---|
+| API | `automation.scflowpre_api.object_hints()`（类 → "先跑哪个流程"）、`host_absent_members()`（类 → 宿主未实现成员）；缺证据文件时返回空 dict，不崩 |
+| 文档 | `docs/NYI_INVENTORY.md` 新增自动生成节「宿主侧能力边界」：取不到实例的类（含先决提示）+ 宿主未实现成员清单（25 条） |
+| 证据 | `schemas/host_member_availability.json` 的 `coverage.empty_hints` / `coverage.no_member_classes` |
+
+提示表升为**模块级知识** `EMPTY_HINTS`（`ClosedVolume`/`Octree` 这轮已经能取到，
+不再出现在当轮证据里，但"要先跑什么"是知识，不随一轮结果消失 —— 测试查表、产品面查当轮子集）。
+
+### R45-3 常规入口
+
+`tools/host_member_sweep.py`：默认 5 个工程（`box.pph` + exB01/exA26/exA16/exA25）、
+`--budget` 时间预算、`--min-classes`（默认 84 = R44 基线）**低于即非零退出**、
+`--report-only` 不起宿主只报当前证据。本轮最终证据就是走它跑的（`_p12u_gate/r45_run4.log`）。
+
+### 附带成果
+
+* 目录 `host_absent` **16 → 25 条**（16 个类）：新增 `CondFreeSurface.GetPhaseCheangeSw`/`SetPhaseCheangeSw`、
+  `CoordinatesSpecifiedPart.GetRadiationValue`、`ClosedVolume.GetSweepDestinationFaceRegion`、
+  `VolumeRegion.GetSweepDestinationFaceRegion`、`ClosedVolume.ImportCSV` 等；
+* 标题/签名分歧总账：**已裁定 32 → 35 / NYI 9 → 6**（`ClosedVolume.SelectFace`、
+  `CondMapForStructure.SetPIDPartCorresp`、`MapCond.SetParam2` 三条由"取不到对象"变为裁定）；
+  NYI 终态 **1 host-interface-absent + 5 needs-gui-flow**；
+* 探针侧错误保持 **0**；`identity_rejected` 10 条全部是同一处（`Condition <- Doc.GetConditions`）。
+
+### 回归
+
+全量回归 **1492 passed / 4 skipped / 0 failed**（569.92 s；R44 收口同口径 1467/4/0，
+增量 +25 = 本轮新模块 25 项，逐项对得上；末行 `exit=0` 一并落盘）。新增测试 1 个模块 `test_r45_evidence.py`（25 项：
+离线配方生成/验身/四桶/产品面/入口），并按新口径更新 R42/R43/R44 的 6 处断言
+（NYI 数量与终态分布改**单调下界**、`ImportCSV` 集合改下界、空对象集合改下界、
+三桶改四桶）。
+
+### 证据
+
+`schemas/host_member_availability.json`（146 类 / 3855 成员 / 25 未实现条目 / errors 0 /
+`auto_obtained` 66 / `identity_rejected` 10 / `no_member_classes` 10）、
+`schemas/vb_api_catalog.json`（`host_absent` 25）、`schemas/dispatch_account.json`（NYI 6）、
+`docs/NYI_INVENTORY.md`、`_p12u_gate/r45_run4.log`。
+
+---
+
+## R46 —— 提案（≈1 人日）
 
 ### 依据
 
-* 仍有 **107 个类未普查**（84 + 8 + 107 = 199）：其中不少能经 `Doc`/`SNode`/`Table` 等
-  已有实例的 getter 拿到（只需补几条链式配方）；
-* `empty_hints` 目前只在**证据**里，面板/文档侧还没有提示；
-* 普查目前只能通过 `tools/dispatch_name_probe.py` 触发，**没有常规入口**
-  （每次都要起宿主会话）。
+* 覆盖到 73.4% 后，剩下 **39 类"从未尝试"** 里绝大多数是**需要前置语料**的
+  （材料/CoSim/粒子/映射/多轴表/SNode/Table/Value），只有个别是纯名字没试对；
+* `classes_swept` 现在只说明"试过"，**没有**说明"这些类的对象是从哪条路来的"——
+  `auto_obtained` 已在覆盖率总账里，但逐类的 `via`（含链条/条件批量）还没进；
+* 面板（`nav_panels.py`/`pph_gui.py`）还没有把"宿主未实现成员"灰显/提示接到菜单上。
 
 ### 条目
 
 | # | 条目 | 做法 | 验收句 | 人日 |
 |---|---|---|---|---|
-| **R45-1** | **继续扩面** | 给未普查类补链式配方（SNode/Region/Table/Utility/VMDL…） | 覆盖类数 84 → ≥110 | 0.5 |
-| **R45-2** | **提示进产品面** | 把 `empty_hints` 接进面板/文档提示 | 面板或文档一处可查，且有测试 | 0.25 |
-| **R45-3** | **普查常规入口** | `tools/host_member_sweep.py` 或把 `--sweep` 的用法文档化 | 一条命令可复算普查（含覆盖率） | 0.25 |
+| **R46-1** | **未普查类归因** | 给 39 个"从未尝试"的类逐类写**终态**（需要什么前置语料 / 手册无创建路径） | 39 类逐类有终态且入 `schemas/`，无"未归因" | 0.5 |
+| **R46-2** | **取得路径进总账** | `coverage.obtained_via`（类 → 配方）落进 availability | 覆盖率报表能答"这个类怎么拿到的" | 0.25 |
+| **R46-3** | **未实现成员上面板** | 菜单/成员面板对 `host_absent` 灰显 + 提示 | GUI 一处可查（或明确记为"面板语义不做"） | 0.25 |
 
 ### 明确不做
 
-* 不提取 Post / Solver / Monitor 类（非本仓域）；
-* 不为 `Set*` 写「自动挑取值」逻辑——取值选择是面板语义，不是目录语义。
+* 不为扩面去**造语料**（材料库/CoSim/粒子算例要另起工程，不是普查该干的事）；
+* 不改 `host_absent` 的判据（`GetIDsOfNames` 零副作用解析仍是唯一证人）。
+
+---
+
 
 ---
 

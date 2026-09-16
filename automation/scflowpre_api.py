@@ -1772,6 +1772,56 @@ def _ensure_api_wiring() -> None:
         _API_WIRED = True
 
 
+#: R45-2：普查证据（宿主成员可用性 + 空对象的前置流程提示）
+AVAILABILITY_PATH = (Path(__file__).resolve().parent.parent
+                     / "schemas" / "host_member_availability.json")
+_AVAILABILITY: Optional[dict] = None
+
+
+def load_availability(path: Optional[Path] = None) -> dict:
+    """读普查证据 schemas/host_member_availability.json（进程内缓存）。
+
+    文件缺失（未跑过普查的部署）返回空 dict —— 提示是**可选**的辅助信息，
+    不该让调用方为此崩掉。
+    """
+    global _AVAILABILITY
+    if _AVAILABILITY is None or path is not None:
+        import json
+        try:
+            _AVAILABILITY = json.loads(
+                Path(path or AVAILABILITY_PATH).read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            _AVAILABILITY = {}
+    return _AVAILABILITY
+
+
+def object_hints(path: Optional[Path] = None) -> dict:
+    """取不到实例的类 → 「先跑哪个流程」的提示（R45-2 产品面）。
+
+    这些类在宿主里**不是接口缺失**，而是当前工程没有该对象（要把前置流程
+    跑出来才有）。面板/文档据此给出可操作提示，而不是一句"取不到"。
+    """
+    cov = (load_availability(path) or {}).get("coverage") or {}
+    return dict(cov.get("empty_hints") or {})
+
+
+def host_absent_members(catalog: Optional[dict] = None) -> dict:
+    """宿主**未实现**的成员（手册有、宿主 GetIDsOfNames 解析不到）：类 → 名表。
+
+    口径与物化包装一致（materialize_catalog_wrappers 跳过这些条目），
+    所以这是"Python 侧不会再造出这些方法"的**同一份**事实。
+    """
+    cat = catalog if catalog is not None else load_catalog()
+    out: dict = {}
+    for cls, info in (cat.get("classes") or {}).items():
+        names = [m for kind in ("methods", "properties")
+                 for m, e in (info.get(kind) or {}).items()
+                 if e.get("host_absent")]
+        if names:
+            out[cls] = sorted(names)
+    return out
+
+
 def catalog_coverage(catalog: dict) -> dict[str, str]:
     """catalog 类名 → 覆盖方式（typed / condition-subclass / generic-call）。
 

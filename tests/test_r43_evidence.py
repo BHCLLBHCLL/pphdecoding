@@ -44,9 +44,10 @@ class TestCoverageAccount(unittest.TestCase):
     def test_coverage_is_complete_and_consistent(self):
         cov = self.data["coverage"]
         self.assertEqual(cov["classes_total"], len(self.cat["classes"]))
-        # 三桶互斥：已普查 + 空对象（试过拿不到）+ 未普查 = 全部类
+        # 四桶互斥（R45 起）：已普查 + 取不到实例 + 手册无成员 + 未普查 = 全部类
         self.assertEqual(
             cov["classes_swept"] + len(cov["empty_objects"])
+            + len(cov.get("no_member_classes") or [])
             + len(cov["unswept_classes"]), cov["classes_total"])
         self.assertEqual(cov["classes_swept"], len(self.data["classes"]))
         self.assertLessEqual(cov["members_swept"], cov["members_total"])
@@ -55,17 +56,29 @@ class TestCoverageAccount(unittest.TestCase):
     def test_unswept_classes_are_real_and_declared(self):
         cov = self.data["coverage"]
         unswept = set(cov["unswept_classes"])
-        self.assertTrue(unswept, "未普查类必须列清")
+        swept = set(self.data["classes"])
+        empty = set(cov.get("empty_objects") or [])
         self.assertTrue(unswept.issubset(set(self.cat["classes"])))
-        self.assertNotIn("Octree", unswept)   # 它属于 empty_objects，不是"没试过"
+        # 三桶真的互斥（R45 修过一次重叠：早期工程空、后面工程拿到了真对象）
+        self.assertFalse(unswept & swept)
+        self.assertFalse(unswept & empty)
+        self.assertFalse(swept & empty)
 
     def test_empty_objects_are_the_nyi_classes(self):
-        """取不到实例的类 = R41/R42 的 NYI 类（同样的对象前置问题）。"""
+        """取不到实例的类 = 有对象前置问题的那批（R41/R42 的 NYI 类）。
+
+        R45 起改为**单调下界**：扩面会把其中一些类真的取到（ClosedVolume/
+        Octree 已经取到了），但已确认"没有前置对象就取不到"的这些必须一直
+        在册 —— 除非它们被取到（那时从本集合移出属于进步，由
+        `test_coverage_reaches_r45_target` 的类数增长体现）。
+        """
         empty = set(self.data["coverage"].get("empty_objects") or [])
-        self.assertEqual(empty, {"ClosedVolume", "CondBoussinesqBaseTemp",
-                                 "CondCoSim", "CondCoSimRegion",
-                                 "CondMapForStructure", "MapCond", "Octree",
-                                 "PropItem"})
+        known = {"CondBoussinesqBaseTemp", "CondCoSim", "CondCoSimRegion",
+                 "PropItem"}
+        self.assertTrue(known.issubset(empty), empty)
+        # 提示必须逐条覆盖（R44-2 的口径）
+        hints = self.data["coverage"].get("empty_hints") or {}
+        self.assertEqual(set(hints), empty)
 
 
 class TestProbeErrorsZero(unittest.TestCase):

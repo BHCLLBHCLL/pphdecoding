@@ -1434,7 +1434,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "Name of surface region (string)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "GetSweepFaceRegionName": {
      "signature": "retval=cvol.GetSweepFaceRegionName",
@@ -1561,7 +1563,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "InsertSweepLayer": {
      "signature": "retval=cvol.InsertSweepLayer(index, thickness)",
@@ -1828,7 +1832,9 @@
       "name": "None",
       "description": ""
      },
-     "signature_name": "SetSelectFaces"
+     "signature_name": "SetSelectFaces",
+     "dispatch_name": "SelectFace",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "SelectMeshElementsOfSpecifiedCVolID": {
      "signature": "cvol.SelectMeshElementsOfSpecifiedCVolID bSelect, id",
@@ -11989,7 +11995,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (Yes), False (No)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "GetPhaseChangeType": {
      "signature": "retval=freesurface.GetPhaseChangeType()",
@@ -12418,7 +12426,9 @@
      }
     },
     "SetPhaseCheangeSw": {
-     "signature": "freesurface.SetPhaseCheangeSw(type, bset)"
+     "signature": "freesurface.SetPhaseCheangeSw(type, bset)",
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "SetPhaseChangeType": {
      "signature": "retval=freesurface.SetPhaseChangeType(type)"
@@ -15773,7 +15783,9 @@
       "name": "None",
       "description": ""
      },
-     "signature_name": "SetLoadIDFaceRegionCorresp"
+     "signature_name": "SetLoadIDFaceRegionCorresp",
+     "dispatch_name": "SetPIDPartCorresp",
+     "dispatch_source": "verdict:GetIDsOfNames"
     }
    }
   },
@@ -47735,7 +47747,9 @@
       "type": "LPDISPATCH",
       "name": "value",
       "description": "Value class"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "GetLinkedPartName": {
      "signature": "retval=coord_part.GetLinkedPartName",
@@ -47932,7 +47946,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "IsFluid": {
      "signature": "retval=coord_part.IsFluid",
@@ -62308,7 +62324,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "IsFluid": {
      "signature": "retval=frgn_derived_sheet.IsFluid",
@@ -63395,7 +63413,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "IsExpanded": {
      "signature": "retval=fluid_region.IsExpanded",
@@ -67320,7 +67340,9 @@
     },
     "SetParam2": {
      "signature": "retval=mapcond.SetParam(key, val, unit)",
-     "signature_name": "SetParam"
+     "signature_name": "SetParam",
+     "dispatch_name": "SetParam2",
+     "dispatch_source": "verdict:GetIDsOfNames"
     },
     "SetRotateAxis": {
      "signature": "retval=mapcond.SetRotateAxis(axis)",
@@ -84304,7 +84326,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "Name of surface region (string)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "GetSweepFaceRegionName": {
      "signature": "retval=volume_region.GetSweepFaceRegionName",

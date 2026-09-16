@@ -23,3 +23,35 @@
 
 **J1 实测升级（2026-09-05，DEV_PLAN §21.5 / gap §10.20）**：全链前三腿打通——①同几何 12 三角立方体换件秒级成立（60k 三角同几何 STL 使 ImportPatchAsCAD 在工作进程内病态空转 2/2 复现，面片规模边界实证）；②MDL Wizard 重放 **151/151 err=0 全绿**（遗留⑤向导腿解除：录制变量别名 + AF 前置 + 模型状态 1.8MB snapshot 内嵌实证）；③容器级成对注入（`.his` 成员 + main.xml `<storedclosedvolumes>` 声明——装载开关，COM 换件重置该块的精确元素落点）→ 重开 `GetStoredClosedVolumes`=1。**恢复腿产品闸门维持关闭**：重开场景 `IsClosedVolumeRestorationAvailable`=False、候选查询空数组（cand_ub=-1）、`RestoreClosedVolumes` err=0 retval=False——两独立场景复现（I3 r3 cv1b 原生存储 + J1 r7 向导重建+注入），restorable 三态=-1 如实入册。域 10 边界维持：恢复可用性闸门在 COM 面不可构造（GUI [Store and Open] 对话钮无 COM 等价物），前置具备即可复验。遗留④宿主 VBS 能力时变当日未复现（重载日午后向导段正常执行）。
 
+
+## 宿主侧能力边界（R45 自动生成）
+
+> 与 `tools/host_member_sweep.py --report-only` 同源（证据 `schemas/host_member_availability.json` + 目录的 `host_absent` 标记）。这一节**不是菜单缺口**，是宿主 COM 面的实测边界。
+
+### 取不到实例的类（先把前置流程跑出来）
+
+- CondBoussinesqBaseTemp — 条件向导创建——宿主无 CreateCondBoussinesqBaseTemp 接口
+- CondCoSim — 先做 CoSim 设置（本机语料无该条件）
+- CondCoSimRegion — 先有 CoSim 区域（由 CoSim 条件派生）
+- PropItem — 先注册材料/物性（或经闭空间的材料项取得）
+
+### 宿主未实现的成员（25 条）
+
+> Python 侧**不会**为这些条目造包装（调用必然 `com_error`）；手册有、宿主 `GetIDsOfNames` 解析不到。
+
+- ClosedVolume — GetSweepDestinationFaceRegion / ImportCSV
+- CondBoundaryFlowIO — GetMassVolumePressureInflowDirectionType​ / GetPbmFuncType / SetPbmFuncType
+- CondFreeSurface — GetPhaseCheangeSw / SetPhaseCheangeSw
+- CondInitial — GetPbmFuncType / SetPbmFuncType
+- CondInitialShapeModify — RemoveMorphingRegion
+- CondOutputTimeSeries — GetProjectonType / SetProjectonType
+- CondPorousMedia — ImportCSV
+- CondSource — IsEnableConditionForCalculation
+- CoordinatesSpecifiedPart — GetRadiationValue / ImportCSV
+- Doc — GetAllMapCondNames
+- FaceRegionDerivedSheet — ImportCSV
+- FluidRegion — ImportCSV
+- MeshingGroup — GetDiscontinuous / ReplaceMDLMode / SetDiscontinuous
+- MeshingGroupSetting — GetInternalUnit
+- SpecialRegion — ImportCSV
+- VolumeRegion — GetSweepDestinationFaceRegion

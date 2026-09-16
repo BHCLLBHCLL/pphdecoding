@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -127,6 +128,262 @@ def _obtain(cls: str, conds, doc, mg):
         if obj is not None:
             return obj, name
     return None, None
+
+
+#: R45-1：手册配方/自动计划里的宿主变量名 → 本探针 ctx 键
+_HOST_KEYS = {
+    "doc": "Doc", "document": "Doc",
+    "conditions": "Conditions", "conds": "Conditions",
+    "meshgroup": "MeshingGroup", "mesh_group": "MeshingGroup", "mg": "MeshingGroup",
+    "meshgroupsetting": "MeshingGroupSetting",
+    "env": "Env", "app": "Application", "application": "Application",
+    "util": "Utility", "utility": "Utility", "mdl": "MDL",
+}
+
+#: ctx 键 → 目录类名（键名与目录类名不一致时的别名，R45-1）
+#:
+#: **留空是有实测依据的**：R45 第一版把会话的 Application 对象别名成
+#: Kicker.Application，结果那 9 个成员里 8 个 unknown_name —— 会话对象是目录里的
+#: **Application** 类（23 成员），Kicker.Application 是 Kicker 启动器那个对象。
+#: 别名只有在**验身**通过时才允许写进去（见 identity_ok）。
+CTX_ALIASES: dict = {}
+
+def arg_ladder(name: str) -> list:
+    """自动计划的实参候选（R45-1）：1 参 → 3 参 → 2 参 → 0 参 → 布尔 → 字符串。
+
+    多参创建器（CreateCondCoSim(name, apptype, interfacetype)）与零参 getter
+    （Doc.GetProjectSetting 这类）都能在同一套阶梯里试到。
+    """
+    return [(name,), (name, 0, 0), (name, 0), (), (name, False),
+            (name, "default")]
+
+
+#: 目录成员表缓存：扩面要对 199 类各算一遍宿主成员，重复构建太慢
+_MEMBER_CACHE: dict = {}
+
+
+#: R44-2 / R45-2：空对象的**前置条件**提示表（这些类只有跑过对应流程才有实例）。
+#:
+#: 放在模块级是有意的：证据里只出现**当轮真的空**的类（R45 后 ClosedVolume/
+#: Octree 已能取到，就不再列），但"这个类要先跑什么"是**知识**，不随一轮结果
+#: 消失 —— 测试直接查这张表，产品面（`automation.scflowpre_api.object_hints`）
+#: 查证据里的子集。
+EMPTY_HINTS = {
+    "ClosedVolume": "先跑 MDL/BAM 建模（闭空间由面区域生成）",
+    "PropItem": "先注册材料/物性（或经闭空间的材料项取得）",
+    "CondMapForStructure": "先建映射（scFLOW2Nastran）条件——宿主无创建接口",
+    "MapCond": "先有映射流程（宿主无 GetAllMapCondNames 接口）",
+    "CondBoussinesqBaseTemp": "条件向导创建——宿主无 CreateCondBoussinesqBaseTemp 接口",
+    "CondCoSim": "先做 CoSim 设置（本机语料无该条件）",
+    "CondCoSimRegion": "先有 CoSim 区域（由 CoSim 条件派生）",
+    "Octree": "先建八叉树（网格组的 octree 步骤）",
+}
+
+
+def _catalog_members(cat: dict, cls: str) -> dict:
+    key = (id(cat), cls)
+    hit = _MEMBER_CACHE.get(key)
+    if hit is not None:
+        return hit
+    info = cat["classes"].get(cls) or {}
+    out: dict = {}
+    for kind in ("methods", "properties"):
+        out.update(info.get(kind) or {})
+    _MEMBER_CACHE[key] = out
+    return out
+
+
+def _candidate_members(cls: str) -> list:
+    """按类名猜构造/取用成员名（R45-1）。
+
+    手册的取法各式各样（CreateCondDTSR / GetCondCavitation /
+    QueryCondMultiphaseMaterial / GetPresetSurfParam / GetUtility…），
+    所以按名字家族**穷举**，能不能调由宿主裁定。
+    """
+    full = cls.split(".")[-1]
+    short = full[4:] if full.startswith("Cond") else full
+    names: list = []
+    for base in (full, short):
+        names += ["Create" + base, "Create" + base + "Default", "Get" + base,
+                  "Get" + base + "s", "Query" + base + "ByName",
+                  "GetPreset" + base, "Query" + base, "Get" + base + "ByIndex",
+                  "Query" + base + "ByIndex", "Get" + base + "Default"]
+    seen: set = set()
+    out: list = []
+    for n in names:
+        if n not in seen:
+            seen.add(n)
+            out.append(n)
+    return out
+
+
+def _split_args(text: str) -> list:
+    """按顶层逗号切参数（配方里的参数不含嵌套括号，够用）。"""
+    out, depth, cur = [], 0, ""
+    for ch in text:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        if ch == "," and depth == 0:
+            out.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    if cur.strip():
+        out.append(cur)
+    return [t.strip() for t in out if t.strip()]
+
+
+def recipe_plan(cat: dict, cls: str, held: dict):
+    """类级 instance 配方 → (host_key, member, args, how)（R45-1）。
+
+    手册给的取法形如 Set dtsr = conditions.CreateCondDTSR("name")。占位符
+    只认能安全替换的几种（ProgID → 本机 ProgID、带引号字面量 → 生成名或
+    @ 名、整数、布尔）；出现别的占位符就**放弃该配方**（不猜）。
+    """
+    inst = ((cat["classes"].get(cls) or {}).get("instance") or "").strip()
+    # 手册里的引号有**印刷体**（“name”）也有 ASCII —— 先归一，否则配方参数
+    # 会被当成「未知占位符」整条放弃（R45 实测 CreateCondDTSR 等一批）
+    for fancy, plain in (("\u201c", '"'), ("\u201d", '"'),
+                         ("\u2018", "'"), ("\u2019", "'")):
+        inst = inst.replace(fancy, plain)
+    m = re.match(r"^Set\s+\w+\s*=\s*(\w+)\.(\w+)\s*(?:\((.*)\))?$", inst, re.S)
+    if not m:
+        return None
+    host_key = _HOST_KEYS.get(m.group(1).lower())
+    if host_key is None or host_key not in held:
+        return None
+    member, raw = m.group(2), (m.group(3) or "").strip()
+    args: list = []
+    if raw:
+        for tok in _split_args(raw):
+            if tok == "ProgID":
+                args.append(PROGID)
+            elif re.fullmatch(r'"[^"]*"', tok):
+                lit = tok.strip('"')
+                args.append(lit if lit.startswith("@") else "R45" + cls.split(".")[-1])
+            elif tok.lower() in ("true", "false"):
+                args.append(tok.lower() == "true")
+            elif re.fullmatch(r"-?\d+", tok):
+                args.append(int(tok))
+            else:
+                return None      # 未知占位符（如 id / propname）→ 该配方不可自动执行
+    return (host_key, member, tuple(args), "recipe:" + m.group(1) + "." + member)
+
+
+#: 手册参数名前缀：'[in](BSTR)ProgID' → 'ProgID'
+_ARG_PREFIX = re.compile(r"^\[[^\]]*\]\s*(?:\([^)]*\))?\s*")
+
+
+def signature_args(entry: dict, name: str):
+    """按手册**参数名**给一组实参（R45-1）；有认不出的参数就返回 None（不猜）。
+
+    没有它，Kicker.Application.GetApplicationLaunchSetting(ProgID) 这类成员
+    只会被阶梯喂上名字串 → 全失败（PROGID 是唯一能用的取值）。
+    """
+    args: list = []
+    for a in entry.get("arguments") or []:
+        # 手册参数名带前缀：'[in](BSTR)ProgID' —— 不剥前缀就永远认不出 ProgID
+        key = _ARG_PREFIX.sub("", str(a.get("name") or "")).strip().lower()
+        if key in ("", "none", "-"):
+            continue
+        if key == "progid":
+            args.append(PROGID)
+        elif "name" in key:
+            args.append(name)
+        elif key in ("type", "index", "id", "num", "number", "key",
+                     "definitiontype", "valuekey"):
+            args.append(0)
+        elif key.startswith(("b", "is", "flag", "does", "has")):
+            args.append(False)
+        else:
+            return None
+    return tuple(args)
+
+
+def auto_plans(cat: dict, cls: str, held: dict) -> list:
+    """为一个目标类生成候选配方（离线纯函数，可单测）。
+
+    held: {ctx 键: 目录类名}。三层优先级：
+    ① 目录里**声明在已持有宿主上**的构造/取用成员（最可靠）；
+    ② 类级 instance 配方（手册亲自给的取法）；
+    ③ 宿主独有成员（手册是子集，R42 已证宿主有手册外成员）——只在条件/文档/
+       网格组三个宿主上泛试，且放在最后。
+    """
+    plans: list = []
+    cands = _candidate_members(cls)
+    # ② 配方放最前：那是手册**亲自给的取法**（参数也是它给的，不用猜）；
+    #    配方拿错对象由验身拦（CondOversetGap 那页写的就是 CreateCondSpray）
+    rec = recipe_plan(cat, cls, held)
+    if rec:
+        plans.append({"host": rec[0], "member": rec[1], "args": rec[2],
+                      "how": rec[3]})
+    # ① 目录里声明在已持有宿主上的构造/取用成员（参数按阶梯退让）
+    gen = "R45" + cls.split(".")[-1]
+    for host_key, host_cls in held.items():
+        hmembers = _catalog_members(cat, host_cls)
+        for name in cands:
+            if name in hmembers:
+                plans.append({"host": host_key, "member": name,
+                              "args": signature_args(hmembers[name], gen),
+                              "how": "catalog:" + host_cls + "." + name})
+    for host_key in ("Conditions", "Doc", "MeshingGroup"):
+        if host_key in held:
+            for name in cands[:3]:
+                plans.append({"host": host_key, "member": name, "args": None,
+                              "how": "generic:" + host_key + "." + name})
+    return plans
+
+
+def sweep_class_verdict(states: dict, min_members: int = 4) -> str:
+    """整类成员解析结果 → 'ok' / 'suspect' / 'empty'（R45-1 验身后置闸）。
+
+    `suspect` = 未知过半（且成员数够多）⇒ 手上这个对象**多半不是这个类**：
+    别名写错、配方给了别家对象、或对象过时。这类结论一律不记 ——
+    假否证（把别人的成员写成"宿主未实现"）比"未普查"更有害。
+    """
+    if not states:
+        return "empty"
+    n_unk = sum(1 for s in states.values() if s == "unknown_name")
+    if len(states) >= min_members and n_unk * 2 > len(states):
+        return "suspect"
+    return "ok"
+
+
+def member_name_index(cat: dict) -> dict:
+    """成员名 → 出现在多少个类里（1 = 该类独有）。验身与无歧义判据共用。"""
+    index: dict = {}
+    for cls in cat["classes"]:
+        for name in _catalog_members(cat, cls):
+            index[name] = index.get(name, 0) + 1
+    return index
+
+
+def distinctive_members(cat: dict, cls: str, index: dict,
+                        limit: int = 5) -> list:
+    """该类**独有**的成员名（其它类都没有）——用来验「拿到的对象是不是这个类」。"""
+    mine = _catalog_members(cat, cls)
+    return [m for m in sorted(mine) if index.get(m, 0) == 1][:limit]
+
+
+def identity_ok(obj, sample, resolve=None) -> tuple:
+    """拿到的对象必须**像**这个类（R45-1 验身）。
+
+    为什么必须验：手册配方未必对得上类（CondOversetGap 那页配方写的是
+    CreateCondSpray）。拿错对象不会报错，但普查会把它**所有**独有成员判成
+    「宿主未实现」—— 那是假否证，比没普查更糟。判据：独有成员**半数以上**能解析。
+    """
+    resolve = resolve or _resolve
+    if not sample:
+        return True, {"sample": 0, "resolved": 0, "unknown": 0, "errors": 0}
+    states = [resolve(obj, m) for m in sample]
+    detail = {"sample": len(sample),
+              "resolved": sum(1 for s in states if s == "resolved"),
+              "unknown": sum(1 for s in states if s == "unknown_name"),
+              "errors": sum(1 for s in states if str(s).startswith("error:"))}
+    ok = detail["resolved"] * 2 >= len(sample)
+    return ok, detail
 
 
 class _MdlUnavailable(RuntimeError):
@@ -401,6 +658,8 @@ def main(argv=None) -> int:
     ap.add_argument("--sweep", action="store_true",
                     help="R42-1：对已取到实例的类做**成员可用性普查**"
                          "（GetIDsOfNames 逐个解析，零副作用）")
+    ap.add_argument("--auto-budget", type=float, default=300.0,
+                    help="R45-1：自动配方扩面的时间预算（秒）；超时后如实记为未尝试")
     ap.add_argument("--with-mdl", action="store_true",
                     help="R40-1：走 MDL 流程造闭空间（选全部面 → 建闭空间）再裁定")
     ap.add_argument("--keep-host", action="store_true")
@@ -426,7 +685,6 @@ def main(argv=None) -> int:
     # 走仓内桥的附着逻辑：ROT 附着失败会自动回退 Dispatch（实测裸
     # GetActiveObject 会 MK_E_UNAVAILABLE = -2147221021）
     sess = api.ScFlowpreSession()
-    verdicts_by_class: dict = {}
     ok = False
     for _ in range(6):
         if sess.connect():
@@ -442,18 +700,6 @@ def main(argv=None) -> int:
             return True
         unwrapped = _unwrap(getattr(obj, "raw", obj))
         return unwrapped is None
-
-    #: R44-2：空对象的**前置条件**提示表（这些类只有跑过对应流程才有实例）
-    empty_hints = {
-        "ClosedVolume": "先跑 MDL/BAM 建模（闭空间由面区域生成）",
-        "PropItem": "先注册材料/物性（或经闭空间的材料项取得）",
-        "CondMapForStructure": "先建映射（scFLOW2Nastran）条件——宿主无创建接口",
-        "MapCond": "先有映射流程（宿主无 GetAllMapCondNames 接口）",
-        "CondBoussinesqBaseTemp": "条件向导创建——宿主无 CreateCondBoussinesqBaseTemp 接口",
-        "CondCoSim": "先做 CoSim 设置（本机语料无该条件）",
-        "CondCoSimRegion": "先有 CoSim 区域（由 CoSim 条件派生）",
-        "Octree": "先建八叉树（网格组的 octree 步骤）",
-    }
 
     def _create_conds(conds) -> int:
         """R44-1：按目录里的 `CreateCond*` 批量建条件实例，供普查扩面。
@@ -495,6 +741,85 @@ def main(argv=None) -> int:
         attribute ...），于是把**能解析的名字误判成 neither** —— 假否证。
         """
         return _unwrap(getattr(obj, "raw", obj))
+
+    cat_all = json.loads(CATALOG.read_text(encoding="utf-8"))
+    _auto_state: dict = {}
+
+    def _auto_expand() -> int:
+        """R45-1：按自动配方扩面（逐工程累积，只补还没拿到的类）。
+
+        配方来自两处：目录里**声明在已持有宿主上**的构造/取用成员，
+        以及类级 instance 配方。三层保护：
+        * 参数按阶梯退让（1 参 → 3 参 → 2 参 → 0 参），多参创建器也能试到；
+        * **验身**（独有成员解析率 ≥ 半数）——拿错对象会把别人的成员判成
+          「宿主未实现」，那是假否证（CondOversetGap 的配方写的是 CreateCondSpray）；
+        * 总时间预算（--auto-budget），超时就停并如实记名，不让一次卡死毁掉整轮。
+        """
+        if "deadline" not in _auto_state:
+            _auto_state["deadline"] = time.time() + args.auto_budget
+        held = {}
+        for key, obj in list(ctx.items()):
+            cls = CTX_ALIASES.get(key, key)
+            if obj is not None and cls in cat_all["classes"]:
+                held[key] = cls
+        index = member_name_index(cat_all)
+        rejected = set(result.get("identity_rejected") or [])
+        # **不并进 call_errors**：那里的错误被"手册标题裁定"与 dispatch_account 当
+        # "宿主没有这个接口"的证据用，而自动配方会在**多个宿主**上试同一个名字
+        # （CreateCondCoSim 在 Doc 上当然没有）—— 并进去会把 CondCoSim 这类
+        # "接口有、对象还没造出来"的条目误判成 host-interface-absent。
+        calls: dict = {}
+        made = 0
+        for cls in sorted(cat_all["classes"]):
+            if cls in ctx or cls in rejected:
+                continue
+            if time.time() > _auto_state["deadline"]:
+                result.setdefault("auto_timeouts", []).append(cls)
+                continue
+            name = "R45" + cls.split(".")[-1]
+            ladders = arg_ladder(name)
+            rejected_here: list = []
+            for plan in auto_plans(cat_all, cls, held)[:8]:
+                host_raw = ctx.get(plan["host"])
+                if host_raw is None:
+                    continue
+                host = api.ComObject(host_raw)
+                # 手册给的那组实参先试；不成再按阶梯退让（两边都不放弃）
+                tries = ([plan["args"]] if plan["args"] is not None else []) + ladders
+                for argsin in tries:
+                    if argsin is None:
+                        continue
+                    try:
+                        got = host.call(plan["member"], *argsin)
+                    except Exception as exc:  # noqa: BLE001
+                        calls[plan["host"] + "." + plan["member"]] = (
+                            type(exc).__name__ + ": " + str(exc)[:80])
+                        continue
+                    cand = _raw(got) if got is not None else None
+                    if cand is None or _empty(cand):
+                        continue
+                    sample = distinctive_members(cat_all, cls, index)
+                    ok, detail = identity_ok(cand, sample)
+                    if not ok:
+                        # 这条配方给的是**别的类**的对象 → 换下一条配方再试
+                        # （不能一票否决：手册配方错不代表目录配方也错）
+                        rejected_here.append(cls + " <- " + plan["how"])
+                        result.setdefault("identity_detail", {})[
+                            cls + " | " + plan["how"]] = detail
+                        continue
+                    ctx[cls] = cand
+                    via[cls] = "auto:" + plan["how"]
+                    result.setdefault("auto_obtained", {})[cls] = plan["how"]
+                    made += 1
+                    break
+                if cls in ctx:
+                    break
+            if cls not in ctx and rejected_here:
+                result.setdefault("identity_rejected", []).extend(rejected_here)
+                rejected.add(cls)      # 本轮别再对这个类做同一批尝试
+        if calls:
+            result.setdefault("auto_call_errors", {}).update(calls)
+        return made
 
     doc = sess.doc                          # typed 包装：内部走 _FlagAsMethod
     wanted = sorted({p["class"] for p in pairs})
@@ -638,16 +963,34 @@ def main(argv=None) -> int:
                     ctx[cls] = cand       # _raw 会拆 tuple（R38-1）
                     via[cls] = how
                     print("   + " + cls + " <- " + str(how), flush=True)
+            # R45-1：自动配方扩面（三层优先级 + 验身 + 时间预算）
+            if args.sweep:
+                n_auto = _auto_expand()
+                if n_auto:
+                    print("   + 自动配方扩面 " + str(n_auto) + " 类", flush=True)
             result["mdl_probe"] = inter.get("mdl_probe") or {}
             # R43-2：**每个工程**都把当前 ctx 普查一遍，状态按优先级累积
             if args.sweep:
-                cat_all = json.loads(CATALOG.read_text(encoding="utf-8"))
                 empty_objs: list = result.setdefault("empty_objects", [])
                 for cls, obj in list(ctx.items()):
                     if _empty(obj):
                         empty_objs.append(cls)
                         continue
-                    cinfo = cat_all["classes"].get(cls) or {}
+                    # R45-1：ctx 键未必是目录类名（Application → Kicker.Application）。
+                    # 普查必须记在**目录类名**上，否则同一类被记两次、别名键还会
+                    # 造出一个目录里不存在的"类"（假覆盖）。
+                    cat_cls = CTX_ALIASES.get(cls, cls)
+                    if cat_cls not in cat_all["classes"]:
+                        result.setdefault("swept_unmapped", []).append(cls)
+                        continue
+                    cinfo = cat_all["classes"].get(cat_cls) or {}
+                    if not (cinfo.get("methods") or cinfo.get("properties")):
+                        # 手册页**一个成员都没有**的类（CondALECancel / ParticleRegion…）：
+                        # 对象拿到了也"没成员可查"。单列一桶 —— 混进 classes_swept 会把
+                        # 覆盖率说虚，算"未普查"又不实（我们确实取到了它）。
+                        result.setdefault("no_member_classes", []).append(cat_cls)
+                        continue
+                    states: dict = {}
                     for kind in ("methods", "properties"):
                         for mem, entry in (cinfo.get(kind) or {}).items():
                             # 属性键可能带类型后缀（`Visible(BOOL)`）——
@@ -657,11 +1000,35 @@ def main(argv=None) -> int:
                                     or entry.get("signature_name")
                                     or mem.split("(", 1)[0])
                             st = _resolve(obj, disp)
-                            slot = sweep_acc.setdefault(cls, {})
-                            old = slot.get(mem)
-                            if old is None or (sweep_prio.get(st, 0)
-                                               > sweep_prio.get(old, 0)):
-                                slot[mem] = st
+                            # R45-1：手册标题名与签名名不一致时（R34-3 的 41 处），
+                            # 只试派发名会把**能用的那个名字**判成"宿主未实现"
+                            # （实测 ClosedVolume.SelectFace：签名名 SetSelectFaces
+                            # 不认，标题名 SelectFace 认）。故派发名不通时再试成员键。
+                            if st == "unknown_name" and disp != mem:
+                                alt = _resolve(obj, mem.split("(", 1)[0])
+                                if alt == "resolved":
+                                    st = "resolved"
+                                    result.setdefault(
+                                        "resolved_via_member_key", []).append(
+                                            cat_cls + "." + mem)
+                            states[mem] = st
+                    # R45-1 **验身后置闸**：拿错对象（别名写错、配方给的别家对象）
+                    # 会把整类成员判成"宿主未实现" —— 那是假否证，比没普查更糟
+                    # （实测：把会话 Application 当成 Kicker.Application，
+                    # 9 个成员里 8 个 unknown_name）。整类未知过半就**整类不记**，
+                    # 宁可停在"未普查"。
+                    if sweep_class_verdict(states) == "suspect":
+                        result.setdefault("swept_suspect", {})[cat_cls] = {
+                            "total": len(states),
+                            "unknown": sum(1 for s in states.values()
+                                           if s == "unknown_name")}
+                        continue
+                    for mem, st in states.items():
+                        slot = sweep_acc.setdefault(cat_cls, {})
+                        old = slot.get(mem)
+                        if old is None or (sweep_prio.get(st, 0)
+                                           > sweep_prio.get(old, 0)):
+                            slot[mem] = st
             result.setdefault("call_errors", {}).update(
                 inter.get("call_errors") or {})
             if all(ctx.get(c) is not None for c in wanted):
@@ -695,8 +1062,16 @@ def main(argv=None) -> int:
                               "unknown": unknown, "errors": errs}
         swept_members = sum(v["total"] for v in per_class.values())
         empty_set = set(result.get("empty_objects") or [])
+        # 同一类可能在**早期工程**里是空的（box.pph 没建八叉树），在后面工程里
+        # 取到了真对象 —— 已普查的类不许再算"取不到实例"，否则三桶会重叠
+        # （R45 实测：ClosedVolume / Octree 同时在两个桶里，199 类数出 201）
+        empty_set -= set(per_class)
         # 三桶互斥：已普查 / 试过但拿不到对象（empty_objects）/ 从未尝试（unswept）
-        unswept = sorted(set(cat["classes"]) - set(per_class) - empty_set)
+        no_member = (set(result.get("no_member_classes") or [])
+                     - set(per_class) - empty_set)
+        # 四桶互斥：已普查 / 取不到实例 / 取到但手册无成员 / 从未尝试
+        unswept = sorted(set(cat["classes"]) - set(per_class) - empty_set
+                         - no_member)
         result["availability"] = {c: {"total": v["total"],
                                       "resolved": v["resolved"],
                                       "unknown": len(v["unknown"]),
@@ -710,12 +1085,29 @@ def main(argv=None) -> int:
                      "未出现在本表的类 = **未普查**（不等于已实现）"),
             "coverage": {"classes_swept": len(per_class),
                          "empty_objects": sorted(empty_set),
-                         "empty_hints": {c: empty_hints.get(c, "（未登记前置条件）")
+                         "empty_hints": {c: EMPTY_HINTS.get(c, "（未登记前置条件）")
                                          for c in sorted(empty_set)},
                          "classes_total": classes_total,
+                         "no_member_classes": sorted(no_member),
                          "members_swept": swept_members,
                          "members_total": members_total,
-                         "unswept_classes": unswept},
+                         "unswept_classes": unswept,
+                         # R45-1：扩面的**过程证据**（哪些类靠哪条配方拿到、
+                         # 哪些被判"拿错对象"、哪些超时没试、哪些 ctx 键不是目录类）
+                         "auto_obtained": dict(sorted(
+                             (result.get("auto_obtained") or {}).items())),
+                         "identity_rejected": sorted(
+                             result.get("identity_rejected") or []),
+                         "identity_detail": result.get("identity_detail") or {},
+                         "auto_timeouts": sorted(
+                             set(result.get("auto_timeouts") or [])),
+                         "swept_unmapped": sorted(
+                             set(result.get("swept_unmapped") or [])),
+                         # 验身后置闸否掉的类（整类未知过半 = 拿错对象）
+                         "swept_suspect": result.get("swept_suspect") or {},
+                         # 派发名不通、成员键名通（R34-3 的标题/签名对）
+                         "resolved_via_member_key": sorted(
+                             set(result.get("resolved_via_member_key") or []))},
             "classes": {c: {"total": v["total"], "resolved": v["resolved"],
                             "unknown": v["unknown"],
                             "errors": v["errors"]}
@@ -728,7 +1120,11 @@ def main(argv=None) -> int:
         print("[r43] 普查 " + str(len(per_class)) + "/" + str(classes_total)
               + " 类、" + str(swept_members) + "/" + str(members_total)
               + " 成员 → " + sweep_path.name + "；未实现 " + str(n_unknown)
-              + "，探针侧错误 " + str(n_err), flush=True)
+              + "，探针侧错误 " + str(n_err)
+              + "，自动配方 " + str(len(result.get("auto_obtained") or {}))
+              + " 类（验身否 " + str(len(result.get("identity_rejected") or []))
+              + "，超时 " + str(len(set(result.get("auto_timeouts") or [])))
+              + "）", flush=True)
         for cls, v in sorted(per_class.items()):
             if v["unknown"] or v["errors"]:
                 print("   " + cls + " unknown=" + str(len(v["unknown"]))

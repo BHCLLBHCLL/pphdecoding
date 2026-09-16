@@ -68,11 +68,20 @@
   },
   "SpecialRegion": {
    "SetIsContactAngleSet": "SetIsContactAngleSet"
+  },
+  "ClosedVolume": {
+   "SelectFace": "SelectFace"
+  },
+  "CondMapForStructure": {
+   "SetPIDPartCorresp": "SetPIDPartCorresp"
+  },
+  "MapCond": {
+   "SetParam2": "SetParam2"
   }
  },
  "tally": {
-  "both": 21,
-  "heading": 5,
+  "heading": 7,
+  "both": 24,
   "signature": 4
  }
 }

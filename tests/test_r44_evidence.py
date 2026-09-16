@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT))
 AVAIL = ROOT / "schemas" / "host_member_availability.json"
 CATALOG = ROOT / "schemas" / "vb_api_catalog.json"
 GATE = ROOT / "tools" / "api_contract_check.py"
+PROBE = ROOT / "tools" / "dispatch_name_probe.py"
 
 
 def _load(name: str, path: Path):
@@ -47,7 +48,9 @@ class TestCoverageExpansion(unittest.TestCase):
 
     def test_buckets_still_partition(self):
         cov = self.data["coverage"]
+        # R45 起多一桶：手册页零成员的类（取到了对象但没成员可查）
         self.assertEqual(cov["classes_swept"] + len(cov["empty_objects"])
+                         + len(cov.get("no_member_classes") or [])
                          + len(cov["unswept_classes"]), cov["classes_total"])
 
     def test_new_absent_members_found(self):
@@ -82,10 +85,15 @@ class TestEmptyObjectHints(unittest.TestCase):
             self.assertNotIn("未登记", hint, cls + " 的前置条件未登记")
 
     def test_hints_are_actionable(self):
-        hints = self.data["coverage"]["empty_hints"]
-        self.assertIn("MDL", hints["ClosedVolume"])
-        self.assertIn("材料", hints["PropItem"])
-        self.assertIn("八叉树", hints["Octree"])
+        # R45：证据里只列**当轮真的空**的类（ClosedVolume/Octree 已能取到），
+        # 但"这个类要先跑什么"是知识 —— 查探针模块里的**知识表**
+        probe = _load("probe_r44_hints", PROBE)
+        table = probe.EMPTY_HINTS
+        self.assertIn("MDL", table["ClosedVolume"])
+        self.assertIn("材料", table["PropItem"])
+        self.assertIn("八叉树", table["Octree"])
+        for cls, hint in self.data["coverage"]["empty_hints"].items():
+            self.assertEqual(hint, table[cls], cls)
 
 
 class TestGateAfterR44(unittest.TestCase):

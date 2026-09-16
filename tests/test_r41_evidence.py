@@ -104,13 +104,23 @@ class TestAccountAfterR41(unittest.TestCase):
         cls.mod = _load("acct_r41", ACCOUNT)
 
     def test_host_absent_classes_are_marked(self):
+        """R41 那批"取不到对象"的类必须有终态归因。
+
+        R45 起改为**只减不增**：扩面把 `CondMapForStructure`/`MapCond` 裁定掉了
+        （能取到实例 → 名字解析成功），但"宿主确实没有这个接口"的类
+        （`CondBoussinesqBaseTemp`）必须一直带 UNKNOWNNAME 证据，且不许冒出
+        基线之外的新 NYI 类。
+        """
+        baseline = {"CondBoussinesqBaseTemp", "CondMapForStructure", "MapCond",
+                    "CondCoSim", "CondCoSimRegion", "PropItem"}
         data = self.mod.account()
         by_cls = {r["class"]: r for r in data["rows"] if r["state"] == "nyi"}
-        for cls in ("CondBoussinesqBaseTemp", "CondMapForStructure", "MapCond"):
-            self.assertIn(cls, by_cls)
-            self.assertTrue(by_cls[cls].get("host_interface_absent"),
-                            cls + " 应带宿主无接口证据")
-            self.assertIn("DISP_E_UNKNOWNNAME", by_cls[cls]["reason"])
+        self.assertTrue(set(by_cls).issubset(baseline), set(by_cls) - baseline)
+        self.assertIn("CondBoussinesqBaseTemp", by_cls)
+        entry = by_cls["CondBoussinesqBaseTemp"]
+        self.assertTrue(entry.get("host_interface_absent"),
+                        "宿主无接口的类应带证据")
+        self.assertIn("DISP_E_UNKNOWNNAME", entry["reason"])
 
     def test_totals_unchanged_and_complete(self):
         data = self.mod.account()
