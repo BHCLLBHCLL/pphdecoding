@@ -2016,6 +2016,35 @@ VBS 生成（取值 + 纠名）、面板写 xenv（实测键账本 + 枚举白�
 **顺带修掉 2 个假阳性**：属性键带类型后缀（`Visible(BOOL)`/`UserControl(BOOL)`），
 宿主认的是括号前那段 —— 不剥后缀会把已实现属性误报成"宿主未实现"（unknown 12 → 14）。
 剥后缀后回到 **12**，目录里两条误标 `host_absent` 自动清除。
+
+---
+
+## 58. R44 更新（2026-09-15）—— 普查扩面到 Cond* + 空对象前置提示
+
+### 58.1 批量条件实例化：覆盖 17 → 84 类（R44-1）
+
+目录有 **89 个 `CreateCond*`** 创建器。探针在工程会话内批量调用（参数按 1→3→2 参退让）
+→ **78 个实例**一次建成 → 逐成员解析：
+
+| 指标 | R43 | R44 |
+|---|---|---|
+| 已普查类 | 17 | **84**（/199） |
+| 已普查成员 | 1873 | **2793**（/4455） |
+| 未实现成员（条目） | 12 | **16** |
+| 探针侧错误 | 0 | **0** |
+
+新增 4 处"手册有、宿主无"：`CondInitial.GetPbmFuncType`/`SetPbmFuncType`、
+`CondPorousMedia.ImportCSV`、`CondSource.IsEnableConditionForCalculation`。
+
+> ★ **口径**：同名成员可能在**多个类**都未实现（`GetPbmFuncType` 2 类、`ImportCSV` 2 类）
+> —— 统计数**条目**（16），去重名字只有 13；R42 的"只在 SpecialRegion"断言据此更正。
+
+### 58.2 空对象前置提示（R44-2）
+
+`coverage.empty_hints` 落盘 8 条（`ClosedVolume`→MDL/BAM；`PropItem`→材料/物性；
+`CondMapForStructure`/`MapCond`→映射流程；`CondBoussinesqBaseTemp`→条件向导；
+`CondCoSim`/`CondCoSimRegion`→CoSim 设置；`Octree`→建八叉树）。测试要求每条提示
+存在且含可操作关键词（MDL/材料/八叉树）。
 > **口径修正（本节起生效）**：实机网格类验收一律以 `DoesMeshExist` / `DoesMeshErrorExist` 判定，
 > **不得**以 `CreateMesh*` 返回值为准（R2-1 实测三者互不一致：`CreateMeshMonitor=True` 而
 > `mesh_exists=False, mesh_err=True`）。

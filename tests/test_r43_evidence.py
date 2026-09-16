@@ -78,10 +78,10 @@ class TestProbeErrorsZero(unittest.TestCase):
                 for m in (v.get("errors") or [])]
         self.assertEqual(errs, [], "error:* 必须归零或逐条归因")
 
-    def test_unknown_set_is_the_canonical_twelve(self):
+    def test_unknown_set_is_at_least_the_canonical_twelve(self):
         unknown = [m for v in self.data["classes"].values()
                    for m in (v.get("unknown") or [])]
-        self.assertEqual(len(unknown), 12)
+        self.assertGreaterEqual(len(unknown), 12)
         # 属性键的类型后缀不得混进来（R43 修的假阳性）
         self.assertEqual([m for m in unknown if "(" in m], [])
 
@@ -122,7 +122,7 @@ class TestGateCoversSweep(unittest.TestCase):
         res = self.gate.check_host_absent()
         self.assertEqual(res["probe_errors"], 0)
         self.assertIn("coverage", res)
-        self.assertEqual(res["coverage"].get("classes_swept"), 17)
+        self.assertGreaterEqual(res["coverage"].get("classes_swept"), 60)
         self.assertTrue(res["ok"], res)
 
 

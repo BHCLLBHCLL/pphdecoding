@@ -13149,7 +13149,9 @@
         "description": "Log-normal distribution function"
        }
       ]
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "GetPhaseMaterial": {
      "signature": "Set propitem=condinitial.GetPhaseMaterial",
@@ -13756,7 +13758,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "SetPhaseMaterial": {
      "signature": "retval=condinitial.SetPhaseMaterial(propname)",
@@ -31343,7 +31347,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (successful), False (failed)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "IsPressureDropCond": {
      "signature": "retval=porousmedia.IsPressureDropCond()",
@@ -32683,7 +32689,9 @@
       "type": "VARIANT",
       "name": "retval",
       "description": "True (Valid), False (Not valid)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "IsForFaceCondition": {
      "signature": "retval=source.IsForFaceCondition ()",

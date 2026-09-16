@@ -443,6 +443,50 @@ def main(argv=None) -> int:
         unwrapped = _unwrap(getattr(obj, "raw", obj))
         return unwrapped is None
 
+    #: R44-2：空对象的**前置条件**提示表（这些类只有跑过对应流程才有实例）
+    empty_hints = {
+        "ClosedVolume": "先跑 MDL/BAM 建模（闭空间由面区域生成）",
+        "PropItem": "先注册材料/物性（或经闭空间的材料项取得）",
+        "CondMapForStructure": "先建映射（scFLOW2Nastran）条件——宿主无创建接口",
+        "MapCond": "先有映射流程（宿主无 GetAllMapCondNames 接口）",
+        "CondBoussinesqBaseTemp": "条件向导创建——宿主无 CreateCondBoussinesqBaseTemp 接口",
+        "CondCoSim": "先做 CoSim 设置（本机语料无该条件）",
+        "CondCoSimRegion": "先有 CoSim 区域（由 CoSim 条件派生）",
+        "Octree": "先建八叉树（网格组的 octree 步骤）",
+    }
+
+    def _create_conds(conds) -> int:
+        """R44-1：按目录里的 `CreateCond*` 批量建条件实例，供普查扩面。
+
+        这条路子由条件收割工具验证过（一次会话 58/58 create err=0）；
+        参数按"1 参 → 3 参 → 2 参"退让，多参创建器（如 `CreateCondCoSim(name, apptype,
+        interfacetype)`）也能试到。
+        """
+        cat = json.loads(CATALOG.read_text(encoding="utf-8"))
+        methods = (cat["classes"].get("Conditions") or {}).get("methods") or {}
+        made = 0
+        for meth in sorted(methods):
+            if not meth.startswith("CreateCond"):
+                continue
+            cls = "Cond" + meth[len("CreateCond"):]
+            if cls not in cat["classes"] or ctx.get(cls) is not None:
+                continue
+            name = "R44" + cls
+            for args in ((name,), (name, 0, 0), (name, 0)):
+                try:
+                    obj = conds.call(meth, *args)
+                except Exception as exc:  # noqa: BLE001
+                    (inter.setdefault("call_errors", {}))[meth] = (
+                        type(exc).__name__ + ": " + str(exc)[:80])
+                    continue
+                cand = _unwrap(obj)
+                if cand is not None and not _empty(cand):
+                    ctx[cls] = cand
+                    via[cls] = "CreateCond*:" + meth
+                    made += 1
+                    break
+        return made
+
     def _raw(obj):
         """拆 typed 包装 + **拆 tuple/数组**。
 
@@ -566,6 +610,11 @@ def main(argv=None) -> int:
                     errors["ClosedVolume"] = ("mdl 流程 -> "
                                               + type(exc).__name__ + ": "
                                               + str(exc))
+            # R44-1：批量造条件实例（普查扩面的主力）
+            if args.sweep:
+                made = _create_conds(conds_typed)
+                if made:
+                    print("   + 批量条件实例 " + str(made) + " 个", flush=True)
             # R37-1：链式实例（数组型 getter / 多参数 Create / 二级 GetOwner）
             for cls, obj in _chains(doc, conds_typed, mg, via, inter,
                                     errors).items():
@@ -661,6 +710,8 @@ def main(argv=None) -> int:
                      "未出现在本表的类 = **未普查**（不等于已实现）"),
             "coverage": {"classes_swept": len(per_class),
                          "empty_objects": sorted(empty_set),
+                         "empty_hints": {c: empty_hints.get(c, "（未登记前置条件）")
+                                         for c in sorted(empty_set)},
                          "classes_total": classes_total,
                          "members_swept": swept_members,
                          "members_total": members_total,

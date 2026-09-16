@@ -1,0 +1,1049 @@
+{
+ "pairs": 41,
+ "targets": [
+  "Doc",
+  "MeshingGroup",
+  "MeshingGroupSetting",
+  "Octree",
+  "OctParam",
+  "Conditions",
+  "Env",
+  "MDLWizard",
+  "HybridParam"
+ ],
+ "verdicts": [
+  {
+   "class": "CondActranBoundaryNonReflection",
+   "heading": "SetInfiniteElementsAxis",
+   "signature": "GetInfiniteElementsAxis",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "CondBladeShape",
+   "heading": "EditChordLength",
+   "signature": "EditChoordLength",
+   "heading_state": "resolved",
+   "signature_state": "unknown_name",
+   "verdict": "heading"
+  },
+  {
+   "class": "CondBoundaryFlowIO",
+   "heading": "GetEnvironmentParam",
+   "signature": "GetParam",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "CondBoundaryFlowIO",
+   "heading": "GetPassiveScalarIndividualInflowType",
+   "signature": "GetMixedGasInflowType",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "CondInitialShapeModify",
+   "heading": "AddMorphingRegion",
+   "signature": "AddMorphingCalcFaceRegion",
+   "heading_state": "resolved",
+   "signature_state": "unknown_name",
+   "verdict": "heading"
+  },
+  {
+   "class": "CondOutputCSV",
+   "heading": "GetOutputTimingParam",
+   "signature": "GetOutputTimingType",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "CondOutputLFileTurbo",
+   "heading": "ClearOutletBladeRegions",
+   "signature": "ClearOutletRegions",
+   "heading_state": "unknown_name",
+   "signature_state": "resolved",
+   "verdict": "signature"
+  },
+  {
+   "class": "CondOutputTimeSeries",
+   "heading": "GetCSVOutputTimingParam",
+   "signature": "GetCSVOutputTimingType",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Conditions",
+   "heading": "SetContactThicknessDefault",
+   "signature": "SetContactTicknessDefault",
+   "heading_state": "resolved",
+   "signature_state": "unknown_name",
+   "verdict": "heading"
+  },
+  {
+   "class": "Conditions",
+   "heading": "SetDiffusionOptionParam",
+   "signature": "SetMeshOptionParam",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Doc",
+   "heading": "CreateDiscontinuousMeshingGroupWitouthMovingPart",
+   "signature": "CreateDiscontinuousMeshingGroupWithoutMovingPart",
+   "heading_state": "unknown_name",
+   "signature_state": "resolved",
+   "verdict": "signature"
+  },
+  {
+   "class": "Doc",
+   "heading": "GetSelectedSEdges",
+   "signature": "GetSelectedSFaces",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Doc",
+   "heading": "GetVPartInformation",
+   "signature": "GetSPartInformation",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Doc",
+   "heading": "ImprintEdgeToFace",
+   "signature": "ImprintEdgeToBody",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Doc",
+   "heading": "OutputPartsList",
+   "signature": "OpenPropFile",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Doc",
+   "heading": "SelectMeshFaceFromVFaces",
+   "signature": "SelectMeshFaceFromVFace",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Doc",
+   "heading": "SetMeshDisplaySid",
+   "signature": "SetMeshDisplaySide",
+   "heading_state": "unknown_name",
+   "signature_state": "resolved",
+   "verdict": "signature"
+  },
+  {
+   "class": "Doc",
+   "heading": "SetVMDLEdgeDisplayMode",
+   "signature": "SetMeshDisplaySide",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Env",
+   "heading": "SetParallelMeshingFlag",
+   "signature": "GetParallelMeshingFlag",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "Env",
+   "heading": "SetZipLevel",
+   "signature": "GetZipLevel",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "HybridParam",
+   "heading": "SetSimpleLayerNum",
+   "signature": "GetSimpleLayerNum",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "HybridParam",
+   "heading": "SetSimpleOctRatio",
+   "signature": "GetSimpleOctRatio",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "MDLWizard",
+   "heading": "MultiEntityCo_GetSNode",
+   "signature": "MultiEntityCo_SNode",
+   "heading_state": "resolved",
+   "signature_state": "unknown_name",
+   "verdict": "heading"
+  },
+  {
+   "class": "MDLWizard",
+   "heading": "SetValidAutoRemoveTinyFace",
+   "signature": "IsAutoRemoveTinyFaceValid",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "MeshingGroup",
+   "heading": "DoesOctMeshCVolElementExist",
+   "signature": "DoesOctMeshCVollementExist",
+   "heading_state": "unknown_name",
+   "signature_state": "resolved",
+   "verdict": "signature"
+  },
+  {
+   "class": "MeshingGroup",
+   "heading": "SetSelectMeshFacesFromMDLFaces",
+   "signature": "SetSelectMeshFacesFromMDLFace",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "MeshingGroup",
+   "heading": "ShowEachTypeMeshEelem",
+   "signature": "ShowEachTypeMeshEelemregion",
+   "heading_state": "resolved",
+   "signature_state": "unknown_name",
+   "verdict": "heading"
+  },
+  {
+   "class": "MeshingGroupSetting",
+   "heading": "SetMDLMethod",
+   "signature": "GetMDLMethod",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "OctParam",
+   "heading": "SetMinSize",
+   "signature": "SetMeshNum",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  },
+  {
+   "class": "SpecialRegion",
+   "heading": "SetIsContactAngleSet",
+   "signature": "SetContactAngle",
+   "heading_state": "resolved",
+   "signature_state": "resolved",
+   "verdict": "both"
+  }
+ ],
+ "object_probe": {
+  "Doc": "no:com_error",
+  "Application": "no:com_error",
+  "Conditions": "no:com_error",
+  "MeshingGroup": "no:com_error",
+  "MeshingGroupSetting": "no:com_error",
+  "Env": "no:com_error",
+  "HybridParam": "no:com_error",
+  "MDLWizard": "no:com_error",
+  "CondAcceleration": "no:com_error",
+  "CondAccelerationDEM": "no:com_error",
+  "CondActranBoundaryAbsorption": "no:com_error",
+  "CondActranBoundaryNonReflection": "no:com_error",
+  "CondActranOutputSolution": "no:com_error",
+  "CondActranPointSource": "no:com_error",
+  "CondActranRingDipoleSource": "no:com_error",
+  "CondActranSource": "no:com_error",
+  "CondBatteryARCDataPreprocessing": "no:com_error",
+  "CondBatteryEcmOptimization": "no:com_error",
+  "CondBatteryModel": "no:com_error",
+  "CondBladeShape": "no:com_error",
+  "CondBoundaryDiffusiveSpecies": "no:com_error",
+  "CondBoundaryElectric": "no:com_error",
+  "CondBoundaryFlowIO": "no:com_error",
+  "CondBoundaryFlowIOLiquidFilm": "no:com_error",
+  "CondBoundaryGTSuite": "no:com_error",
+  "CondBoundaryHumidity": "no:com_error",
+  "CondBoundaryRadiation": "no:com_error",
+  "CondBoundarySolarRadiation": "no:com_error",
+  "CondBoundaryWallStress": "no:com_error",
+  "CondBoundaryWallThermal": "no:com_error",
+  "CondDiscontinuous": "no:com_error",
+  "CondFWH": "no:com_error",
+  "CondFacePressureDrop": "no:com_error",
+  "CondFan": "no:com_error",
+  "CondFix": "no:com_error",
+  "CondFixDEM": "no:com_error",
+  "CondFrictionalHeat": "no:com_error",
+  "CondInitial": "no:com_error",
+  "CondInitialRandVel": "no:com_error",
+  "CondInitialShapeModify": "no:com_error",
+  "CondJOSBodyType": "no:com_error",
+  "CondJOSClothing": "no:com_error",
+  "CondJOSInitial": "no:com_error",
+  "CondJOSModel": "no:com_error",
+  "CondLDCMorphingALE": "no:com_error",
+  "CondMaterialNamePair": "no:com_error",
+  "CondMoving": "no:com_error",
+  "CondMultiphaseHandling": "no:com_error",
+  "CondMultiphasePhaseChange": "no:com_error",
+  "CondOutputCSV": "no:com_error",
+  "CondOutputFlowNoise": "no:com_error",
+  "CondOutputLFileAngleMoment": "no:com_error",
+  "CondOutputLFileLoadDistribution": "no:com_error",
+  "CondOutputLFileRegion": "no:com_error",
+  "CondOutputLFileRegionDEM": "no:com_error",
+  "CondOutputLFileScalarFlux": "no:com_error",
+  "CondOutputLFileStatisticsDEM": "no:com_error",
+  "CondOutputLFileSurfForce": "no:com_error",
+  "CondOutputLFileSurfForceDEM": "no:com_error",
+  "CondOutputLFileSurfMoment": "no:com_error",
+  "CondOutputLFileSurfMomentDEM": "no:com_error",
+  "CondOutputLFileTurbo": "no:com_error",
+  "CondOutputLFileVFHT": "no:com_error",
+  "CondOutputLFileWaterLevel": "no:com_error",
+  "CondOutputPartialFPH": "no:com_error",
+  "CondOutputRingDipole": "no:com_error",
+  "CondOutputTimeSeries": "no:com_error",
+  "CondPOTData": "no:com_error",
+  "CondParticleBoundary": "no:com_error",
+  "CondParticleForceConnection": "no:com_error",
+  "CondParticleGeneration": "no:com_error",
+  "CondParticlePassingBoundaryDEM": "no:com_error",
+  "CondPeriodicBoundary": "no:com_error",
+  "CondPorousMedia": "no:com_error",
+  "CondRadiationLamp": "no:com_error",
+  "CondReaction": "no:com_error",
+  "CondSource": "no:com_error",
+  "CondSourceDEM": "no:com_error",
+  "CondSourceMass": "no:com_error",
+  "CondSpray": "no:com_error",
+  "CondSprayGeneration": "no:com_error",
+  "CondSprayParticle": "no:com_error",
+  "CondSurfaceReaction": "no:com_error",
+  "CondWaveDamping": "no:com_error",
+  "CondWaveGeneration": "no:com_error",
+  "CondWavelet": "no:com_error",
+  "SpecialRegion": "no:com_error",
+  "OctParam": "no:com_error"
+ },
+ "pairs_unreachable": [
+  {
+   "class": "ClosedVolume",
+   "heading": "SelectFace",
+   "signature": "SetSelectFaces",
+   "reason": "无实例"
+  },
+  {
+   "class": "CondBoussinesqBaseTemp",
+   "heading": "IsBuoyancyConsideredInCurrentSetting",
+   "signature": "GetConsiderBuoyancyFlag",
+   "reason": "无实例"
+  },
+  {
+   "class": "CondCoSim",
+   "heading": "CreateCoSimRegionVolume",
+   "signature": "CreateCoSimRegionSurface",
+   "reason": "无实例"
+  },
+  {
+   "class": "CondCoSimRegion",
+   "heading": "GetType",
+   "signature": "GetRegionType",
+   "reason": "无实例"
+  },
+  {
+   "class": "CondCoSimRegion",
+   "heading": "RemoveRegion",
+   "signature": "RemoveFromRegion",
+   "reason": "无实例"
+  },
+  {
+   "class": "CondMapForStructure",
+   "heading": "SetPIDPartCorresp",
+   "signature": "SetLoadIDFaceRegionCorresp",
+   "reason": "无实例"
+  },
+  {
+   "class": "MapCond",
+   "heading": "SetParam2",
+   "signature": "SetParam",
+   "reason": "无实例"
+  },
+  {
+   "class": "Octree",
+   "heading": "GetMeshingGroup",
+   "signature": "GetMeshingGroupet",
+   "reason": "无实例"
+  },
+  {
+   "class": "Octree",
+   "heading": "GetOctInfoConsideringMesherType",
+   "signature": "GetOctInfo",
+   "reason": "无实例"
+  },
+  {
+   "class": "PropItem",
+   "heading": "GetRefpropTableParam",
+   "signature": "GetRefpropFluid",
+   "reason": "无实例"
+  },
+  {
+   "class": "PropItem",
+   "heading": "SetRefpropTableParam",
+   "signature": "SetRefpropFluid",
+   "reason": "无实例"
+  }
+ ],
+ "with_mdl": false,
+ "projects": [
+  "D:\\training\\cradle\\CradleCFD_2025.2_scFLOW_Example_a\\Exercise\\exB01-1_intake_manifold.pph"
+ ],
+ "obtained_via": {
+  "CondAcceleration": "CreateCond*:CreateCondAcceleration",
+  "CondAccelerationDEM": "CreateCond*:CreateCondAccelerationDEM",
+  "CondActranBoundaryAbsorption": "CreateCond*:CreateCondActranBoundaryAbsorption",
+  "CondActranBoundaryNonReflection": "CreateCond*:CreateCondActranBoundaryNonReflection",
+  "CondActranOutputSolution": "CreateCond*:CreateCondActranOutputSolution",
+  "CondActranPointSource": "CreateCond*:CreateCondActranPointSource",
+  "CondActranRingDipoleSource": "CreateCond*:CreateCondActranRingDipoleSource",
+  "CondActranSource": "CreateCond*:CreateCondActranSource",
+  "CondBatteryARCDataPreprocessing": "CreateCond*:CreateCondBatteryARCDataPreprocessing",
+  "CondBatteryEcmOptimization": "CreateCond*:CreateCondBatteryEcmOptimization",
+  "CondBatteryModel": "CreateCond*:CreateCondBatteryModel",
+  "CondBladeShape": "CreateCond*:CreateCondBladeShape",
+  "CondBoundaryDiffusiveSpecies": "CreateCond*:CreateCondBoundaryDiffusiveSpecies",
+  "CondBoundaryElectric": "CreateCond*:CreateCondBoundaryElectric",
+  "CondBoundaryFlowIO": "CreateCond*:CreateCondBoundaryFlowIO",
+  "CondBoundaryFlowIOLiquidFilm": "CreateCond*:CreateCondBoundaryFlowIOLiquidFilm",
+  "CondBoundaryGTSuite": "CreateCond*:CreateCondBoundaryGTSuite",
+  "CondBoundaryHumidity": "CreateCond*:CreateCondBoundaryHumidity",
+  "CondBoundaryRadiation": "CreateCond*:CreateCondBoundaryRadiation",
+  "CondBoundarySolarRadiation": "CreateCond*:CreateCondBoundarySolarRadiation",
+  "CondBoundaryWallStress": "CreateCond*:CreateCondBoundaryWallStress",
+  "CondBoundaryWallThermal": "CreateCond*:CreateCondBoundaryWallThermal",
+  "CondDiscontinuous": "CreateCond*:CreateCondDiscontinuous",
+  "CondFWH": "CreateCond*:CreateCondFWH",
+  "CondFacePressureDrop": "CreateCond*:CreateCondFacePressureDrop",
+  "CondFan": "CreateCond*:CreateCondFan",
+  "CondFix": "CreateCond*:CreateCondFix",
+  "CondFixDEM": "CreateCond*:CreateCondFixDEM",
+  "CondFrictionalHeat": "CreateCond*:CreateCondFrictionalHeat",
+  "CondInitial": "CreateCond*:CreateCondInitial",
+  "CondInitialRandVel": "CreateCond*:CreateCondInitialRandVel",
+  "CondInitialShapeModify": "CreateCond*:CreateCondInitialShapeModify",
+  "CondJOSBodyType": "CreateCond*:CreateCondJOSBodyType",
+  "CondJOSClothing": "CreateCond*:CreateCondJOSClothing",
+  "CondJOSInitial": "CreateCond*:CreateCondJOSInitial",
+  "CondJOSModel": "CreateCond*:CreateCondJOSModel",
+  "CondLDCMorphingALE": "CreateCond*:CreateCondLDCMorphingALE",
+  "CondMaterialNamePair": "CreateCond*:CreateCondMaterialNamePair",
+  "CondMoving": "CreateCond*:CreateCondMoving",
+  "CondMultiphaseHandling": "CreateCond*:CreateCondMultiphaseHandling",
+  "CondMultiphasePhaseChange": "CreateCond*:CreateCondMultiphasePhaseChange",
+  "CondOutputCSV": "CreateCond*:CreateCondOutputCSV",
+  "CondOutputFlowNoise": "CreateCond*:CreateCondOutputFlowNoise",
+  "CondOutputLFileAngleMoment": "CreateCond*:CreateCondOutputLFileAngleMoment",
+  "CondOutputLFileLoadDistribution": "CreateCond*:CreateCondOutputLFileLoadDistribution",
+  "CondOutputLFileRegion": "CreateCond*:CreateCondOutputLFileRegion",
+  "CondOutputLFileRegionDEM": "CreateCond*:CreateCondOutputLFileRegionDEM",
+  "CondOutputLFileScalarFlux": "CreateCond*:CreateCondOutputLFileScalarFlux",
+  "CondOutputLFileStatisticsDEM": "CreateCond*:CreateCondOutputLFileStatisticsDEM",
+  "CondOutputLFileSurfForce": "CreateCond*:CreateCondOutputLFileSurfForce",
+  "CondOutputLFileSurfForceDEM": "CreateCond*:CreateCondOutputLFileSurfForceDEM",
+  "CondOutputLFileSurfMoment": "CreateCond*:CreateCondOutputLFileSurfMoment",
+  "CondOutputLFileSurfMomentDEM": "CreateCond*:CreateCondOutputLFileSurfMomentDEM",
+  "CondOutputLFileTurbo": "CreateCond*:CreateCondOutputLFileTurbo",
+  "CondOutputLFileVFHT": "CreateCond*:CreateCondOutputLFileVFHT",
+  "CondOutputLFileWaterLevel": "CreateCond*:CreateCondOutputLFileWaterLevel",
+  "CondOutputPartialFPH": "CreateCond*:CreateCondOutputPartialFPH",
+  "CondOutputRingDipole": "CreateCond*:CreateCondOutputRingDipole",
+  "CondOutputTimeSeries": "CreateCond*:CreateCondOutputTimeSeries",
+  "CondPOTData": "CreateCond*:CreateCondPOTData",
+  "CondParticleBoundary": "CreateCond*:CreateCondParticleBoundary",
+  "CondParticleForceConnection": "CreateCond*:CreateCondParticleForceConnection",
+  "CondParticleGeneration": "CreateCond*:CreateCondParticleGeneration",
+  "CondParticlePassingBoundaryDEM": "CreateCond*:CreateCondParticlePassingBoundaryDEM",
+  "CondPeriodicBoundary": "CreateCond*:CreateCondPeriodicBoundary",
+  "CondPorousMedia": "CreateCond*:CreateCondPorousMedia",
+  "CondRadiationLamp": "CreateCond*:CreateCondRadiationLamp",
+  "CondReaction": "CreateCond*:CreateCondReaction",
+  "CondSource": "CreateCond*:CreateCondSource",
+  "CondSourceDEM": "CreateCond*:CreateCondSourceDEM",
+  "CondSourceMass": "CreateCond*:CreateCondSourceMass",
+  "CondSpray": "CreateCond*:CreateCondSpray",
+  "CondSprayGeneration": "CreateCond*:CreateCondSprayGeneration",
+  "CondSprayParticle": "CreateCond*:CreateCondSprayParticle",
+  "CondSurfaceReaction": "CreateCond*:CreateCondSurfaceReaction",
+  "CondWaveDamping": "CreateCond*:CreateCondWaveDamping",
+  "CondWaveGeneration": "CreateCond*:CreateCondWaveGeneration",
+  "CondWavelet": "CreateCond*:CreateCondWavelet",
+  "SpecialRegion": "chain:doc.GetSpecialRegions",
+  "HybridParam": "GetHybridParam",
+  "OctParam": "GetOctParam"
+ },
+ "chain_errors": {
+  "CondMapForStructure": "None -> 空对象（工程里没有该对象）",
+  "ClosedVolume": "None -> 空对象（工程里没有该对象）",
+  "PropItem": "None -> 空对象（工程里没有该对象）",
+  "MapCond": "None -> 空对象（工程里没有该对象）",
+  "CondBoussinesqBaseTemp": "None -> 空对象（工程里没有该对象）",
+  "CondCoSim": "None -> 空对象（工程里没有该对象）",
+  "CondCoSimRegion": "None -> 空对象（工程里没有该对象）",
+  "Octree": "GetOctree -> 空对象（工程里没有该对象）"
+ },
+ "empty_objects": [
+  "Octree",
+  "ClosedVolume",
+  "CondBoussinesqBaseTemp",
+  "CondCoSim",
+  "CondCoSimRegion",
+  "CondMapForStructure",
+  "MapCond",
+  "Octree",
+  "PropItem"
+ ],
+ "mdl_probe": {
+  "begin": "ok",
+  "wizard": "ComObject",
+  "CreateMDL": "None",
+  "mdl_raw_is_none": true
+ },
+ "call_errors": {
+  "CreateCondDTSR": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+  "CreateCondParticleConcentrationFpDEM": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+  "GetAllMapCondNames": "com_error: (-2147352570, '未知名称。', None, None)",
+  "CreateCondMapForStructure": "com_error: (-2147352570, '未知名称。', None, None)",
+  "QueryCondMapForStructureByName": "com_error: (-2147352570, '未知名称。', None, None)",
+  "CreateCondBoussinesqBaseTemp": "com_error: (-2147352570, '未知名称。', None, None)"
+ },
+ "availability": {
+  "Application": {
+   "total": 23,
+   "resolved": 23,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondAcceleration": {
+   "total": 1,
+   "resolved": 1,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondAccelerationDEM": {
+   "total": 3,
+   "resolved": 3,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondActranBoundaryAbsorption": {
+   "total": 7,
+   "resolved": 7,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondActranBoundaryNonReflection": {
+   "total": 8,
+   "resolved": 8,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondActranOutputSolution": {
+   "total": 2,
+   "resolved": 2,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondActranPointSource": {
+   "total": 13,
+   "resolved": 13,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondActranSource": {
+   "total": 2,
+   "resolved": 2,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondBatteryARCDataPreprocessing": {
+   "total": 7,
+   "resolved": 7,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondBatteryModel": {
+   "total": 9,
+   "resolved": 9,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondBladeShape": {
+   "total": 14,
+   "resolved": 14,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondBoundaryDiffusiveSpecies": {
+   "total": 5,
+   "resolved": 5,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondBoundaryElectric": {
+   "total": 19,
+   "resolved": 19,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondBoundaryFlowIO": {
+   "total": 122,
+   "resolved": 119,
+   "unknown": 3,
+   "errors": 0
+  },
+  "CondBoundaryFlowIOLiquidFilm": {
+   "total": 2,
+   "resolved": 2,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondBoundaryGTSuite": {
+   "total": 3,
+   "resolved": 3,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondBoundaryHumidity": {
+   "total": 7,
+   "resolved": 7,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondBoundarySolarRadiation": {
+   "total": 2,
+   "resolved": 2,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondBoundaryWallStress": {
+   "total": 15,
+   "resolved": 15,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondBoundaryWallThermal": {
+   "total": 49,
+   "resolved": 49,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondDiscontinuous": {
+   "total": 24,
+   "resolved": 24,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondFWH": {
+   "total": 15,
+   "resolved": 15,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondFacePressureDrop": {
+   "total": 1,
+   "resolved": 1,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondFan": {
+   "total": 13,
+   "resolved": 13,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondFix": {
+   "total": 4,
+   "resolved": 4,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondFixDEM": {
+   "total": 3,
+   "resolved": 3,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondFrictionalHeat": {
+   "total": 10,
+   "resolved": 10,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondInitial": {
+   "total": 44,
+   "resolved": 42,
+   "unknown": 2,
+   "errors": 0
+  },
+  "CondInitialRandVel": {
+   "total": 4,
+   "resolved": 4,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondInitialShapeModify": {
+   "total": 24,
+   "resolved": 23,
+   "unknown": 1,
+   "errors": 0
+  },
+  "CondJOSBodyType": {
+   "total": 7,
+   "resolved": 7,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondJOSClothing": {
+   "total": 5,
+   "resolved": 5,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondJOSInitial": {
+   "total": 5,
+   "resolved": 5,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondLDCMorphingALE": {
+   "total": 25,
+   "resolved": 25,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondMaterialNamePair": {
+   "total": 5,
+   "resolved": 5,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondMoving": {
+   "total": 84,
+   "resolved": 84,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondMultiphaseHandling": {
+   "total": 8,
+   "resolved": 8,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondMultiphasePhaseChange": {
+   "total": 9,
+   "resolved": 9,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputCSV": {
+   "total": 23,
+   "resolved": 23,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputFlowNoise": {
+   "total": 4,
+   "resolved": 4,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputLFileAngleMoment": {
+   "total": 13,
+   "resolved": 13,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputLFileLoadDistribution": {
+   "total": 7,
+   "resolved": 7,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputLFileRegion": {
+   "total": 53,
+   "resolved": 53,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputLFileRegionDEM": {
+   "total": 22,
+   "resolved": 22,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputLFileScalarFlux": {
+   "total": 2,
+   "resolved": 2,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputLFileStatisticsDEM": {
+   "total": 7,
+   "resolved": 7,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputLFileSurfForce": {
+   "total": 11,
+   "resolved": 11,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputLFileSurfForceDEM": {
+   "total": 5,
+   "resolved": 5,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputLFileSurfMoment": {
+   "total": 15,
+   "resolved": 15,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputLFileSurfMomentDEM": {
+   "total": 5,
+   "resolved": 5,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputLFileTurbo": {
+   "total": 16,
+   "resolved": 16,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputLFileVFHT": {
+   "total": 12,
+   "resolved": 12,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputLFileWaterLevel": {
+   "total": 18,
+   "resolved": 18,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputPartialFPH": {
+   "total": 15,
+   "resolved": 15,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputRingDipole": {
+   "total": 19,
+   "resolved": 19,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondOutputTimeSeries": {
+   "total": 30,
+   "resolved": 28,
+   "unknown": 2,
+   "errors": 0
+  },
+  "CondPOTData": {
+   "total": 10,
+   "resolved": 10,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondParticleBoundary": {
+   "total": 8,
+   "resolved": 8,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondParticleForceConnection": {
+   "total": 7,
+   "resolved": 7,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondParticleGeneration": {
+   "total": 78,
+   "resolved": 78,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondParticlePassingBoundaryDEM": {
+   "total": 2,
+   "resolved": 2,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondPeriodicBoundary": {
+   "total": 17,
+   "resolved": 17,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondPorousMedia": {
+   "total": 51,
+   "resolved": 50,
+   "unknown": 1,
+   "errors": 0
+  },
+  "CondRadiationLamp": {
+   "total": 3,
+   "resolved": 3,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondReaction": {
+   "total": 20,
+   "resolved": 20,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondSource": {
+   "total": 14,
+   "resolved": 13,
+   "unknown": 1,
+   "errors": 0
+  },
+  "CondSourceDEM": {
+   "total": 4,
+   "resolved": 4,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondSourceMass": {
+   "total": 8,
+   "resolved": 8,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondSpray": {
+   "total": 10,
+   "resolved": 10,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondSprayGeneration": {
+   "total": 10,
+   "resolved": 10,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondSprayParticle": {
+   "total": 15,
+   "resolved": 15,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondSurfaceReaction": {
+   "total": 10,
+   "resolved": 10,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondWaveDamping": {
+   "total": 10,
+   "resolved": 10,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondWaveGeneration": {
+   "total": 3,
+   "resolved": 3,
+   "unknown": 0,
+   "errors": 0
+  },
+  "CondWavelet": {
+   "total": 20,
+   "resolved": 20,
+   "unknown": 0,
+   "errors": 0
+  },
+  "Conditions": {
+   "total": 606,
+   "resolved": 606,
+   "unknown": 0,
+   "errors": 0
+  },
+  "Doc": {
+   "total": 424,
+   "resolved": 423,
+   "unknown": 1,
+   "errors": 0
+  },
+  "Env": {
+   "total": 161,
+   "resolved": 161,
+   "unknown": 0,
+   "errors": 0
+  },
+  "HybridParam": {
+   "total": 9,
+   "resolved": 9,
+   "unknown": 0,
+   "errors": 0
+  },
+  "MDLWizard": {
+   "total": 78,
+   "resolved": 78,
+   "unknown": 0,
+   "errors": 0
+  },
+  "MeshingGroup": {
+   "total": 173,
+   "resolved": 170,
+   "unknown": 3,
+   "errors": 0
+  },
+  "MeshingGroupSetting": {
+   "total": 104,
+   "resolved": 103,
+   "unknown": 1,
+   "errors": 0
+  },
+  "OctParam": {
+   "total": 18,
+   "resolved": 18,
+   "unknown": 0,
+   "errors": 0
+  },
+  "SpecialRegion": {
+   "total": 40,
+   "resolved": 39,
+   "unknown": 1,
+   "errors": 0
+  }
+ },
+ "killed_hosts": [],
+ "seconds": 41.5,
+ "tally": {
+  "both": 21,
+  "heading": 5,
+  "signature": 4
+ }
+}
