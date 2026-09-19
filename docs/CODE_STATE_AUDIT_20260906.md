@@ -2100,3 +2100,41 @@ VBS 生成（取值 + 纠名）、面板写 xenv（实测键账本 + 枚举白�
 目录 `host_absent` 16 → **25 条**（16 类）；分歧总账已裁定 32 → **35**、NYI 9 → **6**
 （终态 1 host-interface-absent + 5 needs-gui-flow）。
 
+---
+
+## 60. R46 更新（2026-09-15）—— 未普查类终态归因 + 取得路径进总账 + 宿主边界上面板
+
+### 60.1 六种终态（R46-1）
+
+39 个未普查类逐类归因（`tools/unswept_account.py` → `schemas/unswept_account.json`），
+判据全部来自证据（配方宿主 / 候选调用错误 / 返回空）：
+
+| 终态 | 数 | 判据 |
+|---|---|---|
+| `needs-corpus` | 23 | 前置对象本会话没有（snode/obj_R/condcosim/mixedgas/combustion/particletracking），或取法试过**返回空** |
+| `no-creation-path` | 12 | 手册未声明任何创建/取用路径（WrappingParam/IS*/IV*/PropGroup/CrossSectionView…） |
+| `foreign-app` | 3 | Kicker.*（本会话是 scFLOWpre 会话） |
+| `call-rejected` | 1 | 手册取法存在但调用被拒（非「未知名称」） |
+| `host-interface-absent` | 0 | 手册声明的取法全部 UNKNOWNNAME（判据+测试就绪） |
+| `probe-limitation` | 0 | 无结论（宁可停这里，也不编理由） |
+
+新增证据 `coverage.auto_empty_targets`（21 条）：把「本机工程没有这类对象」与
+「宿主没这个接口」分开 —— R45 三个假证据闸门的延续。
+
+### 60.2 取得路径总账（R46-2）
+
+`coverage.obtained_via` **156 条**（146 已普查 + 10 无成员类，零缺口），形态：
+`chain:` / `auto:` / `CreateCond*:` / `session:`（会话直取，如 GetHybridParam）；
+测试要求非前缀形态必须是目录里真实存在的成员名。
+
+### 60.3 面板（R46-3）
+
+条件类型目录新增 **Host 列**（`⚠ N` + tooltip）与 **「Host 边界…」** 对话框
+（`HostBoundaryDialog`）；数据 = `scflowpre_api.host_absent_members()` /
+`object_hints()`，文本 = 纯函数 `render_host_boundary()`。测试在
+`QT_QPA_PLATFORM=offscreen` 下真建对话框；Qt 不可用则跳过。
+
+> `tools/host_member_sweep.py` 的逐轮证据落点改为 `--evidence`（默认中立目录），
+> 不再写死 `_p12u_gate/r45/`（否则复算会覆盖上一轮证据）。
+
+

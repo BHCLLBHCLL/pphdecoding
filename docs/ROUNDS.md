@@ -3250,31 +3250,96 @@ interfacetype)` 也能试到）→ **78 个条件实例**一次建成，随后�
 
 ---
 
-## R46 —— 提案（≈1 人日）
+## R46 —— 未普查类归因 + 取得路径进总账 + 宿主边界上面板（2026-09-15，✅ 已完成）
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R46-1** | **未普查类归因** | 39 类逐类有终态且入 `schemas/`，无"未归因" | ✅ `tools/unswept_account.py` → `schemas/unswept_account.json`：39/39 有终态（6 种） |
+| **R46-2** | **取得路径进总账** | 覆盖率报表能答"这个类怎么拿到的" | ✅ `coverage.obtained_via` **156 条**（146 已普查 + 10 无成员，无缺口） |
+| **R46-3** | **未实现成员上面板** | GUI 一处可查（或明确记为不做） | ✅ 条件目录新增 **Host 列** + 「Host 边界…」对话框（离屏 Qt 测试） |
+
+### R46-1 终态：六种，每一种都要能追到证据
+
+覆盖到 73.4% 后，剩下的 39 类不是"还没轮到"，而是各有原因。判据全部来自**证据**
+（配方宿主、候选调用错误、返回空），口径写死在 `classify()`（纯函数，可离线单测）：
+
+| 终态 | 数量 | 判据 |
+|---|---|---|
+| `needs-corpus` | **23** | 配方要的前置对象本会话没有（`snode`/`obj_R`/`condcosim`/`mixedgas`/`combustion`/`particletracking`…），或取法**试过返回空**（本机工程没有该对象） |
+| `no-creation-path` | **12** | 手册**没给**任何可取用的创建/取用路径（`WrappingParam`/`ISFace`/`IVEdge`/`PropGroup`/`CrossSectionView`…）—— 名字家族乱猜不构成"宿主无接口"的证据 |
+| `foreign-app` | **3** | `Kicker.Application`/`ApplicationLaunchSetting`/`LicenseStatus`：属于 Kicker 启动器，本会话是 scFLOWpre 会话 |
+| `call-rejected` | **1** | `CondMultiphaseMaterial.QueryCondMultiphaseMaterial`：手册取法存在但调用被拒（非"未知名称"） |
+| `host-interface-absent` | 0 | 手册声明的取法**全部** `DISP_E_UNKNOWNNAME`（本轮无实例；判据与测试就绪） |
+| `probe-limitation` | 0 | 试过但无结论（**宁可停在这里，也不许编理由**） |
+
+**新增证据字段** `coverage.auto_empty_targets`（21 条：试过取法但**返回空**的类）——
+"本机工程没有这类对象"与"宿主没这个接口"从此分得开，这正是 R45 三个假证据闸门的延续。
+
+### R46-2 取得路径
+
+`coverage.obtained_via`（类 → 怎么拿到的）：**156 条**，覆盖 146 个已普查类 +
+10 个"手册无成员"类，零缺口。路径形态：`chain:`（链条）、`auto:`（自动配方）、
+`CreateCond*:`（条件批量实例）、`session:`（会话/文档直取，如
+`HybridParam -> GetHybridParam`、`Doc`/`Conditions`）。测试还要求：非前缀形态的
+路径必须是**目录里真实存在的成员名**（不许写空话）。
+
+### R46-3 面板（离屏 Qt 可测）
+
+`nav_panels.py` 的条件类型目录（`CondTypeCatalogDialog`）：
+
+* 新增 **Host 列**：该条件类型对应的目录类有宿主未实现成员时显示 `⚠ N` 并带 tooltip
+  列出成员名，否则 `ok`；选中行时详情栏追加"宿主未实现: …"；
+* 新增 **「Host 边界…」按钮** → `HostBoundaryDialog`：上半是"取不到实例的类 + 先决流程"，
+  下半是"宿主未实现的成员（25 条）"；
+* 数据走**产品面** `automation.scflowpre_api.host_absent_members()` / `object_hints()`，
+  文本走纯函数 `render_host_boundary()` —— 缺证据文件时给一句可读说明而不是崩。
+* 测试在 `QT_QPA_PLATFORM=offscreen` 下真建对话框（`HostBoundaryDialog` /
+  `CondTypeCatalogDialog`），断言 Host 列与入口存在、文本含成员名；Qt 不可用时跳过。
+
+### 回归
+
+全量回归 **1505 passed / 4 skipped / 0 failed**（585.67 s；改口径前后各复算一次，
+610.81 s / 585.67 s 同数；R45 收口同口径 1492/4/0，增量 +13 = 本轮新模块 13 项）。新增测试 1 个模块 `test_r46_evidence.py`（13 项：
+归因口径/证据优先/入册一致/取得路径/面板文本与离屏对话框）。
+
+### 证据
+
+`schemas/unswept_account.json`（39 类终态 + 判据 + 逐类证据）、
+`schemas/host_member_availability.json`（`obtained_via` 156 / `auto_empty_targets` 21）、
+`_p12u_gate/r46/name_verdicts.json`、`_p12u_gate/r46_run2.log`、`nav_panels.py`。
+
+> `tools/host_member_sweep.py` 的逐轮证据落点改为 `--evidence`（默认中立目录
+> `_p12u_gate/host_member_sweep/`）—— 此前写死在 `_p12u_gate/r45/`，R46 的复算会
+> 覆盖上一轮的证据文件。
+
+---
+
+## R47 —— 提案（≈1 人日）
 
 ### 依据
 
-* 覆盖到 73.4% 后，剩下 **39 类"从未尝试"** 里绝大多数是**需要前置语料**的
-  （材料/CoSim/粒子/映射/多轴表/SNode/Table/Value），只有个别是纯名字没试对；
-* `classes_swept` 现在只说明"试过"，**没有**说明"这些类的对象是从哪条路来的"——
-  `auto_obtained` 已在覆盖率总账里，但逐类的 `via`（含链条/条件批量）还没进；
-* 面板（`nav_panels.py`/`pph_gui.py`）还没有把"宿主未实现成员"灰显/提示接到菜单上。
+* 39 类终态里 **23 类**卡在"需要前置语料"，其中 **8 类**（`SNode`/`Table`/`Value`/
+  `Region`/`DiffusiveSpecies`/`MultiYAxisTable`/`BodyPattern`/`WrappingGroup`）
+  在**有 MDL/材料/条件的算例**里其实取得到 —— 值得用"带语料的工程集"再试一轮；
+* `Kicker.*` 3 类的终态是"本会话取不到"，但 Kicker 启动器对象**本机存在**
+  （探针就是经 Kicker 启动的）：能否另起 `Kicker.Application` 会话把它拿下，值得一次实测；
+* `host_absent` 25 条已入册，但**桥接层**（`automation/vbs_bridge.py` 的 VBS 生成、
+  面板写入路径）还没有"遇到未实现成员就提前报错"的前置校验。
 
 ### 条目
 
 | # | 条目 | 做法 | 验收句 | 人日 |
 |---|---|---|---|---|
-| **R46-1** | **未普查类归因** | 给 39 个"从未尝试"的类逐类写**终态**（需要什么前置语料 / 手册无创建路径） | 39 类逐类有终态且入 `schemas/`，无"未归因" | 0.5 |
-| **R46-2** | **取得路径进总账** | `coverage.obtained_via`（类 → 配方）落进 availability | 覆盖率报表能答"这个类怎么拿到的" | 0.25 |
-| **R46-3** | **未实现成员上面板** | 菜单/成员面板对 `host_absent` 灰显 + 提示 | GUI 一处可查（或明确记为"面板语义不做"） | 0.25 |
+| **R47-1** | **带语料再扩面** | 用有 MDL/材料/条件的算例（exB01/exA26 等）跑一轮，把 `SNode`/`Table`/`Value` 这类真取到 | 覆盖类数 146 → ≥155 或逐类给出"仍取不到"的证据 |
+| **R47-2** | **Kicker 会话实测** | 另起 `Kicker.Application`（`Dispatch`）取 `ApplicationLaunchSetting`/`LicenseStatus` | 3 类终态改为"已实测"（成功或失败都算，必须有证据） |
+| **R47-3** | **未实现成员前置校验** | 桥接/面板写入前查 `host_absent` 并给出可读错误 | 一处可查 + 测试（调不通的成员不再等到 COM 报错） |
 
 ### 明确不做
 
-* 不为扩面去**造语料**（材料库/CoSim/粒子算例要另起工程，不是普查该干的事）；
-* 不改 `host_absent` 的判据（`GetIDsOfNames` 零副作用解析仍是唯一证人）。
-
----
-
+* 不伪造语料（要什么算例就如实要，缺就记"缺"）；
+* 不为 `host-interface-absent` 之外的终态写"自动重试"逻辑 —— 终态是结论，不是待办。
 
 ---
 

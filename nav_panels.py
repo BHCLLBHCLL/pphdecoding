@@ -25,7 +25,8 @@ from PyQt5.QtWidgets import (
     QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
     QDoubleSpinBox, QFileDialog, QFormLayout, QGridLayout, QGroupBox,
     QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMenu, QMessageBox, QPushButton, QRadioButton, QScrollArea,
+    QListWidgetItem, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
+    QRadioButton, QScrollArea,
     QSlider, QSpinBox, QStackedWidget, QTableWidget, QTableWidgetItem,
     QTabWidget, QTextEdit, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
@@ -69,6 +70,49 @@ DIALOG_KEYS = frozenset({
     "conditions", "build_am_detailed", "oct_param", "mesh_param", "execute",
     "option_nav",
 })
+
+
+def host_boundary_data() -> dict:
+    """宿主侧能力边界（R46-3）：走**产品 API**，缺证据时给空表。
+
+    为什么面板要这个：用户看到"这个条件建不出来"其实有两种根因 —— 面板没接线，
+    或**宿主 COM 面**没有对应成员。后者此前只在 schemas 里，这里给出可读面。
+    """
+    out: dict = {"absent": {}, "hints": {}}
+    try:
+        from automation import scflowpre_api as api
+        out["absent"] = api.host_absent_members()
+        out["hints"] = api.object_hints()
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def render_host_boundary(data: dict) -> str:
+    """把宿主边界数据渲染成面板文本（纯函数，可离线单测）。"""
+    absent = (data or {}).get("absent") or {}
+    hints = (data or {}).get("hints") or {}
+    lines = []
+    if hints:
+        lines.append("取不到实例的类（先跑前置流程）：")
+        for cls in sorted(hints):
+            lines.append("  · " + cls + " — " + str(hints[cls]))
+        lines.append("")
+    if absent:
+        n = sum(len(v) for v in absent.values())
+        lines.append("宿主未实现的成员（" + str(n) + " 条；调用必然失败，"
+                     "面板与脚本都要避开）：")
+        for cls in sorted(absent):
+            lines.append("  · " + cls + " — " + " / ".join(absent[cls]))
+    else:
+        lines.append("（没有宿主未实现成员的证据：schemas/"
+                     "host_member_availability.json 未生成）")
+    return "\n".join(lines)
+
+
+def host_absent_for(name: str) -> list:
+    """某个条件类型名（= 目录类名）上宿主未实现的成员（没有则空表）。"""
+    return list((host_boundary_data().get("absent") or {}).get(name) or [])
 
 
 def _note(text: str) -> QLabel:
@@ -14841,6 +14885,33 @@ _CATEGORY_LABELS: list[tuple[str, str]] = [
 ]
 
 
+class HostBoundaryDialog(QDialog):
+    """宿主侧能力边界（R46-3）：未实现成员 + 取不到实例的类（含先决提示）。
+
+    数据走 :func:`host_boundary_data`（= `automation.scflowpre_api` 的产品面），
+    文本走 :func:`render_host_boundary`（纯函数，离线可单测）。
+    """
+
+    def __init__(self, data: dict | None = None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Host Boundary — 宿主侧能力边界")
+        self.setMinimumSize(660, 460)
+        outer = QVBoxLayout(self)
+        self.txt = QPlainTextEdit()
+        self.txt.setReadOnly(True)
+        self.txt.setPlainText(render_host_boundary(
+            data if data is not None else host_boundary_data()))
+        self.txt.setStyleSheet("font-family:Consolas,monospace; font-size:11px;")
+        outer.addWidget(self.txt, 1)
+        outer.addWidget(_note(
+            "证据：schemas/host_member_availability.json（普查）+ 目录的 "
+            "host_absent 标记；与 tools/host_member_sweep.py --report-only 同源。"))
+        bb = QDialogButtonBox(QDialogButtonBox.Close)
+        bb.rejected.connect(self.reject)
+        bb.clicked.connect(lambda *_: self.accept())
+        outer.addWidget(bb)
+
+
 class CondTypeCatalogDialog(QDialog):
     """条件类型目录（P4-1）：二进制扫描目录 → 通用表单入口。
 
@@ -14881,7 +14952,7 @@ class CondTypeCatalogDialog(QDialog):
         right = QVBoxLayout()
         self.lst = QTreeWidget()
         self.lst.setHeaderLabels(
-            ["Condition", "Type", "Fields", "Origin"])
+            ["Condition", "Type", "Fields", "Origin", "Host"])
         self.lst.setRootIsDecorated(False)
         self.lst.setAlternatingRowColors(True)
         self.lst.setColumnWidth(0, 280)
@@ -14904,6 +14975,9 @@ class CondTypeCatalogDialog(QDialog):
         bb = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.button(QDialogButtonBox.Ok).setText("New condition")
+        self.btn_host = bb.addButton("Host 边界…",
+                                     QDialogButtonBox.ActionRole)
+        self.btn_host.clicked.connect(self._open_host_boundary)
         bb.accepted.connect(self._on_create_btn)
         bb.rejected.connect(self.reject)
         outer.addWidget(bb)
@@ -14944,6 +15018,9 @@ class CondTypeCatalogDialog(QDialog):
         if cats is None and self._cats is not None:
             cats = self._cats
         text = self.ed_search.text().strip().lower()
+        # R46-3：宿主侧边界（同一份证据：schemas/host_member_availability.json
+        # + 目录的 host_absent 标记）—— 类型名恰好就是目录类名时直接标出来
+        absent = host_boundary_data().get("absent") or {}
         for name in sorted(reg.types):
             t = reg.types[name]
             if cats is not None and (t.category or "misc") not in cats:
@@ -14952,13 +15029,22 @@ class CondTypeCatalogDialog(QDialog):
             if text and text not in disp.lower() \
                     and text not in name.lower():
                 continue
+            missing = list(absent.get(name) or [])
             it = QTreeWidgetItem([
                 disp, name,
                 str(len(t.fields)) if t.fields else "—",
                 "sample" if t.sample_count or t.count else t.lineage,
+                "⚠ " + str(len(missing)) if missing else "ok",
             ])
+            if missing:
+                it.setToolTip(4, "宿主未实现（调用必然失败）："
+                              + " / ".join(missing))
             it.setData(0, Qt.UserRole, name)
             self.lst.addTopLevelItem(it)
+
+    def _open_host_boundary(self) -> None:
+        """R46-3：把「宿主未实现成员 + 取不到实例的类」摆到面板上。"""
+        HostBoundaryDialog(host_boundary_data(), self).exec_()
 
     def _on_select(self, cur, _prev) -> None:
         if cur is None:
@@ -14975,6 +15061,9 @@ class CondTypeCatalogDialog(QDialog):
             bits.append(f"help: {t.help_file}")
         if t.sample_count or t.count:
             bits.append(f"samples: {t.sample_count or t.count}")
+        missing = host_absent_for(name)
+        if missing:
+            bits.append("宿主未实现: " + " / ".join(missing))
         self.lab_detail.setText("  |  ".join(bits))
 
     def _on_create(self, *_args) -> None:

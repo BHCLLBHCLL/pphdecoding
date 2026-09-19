@@ -764,6 +764,7 @@ def main(argv=None) -> int:
                 held[key] = cls
         index = member_name_index(cat_all)
         rejected = set(result.get("identity_rejected") or [])
+        empty_hits: dict = {}
         # **不并进 call_errors**：那里的错误被"手册标题裁定"与 dispatch_account 当
         # "宿主没有这个接口"的证据用，而自动配方会在**多个宿主**上试同一个名字
         # （CreateCondCoSim 在 Doc 上当然没有）—— 并进去会把 CondCoSim 这类
@@ -797,6 +798,9 @@ def main(argv=None) -> int:
                         continue
                     cand = _raw(got) if got is not None else None
                     if cand is None or _empty(cand):
+                        # 试过、但**返回空**：这是 R46-1 归因的主要证据
+                        # （"本机工程里没有这类对象"≠"宿主没这个接口"）
+                        empty_hits.setdefault(cls, plan["how"])
                         continue
                     sample = distinctive_members(cat_all, cls, index)
                     ok, detail = identity_ok(cand, sample)
@@ -819,6 +823,12 @@ def main(argv=None) -> int:
                 rejected.add(cls)      # 本轮别再对这个类做同一批尝试
         if calls:
             result.setdefault("auto_call_errors", {}).update(calls)
+        # 后来拿到了的类，不算"试过返回空"
+        for done in list(empty_hits):
+            if done in ctx:
+                empty_hits.pop(done)
+        if empty_hits:
+            result.setdefault("auto_empty_targets", {}).update(empty_hits)
         return made
 
     doc = sess.doc                          # typed 包装：内部走 _FlagAsMethod
@@ -1038,6 +1048,10 @@ def main(argv=None) -> int:
                 Path(proj).name + ": " + type(exc).__name__ + ": " + str(exc))
             print("[r38] 工程 " + Path(proj).name + " 取实例失败: "
                   + type(exc).__name__ + ": " + str(exc), flush=True)
+    # R46-2：**每个拿到实例的类都要能答"怎么拿到的"** —— 会话直取的核心对象
+    # （Doc/Conditions/MeshingGroup…）此前没有 via 条目，覆盖率报表答不上来
+    for _key in ctx:
+        via.setdefault(_key, "session:会话/文档直取")
     # 没拿到实例、也没留下链式错误的类，补一条**兜底原因**（不许静默）
     for cls in wanted:
         if ctx.get(cls) is None:
@@ -1101,6 +1115,14 @@ def main(argv=None) -> int:
                          "identity_detail": result.get("identity_detail") or {},
                          "auto_timeouts": sorted(
                              set(result.get("auto_timeouts") or [])),
+                         # R46-2：**每个类的取得路径**（链条/条件批量/自动配方）
+                         "obtained_via": {CTX_ALIASES.get(k, k): v
+                                          for k, v in sorted(via.items())
+                                          if CTX_ALIASES.get(k, k)
+                                          in cat["classes"]},
+                         # R46-1：试过取法但返回空的类（归因证据）
+                         "auto_empty_targets": dict(sorted(
+                             (result.get("auto_empty_targets") or {}).items())),
                          "swept_unmapped": sorted(
                              set(result.get("swept_unmapped") or [])),
                          # 验身后置闸否掉的类（整类未知过半 = 拿错对象）

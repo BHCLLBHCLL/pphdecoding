@@ -95,6 +95,10 @@ def main(argv=None) -> int:
                     help="不起宿主，只报已有证据的覆盖率")
     ap.add_argument("--json", action="store_true", help="总账以 JSON 输出")
     ap.add_argument("--keep-host", action="store_true", help="跑完不杀宿主")
+    ap.add_argument("--evidence", type=Path,
+                    default=ROOT / "_p12u_gate" / "host_member_sweep"
+                    / "name_verdicts.json",
+                    help="逐轮证据落点（默认中立目录；轮次证据自行指定）")
     ap.add_argument("--out", type=Path, default=AVAIL)
     args = ap.parse_args(argv)
 
@@ -109,7 +113,7 @@ def main(argv=None) -> int:
             return 2
         cmd = [sys.executable, str(PROBE), "--sweep",
                "--auto-budget", str(args.budget),
-               "--json", str(ROOT / "_p12u_gate" / "r45" / "name_verdicts.json")]
+               "--json", str(args.evidence)]
         for p in projects:
             cmd += ["--project", str(p)]
         if args.keep_host:
