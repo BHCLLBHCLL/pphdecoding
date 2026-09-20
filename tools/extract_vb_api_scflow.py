@@ -438,6 +438,51 @@ def _apply_host_absent(catalog: dict) -> int:
     return n
 
 
+def _apply_recipe_evidence(catalog: dict) -> int:
+    """把「取法实测给的是别家对象」的类标进目录（R48-2）。
+
+    证据来自普查（`host_member_availability.json` 的 coverage）：
+    * `identity_rejected`：验身否掉的配方/候选（如 `Condition <- catalog:Doc.GetConditions`
+      —— 集合对象不是单个 Condition）；
+    * `swept_suspect`：整类成员未知过半（拿错对象，整类不记）。
+
+    标记后，读目录的人一眼能看出**这一页的 instance 配方不可照抄** ——
+    比"照抄配方再撞一次墙"值钱。返回**被标记的类数**（证据按 (类, 取法) 去重）。
+    """
+    import json as _json
+    try:
+        data = _json.loads(HOST_AVAILABILITY.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return 0
+    cov = data.get("coverage") or {}
+    marked: set = set()
+    n = 0
+    for line in cov.get("identity_rejected") or []:
+        cls, _, how = str(line).partition(" <- ")
+        info = catalog["classes"].get(cls)
+        if not info:
+            continue
+        info["recipe_unreliable"] = True
+        ev = info.setdefault("recipe_unreliable_evidence", [])
+        marked.add(cls)
+        if isinstance(ev, list) and how and how not in ev:
+            ev.append(how + "（验身否：该类独有成员解析率不过半）")
+            n += 1
+    for cls, detail in (cov.get("swept_suspect") or {}).items():
+        info = catalog["classes"].get(cls)
+        if not info:
+            continue
+        info["recipe_unreliable"] = True
+        ev = info.setdefault("recipe_unreliable_evidence", [])
+        text = ("整类成员 " + str(detail.get("unknown")) + "/"
+                + str(detail.get("total")) + " 解析不到（拿错对象）")
+        marked.add(cls)
+        if isinstance(ev, list) and text not in ev:
+            ev.append(text)
+            n += 1
+    return n or len(marked)
+
+
 def _apply_value_evidence(catalog: dict) -> dict:
     """笔误修正 + 语料补充（R33-1）。返回统计，供 CLI 打印。"""
     fixed = added = 0
@@ -613,6 +658,7 @@ def main(argv: list[str] | None = None) -> int:
     ev = _apply_value_evidence(catalog)
     ev["dispatch_names"] = _apply_name_verdicts(catalog)
     ev["host_absent"] = _apply_host_absent(catalog)
+    ev["recipe_unreliable"] = _apply_recipe_evidence(catalog)
 
     if args.list:
         print(f"== {len(files)} classes, {total} members "
@@ -629,7 +675,8 @@ def main(argv: list[str] | None = None) -> int:
           f"(Cond*={n_cond}) members={total} "
           f"fixes={ev['fixed']} addenda={ev['added']} "
           f"dispatch_names={ev['dispatch_names']} "
-          f"host_absent={ev['host_absent']}")
+          f"host_absent={ev['host_absent']} "
+          f"recipe_unreliable={ev.get('recipe_unreliable', 0)}")
     return 0
 
 

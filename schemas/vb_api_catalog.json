@@ -1,7 +1,7 @@
 {
  "source": "CradleCFD2025.2 Manuals scFLOW HTML VB_Interface_eng",
  "progid": "scFLOWpre_Bx64net.Application.2025",
- "extracted": "2026-09-20",
+ "extracted": "2026-09-21",
  "classes": {
   "AdaptiveParam": {
    "file": "Scf_vb_Preprocessor_AdaptiveParam_Class.html",
@@ -9260,7 +9260,22 @@
       "description": "CondCoSimRegionVolume class"
      }
     }
-   }
+   },
+   "recipe_unreliable": true,
+   "recipe_unreliable_evidence": [
+    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
+    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
+    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
+    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
+    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
+    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
+    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
+    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
+    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
+    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
+    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
+    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）"
+   ]
   },
   "CondCoSimOption": {
    "file": "Scf_vb_Preprocessor_CondCoSimOption_Class.html",
@@ -26968,7 +26983,11 @@
       "description": "True (successful), False (failed)"
      }
     }
-   }
+   },
+   "recipe_unreliable": true,
+   "recipe_unreliable_evidence": [
+    "整类成员 8/9 解析不到（拿错对象）"
+   ]
   },
   "CondParticleForceConnection": {
    "file": "Scf_vb_Preprocessor_CondParticleForceConnection_Class.html",
@@ -49336,7 +49355,12 @@
     "SetVOFConcentrationPhase": {
      "signature": "retval=diff_species.SetVOFConcentrationPhase(phase)"
     }
-   }
+   },
+   "recipe_unreliable": true,
+   "recipe_unreliable_evidence": [
+    "stem:Conditions.GetCondBoundaryDiffusiveSpecies（验身否：该类独有成员解析率不过半）",
+    "stem:Conditions.GetCondBoundaryDiffusiveSpecies（验身否：该类独有成员解析率不过半）"
+   ]
   },
   "Doc": {
    "file": "Scf_vb_Preprocessor_Doc_Class.html",
@@ -82122,7 +82146,14 @@
      },
      "note": "Refer to List of Unit for the available units."
     }
-   }
+   },
+   "recipe_unreliable": true,
+   "recipe_unreliable_evidence": [
+    "stem:Conditions.GetCondFrequencyAmplitudeTable（验身否：该类独有成员解析率不过半）",
+    "stem:Conditions.GetCondFrequencyAmplitudeTable（验身否：该类独有成员解析率不过半）",
+    "stem:Doc.GetAllMultiYAxisTables（验身否：该类独有成员解析率不过半）",
+    "stem:Doc.GetAllMultiYAxisTables（验身否：该类独有成员解析率不过半）"
+   ]
   },
   "TetraParam": {
    "file": "Scf_vb_Preprocessor_TetraParam_Class.html",

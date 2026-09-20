@@ -2,7 +2,7 @@
  "source": "tools/dispatch_name_probe.py --sweep（GetIDsOfNames）",
  "note": "state=unknown_name ⇒ 宿主**未实现**该成员；error:* ⇒ 探针侧问题（对象为空/过时），**不得**当宿主否证；未出现在本表的类 = **未普查**（不等于已实现）",
  "coverage": {
-  "classes_swept": 149,
+  "classes_swept": 152,
   "empty_objects": [
    "CondBoussinesqBaseTemp",
    "CondCoSim",
@@ -28,7 +28,7 @@
    "LocalCoordinate",
    "ParticleRegion"
   ],
-  "members_swept": 3878,
+  "members_swept": 3902,
   "members_total": 4455,
   "unswept_classes": [
    "BodyPattern",
@@ -39,7 +39,6 @@
    "CondDTSR",
    "CondMixedGas",
    "CondMultiphaseMaterial",
-   "CondOutputPclFile",
    "CondParticleConcentrationFpDEM",
    "CondParticleCounter",
    "CondParticleForceFPDEM",
@@ -50,7 +49,6 @@
    "CondReactionIncompSpecies",
    "CondRepulsion",
    "CreateVMDLError",
-   "CrossSectionView",
    "DiffusiveSpecies",
    "ISEdge",
    "ISFace",
@@ -61,7 +59,6 @@
    "OutputCombustionSpecies",
    "PropDataBase",
    "PropGroup",
-   "Region",
    "SNode",
    "Table",
    "Value",
@@ -95,6 +92,7 @@
    "CondOutputLFileHeatTransfer": "catalog:Conditions.GetCondOutputLFileHeatTransfer",
    "CondOutputLFilePassage": "catalog:Conditions.GetCondOutputLFilePassage",
    "CondOutputLFileYplus": "recipe:conditions.GetCondOutputLFileYplus",
+   "CondOutputPclFile": "stem:Conditions.GetCondOutputPclFileCondition",
    "CondOversetGap": "recipe:conditions.CreateCondSpray",
    "CondOversetRegionOption": "recipe:conds.QueryCondOversetRegionOption",
    "CondParticleBoundaryDEM": "recipe:conditions.CreateCondParticleBoundaryDEM",
@@ -112,6 +110,7 @@
    "Condition": "catalog:Conditions.QueryConditionByName",
    "CoordinatesSpecifiedPart": "catalog:Doc.CreateCoordinatesSpecifiedPart",
    "CrossSectionRegion": "catalog:Doc.CreateCrossSectionRegion",
+   "CrossSectionView": "stem:Doc.BeginCrossSectionView",
    "FaceRegion": "catalog:Doc.CreateFaceRegion",
    "FaceRegionDerivedSheet": "catalog:Doc.CreateFaceRegionDerivedSheet",
    "FluidRegion": "catalog:Doc.CreateFluidRegion",
@@ -127,6 +126,7 @@
    "PolyPrismParam": "catalog:Doc.GetPresetPolyPrismParam",
    "ProjectSetting": "catalog:Doc.GetProjectSetting",
    "ReferencePoint": "catalog:Doc.CreateReferencePoint",
+   "Region": "stem:ClosedVolume.GetFluidRegion",
    "Script": "catalog:Doc.CreateScript",
    "SubmeshSurfaceRegion": "catalog:Doc.CreateSubmeshSurfaceRegion",
    "SurfParam": "catalog:Doc.GetPresetSurfParam",
@@ -137,12 +137,61 @@
    "VPart": "catalog:Doc.GetVParts",
    "VolumeRegion": "catalog:Doc.CreateVolumeRegion"
   },
-  "identity_rejected": [],
+  "identity_rejected": [
+   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
+   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
+   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
+   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
+   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
+   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
+   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
+   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
+   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
+   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
+   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
+   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
+   "DiffusiveSpecies <- stem:Conditions.GetCondBoundaryDiffusiveSpecies",
+   "DiffusiveSpecies <- stem:Conditions.GetCondBoundaryDiffusiveSpecies",
+   "Table <- stem:Conditions.GetCondFrequencyAmplitudeTable",
+   "Table <- stem:Conditions.GetCondFrequencyAmplitudeTable",
+   "Table <- stem:Doc.GetAllMultiYAxisTables",
+   "Table <- stem:Doc.GetAllMultiYAxisTables"
+  ],
   "identity_detail": {
+   "CondCoSim | stem:Conditions.GetCondCoSimOption": {
+    "sample": 5,
+    "resolved": 0,
+    "unknown": 5,
+    "errors": 0
+   },
    "Condition | catalog:Doc.GetConditions": {
     "sample": 4,
     "resolved": 0,
     "unknown": 4,
+    "errors": 0
+   },
+   "CrossSectionView | stem:Doc.GetCrossSectionRegions": {
+    "sample": 5,
+    "resolved": 0,
+    "unknown": 5,
+    "errors": 0
+   },
+   "DiffusiveSpecies | stem:Conditions.GetCondBoundaryDiffusiveSpecies": {
+    "sample": 5,
+    "resolved": 0,
+    "unknown": 5,
+    "errors": 0
+   },
+   "Table | stem:Conditions.GetCondFrequencyAmplitudeTable": {
+    "sample": 5,
+    "resolved": 0,
+    "unknown": 5,
+    "errors": 0
+   },
+   "Table | stem:Doc.GetAllMultiYAxisTables": {
+    "sample": 5,
+    "resolved": 0,
+    "unknown": 5,
     "errors": 0
    }
   },
@@ -233,6 +282,7 @@
    "CondOutputLFileWaterLevel": "CreateCond*:CreateCondOutputLFileWaterLevel",
    "CondOutputLFileYplus": "auto:recipe:conditions.GetCondOutputLFileYplus",
    "CondOutputPartialFPH": "CreateCond*:CreateCondOutputPartialFPH",
+   "CondOutputPclFile": "auto:stem:Conditions.GetCondOutputPclFileCondition",
    "CondOutputRingDipole": "CreateCond*:CreateCondOutputRingDipole",
    "CondOutputTimeSeries": "CreateCond*:CreateCondOutputTimeSeries",
    "CondOversetGap": "auto:recipe:conditions.CreateCondSpray",
@@ -273,6 +323,7 @@
    "Conditions": "session:会话/文档直取",
    "CoordinatesSpecifiedPart": "auto:catalog:Doc.CreateCoordinatesSpecifiedPart",
    "CrossSectionRegion": "auto:catalog:Doc.CreateCrossSectionRegion",
+   "CrossSectionView": "auto:stem:Doc.BeginCrossSectionView",
    "Doc": "session:会话/文档直取",
    "Env": "session:会话/文档直取",
    "FaceRegion": "auto:catalog:Doc.CreateFaceRegion",
@@ -298,6 +349,7 @@
    "PolyPrismParam": "auto:catalog:Doc.GetPresetPolyPrismParam",
    "ProjectSetting": "auto:catalog:Doc.GetProjectSetting",
    "ReferencePoint": "auto:catalog:Doc.CreateReferencePoint",
+   "Region": "auto:stem:ClosedVolume.GetFluidRegion",
    "Script": "auto:catalog:Doc.CreateScript",
    "SpecialRegion": "chain:doc.GetSpecialRegions",
    "SubmeshSurfaceRegion": "auto:catalog:Doc.CreateSubmeshSurfaceRegion",
@@ -314,21 +366,31 @@
    "CondBUND": "catalog:Conditions.QueryCondBUND",
    "CondBoussinesqBaseTemp": "recipe:conds.QueryCondBoussinesqBaseTempByName",
    "CondCoSim": "catalog:Conditions.CreateCondCoSim",
+   "CondCoSimRegion": "stem:CondBoundaryWallThermal.GetCondCoSimRegionSurface",
    "CondCoSimRegionMarker": "catalog:CondMoving.GetCondCoSimRegionMarker",
    "CondCoSimRegionSurface": "catalog:CondBoundaryWallThermal.GetCondCoSimRegionSurface",
    "CondDTSR": "recipe:conditions.CreateCondDTSR",
+   "CondMixedGas": "stem:CondInitial.GetTargetMixedGas",
    "CondParticleConcentrationFpDEM": "recipe:conditions.CreateCondParticleConcentrationFpDEM",
    "CondParticleForceFPDEM": "recipe:conditions.CreateCondParticleForceFPDEM",
    "CondParticleHeatFPDEM": "recipe:conditions.CreateCondParticleHeatFPDEM",
    "CondParticleRestitutionDEM": "recipe:conditions.CreateCondParticleRestitutionDEM",
+   "CondReactionIncompSpecies": "stem:CondInitial.GetTargetReactionIncompSpecies",
    "CondRepulsion": "recipe:conditions.CreateCondRepulsion",
    "CreateVMDLError": "catalog:MeshingGroup.GetCreateVMDLError",
    "DiffusiveSpecies": "catalog:Doc.QueryDiffusiveSpecies",
-   "Region": "catalog:Doc.QueryRegionByName",
+   "ISEdge": "stem:Doc.GetSelectedSEdges",
+   "ISFace": "stem:Doc.GetSelectedSFaces",
+   "ISVertex": "stem:Doc.HitTestSVertex",
+   "IVEdge": "stem:Doc.GetSelectedVEdges",
+   "IVFace": "stem:Doc.GetSelectedVFaces",
+   "OutputCombustionSpecies": "stem:CondOutputLFileRegion.GetAllOutputCombustionSpeciesOutput",
+   "PropDataBase": "stem:CondBoundaryFlowIO.QueryPropValueObj",
    "SNode": "catalog:Doc.QuerySNodeByName",
    "Table": "catalog:Doc.CreateTable",
    "Value": "catalog:CondAcceleration.GetValue",
-   "WrappingGroup": "recipe:doc.QueryWrappingGroupByIndex"
+   "WrappingGroup": "recipe:doc.QueryWrappingGroupByIndex",
+   "WrappingParam": "stem:Doc.GetWrappingGroups"
   },
   "swept_unmapped": [],
   "swept_suspect": {
@@ -835,6 +897,12 @@
    "unknown": [],
    "errors": []
   },
+  "CondOutputPclFile": {
+   "total": 11,
+   "resolved": 11,
+   "unknown": [],
+   "errors": []
+  },
   "CondOutputRingDipole": {
    "total": 19,
    "resolved": 19,
@@ -1061,6 +1129,12 @@
    "unknown": [],
    "errors": []
   },
+  "CrossSectionView": {
+   "total": 7,
+   "resolved": 7,
+   "unknown": [],
+   "errors": []
+  },
   "Doc": {
    "total": 424,
    "resolved": 423,
@@ -1208,6 +1282,12 @@
   "ReferencePoint": {
    "total": 11,
    "resolved": 11,
+   "unknown": [],
+   "errors": []
+  },
+  "Region": {
+   "total": 6,
+   "resolved": 6,
    "unknown": [],
    "errors": []
   },
@@ -4633,6 +4713,19 @@
    "SetOutputTimingType": "resolved",
    "SetTimeInterval": "resolved"
   },
+  "CondOutputPclFile": {
+   "DoesRestrictSet": "resolved",
+   "DoesVariableOutputSet": "resolved",
+   "GetRestrict": "resolved",
+   "GetRestrictRegion": "resolved",
+   "GetVariableOutput": "resolved",
+   "RemoveAllRestrict": "resolved",
+   "RemoveAllVariableOutput": "resolved",
+   "RemoveRestrict": "resolved",
+   "RemoveRestrictPair": "resolved",
+   "SetRestrictType": "resolved",
+   "SetVariableOutput": "resolved"
+  },
   "CondOversetGap": {
    "GetParam": "resolved",
    "GetValue": "resolved",
@@ -4811,6 +4904,15 @@
    "SetPlaneType": "resolved",
    "SetSide": "resolved",
    "SetSphere": "resolved"
+  },
+  "CrossSectionView": {
+   "GetParam": "resolved",
+   "SetParam": "resolved",
+   "SetPlane": "resolved",
+   "SetPreviewPlane": "resolved",
+   "ShowMeshOnPlane": "resolved",
+   "RefreshPreviewPlane": "resolved",
+   "UpdatePartPriority": "resolved"
   },
   "FaceRegion": {
    "CalculateRotateAxis": "resolved",
@@ -5283,6 +5385,14 @@
    "SetFixPressureType": "resolved",
    "SetIsFixedPressureSet": "resolved",
    "VerifyLocation": "resolved"
+  },
+  "Region": {
+   "CheckConditionExist": "resolved",
+   "GetConditions": "resolved",
+   "GetName": "resolved",
+   "GetRegionType": "resolved",
+   "GetValue": "resolved",
+   "SetName": "resolved"
   },
   "Script": {
    "GetAllStatement": "resolved",

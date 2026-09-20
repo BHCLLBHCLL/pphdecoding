@@ -3386,25 +3386,101 @@ interfacetype)` 也能试到）→ **78 个条件实例**一次建成，随后�
 
 ---
 
-## R48 —— 提案（≈1 人日）
+## R48 —— 命名片段扩面 + 配方可信度入目录 + typed 直调前置拦截（2026-09-15，✅ 已完成）
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R48-1** | **取法命名模式扩面** | 149 → ≥160，或逐类给出"宿主确实没有"的证据 | ✅ **152 类**（+3：`CondOutputPclFile`/`CrossSectionView`/`Region`，均 **0 未知成员**）；未达 160 → 33 类逐类终态齐备 |
+| **R48-2** | **配方可信度入目录** | 一处可查 + 测试 | ✅ 目录新增 `recipe_unreliable`（**4 类** + 逐条证据） |
+| **R48-3** | **typed 直调侧也拦** | 一处可查 + 测试 | ✅ `ComObject.call` 调用前拦（与 VBS 生成**共用** `unambiguous_host_absent()`） |
+
+### R48-1 命名片段（手册的命名习惯是证据）
+
+手册没给实例配方、名字家族也猜不中的类，靠**命名片段**找到取法 —— 片段来自实测的命名习惯：
+
+| 习惯 | 例 |
+|---|---|
+| `IS??? → S???` / `IV??? → V???` | `IVFace ← Doc.GetSelectedVFaces`、`ISFace ← Doc.GetSelectedSFaces` |
+| `Cond<X> → GetCond<X>Condition` | `CondOutputPclFile ← Conditions.GetCondOutputPclFileCondition` |
+| 尾部 `View/Param` 常省略 | `CrossSectionView ← Doc.BeginCrossSectionView` |
+| 通用词干 | `Region ← ClosedVolume.GetFluidRegion` |
+
+片段要求 **≥4 个字母**（"edge" 这种会命中一大片），排除元信息取器
+（`…Information/Count/Num/Flag/Color/Name` 返回的是结构/标量），`Get*/Query*` 优先于
+`HitTest*/Set*`。
+
+**两个新闸门**（本轮实测逼出来的）：
+
+* **标量闸**：片段候选里混着返回字符串/结构体的成员（`Doc.GetSFaceInformation`），
+  它们过得了"非空"检查，却会让整类成员在普查里抛 `AttributeError` ——
+  首轮实测 **46 条 `error:*`**（覆盖 162 类的假象）。`_is_com()` 只收真正的
+  COM 对象后，错误回到 **0**，覆盖是实打实的 **152**；
+* **验身继续拦**：18 条验身否（`CondCoSim ← GetCondCoSimOption`、
+  `Table ← GetAllMultiYAxisTables`…）—— 片段命中不等于就是这个类。
+
+净值 **149 → 152 类**、成员 3878 → **3902**；未普查 36 → **33**，其中
+`no-creation-path` 从 12 降到 **2**：片段取法试过之后，"手册没给路径"变成了更准的
+`needs-corpus`（取法试过、**返回空** —— 本机工程里没有该对象）。
+
+### R48-2 配方可信度入目录
+
+`schemas/vb_api_catalog.json` 的类级新增 `recipe_unreliable` +
+`recipe_unreliable_evidence`：验身否掉的取法与整类拿错对象的（`swept_suspect`）
+逐条记录（本轮 **4 类**：`CondCoSim`/`DiffusiveSpecies`/`Table`/`CondParticleCounter`）。
+读目录的人不必照抄配方再撞一次墙；测试断言"证据里被否的类必须在目录里有标记"。
+
+### R48-3 typed 直调侧前置拦截
+
+`automation/scflowpre_api.unambiguous_host_absent()`（无歧义 = 所有声明它的类都标了
+`host_absent`；`ImportCSV` 这类部分类能用的一律不进）成为**唯一判据**：
+`ComObject.call` 在调用前抛可读 `ApiValueError`（措辞保留 `DISP_E_UNKNOWNNAME`，
+既有按错误文本判定的消费者口径不变），`vbs_bridge.host_absent_methods()` 直接委托同一个函数。
+
+### 回归
+
+全量回归 **1525 passed / 4 skipped / 0 failed**（568.88 s；R47 收口同口径 1514/4/0，
+增量 +11 = 本轮新模块 11 项）。复算两次：第一次 1524/5/0（579.15 s）多出 1 个 **偶发 skip**，
+带 `-rs` 复算确认 4 个 skip 全是稳定环境项（`test_material_prp_write` 1 项 +
+`test_native_bridge` 3 项，后者要 `SCF_RUN_BRIDGE_TESTS=1` 且需已编译桥）。新增测试 1 个模块 `test_r48_evidence.py`（11 项：
+片段生成/短片段拒绝/取用优先/配方标记/前置拦截共用判据）。
+
+### 过程说明（自曝）
+
+R47 的里程碑提交把 9 个**草稿脚本**（`_r47_scan*.py`/`_r47_diff.py`/`_r47_final.py`）
+一起收进了仓库 —— `tools/git_milestone.py` 的收录模式含根目录 `*.py`，而草稿脚本正好
+落在根目录。本轮删除（提交里会看到 `D`）。教训：草稿脚本要么放 `_p12*` 目录（只收
+json/log/md/vbs），要么在轮次收口前删干净 —— 顺带说明为什么 `api_contract_check` 的
+"仓内引用"检查会被草稿脚本误伤一次（R45 也踩过同一个坑）。
+
+### 证据
+
+`schemas/host_member_availability.json`（152 类 / 3902 成员 / errors 0 /
+`identity_rejected` 18 / `swept_suspect` 1）、`schemas/unswept_account.json`（33 类终态）、
+`schemas/vb_api_catalog.json`（`recipe_unreliable` 4 类）、`_p12u_gate/r48/name_verdicts.json`、
+`_p12u_gate/r48_run2.log`。
+
+---
+
+## R49 —— 提案（≈1 人日）
 
 ### 依据
 
-* 未普查 36 类里 **12 类**手册没给任何取法（`no-creation-path`），但**宿主未必没有** ——
-  名字家族穷举只试了 3 个名字/宿主；可以按"手册里同类成员的命名模式"扩大候选（例如
-  从已实现类里学 `Get<X>Default`/`Query<X>ByIndex` 之类的真实命名习惯）；
-* `swept_suspect` 现在只有 1 条（`CondParticleCounter`），说明"配方给的是别家对象"
-  不是个例风险 —— 值得把这套验身做成**目录级**证据（哪些类的配方不可信）；
-* 桥接前置校验只在 VBS 生成期；`automation/scflowpre_api.ComObject.call` 侧的
-  `host_absent` 拦截还没有（typed 直调会照旧发出去等 COM 报错）。
+* 33 个未普查类里 **29 类**是 `needs-corpus`（取法试过、返回空）—— 说明"缺的不是接口，
+  是**语料**"；其中 `ISFace`/`IVFace`/`ISEdge`/`IVEdge`/`ISVertex` 只需要**选中几何**
+  （`GetSelectedVFaces` 之类都在 Doc 上、都调用成功），值得在探针里补一步"先全选再取"；
+* `swept_suspect` 只有 1 条、`identity_rejected` 18 条 —— 验身闸门的**误报率**还没量过
+  （现在只知道它拦住了什么，不知道它有没有拦住真对象）；
+* `recipe_unreliable` 已入目录，但**读目录的代码**（物化包装、VBS 生成）还没利用它。
 
 ### 条目
 
 | # | 条目 | 做法 | 验收句 | 人日 |
 |---|---|---|---|---|
-| **R48-1** | **取法命名模式扩面** | 从已普查类的**真实**成员名学命名模式，给 12 个 `no-creation-path` 类扩候选 | 覆盖 149 → ≥160，或逐类给出"宿主确实没有"的证据 |
-| **R48-2** | **配方可信度入目录** | 被验身否掉的配方在目录里标记（`recipe_unreliable`） | 一处可查 + 测试 |
-| **R48-3** | **typed 直调侧也拦** | `ComObject.call` 前查 `host_absent` 并给可读错误（与 VBS 侧同口径） | 一处可查 + 测试 |
+| **R49-1** | **先选中再取** | 探针在取 `IS*/IV*` 类前先 `SetSelectAllVFaces/SetSelectAllSFaces` 等 | 覆盖 152 → ≥160，或给出"选中也取不到"的证据 |
+| **R49-2** | **验身闸门误报率** | 对已普查类抽样"故意喂错对象"，量闸门判据（独有成员半数）的漏放/误杀 | 误报率有数（<10% 或说明为何不能更低） |
+| **R49-3** | **recipe_unreliable 上消费面** | 物化包装/VBS 生成遇到 `recipe_unreliable` 的类时给出提示 | 一处可查 + 测试 |
 
 ### 明确不做
 

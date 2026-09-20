@@ -1,12 +1,12 @@
 {
  "source": "tools/unswept_account.py（R46-1）",
  "note": "未普查类的**终态**：每个类都必须有一条，理由必须来自证据（配方宿主 / 候选调用错误 / 返回空）；口径见模块 docstring。终态不是待办 —— 除非将来补语料，这些类不会被再排期。",
- "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+ "evidence": "_p12u_gate\\r48\\name_verdicts.json",
  "counts": {
-  "total": 36,
-  "needs-corpus": 22,
+  "total": 33,
+  "needs-corpus": 29,
   "host-interface-absent": 0,
-  "no-creation-path": 12,
+  "no-creation-path": 2,
   "call-rejected": 2,
   "foreign-app": 0,
   "probe-limitation": 0
@@ -58,7 +58,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:Doc.GetBodyPatterns"
   },
@@ -73,6 +73,18 @@
     {
      "host": "Conditions",
      "member": "QueryCondBUND",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "Conditions",
+     "member": "GetBundOptionParam",
+     "err": "com_error: (-2147352571, '类型不匹配。', None, 2)",
+     "unknown": false
+    },
+    {
+     "host": "Doc",
+     "member": "SelectBUNDMeshElemFromLFile",
      "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
      "unknown": false
     },
@@ -93,21 +105,9 @@
      "member": "GetCondBUND",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCondBUND",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCondBUNDDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:Conditions.QueryCondBUND"
   },
@@ -124,6 +124,12 @@
      "unknown": false
     },
     {
+     "host": "CondMoving",
+     "member": "SetCondCoSimRegionMarker",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
      "host": "Conditions",
      "member": "CreateCondCoSimRegionMarker",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
@@ -146,15 +152,9 @@
      "member": "CreateCondCoSimRegionMarker",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCondCoSimRegionMarkerDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 condcosim 对象（本会话没有）"
   },
@@ -171,6 +171,24 @@
      "unknown": false
     },
     {
+     "host": "CondLDCMorphingALE",
+     "member": "GetLDCCondCoSimRegionSurface",
+     "err": "com_error: (-2147417851, '服务器出现意外情况。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "CondBoundaryWallThermal",
+     "member": "SetCondCoSimRegionSurface",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "CondLDCMorphingALE",
+     "member": "SetLDCCondCoSimRegionSurface",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
      "host": "Conditions",
      "member": "CreateCondCoSimRegionSurface",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
@@ -178,30 +196,12 @@
     },
     {
      "host": "Conditions",
-     "member": "CreateCondCoSimRegionSurfaceDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "GetCondCoSimRegionSurface",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCondCoSimRegionSurface",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
      "member": "CreateCondCoSimRegionSurfaceDefault",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 condcosim 对象（本会话没有）"
   },
@@ -248,7 +248,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 condcosim 对象（本会话没有）"
   },
@@ -282,24 +282,24 @@
     },
     {
      "host": "Conditions",
-     "member": "CreateCondDTSRDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCondDTSR",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "member": "GetDefaultTargetEquationPairofDTSR",
+     "err": "com_error: (-2147352561, '非选择性的参数。', None, None)",
+     "unknown": false
     },
     {
      "host": "Conditions",
-     "member": "CreateCondDTSR",
+     "member": "GetDtsrOption",
+     "err": "com_error: (-2147352571, '类型不匹配。', None, 2)",
+     "unknown": false
+    },
+    {
+     "host": "Conditions",
+     "member": "DeleteCondDTSR",
      "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
      "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondDTSR"
   },
@@ -310,43 +310,43 @@
    "declared_candidates": [],
    "attempts": [
     {
-     "host": "Conditions",
-     "member": "CreateCondMixedGas",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondInitial",
+     "member": "GetTargetMixedGas",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Conditions",
-     "member": "CreateCondMixedGasDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondOutputLFileRegion",
+     "member": "GetAllOutputMixedGas",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Conditions",
-     "member": "GetCondMixedGas",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondOutputLFileRegionDEM",
+     "member": "GetAllOutputMixedGas",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Doc",
-     "member": "CreateCondMixedGas",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondSource",
+     "member": "GetTargetMixedGas",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Doc",
-     "member": "CreateCondMixedGasDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondSourceMass",
+     "member": "GetTargetMixedGas",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Doc",
-     "member": "GetCondMixedGas",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondBoundaryFlowIO",
+     "member": "GetMixedGasInflowType",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 mixedgas 对象（本会话没有）"
   },
@@ -395,56 +395,9 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "call-rejected",
    "reason": "手册取法调用被拒（非「未知名称」）：QueryCondMultiphaseMaterial → com_error: (-2147352562, '无效的参数数目。', None, None)"
-  },
-  "CondOutputPclFile": {
-   "class": "CondOutputPclFile",
-   "members": 11,
-   "recipe": "Set outputPclFile = conditions.CreateCondOutputPclFile(\"name\")",
-   "declared_candidates": [],
-   "attempts": [
-    {
-     "host": "Conditions",
-     "member": "CreateCondOutputPclFile",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "CreateCondOutputPclFileDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "GetCondOutputPclFile",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCondOutputPclFile",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCondOutputPclFileDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "GetCondOutputPclFile",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    }
-   ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
-   "terminal": "no-creation-path",
-   "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
   "CondParticleConcentrationFpDEM": {
    "class": "CondParticleConcentrationFpDEM",
@@ -476,6 +429,12 @@
     },
     {
      "host": "Conditions",
+     "member": "DeleteCondParticleConcentrationFpDEM",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "Conditions",
      "member": "CreateCondParticleConcentrationFpDEMDefault",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
@@ -485,15 +444,9 @@
      "member": "CreateCondParticleConcentrationFpDEM",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "CreateCondParticleConcentrationFpDEM",
-     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
-     "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondParticleConcentrationFpDEM"
   },
@@ -505,7 +458,7 @@
     "catalog:Conditions.GetCondParticleCounter"
    ],
    "attempts": [],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "条件类的实例由条件向导/流程产生；批量 CreateCond* 未产出该类（本机语料没有这种条件）"
   },
@@ -538,6 +491,12 @@
     },
     {
      "host": "Conditions",
+     "member": "DeleteCondParticleForceFPDEM",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "Conditions",
      "member": "CreateCondParticleForceFPDEMDefault",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
@@ -547,15 +506,9 @@
      "member": "CreateCondParticleForceFPDEM",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCondParticleForceFPDEMDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondParticleForceFPDEM"
   },
@@ -581,6 +534,12 @@
     },
     {
      "host": "Conditions",
+     "member": "DeleteCondParticleHeatFPDEM",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "Conditions",
      "member": "CreateCondParticleHeatFPDEMDefault",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
@@ -596,15 +555,9 @@
      "member": "CreateCondParticleHeatFPDEM",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCondParticleHeatFPDEMDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondParticleHeatFPDEM"
   },
@@ -651,7 +604,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
@@ -698,7 +651,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 particletracking 对象（本会话没有）"
   },
@@ -731,6 +684,12 @@
     },
     {
      "host": "Conditions",
+     "member": "DeleteCondParticleRestitutionDEM",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "Conditions",
      "member": "CreateCondParticleRestitutionDEMDefault",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
@@ -740,15 +699,9 @@
      "member": "CreateCondParticleRestitutionDEM",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCondParticleRestitutionDEMDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondParticleRestitutionDEM"
   },
@@ -759,45 +712,45 @@
    "declared_candidates": [],
    "attempts": [
     {
-     "host": "Conditions",
-     "member": "CreateCondReactionIncompSpecies",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondInitial",
+     "member": "GetTargetReactionIncompSpecies",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Conditions",
-     "member": "CreateCondReactionIncompSpeciesDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondOutputLFileRegion",
+     "member": "GetAllOutputReactionIncompSpecies",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Conditions",
-     "member": "GetCondReactionIncompSpecies",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondOutputLFileRegionDEM",
+     "member": "GetAllOutputReactionIncompSpecies",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Doc",
-     "member": "CreateCondReactionIncompSpecies",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondSource",
+     "member": "GetTargetReactionIncompSpecies",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Doc",
-     "member": "CreateCondReactionIncompSpeciesDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondBoundaryFlowIO",
+     "member": "GetReactionIncompSpeciesValue",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Doc",
-     "member": "GetCondReactionIncompSpecies",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondOutputLFileRegion",
+     "member": "GetAllOutputReactionIncompSpeciesMolarFraction",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
-   "terminal": "no-creation-path",
-   "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
+   "terminal": "needs-corpus",
+   "reason": "取法试过、返回空（本机工程没有该对象）：stem:CondInitial.GetTargetReactionIncompSpecies"
   },
   "CondRepulsion": {
    "class": "CondRepulsion",
@@ -816,19 +769,25 @@
      "unknown": false
     },
     {
+     "host": "CondParticleGeneration",
+     "member": "GetRepulsionCoefficient",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "CondParticleGeneration",
+     "member": "GetRepulsionType",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
      "host": "Conditions",
      "member": "CreateCondRepulsionDefault",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCondRepulsion",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondRepulsion"
   },
@@ -877,56 +836,9 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:MeshingGroup.GetCreateVMDLError"
-  },
-  "CrossSectionView": {
-   "class": "CrossSectionView",
-   "members": 7,
-   "recipe": "（手册未给实例配方）",
-   "declared_candidates": [],
-   "attempts": [
-    {
-     "host": "Conditions",
-     "member": "CreateCrossSectionView",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "CreateCrossSectionViewDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "GetCrossSectionView",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCrossSectionView",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCrossSectionViewDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "GetCrossSectionView",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    }
-   ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
-   "terminal": "no-creation-path",
-   "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
   "DiffusiveSpecies": {
    "class": "DiffusiveSpecies",
@@ -944,36 +856,36 @@
     },
     {
      "host": "Conditions",
-     "member": "CreateDiffusiveSpecies",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "member": "GetCondBoundaryDiffusiveSpecies",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Conditions",
-     "member": "CreateDiffusiveSpeciesDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondBoundaryDiffusiveSpecies",
+     "member": "SetDiffusiveSpecies",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Conditions",
-     "member": "GetDiffusiveSpecies",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondOutputCSV",
+     "member": "AppendOutputDiffusiveSpecies",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Doc",
-     "member": "CreateDiffusiveSpecies",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondOutputCSV",
+     "member": "AppendOutputDiffusiveSpeciesMolarFraction",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Doc",
-     "member": "CreateDiffusiveSpeciesDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondOutputTimeSeries",
+     "member": "AppendOutputDiffusiveSpecies",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:Doc.QueryDiffusiveSpecies"
   },
@@ -1020,9 +932,9 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
-   "terminal": "no-creation-path",
-   "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
+   "terminal": "needs-corpus",
+   "reason": "取法试过、返回空（本机工程没有该对象）：stem:Doc.GetSelectedSEdges"
   },
   "ISFace": {
    "class": "ISFace",
@@ -1031,6 +943,24 @@
    "declared_candidates": [],
    "attempts": [
     {
+     "host": "MeshingGroup",
+     "member": "IsFacePartOfCVol",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "MeshingGroup",
+     "member": "IsFacePartOfSNode",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "MeshingGroup",
+     "member": "IsFacePartOfVolRegion",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
      "host": "Conditions",
      "member": "CreateISFace",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
@@ -1044,32 +974,14 @@
     },
     {
      "host": "Conditions",
-     "member": "GetISFace",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateISFace",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateISFaceDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
      "member": "GetISFace",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
-   "terminal": "no-creation-path",
-   "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
+   "terminal": "needs-corpus",
+   "reason": "取法试过、返回空（本机工程没有该对象）：stem:Doc.GetSelectedSFaces"
   },
   "ISVertex": {
    "class": "ISVertex",
@@ -1114,9 +1026,9 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
-   "terminal": "no-creation-path",
-   "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
+   "terminal": "needs-corpus",
+   "reason": "取法试过、返回空（本机工程没有该对象）：stem:Doc.HitTestSVertex"
   },
   "IVEdge": {
    "class": "IVEdge",
@@ -1161,9 +1073,9 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
-   "terminal": "no-creation-path",
-   "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
+   "terminal": "needs-corpus",
+   "reason": "取法试过、返回空（本机工程没有该对象）：stem:Doc.GetSelectedVEdges"
   },
   "IVFace": {
    "class": "IVFace",
@@ -1172,6 +1084,12 @@
    "declared_candidates": [],
    "attempts": [
     {
+     "host": "MeshingGroup",
+     "member": "GetIVFacesFromMeshFaceID",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
      "host": "Conditions",
      "member": "CreateIVFace",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
@@ -1198,19 +1116,13 @@
     {
      "host": "Doc",
      "member": "CreateIVFaceDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "GetIVFace",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
-   "terminal": "no-creation-path",
-   "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
+   "terminal": "needs-corpus",
+   "reason": "取法试过、返回空（本机工程没有该对象）：stem:Doc.GetSelectedVFaces"
   },
   "Kicker.ApplicationLaunchSetting": {
    "class": "Kicker.ApplicationLaunchSetting",
@@ -1255,7 +1167,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "call-rejected",
    "reason": "Kicker 会话已实测（Kicker.Application/LicenseStatus 都取到了），该类的取法被宿主拒绝：GetApplicationLaunchSetting(scFLOWpre_Bx64net.Application.2023) -> com_error: (-2147352567, '发生意外。', (4001, 'Kicker_Bx64', 'Invalid ProgID was specified.', 'C:\\\\Program"
   },
@@ -1266,6 +1178,24 @@
    "declared_candidates": [],
    "attempts": [
     {
+     "host": "CondOutputLFileRegion",
+     "member": "GetAllOutputCombustionSpeciesOutput",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "CondOutputCSV",
+     "member": "AppendOutputCombustionSpecies",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "CondOutputTimeSeries",
+     "member": "AppendOutputCombustionSpecies",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
      "host": "Conditions",
      "member": "CreateOutputCombustionSpecies",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
@@ -1279,30 +1209,12 @@
     },
     {
      "host": "Conditions",
-     "member": "GetOutputCombustionSpecies",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateOutputCombustionSpecies",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateOutputCombustionSpeciesDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
      "member": "GetOutputCombustionSpecies",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 combustion 对象（本会话没有）"
   },
@@ -1349,9 +1261,9 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
-   "terminal": "no-creation-path",
-   "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
+   "terminal": "needs-corpus",
+   "reason": "取法试过、返回空（本机工程没有该对象）：stem:CondBoundaryFlowIO.QueryPropValueObj"
   },
   "PropGroup": {
    "class": "PropGroup",
@@ -1396,58 +1308,9 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
-  },
-  "Region": {
-   "class": "Region",
-   "members": 6,
-   "recipe": "Set value = obj_R.GetValue(key)",
-   "declared_candidates": [
-    "catalog:Doc.QueryRegionByName"
-   ],
-   "attempts": [
-    {
-     "host": "Conditions",
-     "member": "CreateCondCoSimRegion",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "CreateCondCoSimRegionDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "GetCondCoSimRegion",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCondCoSimRegion",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateCondCoSimRegionDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "GetCondCoSimRegion",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    }
-   ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
-   "terminal": "needs-corpus",
-   "reason": "配方需要先有 obj_r 对象（本会话没有）"
   },
   "SNode": {
    "class": "SNode",
@@ -1458,43 +1321,43 @@
    ],
    "attempts": [
     {
+     "host": "MeshingGroup",
+     "member": "IsFacePartOfSNode",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
      "host": "Doc",
      "member": "QuerySNodeByName",
      "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
      "unknown": false
     },
     {
-     "host": "Conditions",
-     "member": "CreateSNode",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "CreateSNodeDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "GetSNode",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
      "host": "Doc",
-     "member": "CreateSNode",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "member": "DeleteSNode",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Doc",
-     "member": "CreateSNodeDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "MDLWizard",
+     "member": "MultiEntity_GetSNode",
+     "err": "com_error: (-2147417851, '服务器出现意外情况。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "MDLWizard",
+     "member": "TinyFace_GetSNode",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "MeshingGroup",
+     "member": "DoesOctMeshSNodeElementExist",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 snode 对象（本会话没有）"
   },
@@ -1526,25 +1389,25 @@
      "unknown": false
     },
     {
-     "host": "Conditions",
-     "member": "CreateTable",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "CondActranPointSource",
+     "member": "GetAmplitudeTable",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
      "host": "Conditions",
-     "member": "CreateTableDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "member": "GetCondFrequencyAmplitudeTable",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     },
     {
-     "host": "Conditions",
-     "member": "GetTable",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "Doc",
+     "member": "GetAllMultiYAxisTables",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:Doc.CreateTable"
   },
@@ -1556,6 +1419,18 @@
     "catalog:Conditions.GetValue"
    ],
    "attempts": [
+    {
+     "host": "CondBoundaryFlowIO",
+     "member": "GetReactionIncompSpeciesValue",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "CondBoundaryFlowIO",
+     "member": "QueryPropValueObj",
+     "err": "com_error: (-2147417851, '服务器出现意外情况。', None, None)",
+     "unknown": false
+    },
     {
      "host": "Conditions",
      "member": "GetValue",
@@ -1579,21 +1454,9 @@
      "member": "GetValue",
      "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
      "unknown": false
-    },
-    {
-     "host": "CondBoundaryDiffusiveSpecies",
-     "member": "GetValue",
-     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
-     "unknown": false
-    },
-    {
-     "host": "CondBoundaryElectric",
-     "member": "GetValue",
-     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
-     "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:CondAcceleration.GetValue"
   },
@@ -1638,13 +1501,13 @@
      "unknown": false
     },
     {
-     "host": "Conditions",
-     "member": "CreateWrappingGroup",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
+     "host": "Doc",
+     "member": "DeleteWrappingGroup",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:doc.QueryWrappingGroupByIndex"
   },
@@ -1691,9 +1554,9 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
-   "terminal": "no-creation-path",
-   "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
+   "evidence": "_p12u_gate\\r48\\name_verdicts.json",
+   "terminal": "needs-corpus",
+   "reason": "取法试过、返回空（本机工程没有该对象）：stem:Doc.GetWrappingGroups"
   }
  }
 }

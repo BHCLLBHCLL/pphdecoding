@@ -115,17 +115,12 @@ def host_absent_methods() -> set:
     global _ABSENT_CACHE
     if _ABSENT_CACHE is not None:
         return _ABSENT_CACHE
-    flags: dict = {}
     try:
-        from automation.scflowpre_api import load_catalog
-        for info in (load_catalog().get("classes") or {}).values():
-            for kind in ("methods", "properties"):
-                for name, entry in (info.get(kind) or {}).items():
-                    flags.setdefault(name, []).append(
-                        bool(entry.get("host_absent")))
+        # 与 typed 直调（ComObject.call）**同一份**判据（R48-3 起共用）
+        from automation.scflowpre_api import unambiguous_host_absent
+        _ABSENT_CACHE = unambiguous_host_absent()
     except Exception:  # noqa: BLE001
-        flags = {}
-    _ABSENT_CACHE = {n for n, f in flags.items() if f and all(f)}
+        _ABSENT_CACHE = set()
     return _ABSENT_CACHE
 
 

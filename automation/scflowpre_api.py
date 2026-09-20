@@ -161,6 +161,13 @@ class ComObject:
         # 手册对"可选参数"的标注极稀疏（全库仅 14 个文件 41 处，且多在 Post/Kicker），
         # 拿 `len(args) != expected` 判会把 `OpenProject(path)` 这类
         # "省略可选尾参"的正常调用报成错 —— 少参数交给宿主判，多参数一定是错。
+        # R48-3：宿主**未实现**的成员在**调用前**就拦下（不再等 com_error）——
+        # 措辞里保留 DISP_E_UNKNOWNNAME，让"按错误文本判宿主无接口"的既有消费者
+        # （dispatch_account 等）口径不变。
+        if name in unambiguous_host_absent():
+            msg = (cls + "." + name + " 宿主未实现（GetIDsOfNames → DISP_E_UNKNOWNNAME；"
+                   "目录 schemas/vb_api_catalog.json 已标 host_absent），调用必然失败")
+            raise ApiValueError(msg)
         expected = signature_arity(entry.get("signature"))
         if expected is not None and len(args) > expected:
             msg = (cls + "." + name + " 参数个数 " + str(len(args))
@@ -1819,6 +1826,32 @@ def host_absent_members(catalog: Optional[dict] = None) -> dict:
                  if e.get("host_absent")]
         if names:
             out[cls] = sorted(names)
+    return out
+
+
+#: 无歧义的"宿主未实现"成员名缓存（R48-3）
+_UNAMBIGUOUS_ABSENT: Optional[set] = None
+
+
+def unambiguous_host_absent(catalog: Optional[dict] = None) -> set:
+    """宿主**未实现**且**无歧义**的成员名（R48-3）。
+
+    无歧义 = 目录里**所有**声明它的类都标了 `host_absent`：同名成员可能只在部分类
+    未实现（`ImportCSV` 在 FaceRegion/NumericalRegion 是好的），按名字一律拦会误杀。
+    产品面（typed 直调与 VBS 生成）共用这一个集合。
+    """
+    global _UNAMBIGUOUS_ABSENT
+    if _UNAMBIGUOUS_ABSENT is not None and catalog is None:
+        return _UNAMBIGUOUS_ABSENT
+    cat = catalog if catalog is not None else load_catalog()
+    flags: dict = {}
+    for info in (cat.get("classes") or {}).values():
+        for kind in ("methods", "properties"):
+            for name, entry in (info.get(kind) or {}).items():
+                flags.setdefault(name, []).append(bool(entry.get("host_absent")))
+    out = {n for n, f in flags.items() if f and all(f)}
+    if catalog is None:
+        _UNAMBIGUOUS_ABSENT = out
     return out
 
 

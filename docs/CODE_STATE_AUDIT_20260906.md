@@ -2171,5 +2171,38 @@ ProgID 变体全被宿主拒绝（`Invalid ProgID was specified`）→ 终态 `c
 能用的一律不进）+ `validate_actions()` 生成期点名 + `build_vbs(strict_values=True)` 抛
 `ApiValueError` —— 不再等 COM 报错。
 
+---
+
+## 62. R48 更新（2026-09-15）—— 命名片段扩面 + 配方可信度入目录 + typed 直调前置拦截
+
+### 62.1 命名片段（R48-1）
+
+手册的命名习惯本身就是证据：`IS???→S???`/`IV???→V???`（`IVFace←Doc.GetSelectedVFaces`）、
+`Cond<X>→GetCond<X>Condition`（`CondOutputPclFile`）、尾部 `View/Param` 常省略
+（`CrossSectionView←Doc.BeginCrossSectionView`）、通用词干（`Region←ClosedVolume.GetFluidRegion`）。
+片段要求 ≥4 字母、排除元信息取器（`…Information/Count/Num/Flag/Color/Name`）、`Get*/Query*` 优先。
+
+**两个新闸门**：
+
+* **标量闸** `_is_com()`：片段候选混着返回字符串/结构体的成员（`Doc.GetSFaceInformation`），
+  首轮实测 **46 条 `error:*`**（覆盖 162 类的假象）→ 只收真 COM 对象后错误归 **0**，覆盖 **152**；
+* **验身闸**继续拦 18 条（`CondCoSim ← GetCondCoSimOption` 等）—— 片段命中 ≠ 就是这个类。
+
+净值 149 → **152 类**、成员 3878 → **3902**；未普查 36 → **33**，`no-creation-path` 12 → **2**
+（片段试过之后，"手册没给路径"细化成"取法试过、返回空"= `needs-corpus`）。
+
+### 62.2 配方可信度（R48-2）
+
+目录类级新增 `recipe_unreliable` + `recipe_unreliable_evidence`（**4 类**：
+`CondCoSim`/`DiffusiveSpecies`/`Table`/`CondParticleCounter`），证据来自
+`identity_rejected`（验身否）与 `swept_suspect`（整类拿错对象）。
+
+### 62.3 typed 直调前置拦截（R48-3）
+
+`scflowpre_api.unambiguous_host_absent()` 成为 typed 直调与 VBS 生成的**唯一判据**
+（`vbs_bridge.host_absent_methods()` 委托它）；`ComObject.call` 调用前抛可读
+`ApiValueError`，措辞保留 `DISP_E_UNKNOWNNAME`。
+
+
 
 

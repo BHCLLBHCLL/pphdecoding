@@ -309,6 +309,76 @@ def signature_args(entry: dict, name: str):
     return tuple(args)
 
 
+def _class_stems(cls: str) -> list:
+    """类名 → 手册里可能用来命名"取它"的成员的名字片段（R48-1）。
+
+    手册的命名习惯（实测）：
+    * 前缀缩写 @@IS???@@ → @@S???@@、@@IV???@@ → @@V???@@（ISFace 的取法是
+      @Doc.GetSelectedSFaces@@、IVFace 是 @@Doc.GetSelectedVFaces@@）；
+    * @@Cond<X>@@ 的取法常叫 @@GetCond<X>Condition@@（CondOutputPclFile →
+      @@GetCondOutputPclFileCondition@@）；
+    * 尾部 @@View/Param@@ 常被省掉（CrossSectionView → @@GetCrossSectionViewObj@@）。
+    片段**按特异性排序**（长的在前），短于 4 个字母的一律不要（否则 "edge" 这种
+    会命中一大片无关成员）。
+    """
+    full = cls.split(".")[-1]
+    low = full.lower()
+    out: list = [low]
+    if low.startswith("cond") and len(low) > 6:
+        out.append(low[4:])
+    if low.startswith("is") and len(low) > 4:
+        out.append("s" + low[2:])
+    if low.startswith("iv") and len(low) > 4:
+        out.append("v" + low[2:])
+    for suffix in ("view", "param", "database", "info"):
+        if low.endswith(suffix) and len(low) - len(suffix) >= 4:
+            out.append(low[:-len(suffix)])
+    seen: list = []
+    for s in sorted(set(out), key=len, reverse=True):
+        if len(s) >= 4 and s not in seen:
+            seen.append(s)
+    return seen
+
+
+#: 片段命中里要排除的"元信息"字样（它们返回的是结构/标量，不是那个类的实例）
+_STEM_NOISE = ("information", "count", "num", "flag", "color", "name")
+
+
+def stem_candidates(cat: dict, cls: str, held: dict) -> list:
+    """按**命名片段**找取法（R48-1）：手册没给实例配方、名字家族也猜不中的类。
+
+    只在**已持有宿主**上找（调得到才算候选）；@@Get*/Query*@@ 优先，@@HitTest*/
+    @@Set*/@@Select*@@ 靠后（前者是取用，后者多是动作）。
+    """
+    stems = _class_stems(cls)
+    if not stems:
+        return []
+    out: list = []
+    for host_key, host_cls in held.items():
+        hmembers = _catalog_members(cat, host_cls)
+        for name in sorted(hmembers):
+            low = name.lower()
+            rank = 2
+            for i, stem in enumerate(stems):
+                if stem in low:
+                    rank = i
+                    break
+            else:
+                continue
+            if not low.startswith(("get", "query")):
+                rank += 3          # 取用优先于动作
+            elif any(bad in low for bad in _STEM_NOISE):
+                continue           # 元信息取器（...Information/Count/Num/Flag…）
+            elif any(low.endswith(stem + s) for stem in stems for s in ("", "s")):
+                rank -= 1          # 名字**以片段收尾**的最像"取这个类"
+            out.append({"rank": rank, "host": host_key, "member": name,
+                        "args": signature_args(hmembers[name],
+                                               "R48" + cls.split(".")[-1]),
+                        "how": "stem:" + host_cls + "." + name})
+    out.sort(key=lambda p: (p["rank"], p["how"]))
+    return out[:6]
+
+
 def auto_plans(cat: dict, cls: str, held: dict) -> list:
     """为一个目标类生成候选配方（离线纯函数，可单测）。
 
@@ -335,6 +405,8 @@ def auto_plans(cat: dict, cls: str, held: dict) -> list:
                 plans.append({"host": host_key, "member": name,
                               "args": signature_args(hmembers[name], gen),
                               "how": "catalog:" + host_cls + "." + name})
+    # ③ 命名片段（R48-1）—— 手册没给配方、名字家族也猜不中的类靠它
+    plans += stem_candidates(cat, cls, held)
     for host_key in ("Conditions", "Doc", "MeshingGroup"):
         if host_key in held:
             for name in cands[:3]:
@@ -540,6 +612,16 @@ def _unwrap(obj, depth: int = 4):
         obj = obj[0]
         depth -= 1
     return obj
+
+
+def _is_com(obj) -> bool:
+    """是不是一个真正的 COM 对象（R48-1 补闸）。
+
+    片段候选里混着**标量返回**的成员（`Doc.GetSFaceInformation` 这类给的是字符串/
+    结构体），它们能过"非空"检查，却会在普查里对每个成员抛 AttributeError ——
+    46 条 `error:*` 就是这么来的（整类不记的闸门只看 unknown_name，不看 error）。
+    """
+    return hasattr(obj, "_oleobj_") or hasattr(obj, "GetIDsOfNames")
 
 
 def _first(obj):
@@ -924,7 +1006,7 @@ def main(argv=None) -> int:
             name = "R45" + cls.split(".")[-1]
             ladders = arg_ladder(name)
             rejected_here: list = []
-            for plan in auto_plans(cat_all, cls, held)[:8]:
+            for plan in auto_plans(cat_all, cls, held)[:12]:
                 host_raw = ctx.get(plan["host"])
                 if host_raw is None:
                     continue
@@ -946,8 +1028,8 @@ def main(argv=None) -> int:
                             type(exc).__name__ + ": " + str(exc)[:80])
                         continue
                     cand = _raw(got) if got is not None else None
-                    if cand is None or _empty(cand):
-                        # 试过、但**返回空**：这是 R46-1 归因的主要证据
+                    if cand is None or _empty(cand) or not _is_com(cand):
+                        # 试过、但**返回空/标量**：这是 R46-1 归因的主要证据
                         # （"本机工程里没有这类对象"≠"宿主没这个接口"）
                         empty_hits.setdefault(cls, plan["how"])
                         continue
