@@ -1,7 +1,7 @@
 {
  "source": "CradleCFD2025.2 Manuals scFLOW HTML VB_Interface_eng",
  "progid": "scFLOWpre_Bx64net.Application.2025",
- "extracted": "2026-09-19",
+ "extracted": "2026-09-20",
  "classes": {
   "AdaptiveParam": {
    "file": "Scf_vb_Preprocessor_AdaptiveParam_Class.html",

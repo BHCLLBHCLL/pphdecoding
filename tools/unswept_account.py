@@ -106,6 +106,10 @@ def _attempts(cls: str, cat: dict, ev: dict) -> list:
             out.append({"host": host, "member": member, "err": str(err),
                         "unknown": ("未知名称" in str(err)
                                     or "UNKNOWNNAME" in str(err).upper())})
+    kerr = (ev.get("kicker_errors") or {}).get(cls)
+    if kerr:
+        out.append({"host": "Kicker.Application", "member": str(kerr).split(" ")[0],
+                    "err": str(kerr), "unknown": False})
     for member, err in (ev.get("call_errors") or {}).items():
         if member in cands or short.lower() in member.lower():
             out.append({"host": "Conditions", "member": member, "err": str(err),
@@ -142,8 +146,16 @@ def classify(cls: str, cat: dict, ev: dict) -> dict:
             "attempts": attempts[:6],
             "evidence": ev.get("_path")}
 
-    # ① Kicker.* 属于**别的应用对象**（本会话是 scFLOWpre 会话）
+    # ① Kicker.* 属于**别的应用对象**（本会话是 scFLOWpre 会话）。
+    #    R47 起：附着 Kicker 会话**实测**过的类，用实测结论（成功→已普查；
+    #    失败→call-rejected + 宿主原话），不再笼统写"取不到"。
+    kicker_err = (ev.get("kicker_errors") or {}).get(cls)
     if cls.startswith("Kicker.") or host in FOREIGN_HOSTS:
+        if kicker_err:
+            return {**base, "terminal": "call-rejected",
+                    "reason": ("Kicker 会话已实测（Kicker.Application/"
+                               "LicenseStatus 都取到了），该类的取法被宿主拒绝："
+                               + str(kicker_err))}
         return {**base, "terminal": "foreign-app",
                 "reason": ("Kicker 启动器（Kicker.Application）的类；本会话是 "
                            "scFLOWpre 会话，取不到该对象" +

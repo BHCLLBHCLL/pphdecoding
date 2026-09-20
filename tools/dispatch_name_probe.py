@@ -288,10 +288,17 @@ def signature_args(entry: dict, name: str):
         key = _ARG_PREFIX.sub("", str(a.get("name") or "")).strip().lower()
         if key in ("", "none", "-"):
             continue
+        vals = [v.get("value") for v in (a.get("values") or [])
+                if v.get("value") is not None]
         if key == "progid":
             args.append(PROGID)
         elif "name" in key:
             args.append(name)
+        elif vals:
+            # R47-1：手册**词表**里的合法取值优先（CreateMultiYAxisTable(name,
+            # type) 的 type 只认 'freq_absorp_coeff_table' 这类字符串 —— 喂 0
+            # 必然被拒，喂词表首项就能过）
+            args.append(vals[0])
         elif key in ("type", "index", "id", "num", "number", "key",
                      "definitiontype", "valuekey"):
             args.append(0)
@@ -349,6 +356,136 @@ def sweep_class_verdict(states: dict, min_members: int = 4) -> str:
     if len(states) >= min_members and n_unk * 2 > len(states):
         return "suspect"
     return "ok"
+
+
+#: 收获名字用的成员名（GetAll*Names 这类；值是名字数组）
+_NAME_GETTERS = ("GetAllConditionNames", "GetAllTableNames",
+                 "GetAllMultiYAxisTableNames", "GetAllMapCondNames",
+                 "GetAllScriptNames", "GetAllRegionNames")
+
+
+def harvest_names(cat: dict, ctx: dict, call) -> list:
+    """收集**真实存在的对象名**，供 Query<X>ByName(name) 类配方使用（R47-1）。
+
+    只开工程拿不到 Region/Table/SNode 这类对象，但它们的取法是
+    Query<X>ByName(name) —— 名字从哪来？两条**实证**来源：
+    ① 已持有对象的 GetName()（区域/条件都实现了它）；
+    ② 宿主上的 GetAll*Names 取器（返回名字数组）。
+    拿不到就空手（不猜名字）。
+    """
+    pool: list = []
+
+    def _add(v):
+        if isinstance(v, str) and v and v not in pool and len(pool) < 40:
+            pool.append(v)
+
+    for key, obj in list(ctx.items()):
+        if obj is None or key in ("Doc", "Conditions", "MeshingGroup"):
+            continue
+        try:
+            _add(str(call(obj, "GetName") or "").strip())
+        except Exception:  # noqa: BLE001
+            continue
+    for key in ("Doc", "Conditions", "MeshingGroup"):
+        obj = ctx.get(key)
+        if obj is None:
+            continue
+        for member in _NAME_GETTERS:
+            try:
+                got = call(obj, member)
+            except Exception:  # noqa: BLE001
+                continue
+            for item in (got if isinstance(got, (list, tuple)) else [got]):
+                _add(str(_unwrap(item) or "").strip())
+    # 手册配方里的 @名字 也是实证的名字（引号有印刷体，先归一 —— R47 实测：
+    # 不归一只能收到 ASCII 引号那 4 个，@ALECancel 这类会漏）
+    for cls in cat["classes"]:
+        inst = ((cat["classes"].get(cls) or {}).get("instance") or "")
+        for fancy, plain in (("\u201c", '"'), ("\u201d", '"'),
+                             ("\u2018", "'"), ("\u2019", "'")):
+            inst = inst.replace(fancy, plain)
+        for lit in re.findall(r'"(@[^"]+)"', inst):
+            _add(lit)
+    return pool
+
+
+KICKER_PROGID = "Kicker_Bx64.Application.2025"
+
+
+def attach_kicker(ctx: dict, via: dict, result: dict, index: dict,
+                  cat: dict, resolve=None) -> int:
+    """把 Kicker 启动器对象接进来（R47-2），并派生它的两个类实例。
+
+    Kicker.* 三个类此前终态是"本会话取不到"——但**Kicker 本机就在跑**（宿主就是
+    它启动的）。这里附着（失败才 Dispatch），然后按手册取
+    GetApplicationLaunchSetting(ProgID) / GetLicenseStatus()，**逐个验身**
+    （identity_ok：类独有成员解析率 ≥ 半数）才收进 ctx。
+    """
+    import win32com.client as wc
+
+    from automation import scflowpre_api as api
+    resolve = resolve or _resolve
+    made = 0
+    kicker = None
+    try:
+        kicker = wc.GetActiveObject(KICKER_PROGID)
+        how = "kicker:GetActiveObject"
+    except Exception:  # noqa: BLE001
+        try:
+            kicker = wc.Dispatch(KICKER_PROGID)
+            how = "kicker:Dispatch"
+        except Exception as exc:  # noqa: BLE001
+            result["kicker_error"] = type(exc).__name__ + ": " + str(exc)[:120]
+            return 0
+    raw = getattr(kicker, "_oleobj_", None) or kicker
+    ctx["Kicker.Application"] = raw       # 普查用：PyIDispatch 就能 GetIDsOfNames
+    via["Kicker.Application"] = how
+    made += 1
+    # **调用**必须走 win32com 的 CDispatch（_invoke 先 _FlagAsMethod 再 getattr）——
+    # 拿 _oleobj_（PyIDispatch）去调会 AttributeError（R47 首轮实测）
+    caller = api.ComObject(kicker)
+    # GetApplicationLaunchSetting(ProgID) 的 ProgID **不是**我们连 scFLOWpre 用的那个
+    # （R47 实测：传 scFLOWpre_Bx64net.Application.2025 → 宿主回 'Invalid ProgID
+    # was specified.'）。故按"注册表里实际存在的 ProgID 形态"逐个试，成功的那个入证据。
+    progids = (PROGID, "scFLOWpre_Bx64net.Application", "scFLOWpre_Bx64net",
+               "scFLOWpre_Bx64net.Application.2023")
+    plans = (("GetApplicationLaunchSetting", "Kicker.ApplicationLaunchSetting",
+              progids),
+             ("GetLicenseStatus", "Kicker.LicenseStatus", (None,)))
+    for member, cls, arglist in plans:
+        args = arglist if isinstance(arglist, tuple) else (arglist,)
+        cand = None
+        for arg in (args if args else (None,)):
+            try:
+                cand = _unwrap(caller.call(member) if arg is None
+                               else caller.call(member, arg))
+            except Exception as exc:  # noqa: BLE001
+                result.setdefault("kicker_errors", {})[cls] = (
+                    member + "(" + str(arg)[:40] + ") -> "
+                    + type(exc).__name__ + ": " + str(exc)[:90])
+                cand = None
+                continue
+            if cand is not None and cand is not False:
+                result.setdefault("kicker_args", {})[cls] = str(arg)
+                break
+            cand = None
+        if cand is None:
+            result.setdefault("kicker_errors", {}).setdefault(
+                cls, member + " -> 各 ProgID 都返回空")
+            continue
+        if cand is None or cand is False:
+            result.setdefault("kicker_errors", {})[cls] = member + " -> 返回空"
+            continue
+        ok, detail = identity_ok(
+            cand, distinctive_members(cat, cls, index))
+        if not ok:
+            result.setdefault("kicker_errors", {})[cls] = (
+                member + " -> 验身不过 " + str(detail))
+            continue
+        ctx[cls] = cand
+        via[cls] = "kicker:" + member
+        made += 1
+    return made
 
 
 def member_name_index(cat: dict) -> dict:
@@ -662,6 +799,8 @@ def main(argv=None) -> int:
                     help="R45-1：自动配方扩面的时间预算（秒）；超时后如实记为未尝试")
     ap.add_argument("--with-mdl", action="store_true",
                     help="R40-1：走 MDL 流程造闭空间（选全部面 → 建闭空间）再裁定")
+    ap.add_argument("--kicker", action="store_true",
+                    help="R47-2：另取 Kicker 启动器对象，把 Kicker.* 三个类也普查")
     ap.add_argument("--keep-host", action="store_true")
     args = ap.parse_args(argv)
     pairs = mismatches()
@@ -763,6 +902,11 @@ def main(argv=None) -> int:
             if obj is not None and cls in cat_all["classes"]:
                 held[key] = cls
         index = member_name_index(cat_all)
+        # R47-1：真实对象名池（Query<X>ByName 类配方要用真名字）
+        pool = harvest_names(cat_all, ctx,
+                             lambda o, m: _unwrap(api.ComObject(o).call(m)))
+        if pool:
+            result["name_pool"] = pool
         rejected = set(result.get("identity_rejected") or [])
         empty_hits: dict = {}
         # **不并进 call_errors**：那里的错误被"手册标题裁定"与 dispatch_account 当
@@ -787,6 +931,11 @@ def main(argv=None) -> int:
                 host = api.ComObject(host_raw)
                 # 手册给的那组实参先试；不成再按阶梯退让（两边都不放弃）
                 tries = ([plan["args"]] if plan["args"] is not None else []) + ladders
+                if "ByName" in plan["member"] and pool:
+                    # R47-1：*ByName 类取法先用**真名字**试（池里的是宿主上存在的
+                    # 对象名；用生成的 "R45Xxx" 必然查不到）
+                    tries = ([(n,) for n in pool[:8]]
+                             + [(n, 0) for n in pool[:4]] + tries)
                 for argsin in tries:
                     if argsin is None:
                         continue
@@ -834,6 +983,14 @@ def main(argv=None) -> int:
     doc = sess.doc                          # typed 包装：内部走 _FlagAsMethod
     wanted = sorted({p["class"] for p in pairs})
     via = result.setdefault("obtained_via", {})
+    if args.kicker:
+        # R47-2：Kicker.* 与工程无关，一次性取（在最前面，失败不影响后续）
+        _idx = member_name_index(cat_all)
+        try:
+            n_k = attach_kicker(ctx, via, result, _idx, cat_all)
+            print("[r47] Kicker 对象接入 " + str(n_k) + " 个类", flush=True)
+        except Exception as exc:  # noqa: BLE001
+            result["kicker_error"] = type(exc).__name__ + ": " + str(exc)[:120]
     errors = result.setdefault("chain_errors", {})
     # R38-1：**一个会话里轮换多个工程** —— 不同工程提供不同对象（闭空间/材料/CoSim），
     # 已取到的类不再重复取（ctx 只增不减），未取到的继续在下一个工程里试。
@@ -1032,6 +1189,11 @@ def main(argv=None) -> int:
                             "total": len(states),
                             "unknown": sum(1 for s in states.values()
                                            if s == "unknown_name")}
+                        # 取得路径**作废**：这个类没进普查，就别说"拿到了"
+                        # （R47 实测：CondParticleCounter 的配方给的是别的条件对象，
+                        # 验身否掉后仍留在 obtained_via/auto_obtained 里 → 自相矛盾）
+                        via.pop(cls, None)
+                        (result.get("auto_obtained") or {}).pop(cat_cls, None)
                         continue
                     for mem, st in states.items():
                         slot = sweep_acc.setdefault(cat_cls, {})

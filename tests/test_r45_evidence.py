@@ -164,8 +164,13 @@ class TestExpansionEvidence(unittest.TestCase):
             self.assertIn(cls, self.cat["classes"], cls + " 不是目录类名")
         self.assertIn("Application", self.data["classes"],
                       "会话 Application 对象本身就是目录 Application 类")
-        self.assertNotIn("Kicker.Application", self.data["classes"],
-                         "Kicker 启动器对象在本会话取不到，不许冒充")
+        # R47：Kicker.* 改为**附着 Kicker 会话实测**取得 —— 可以进普查，但取得路径
+        # 必须写明是 kicker:（否则就是拿会话对象冒充，正是 R45 修掉的那个假象）
+        via = self.data["coverage"].get("obtained_via") or {}
+        if "Kicker.Application" in self.data["classes"]:
+            self.assertTrue(str(via.get("Kicker.Application", ""))
+                            .startswith("kicker:"),
+                            "Kicker.* 只能是实测取得")
 
     def test_suspect_classes_are_not_recorded(self):
         # 验身后置闸否掉的类：不得同时出现在普查结果里（宁可停在未普查）

@@ -2137,4 +2137,39 @@ VBS 生成（取值 + 纠名）、面板写 xenv（实测键账本 + 枚举白�
 > `tools/host_member_sweep.py` 的逐轮证据落点改为 `--evidence`（默认中立目录），
 > 不再写死 `_p12u_gate/r45/`（否则复算会覆盖上一轮证据）。
 
+---
+
+## 61. R47 更新（2026-09-15）—— 词表/真名再扩面 + Kicker 会话实测 + 前置校验
+
+### 61.1 两条"按手册给、不猜"的扩面机制（R47-1）
+
+| 机制 | 做法 | 战果 |
+|---|---|---|
+| 手册**词表**填实参 | `signature_args()` 对字符串参数用手册 `values` 首项 | `MultiYAxisTable`（`CreateMultiYAxisTable(name, type)` 只认 `'freq_absorp_coeff_table'`） |
+| **真名字池** | `harvest_names()` = 已持有对象 `GetName()` + 宿主 `GetAll*Names` + 配方 ``@名字``（引号先归一） | `Condition`（`QueryConditionByName(真名)`） |
+
+**假覆盖修正**：被验身后置闸否掉的类（`CondParticleCounter`：配方给的是别的条件对象，
+9 成员 8 未知）现在**同时撤下** `obtained_via`/`auto_obtained` → 退回"未普查"并进终态表。
+
+净值 146 → **149 类**（+Condition/Kicker.Application/Kicker.LicenseStatus/MultiYAxisTable，
+−CondParticleCounter），成员 3855 → **3878**；未普查 39 → **36**
+（needs-corpus 22 / no-creation-path 12 / call-rejected 2）。
+
+### 61.2 Kicker 会话实测（R47-2）
+
+附着 `Kicker_Bx64.Application.2025`：`Kicker.Application`（0 未知成员）与
+`Kicker.LicenseStatus`（`GetLicenseStatus()`，0 未知）**取到**；
+`Kicker.ApplicationLaunchSetting` 的 `GetApplicationLaunchSetting(ProgID)` 四个
+ProgID 变体全被宿主拒绝（`Invalid ProgID was specified`）→ 终态 `call-rejected`（原话入库）。
+
+> 坑位：`_oleobj_`（PyIDispatch）只能做 `GetIDsOfNames` 普查；**调用**必须走 win32com
+> CDispatch（`_invoke` 先 `_FlagAsMethod` 再 `getattr`）。
+
+### 61.3 未实现成员前置校验（R47-3）
+
+`automation/vbs_bridge.host_absent_methods()`（无歧义 12 条；`ImportCSV` 这类部分类
+能用的一律不进）+ `validate_actions()` 生成期点名 + `build_vbs(strict_values=True)` 抛
+`ApiValueError` —— 不再等 COM 报错。
+
+
 

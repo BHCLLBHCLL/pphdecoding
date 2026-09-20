@@ -3316,30 +3316,100 @@ interfacetype)` 也能试到）→ **78 个条件实例**一次建成，随后�
 
 ---
 
-## R47 —— 提案（≈1 人日）
+## R47 —— 带词表/真名再扩面 + Kicker 会话实测 + 未实现成员前置校验（2026-09-15，✅ 已完成）
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R47-1** | **带语料/词表再扩面** | 覆盖 146 → ≥155，或逐类给出"仍取不到"的证据 | ✅ 两条新机制各下一城（**+4 类**，见下）；未达 155 → 走第二分支：**36 类逐类终态**齐备 |
+| **R47-2** | **Kicker 会话实测** | 3 类终态改为"已实测"（成功失败都要有证据） | ✅ 附着 `Kicker_Bx64.Application.2025`：**2 类取到**（Application 0 未知成员、LicenseStatus 0 未知）/ 1 类宿主原话拒绝 |
+| **R47-3** | **未实现成员前置校验** | 一处可查 + 测试 | ✅ `vbs_bridge.host_absent_methods()` 在**生成期**点名（12 条无歧义），`strict_values=True` 直接抛 |
+
+### R47-1 两条新机制（都是"按手册给，不猜"）
+
+| 机制 | 做法 | 战果 |
+|---|---|---|
+| **手册词表填实参** | `signature_args()` 对字符串参数优先用手册 `values` 首项（`CreateMultiYAxisTable(name, type)` 的 type 只认 `'freq_absorp_coeff_table'`，喂 0 必被拒） | `MultiYAxisTable` ✓ |
+| **真名字池** | `harvest_names()`：已持有对象的 `GetName()` + 宿主 `GetAll*Names` + 配方里的 ``@名字`` → 喂给 `Query<X>ByName` 类取法 | `Condition` ✓（`Conditions.QueryConditionByName(真条件名)`） |
+
+**同时修掉一个假覆盖**（口径修正）：`CondParticleCounter` 的配方给的是**别的条件对象**
+（9 个成员 8 个解析不到），验身后置闸早就把它拦了，但 `obtained_via`/`auto_obtained`
+还留着"已取得"——自相矛盾。R47 起**验身否掉的类同时撤下取得声明**，该类退回"未普查"
+并进终态表。
+
+净值：**146 → 149 类**（新增 `Condition`/`Kicker.Application`/`Kicker.LicenseStatus`/
+`MultiYAxisTable`，退出 `CondParticleCounter`），成员 3855 → **3878**；未普查 39 → **36**
+（needs-corpus 22 / no-creation-path 12 / call-rejected 2 / foreign-app 0 / probe-limitation 0）。
+
+> 为什么没到 155：剩余 36 类里 22 类卡在**前置对象**（材料/CoSim/粒子/映射/混合物/
+> 体网格产物），12 类手册**根本没给取法** —— 这不是"再跑一轮就能多几类"的事，
+> 逐类终态（`schemas/unswept_account.json`）就是这一条的验收面。
+
+### R47-2 Kicker 会话实测
+
+宿主**就是 Kicker 启动的**，故附着它（`GetActiveObject("Kicker_Bx64.Application.2025")`）：
+
+| 类 | 结果 | 证据 |
+|---|---|---|
+| `Kicker.Application` | ✅ 取得（`"kicker:GetActiveObject"`），9 个成员 **0 未知** | `obtained_via` |
+| `Kicker.LicenseStatus` | ✅ `GetLicenseStatus()` 取得，4 个成员 **0 未知** | `obtained_via` |
+| `Kicker.ApplicationLaunchSetting` | ❌ `GetApplicationLaunchSetting(ProgID)`：4 个 ProgID 变体全被拒（`Invalid ProgID was specified`，宿主原话入库） | `kicker_errors` → 终态 `call-rejected` |
+
+> **坑位记录**：`_oleobj_`（PyIDispatch）只能用于 `GetIDsOfNames` 普查，**调用**必须走
+> win32com 的 CDispatch（`ComObject._invoke` 先 `_FlagAsMethod` 再 `getattr`）——
+> 首轮就是拿 `_oleobj_` 去调，两个类都报 `AttributeError: 'PyIDispatch' object has
+> no attribute ...`。
+
+### R47-3 未实现成员前置校验
+
+`automation/vbs_bridge.host_absent_methods()`：目录 `host_absent` 里**无歧义**的名字
+（所有声明它的类都标了未实现 —— 12 条；`ImportCSV` 这种部分类能用的不许进集合）。
+`validate_actions()` 对动作行里 `.Member` 形态的调用点逐个点名：
+"`GetAllMapCondNames 宿主未实现（GetIDsOfNames → DISP_E_UNKNOWNNAME…）调用必然失败`"
+—— 以前要等 COM 抛 `com_error` 才知道；`build_vbs(strict_values=True)` 直接抛 `ApiValueError`。
+
+### 回归
+
+全量回归 **1514 passed / 4 skipped / 0 failed**（568.61 s；R46 收口同口径 1505/4/0，
+增量 +9 = 本轮新模块 9 项）。新增测试 1 个模块 `test_r47_evidence.py`（9 项：
+词表填参/名字池/Kicker 终态/桥前置校验），并按新事实更新 R45/R46 两处 Kicker 断言
+（R45 那条"Kicker 不许进普查"改为"进普查必须写明 `kicker:` 取得路径"—— 正是它刚刚
+抓住了 R46 的验身缺口）。
+
+### 证据
+
+`schemas/host_member_availability.json`（149 类 / 3878 成员 / 25 未实现 / errors 0 /
+`swept_suspect` 1 / `obtained_via` 160 / `name_pool` 10）、
+`schemas/unswept_account.json`（36 类终态）、`_p12u_gate/r47/name_verdicts.json`
+（`kicker_args`/`kicker_errors`/`name_pool`）、`_p12u_gate/r47_run4.log`。
+
+---
+
+## R48 —— 提案（≈1 人日）
 
 ### 依据
 
-* 39 类终态里 **23 类**卡在"需要前置语料"，其中 **8 类**（`SNode`/`Table`/`Value`/
-  `Region`/`DiffusiveSpecies`/`MultiYAxisTable`/`BodyPattern`/`WrappingGroup`）
-  在**有 MDL/材料/条件的算例**里其实取得到 —— 值得用"带语料的工程集"再试一轮；
-* `Kicker.*` 3 类的终态是"本会话取不到"，但 Kicker 启动器对象**本机存在**
-  （探针就是经 Kicker 启动的）：能否另起 `Kicker.Application` 会话把它拿下，值得一次实测；
-* `host_absent` 25 条已入册，但**桥接层**（`automation/vbs_bridge.py` 的 VBS 生成、
-  面板写入路径）还没有"遇到未实现成员就提前报错"的前置校验。
+* 未普查 36 类里 **12 类**手册没给任何取法（`no-creation-path`），但**宿主未必没有** ——
+  名字家族穷举只试了 3 个名字/宿主；可以按"手册里同类成员的命名模式"扩大候选（例如
+  从已实现类里学 `Get<X>Default`/`Query<X>ByIndex` 之类的真实命名习惯）；
+* `swept_suspect` 现在只有 1 条（`CondParticleCounter`），说明"配方给的是别家对象"
+  不是个例风险 —— 值得把这套验身做成**目录级**证据（哪些类的配方不可信）；
+* 桥接前置校验只在 VBS 生成期；`automation/scflowpre_api.ComObject.call` 侧的
+  `host_absent` 拦截还没有（typed 直调会照旧发出去等 COM 报错）。
 
 ### 条目
 
 | # | 条目 | 做法 | 验收句 | 人日 |
 |---|---|---|---|---|
-| **R47-1** | **带语料再扩面** | 用有 MDL/材料/条件的算例（exB01/exA26 等）跑一轮，把 `SNode`/`Table`/`Value` 这类真取到 | 覆盖类数 146 → ≥155 或逐类给出"仍取不到"的证据 |
-| **R47-2** | **Kicker 会话实测** | 另起 `Kicker.Application`（`Dispatch`）取 `ApplicationLaunchSetting`/`LicenseStatus` | 3 类终态改为"已实测"（成功或失败都算，必须有证据） |
-| **R47-3** | **未实现成员前置校验** | 桥接/面板写入前查 `host_absent` 并给出可读错误 | 一处可查 + 测试（调不通的成员不再等到 COM 报错） |
+| **R48-1** | **取法命名模式扩面** | 从已普查类的**真实**成员名学命名模式，给 12 个 `no-creation-path` 类扩候选 | 覆盖 149 → ≥160，或逐类给出"宿主确实没有"的证据 |
+| **R48-2** | **配方可信度入目录** | 被验身否掉的配方在目录里标记（`recipe_unreliable`） | 一处可查 + 测试 |
+| **R48-3** | **typed 直调侧也拦** | `ComObject.call` 前查 `host_absent` 并给可读错误（与 VBS 侧同口径） | 一处可查 + 测试 |
 
 ### 明确不做
 
-* 不伪造语料（要什么算例就如实要，缺就记"缺"）；
-* 不为 `host-interface-absent` 之外的终态写"自动重试"逻辑 —— 终态是结论，不是待办。
+* 不为扩面去猜取值/猜名字（只用手册词表与宿主实证的名字）；
+* 不动 `host_absent` 判据（`GetIDsOfNames` 仍是唯一证人）。
 
 ---
 

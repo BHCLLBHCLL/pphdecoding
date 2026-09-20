@@ -2,7 +2,7 @@
  "source": "tools/dispatch_name_probe.py --sweep（GetIDsOfNames）",
  "note": "state=unknown_name ⇒ 宿主**未实现**该成员；error:* ⇒ 探针侧问题（对象为空/过时），**不得**当宿主否证；未出现在本表的类 = **未普查**（不等于已实现）",
  "coverage": {
-  "classes_swept": 146,
+  "classes_swept": 149,
   "empty_objects": [
    "CondBoussinesqBaseTemp",
    "CondCoSim",
@@ -28,7 +28,7 @@
    "LocalCoordinate",
    "ParticleRegion"
   ],
-  "members_swept": 3855,
+  "members_swept": 3878,
   "members_total": 4455,
   "unswept_classes": [
    "BodyPattern",
@@ -41,6 +41,7 @@
    "CondMultiphaseMaterial",
    "CondOutputPclFile",
    "CondParticleConcentrationFpDEM",
+   "CondParticleCounter",
    "CondParticleForceFPDEM",
    "CondParticleHeatFPDEM",
    "CondParticleHistogram",
@@ -48,7 +49,6 @@
    "CondParticleRestitutionDEM",
    "CondReactionIncompSpecies",
    "CondRepulsion",
-   "Condition",
    "CreateVMDLError",
    "CrossSectionView",
    "DiffusiveSpecies",
@@ -57,10 +57,7 @@
    "ISVertex",
    "IVEdge",
    "IVFace",
-   "Kicker.Application",
    "Kicker.ApplicationLaunchSetting",
-   "Kicker.LicenseStatus",
-   "MultiYAxisTable",
    "OutputCombustionSpecies",
    "PropDataBase",
    "PropGroup",
@@ -101,7 +98,6 @@
    "CondOversetGap": "recipe:conditions.CreateCondSpray",
    "CondOversetRegionOption": "recipe:conds.QueryCondOversetRegionOption",
    "CondParticleBoundaryDEM": "recipe:conditions.CreateCondParticleBoundaryDEM",
-   "CondParticleCounter": "recipe:conditions.QueryConditionByName",
    "CondParticleGenerationDEM": "recipe:conditions.CreateCondParticleGenerationDEM",
    "CondParticleHeatBoundaryDEM": "recipe:conditions.CreateCondParticleHeatBoundaryDEM",
    "CondParticlePropertyDEM": "recipe:conditions.CreateCondParticlePropertyDEM",
@@ -113,6 +109,7 @@
    "CondSolidification": "catalog:Conditions.GetCondSolidification",
    "CondStedInfo": "generic:Conditions.CreateCondStedInfo",
    "CondSymmetricalBoundary": "recipe:conds.QueryConditionByName",
+   "Condition": "catalog:Conditions.QueryConditionByName",
    "CoordinatesSpecifiedPart": "catalog:Doc.CreateCoordinatesSpecifiedPart",
    "CrossSectionRegion": "catalog:Doc.CreateCrossSectionRegion",
    "FaceRegion": "catalog:Doc.CreateFaceRegion",
@@ -122,35 +119,25 @@
    "MDL": "catalog:MeshingGroup.GetMDL",
    "MapCond": "catalog:Doc.CreateMapCond",
    "MovingGroup": "recipe:meshgroup.QueryMovingGroupByIndex",
+   "MultiYAxisTable": "catalog:Doc.CreateMultiYAxisTable",
    "NumericalRegion": "catalog:Doc.CreateNumericalRegion",
-   "OctBasePolyParam": "catalog:MeshingGroup.GetOctBasePolyParam",
+   "OctBasePolyParam": "catalog:Doc.GetPresetOctBasePolyParam",
    "ParticleRegion": "catalog:Doc.CreateParticleRegion",
-   "PolyConvParam": "catalog:MeshingGroup.GetPolyConvParam",
-   "PolyPrismParam": "catalog:MeshingGroup.GetPolyPrismParam",
+   "PolyConvParam": "catalog:Doc.GetPresetPolyConvParam",
+   "PolyPrismParam": "catalog:Doc.GetPresetPolyPrismParam",
    "ProjectSetting": "catalog:Doc.GetProjectSetting",
    "ReferencePoint": "catalog:Doc.CreateReferencePoint",
    "Script": "catalog:Doc.CreateScript",
    "SubmeshSurfaceRegion": "catalog:Doc.CreateSubmeshSurfaceRegion",
-   "SurfParam": "catalog:MeshingGroup.GetSurfParam",
+   "SurfParam": "catalog:Doc.GetPresetSurfParam",
    "SweepParam": "recipe:meshgroup.GetSweepParam",
-   "TetraParam": "catalog:MeshingGroup.GetTetraParam",
+   "TetraParam": "catalog:Doc.GetPresetTetraParam",
    "Utility": "catalog:Doc.GetUtility",
    "VMDL": "catalog:MeshingGroup.CreateVMDL",
    "VPart": "catalog:Doc.GetVParts",
    "VolumeRegion": "catalog:Doc.CreateVolumeRegion"
   },
-  "identity_rejected": [
-   "Condition <- catalog:Doc.GetConditions",
-   "Condition <- catalog:Doc.GetConditions",
-   "Condition <- catalog:Doc.GetConditions",
-   "Condition <- catalog:Doc.GetConditions",
-   "Condition <- catalog:Doc.GetConditions",
-   "Condition <- catalog:Doc.GetConditions",
-   "Condition <- catalog:Doc.GetConditions",
-   "Condition <- catalog:Doc.GetConditions",
-   "Condition <- catalog:Doc.GetConditions",
-   "Condition <- catalog:Doc.GetConditions"
-  ],
+  "identity_rejected": [],
   "identity_detail": {
    "Condition | catalog:Doc.GetConditions": {
     "sample": 4,
@@ -253,7 +240,7 @@
    "CondPOTData": "CreateCond*:CreateCondPOTData",
    "CondParticleBoundary": "CreateCond*:CreateCondParticleBoundary",
    "CondParticleBoundaryDEM": "auto:recipe:conditions.CreateCondParticleBoundaryDEM",
-   "CondParticleCounter": "auto:recipe:conditions.QueryConditionByName",
+   "CondParticleCounter": "session:会话/文档直取",
    "CondParticleForceConnection": "CreateCond*:CreateCondParticleForceConnection",
    "CondParticleGeneration": "CreateCond*:CreateCondParticleGeneration",
    "CondParticleGenerationDEM": "auto:recipe:conditions.CreateCondParticleGenerationDEM",
@@ -282,6 +269,7 @@
    "CondWaveDamping": "CreateCond*:CreateCondWaveDamping",
    "CondWaveGeneration": "CreateCond*:CreateCondWaveGeneration",
    "CondWavelet": "CreateCond*:CreateCondWavelet",
+   "Condition": "auto:catalog:Conditions.QueryConditionByName",
    "Conditions": "session:会话/文档直取",
    "CoordinatesSpecifiedPart": "auto:catalog:Doc.CreateCoordinatesSpecifiedPart",
    "CrossSectionRegion": "auto:catalog:Doc.CreateCrossSectionRegion",
@@ -291,6 +279,8 @@
    "FaceRegionDerivedSheet": "auto:catalog:Doc.CreateFaceRegionDerivedSheet",
    "FluidRegion": "auto:catalog:Doc.CreateFluidRegion",
    "HybridParam": "GetHybridParam",
+   "Kicker.Application": "kicker:GetActiveObject",
+   "Kicker.LicenseStatus": "kicker:GetLicenseStatus",
    "LocalCoordinate": "auto:catalog:Doc.CreateLocalCoordinate",
    "MDL": "auto:catalog:MeshingGroup.GetMDL",
    "MDLWizard": "session:会话/文档直取",
@@ -298,21 +288,22 @@
    "MeshingGroup": "session:会话/文档直取",
    "MeshingGroupSetting": "session:会话/文档直取",
    "MovingGroup": "auto:recipe:meshgroup.QueryMovingGroupByIndex",
+   "MultiYAxisTable": "auto:catalog:Doc.CreateMultiYAxisTable",
    "NumericalRegion": "auto:catalog:Doc.CreateNumericalRegion",
-   "OctBasePolyParam": "auto:catalog:MeshingGroup.GetOctBasePolyParam",
+   "OctBasePolyParam": "auto:catalog:Doc.GetPresetOctBasePolyParam",
    "OctParam": "GetOctParam",
    "Octree": "session:会话/文档直取",
    "ParticleRegion": "auto:catalog:Doc.CreateParticleRegion",
-   "PolyConvParam": "auto:catalog:MeshingGroup.GetPolyConvParam",
-   "PolyPrismParam": "auto:catalog:MeshingGroup.GetPolyPrismParam",
+   "PolyConvParam": "auto:catalog:Doc.GetPresetPolyConvParam",
+   "PolyPrismParam": "auto:catalog:Doc.GetPresetPolyPrismParam",
    "ProjectSetting": "auto:catalog:Doc.GetProjectSetting",
    "ReferencePoint": "auto:catalog:Doc.CreateReferencePoint",
    "Script": "auto:catalog:Doc.CreateScript",
    "SpecialRegion": "chain:doc.GetSpecialRegions",
    "SubmeshSurfaceRegion": "auto:catalog:Doc.CreateSubmeshSurfaceRegion",
-   "SurfParam": "auto:catalog:MeshingGroup.GetSurfParam",
+   "SurfParam": "auto:catalog:Doc.GetPresetSurfParam",
    "SweepParam": "auto:recipe:meshgroup.GetSweepParam",
-   "TetraParam": "auto:catalog:MeshingGroup.GetTetraParam",
+   "TetraParam": "auto:catalog:Doc.GetPresetTetraParam",
    "Utility": "auto:catalog:Doc.GetUtility",
    "VMDL": "auto:catalog:MeshingGroup.CreateVMDL",
    "VPart": "auto:catalog:Doc.GetVParts",
@@ -331,10 +322,8 @@
    "CondParticleHeatFPDEM": "recipe:conditions.CreateCondParticleHeatFPDEM",
    "CondParticleRestitutionDEM": "recipe:conditions.CreateCondParticleRestitutionDEM",
    "CondRepulsion": "recipe:conditions.CreateCondRepulsion",
-   "Condition": "catalog:Conditions.QueryConditionByName",
    "CreateVMDLError": "catalog:MeshingGroup.GetCreateVMDLError",
    "DiffusiveSpecies": "catalog:Doc.QueryDiffusiveSpecies",
-   "MultiYAxisTable": "catalog:Doc.CreateMultiYAxisTable",
    "Region": "catalog:Doc.QueryRegionByName",
    "SNode": "catalog:Doc.QuerySNodeByName",
    "Table": "catalog:Doc.CreateTable",
@@ -342,7 +331,12 @@
    "WrappingGroup": "recipe:doc.QueryWrappingGroupByIndex"
   },
   "swept_unmapped": [],
-  "swept_suspect": {},
+  "swept_suspect": {
+   "CondParticleCounter": {
+    "total": 9,
+    "unknown": 8
+   }
+  },
   "resolved_via_member_key": []
  },
  "classes": {
@@ -886,12 +880,6 @@
    "unknown": [],
    "errors": []
   },
-  "CondParticleCounter": {
-   "total": 9,
-   "resolved": 9,
-   "unknown": [],
-   "errors": []
-  },
   "CondParticleForceConnection": {
    "total": 7,
    "resolved": 7,
@@ -1046,6 +1034,12 @@
    "unknown": [],
    "errors": []
   },
+  "Condition": {
+   "total": 8,
+   "resolved": 8,
+   "unknown": [],
+   "errors": []
+  },
   "Conditions": {
    "total": 606,
    "resolved": 606,
@@ -1109,6 +1103,18 @@
    "unknown": [],
    "errors": []
   },
+  "Kicker.Application": {
+   "total": 9,
+   "resolved": 9,
+   "unknown": [],
+   "errors": []
+  },
+  "Kicker.LicenseStatus": {
+   "total": 4,
+   "resolved": 4,
+   "unknown": [],
+   "errors": []
+  },
   "MDL": {
    "total": 35,
    "resolved": 35,
@@ -1148,6 +1154,12 @@
   "MovingGroup": {
    "total": 17,
    "resolved": 17,
+   "unknown": [],
+   "errors": []
+  },
+  "MultiYAxisTable": {
+   "total": 11,
+   "resolved": 11,
    "unknown": [],
    "errors": []
   },
@@ -1265,6 +1277,23 @@
   }
  },
  "availability": {
+  "Kicker.Application": {
+   "GetApplicationLaunchSetting": "resolved",
+   "GetLaunchProgram": "resolved",
+   "GetLicenseStatus": "resolved",
+   "GetProductType": "resolved",
+   "SetLaunchProgram": "resolved",
+   "SetProductType": "resolved",
+   "Quit": "resolved",
+   "ErrorCode": "resolved",
+   "ErrorString": "resolved"
+  },
+  "Kicker.LicenseStatus": {
+   "MaximumNumberOfParallelizedProcess": "resolved",
+   "ValidLicenseExists": "resolved",
+   "ErrorCode": "resolved",
+   "ErrorString": "resolved"
+  },
   "Doc": {
    "AddTemporaryDrawingObjectAxis": "resolved",
    "AddTemporaryDrawingObjectCuboid": "resolved",
@@ -4624,17 +4653,6 @@
    "GetValue": "resolved",
    "SetParam": "resolved"
   },
-  "CondParticleCounter": {
-   "GetCycleInterval": "resolved",
-   "GetOutputLastSw": "resolved",
-   "GetOutputTimingType": "resolved",
-   "GetTimeInterval": "resolved",
-   "GetValue": "resolved",
-   "SetCycleInterval": "resolved",
-   "SetOutputLastSw": "resolved",
-   "SetOutputTimingType": "resolved",
-   "SetTimeInterval": "resolved"
-  },
   "CondParticleGenerationDEM": {
    "GetClothAxis": "resolved",
    "GetParam": "resolved",
@@ -4712,6 +4730,16 @@
    "SetOutputCondition": "resolved",
    "SetParam": "resolved",
    "SetRegion": "resolved"
+  },
+  "Condition": {
+   "ApplyToRegion": "resolved",
+   "DoesConflictWithAnalysisType": "resolved",
+   "GetConditionType": "resolved",
+   "GetName": "resolved",
+   "GetRegions": "resolved",
+   "RemoveFromAllRegions": "resolved",
+   "RemoveFromRegion": "resolved",
+   "SetName": "resolved"
   },
   "CoordinatesSpecifiedPart": {
    "GetAbsorptionCoeff": "resolved",
@@ -5069,6 +5097,19 @@
    "SetFaceRegionName": "resolved",
    "SetVisible": "resolved",
    "SetVolumeRegionName": "resolved"
+  },
+  "MultiYAxisTable": {
+   "AddData": "resolved",
+   "DeleteData": "resolved",
+   "GetName": "resolved",
+   "GetNumberOfData": "resolved",
+   "GetNumberOfYAxes": "resolved",
+   "GetType": "resolved",
+   "GetUsedCondNum": "resolved",
+   "GetXData": "resolved",
+   "GetYData": "resolved",
+   "SetName": "resolved",
+   "SortData": "resolved"
   },
   "NumericalRegion": {
    "GetCombinationOption": "resolved",

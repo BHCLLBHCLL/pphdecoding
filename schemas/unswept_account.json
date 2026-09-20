@@ -1,14 +1,14 @@
 {
  "source": "tools/unswept_account.py（R46-1）",
  "note": "未普查类的**终态**：每个类都必须有一条，理由必须来自证据（配方宿主 / 候选调用错误 / 返回空）；口径见模块 docstring。终态不是待办 —— 除非将来补语料，这些类不会被再排期。",
- "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+ "evidence": "_p12u_gate\\r47\\name_verdicts.json",
  "counts": {
-  "total": 39,
-  "needs-corpus": 23,
+  "total": 36,
+  "needs-corpus": 22,
   "host-interface-absent": 0,
   "no-creation-path": 12,
-  "call-rejected": 1,
-  "foreign-app": 3,
+  "call-rejected": 2,
+  "foreign-app": 0,
   "probe-limitation": 0
  },
  "classes": {
@@ -58,7 +58,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:Doc.GetBodyPatterns"
   },
@@ -107,7 +107,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:Conditions.QueryCondBUND"
   },
@@ -154,7 +154,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 condcosim 对象（本会话没有）"
   },
@@ -201,7 +201,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 condcosim 对象（本会话没有）"
   },
@@ -248,7 +248,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 condcosim 对象（本会话没有）"
   },
@@ -299,7 +299,7 @@
      "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondDTSR"
   },
@@ -346,7 +346,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 mixedgas 对象（本会话没有）"
   },
@@ -395,7 +395,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "call-rejected",
    "reason": "手册取法调用被拒（非「未知名称」）：QueryCondMultiphaseMaterial → com_error: (-2147352562, '无效的参数数目。', None, None)"
   },
@@ -442,7 +442,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
@@ -493,9 +493,21 @@
      "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondParticleConcentrationFpDEM"
+  },
+  "CondParticleCounter": {
+   "class": "CondParticleCounter",
+   "members": 9,
+   "recipe": "Set particlecounter = conditions.QueryConditionByName(\"@ParticleSrgnCounter\")",
+   "declared_candidates": [
+    "catalog:Conditions.GetCondParticleCounter"
+   ],
+   "attempts": [],
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "terminal": "needs-corpus",
+   "reason": "条件类的实例由条件向导/流程产生；批量 CreateCond* 未产出该类（本机语料没有这种条件）"
   },
   "CondParticleForceFPDEM": {
    "class": "CondParticleForceFPDEM",
@@ -543,7 +555,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondParticleForceFPDEM"
   },
@@ -592,7 +604,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondParticleHeatFPDEM"
   },
@@ -639,7 +651,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
@@ -686,7 +698,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 particletracking 对象（本会话没有）"
   },
@@ -736,7 +748,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondParticleRestitutionDEM"
   },
@@ -783,7 +795,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
@@ -816,59 +828,9 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondRepulsion"
-  },
-  "Condition": {
-   "class": "Condition",
-   "members": 8,
-   "recipe": "（手册未给实例配方）",
-   "declared_candidates": [
-    "catalog:Doc.GetConditions",
-    "catalog:Conditions.QueryConditionByName"
-   ],
-   "attempts": [
-    {
-     "host": "Conditions",
-     "member": "CreateCondPartition",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "CreateCondPartitionDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "GetCondPartition",
-     "err": "com_error: (-2147352573, '找不到成员。', None, None)",
-     "unknown": false
-    },
-    {
-     "host": "Doc",
-     "member": "GetConditions",
-     "err": "com_error: (-2147352573, '找不到成员。', None, None)",
-     "unknown": false
-    },
-    {
-     "host": "Conditions",
-     "member": "QueryConditionByName",
-     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
-     "unknown": false
-    },
-    {
-     "host": "Conditions",
-     "member": "CreateCondition",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    }
-   ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
-   "terminal": "needs-corpus",
-   "reason": "取法试过、返回空（本机工程没有该对象）：catalog:Conditions.QueryConditionByName"
   },
   "CreateVMDLError": {
    "class": "CreateVMDLError",
@@ -915,7 +877,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:MeshingGroup.GetCreateVMDLError"
   },
@@ -962,7 +924,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
@@ -1011,7 +973,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:Doc.QueryDiffusiveSpecies"
   },
@@ -1058,7 +1020,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
@@ -1105,7 +1067,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
@@ -1152,7 +1114,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
@@ -1199,7 +1161,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
@@ -1246,56 +1208,9 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
-  },
-  "Kicker.Application": {
-   "class": "Kicker.Application",
-   "members": 9,
-   "recipe": "Set als = app.GetApplicationLaunchSetting(ProgID)",
-   "declared_candidates": [],
-   "attempts": [
-    {
-     "host": "Conditions",
-     "member": "CreateApplication",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "CreateApplicationDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "GetApplication",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateApplication",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateApplicationDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "GetApplication",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    }
-   ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
-   "terminal": "foreign-app",
-   "reason": "Kicker 启动器（Kicker.Application）的类；本会话是 scFLOWpre 会话，取不到该对象；配方：Set als = app.GetApplicationLaunchSetting(ProgID)"
   },
   "Kicker.ApplicationLaunchSetting": {
    "class": "Kicker.ApplicationLaunchSetting",
@@ -1304,12 +1219,6 @@
    "declared_candidates": [],
    "attempts": [
     {
-     "host": "Application",
-     "member": "GetApplicationLaunchSetting",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
      "host": "Conditions",
      "member": "CreateApplicationLaunchSetting",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
@@ -1338,108 +1247,17 @@
      "member": "CreateApplicationLaunchSettingDefault",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
-    }
-   ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
-   "terminal": "foreign-app",
-   "reason": "Kicker 启动器（Kicker.Application）的类；本会话是 scFLOWpre 会话，取不到该对象"
-  },
-  "Kicker.LicenseStatus": {
-   "class": "Kicker.LicenseStatus",
-   "members": 4,
-   "recipe": "（手册未给实例配方）",
-   "declared_candidates": [],
-   "attempts": [
-    {
-     "host": "Conditions",
-     "member": "CreateLicenseStatus",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "CreateLicenseStatusDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "GetLicenseStatus",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
     },
     {
      "host": "Doc",
-     "member": "CreateLicenseStatus",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateLicenseStatusDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "GetLicenseStatus",
+     "member": "GetApplicationLaunchSetting",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
-   "terminal": "foreign-app",
-   "reason": "Kicker 启动器（Kicker.Application）的类；本会话是 scFLOWpre 会话，取不到该对象"
-  },
-  "MultiYAxisTable": {
-   "class": "MultiYAxisTable",
-   "members": 11,
-   "recipe": "（手册未给实例配方）",
-   "declared_candidates": [
-    "catalog:Doc.CreateMultiYAxisTable",
-    "catalog:Doc.QueryMultiYAxisTableByName"
-   ],
-   "attempts": [
-    {
-     "host": "Doc",
-     "member": "CreateMultiYAxisTable",
-     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
-     "unknown": false
-    },
-    {
-     "host": "Doc",
-     "member": "QueryMultiYAxisTableByName",
-     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
-     "unknown": false
-    },
-    {
-     "host": "Conditions",
-     "member": "CreateMultiYAxisTable",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "CreateMultiYAxisTableDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Conditions",
-     "member": "GetMultiYAxisTable",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateMultiYAxisTableDefault",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    }
-   ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
-   "terminal": "needs-corpus",
-   "reason": "取法试过、返回空（本机工程没有该对象）：catalog:Doc.CreateMultiYAxisTable"
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
+   "terminal": "call-rejected",
+   "reason": "Kicker 会话已实测（Kicker.Application/LicenseStatus 都取到了），该类的取法被宿主拒绝：GetApplicationLaunchSetting(scFLOWpre_Bx64net.Application.2023) -> com_error: (-2147352567, '发生意外。', (4001, 'Kicker_Bx64', 'Invalid ProgID was specified.', 'C:\\\\Program"
   },
   "OutputCombustionSpecies": {
    "class": "OutputCombustionSpecies",
@@ -1484,7 +1302,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 combustion 对象（本会话没有）"
   },
@@ -1531,7 +1349,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
@@ -1578,7 +1396,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
@@ -1627,7 +1445,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 obj_r 对象（本会话没有）"
   },
@@ -1676,7 +1494,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 snode 对象（本会话没有）"
   },
@@ -1691,42 +1509,42 @@
    "attempts": [
     {
      "host": "Doc",
-     "member": "CreateMultiYAxisTable",
+     "member": "CreateTable",
      "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
      "unknown": false
     },
     {
      "host": "Doc",
-     "member": "QueryMultiYAxisTableByName",
+     "member": "QueryTableByName",
+     "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
+     "unknown": false
+    },
+    {
+     "host": "CondBatteryARCDataPreprocessing",
+     "member": "GetTable",
      "err": "com_error: (-2147352562, '无效的参数数目。', None, None)",
      "unknown": false
     },
     {
      "host": "Conditions",
-     "member": "CreateMultiYAxisTable",
+     "member": "CreateTable",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
     },
     {
      "host": "Conditions",
-     "member": "CreateMultiYAxisTableDefault",
+     "member": "CreateTableDefault",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
     },
     {
      "host": "Conditions",
-     "member": "GetMultiYAxisTable",
-     "err": "com_error: (-2147352570, '未知名称。', None, None)",
-     "unknown": true
-    },
-    {
-     "host": "Doc",
-     "member": "CreateMultiYAxisTableDefault",
+     "member": "GetTable",
      "err": "com_error: (-2147352570, '未知名称。', None, None)",
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:Doc.CreateTable"
   },
@@ -1775,7 +1593,7 @@
      "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:CondAcceleration.GetValue"
   },
@@ -1826,7 +1644,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:doc.QueryWrappingGroupByIndex"
   },
@@ -1873,7 +1691,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   }

@@ -138,7 +138,8 @@ class TestObtainedVia(unittest.TestCase):
         members = {m for info in cat["classes"].values()
                    for kind in ("methods", "properties")
                    for m in (info.get(kind) or {})}
-        prefixes = ("chain:", "auto:", "CreateCond*:", "alias:", "session:")
+        prefixes = ("chain:", "auto:", "CreateCond*:", "alias:", "session:",
+                    "kicker:")
         for cls, how in (self.data["coverage"]["obtained_via"] or {}).items():
             how = str(how)
             if how.startswith(prefixes):

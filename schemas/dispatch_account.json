@@ -62,7 +62,7 @@
     "CreateCondBoussinesqBaseTemp"
    ],
    "recipe": "Set boussinesqbasetemp = conds.QueryCondBoussinesqBaseTempByName(“name”)",
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json"
   },
   {
    "class": "CondCoSim",
@@ -73,7 +73,7 @@
    "terminal": "needs-gui-flow",
    "reason": "None -> 空对象（工程里没有该对象）",
    "recipe": "Set condcosim = conds.CreateCondCoSim(\"name\", apptype, interfacetype)",
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json"
   },
   {
    "class": "CondCoSimRegion",
@@ -84,7 +84,7 @@
    "terminal": "needs-gui-flow",
    "reason": "None -> 空对象（工程里没有该对象）",
    "recipe": "Set condcosim = cosim_region.GetOwner()",
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json"
   },
   {
    "class": "CondCoSimRegion",
@@ -95,7 +95,7 @@
    "terminal": "needs-gui-flow",
    "reason": "None -> 空对象（工程里没有该对象）",
    "recipe": "Set condcosim = cosim_region.GetOwner()",
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json"
   },
   {
    "class": "CondInitialShapeModify",
@@ -367,7 +367,7 @@
    "terminal": "needs-gui-flow",
    "reason": "None -> 空对象（工程里没有该对象）",
    "recipe": "（手册未给实例配方）",
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json"
   },
   {
    "class": "PropItem",
@@ -378,7 +378,7 @@
    "terminal": "needs-gui-flow",
    "reason": "None -> 空对象（工程里没有该对象）",
    "recipe": "（手册未给实例配方）",
-   "evidence": "_p12u_gate\\r46\\name_verdicts.json"
+   "evidence": "_p12u_gate\\r47\\name_verdicts.json"
   },
   {
    "class": "SpecialRegion",
@@ -395,5 +395,5 @@
   "both": 24,
   "signature": 4
  },
- "evidence": "_p12u_gate\\r46\\name_verdicts.json"
+ "evidence": "_p12u_gate\\r47\\name_verdicts.json"
 }

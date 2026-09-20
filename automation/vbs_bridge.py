@@ -101,6 +101,34 @@ def name_corrections() -> dict:
     return out
 
 
+_ABSENT_CACHE: Optional[set] = None
+
+
+def host_absent_methods() -> set:
+    """宿主**未实现**且**无歧义**的成员名（R47-3）。
+
+    无歧义 = **所有**声明它的类都标了 `host_absent`：同名成员可能只在部分类未实现
+    （`ImportCSV` 在 FaceRegion/NumericalRegion 是好的），按名字一律拦会误杀。
+    证据：`schemas/vb_api_catalog.json` 的 `host_absent`（R42 起由 GetIDsOfNames
+    普查入册）。
+    """
+    global _ABSENT_CACHE
+    if _ABSENT_CACHE is not None:
+        return _ABSENT_CACHE
+    flags: dict = {}
+    try:
+        from automation.scflowpre_api import load_catalog
+        for info in (load_catalog().get("classes") or {}).values():
+            for kind in ("methods", "properties"):
+                for name, entry in (info.get(kind) or {}).items():
+                    flags.setdefault(name, []).append(
+                        bool(entry.get("host_absent")))
+    except Exception:  # noqa: BLE001
+        flags = {}
+    _ABSENT_CACHE = {n for n, f in flags.items() if f and all(f)}
+    return _ABSENT_CACHE
+
+
 def validate_actions(actions: list) -> list:
     """扫动作行里的字符串实参，按目录词表三态校验（返回告警列表）。
 
@@ -111,6 +139,7 @@ def validate_actions(actions: list) -> list:
     out = []
     cache: dict = {}
     fixes = name_corrections()
+    absent = host_absent_methods()      # R47-3：宿主未实现（无歧义）的成员
     for action in actions:
         # 名字纠错（R37-2）：目录键调不通的对，直接在生成期点名
         for method in VBS_CALL_NAME.findall(str(action)):
@@ -118,6 +147,12 @@ def validate_actions(actions: list) -> list:
             if fixed:
                 out.append(method + " 在宿主上不存在（手册标题拼写），应改用 "
                            + fixed)
+            elif method in absent:
+                # R47-3：**前置**拦下（生成期，早于任何宿主会话）——
+                # 以前要等 COM 抛 com_error 才知道调不通
+                out.append(method + " 宿主未实现（GetIDsOfNames → "
+                           "DISP_E_UNKNOWNNAME；目录 schemas/vb_api_catalog.json "
+                           "已标 host_absent），调用必然失败")
         for method, literal in VBS_CALL_LITERAL.findall(str(action)):
             if not IDENT_LITERAL.match(literal):
                 continue
