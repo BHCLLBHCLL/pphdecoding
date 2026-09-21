@@ -9268,12 +9268,6 @@
     "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
     "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
     "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
-    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
-    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
-    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
-    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
-    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
-    "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
     "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）"
    ]
   },
@@ -64533,7 +64527,9 @@
       "type": "LPDISPATCH",
       "name": "part",
       "description": "Part to which the edge is attached (SNode)class"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "GetSelect": {
      "signature": "bSelect=sedge.GetSelect",
@@ -64565,7 +64561,9 @@
       "type": "VARIANT",
       "name": "bEqual",
       "description": "True (Identical), False (Not identical)"
-     }
+     },
+     "host_absent": true,
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
     },
     "SetSelect": {
      "signature": "sedge.SetSelect(bSelect, bSpread)",

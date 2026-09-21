@@ -560,6 +560,75 @@ def attach_kicker(ctx: dict, via: dict, result: dict, index: dict,
     return made
 
 
+def prime_selection(ctx: dict, cat: dict) -> list:
+    """先"全选"再取几何类（R49-1）。
+
+    @@GetSelected<X>@@ 系列只在**有选中**时才给对象 —— @@ISFace@@/@@IVFace@@/@@ISEdge@@/
+    @@IVEdge@@/@@ISVertex@@ 这几类在 R48 的实测里"取法都在、调用也成功，就是返回空"。
+    这里在取实例之前把 Doc 上的 @@SetSelectAll*@@ 逐个打上（参数全给 True，
+    因为这些 setter 的布尔参数是"选/不选"而不是可选行为）。
+    """
+    from automation import scflowpre_api as api
+    doc = ctx.get("Doc")
+    if doc is None:
+        return [], {}
+    caller = api.ComObject(doc)
+    done: list = []
+    errs: dict = {}
+    for name, entry in (cat["classes"].get("Doc", {}).get("methods")
+                        or {}).items():
+        if not name.startswith("SetSelectAll"):
+            continue
+        argc = max(1, len(entry.get("arguments") or []))
+        tries = [(True,) * argc]
+        if argc > 1:
+            # 可选尾参可省（手册口径"少不报"）—— 实测 SetSelectAllVFace 两参版
+            # 在本机被拒，一参版才行
+            tries.append((True,))
+        for argsin in tries:
+            try:
+                caller.call(name, *argsin)
+                done.append(name)
+                errs.pop(name, None)
+                break
+            except Exception as exc:  # noqa: BLE001
+                errs[name] = type(exc).__name__ + ": " + str(exc)[:80]
+    return done, errs
+
+
+def audit_identity_guard(cat: dict, ctx: dict, index: dict,
+                         sample: int = 0) -> dict:
+    """量验身闸门的**误放率**（R49-2）：拿别家的对象去验，看会不会被放行。
+
+    判据是"该类独有成员的解析率 ≥ 半数"。这条例很便宜，但**只有拦住过什么**
+    的记录（identity_rejected），没有"会不会放错"的数。这里在真对象上做对照：
+    * @@self_pass@@：对象对**自己**的类应当通过（放错=误杀真对象）；
+    * @@false_accept@@：对象对**别的类**若不通过则拦对了（放行=误放）。
+    """
+    if sample <= 0:
+        return {}
+    cands = [c for c in sorted(ctx)
+             if c in cat["classes"]
+             and len(distinctive_members(cat, c, index)) >= 2]
+    cands = cands[:sample]
+    trials = accepts = self_pass = 0
+    for cls in cands:
+        obj = ctx.get(cls)
+        if obj is None:
+            continue
+        ok, _ = identity_ok(obj, distinctive_members(cat, cls, index))
+        self_pass += 1 if ok else 0
+        others = [c for c in cands if c != cls][:3]
+        for other in others:
+            trials += 1
+            ok2, _ = identity_ok(obj, distinctive_members(cat, other, index))
+            accepts += 1 if ok2 else 0
+    return {"classes_sampled": len(cands), "self_pass": self_pass,
+            "cross_trials": trials, "false_accept": accepts,
+            "false_accept_rate": (round(accepts / trials, 3) if trials else None),
+            "rule": "该类独有成员解析率 ≥ 半数即认作此类的对象"}
+
+
 def member_name_index(cat: dict) -> dict:
     """成员名 → 出现在多少个类里（1 = 该类独有）。验身与无歧义判据共用。"""
     index: dict = {}
@@ -877,6 +946,8 @@ def main(argv=None) -> int:
     ap.add_argument("--sweep", action="store_true",
                     help="R42-1：对已取到实例的类做**成员可用性普查**"
                          "（GetIDsOfNames 逐个解析，零副作用）")
+    ap.add_argument("--guard-audit", type=int, default=0,
+                    help="R49-2：抽样 N 个类量验身闸门的误放率（0=不量）")
     ap.add_argument("--auto-budget", type=float, default=300.0,
                     help="R45-1：自动配方扩面的时间预算（秒）；超时后如实记为未尝试")
     ap.add_argument("--with-mdl", action="store_true",
@@ -978,6 +1049,12 @@ def main(argv=None) -> int:
         """
         if "deadline" not in _auto_state:
             _auto_state["deadline"] = time.time() + args.auto_budget
+        # R49-1：取实例前先"全选"（GetSelected* 只在有选中时给对象）
+        sel, sel_err = prime_selection(ctx, cat_all)
+        if sel:
+            result["selection_primed"] = sorted(set(sel))
+        if sel_err:
+            result.setdefault("selection_prime_errors", {}).update(sel_err)
         held = {}
         for key, obj in list(ctx.items()):
             cls = CTX_ALIASES.get(key, key)
@@ -1336,6 +1413,16 @@ def main(argv=None) -> int:
                                       "errors": len(v["errors"])}
                                   for c, v in per_class.items()}
         sweep_path = ROOT / "schemas" / "host_member_availability.json"
+        # R49-2：验身闸门误放率（真对象 × 别家的独有成员，抽样实测）
+        if args.guard_audit:
+            result["guard_audit"] = audit_identity_guard(
+                cat, ctx, member_name_index(cat), args.guard_audit)
+            ga = result["guard_audit"]
+            print("[r49] 验身闸门：抽样 " + str(ga["classes_sampled"]) + " 类，"
+                  + "自类通过 " + str(ga["self_pass"]) + "，跨类 "
+                  + str(ga["cross_trials"]) + " 次里误放 "
+                  + str(ga["false_accept"]) + "（"
+                  + str(ga["false_accept_rate"]) + "）", flush=True)
         sweep_path.write_text(json.dumps({
             "source": "tools/dispatch_name_probe.py --sweep（GetIDsOfNames）",
             "note": ("state=unknown_name ⇒ 宿主**未实现**该成员；"
@@ -1373,7 +1460,14 @@ def main(argv=None) -> int:
                          "swept_suspect": result.get("swept_suspect") or {},
                          # 派发名不通、成员键名通（R34-3 的标题/签名对）
                          "resolved_via_member_key": sorted(
-                             set(result.get("resolved_via_member_key") or []))},
+                             set(result.get("resolved_via_member_key") or [])),
+                         # R49-1：取实例前打过"全选"的成员（几何类靠它才有对象）
+                         "selection_primed": sorted(
+                             set(result.get("selection_primed") or [])),
+                         "selection_prime_errors": result.get(
+                             "selection_prime_errors") or {},
+                         # R49-2：验身闸门的误放率实测
+                         "guard_audit": result.get("guard_audit") or {}},
             "classes": {c: {"total": v["total"], "resolved": v["resolved"],
                             "unknown": v["unknown"],
                             "errors": v["errors"]}

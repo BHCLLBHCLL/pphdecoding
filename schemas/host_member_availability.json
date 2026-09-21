@@ -2,7 +2,7 @@
  "source": "tools/dispatch_name_probe.py --sweep（GetIDsOfNames）",
  "note": "state=unknown_name ⇒ 宿主**未实现**该成员；error:* ⇒ 探针侧问题（对象为空/过时），**不得**当宿主否证；未出现在本表的类 = **未普查**（不等于已实现）",
  "coverage": {
-  "classes_swept": 152,
+  "classes_swept": 155,
   "empty_objects": [
    "CondBoussinesqBaseTemp",
    "CondCoSim",
@@ -25,10 +25,11 @@
    "CondParticleSymmBoundaryDEM",
    "CondParticleSymmHeatBoundaryDEM",
    "CondSymmetricalBoundary",
+   "ISFace",
    "LocalCoordinate",
    "ParticleRegion"
   ],
-  "members_swept": 3902,
+  "members_swept": 3925,
   "members_total": 4455,
   "unswept_classes": [
    "BodyPattern",
@@ -50,11 +51,7 @@
    "CondRepulsion",
    "CreateVMDLError",
    "DiffusiveSpecies",
-   "ISEdge",
-   "ISFace",
    "ISVertex",
-   "IVEdge",
-   "IVFace",
    "Kicker.ApplicationLaunchSetting",
    "OutputCombustionSpecies",
    "PropDataBase",
@@ -114,6 +111,10 @@
    "FaceRegion": "catalog:Doc.CreateFaceRegion",
    "FaceRegionDerivedSheet": "catalog:Doc.CreateFaceRegionDerivedSheet",
    "FluidRegion": "catalog:Doc.CreateFluidRegion",
+   "ISEdge": "stem:Doc.GetSelectedSEdges",
+   "ISFace": "stem:Doc.GetSelectedSFaces",
+   "IVEdge": "stem:Doc.GetSelectedVEdges",
+   "IVFace": "stem:Doc.GetSelectedVFaces",
    "LocalCoordinate": "catalog:Doc.CreateLocalCoordinate",
    "MDL": "catalog:MeshingGroup.GetMDL",
    "MapCond": "catalog:Doc.CreateMapCond",
@@ -138,12 +139,6 @@
    "VolumeRegion": "catalog:Doc.CreateVolumeRegion"
   },
   "identity_rejected": [
-   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
-   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
-   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
-   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
-   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
-   "CondCoSim <- stem:Conditions.GetCondCoSimOption",
    "CondCoSim <- stem:Conditions.GetCondCoSimOption",
    "CondCoSim <- stem:Conditions.GetCondCoSimOption",
    "CondCoSim <- stem:Conditions.GetCondCoSimOption",
@@ -330,6 +325,10 @@
    "FaceRegionDerivedSheet": "auto:catalog:Doc.CreateFaceRegionDerivedSheet",
    "FluidRegion": "auto:catalog:Doc.CreateFluidRegion",
    "HybridParam": "GetHybridParam",
+   "ISEdge": "auto:stem:Doc.GetSelectedSEdges",
+   "ISFace": "auto:stem:Doc.GetSelectedSFaces",
+   "IVEdge": "auto:stem:Doc.GetSelectedVEdges",
+   "IVFace": "auto:stem:Doc.GetSelectedVFaces",
    "Kicker.Application": "kicker:GetActiveObject",
    "Kicker.LicenseStatus": "kicker:GetLicenseStatus",
    "LocalCoordinate": "auto:catalog:Doc.CreateLocalCoordinate",
@@ -379,8 +378,6 @@
    "CondRepulsion": "recipe:conditions.CreateCondRepulsion",
    "CreateVMDLError": "catalog:MeshingGroup.GetCreateVMDLError",
    "DiffusiveSpecies": "catalog:Doc.QueryDiffusiveSpecies",
-   "ISEdge": "stem:Doc.GetSelectedSEdges",
-   "ISFace": "stem:Doc.GetSelectedSFaces",
    "ISVertex": "stem:Doc.HitTestSVertex",
    "IVEdge": "stem:Doc.GetSelectedVEdges",
    "IVFace": "stem:Doc.GetSelectedVFaces",
@@ -399,7 +396,27 @@
     "unknown": 8
    }
   },
-  "resolved_via_member_key": []
+  "resolved_via_member_key": [],
+  "selection_primed": [
+   "SetSelectAllCoordinatesSpecifiedParts",
+   "SetSelectAllFace",
+   "SetSelectAllSEdge",
+   "SetSelectAllSFace",
+   "SetSelectAllSPart",
+   "SetSelectAllSVertex",
+   "SetSelectAllVEdge",
+   "SetSelectAllVFace",
+   "SetSelectAllVPart"
+  ],
+  "selection_prime_errors": {},
+  "guard_audit": {
+   "classes_sampled": 40,
+   "self_pass": 40,
+   "cross_trials": 120,
+   "false_accept": 0,
+   "false_accept_rate": 0.0,
+   "rule": "该类独有成员解析率 ≥ 半数即认作此类的对象"
+  }
  },
  "classes": {
   "AdaptiveParam": {
@@ -1174,6 +1191,27 @@
   "HybridParam": {
    "total": 9,
    "resolved": 9,
+   "unknown": [],
+   "errors": []
+  },
+  "ISEdge": {
+   "total": 6,
+   "resolved": 6,
+   "unknown": [],
+   "errors": []
+  },
+  "IVEdge": {
+   "total": 6,
+   "resolved": 4,
+   "unknown": [
+    "GetPart",
+    "IsEqual"
+   ],
+   "errors": []
+  },
+  "IVFace": {
+   "total": 11,
+   "resolved": 11,
    "unknown": [],
    "errors": []
   },
@@ -5123,6 +5161,14 @@
    "SetSpecularReflectivity": "resolved",
    "SetTransmissivity": "resolved"
   },
+  "ISEdge": {
+   "GetEdgeNum": "resolved",
+   "GetName": "resolved",
+   "GetPart": "resolved",
+   "GetSelect": "resolved",
+   "IsEqual": "resolved",
+   "SetSelect": "resolved"
+  },
   "MDL": {
    "CanRegisterSelectedModelFaceToMesh": "resolved",
    "CheckIntersectingFaces": "resolved",
@@ -5562,6 +5608,27 @@
    "SetSweepDestinationFaceRegion": "resolved",
    "SetSweepFaceRegion": "resolved",
    "SetSweepLayerParam": "resolved"
+  },
+  "IVEdge": {
+   "GetEdgeNum": "resolved",
+   "GetName": "resolved",
+   "GetPart": "unknown_name",
+   "GetSelect": "resolved",
+   "IsEqual": "unknown_name",
+   "SetSelect": "resolved"
+  },
+  "IVFace": {
+   "GetBoundingBox": "resolved",
+   "GetCentroid": "resolved",
+   "GetFaceNum": "resolved",
+   "GetName": "resolved",
+   "GetNormal": "resolved",
+   "GetSelect": "resolved",
+   "GetVisible": "resolved",
+   "GetVMDL": "resolved",
+   "GetVParts": "resolved",
+   "SetSelect": "resolved",
+   "SetVisible": "resolved"
   }
  }
 }

@@ -3463,29 +3463,100 @@ json/log/md/vbs），要么在轮次收口前删干净 —— 顺带说明为什
 
 ---
 
-## R49 —— 提案（≈1 人日）
+## R49 —— 先全选再取几何 + 验身闸门误放率 + 取法不可照抄上产品面（2026-09-15，✅ 已完成）
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R49-1** | **先选中再取** | 152 → ≥160，或给出"选中也取不到"的证据 | ✅ **155 类**（+`ISEdge`/`IVEdge`/`IVFace`）；未达 160 → 29 类逐类终态齐备 |
+| **R49-2** | **验身闸门误报率** | 误报率有数（<10% 或说明为何不能更低） | ✅ 抽样 **40 类**：自类通过 **40/40**，跨类 **120 次误放 0（0.0%）** |
+| **R49-3** | **recipe_unreliable 上消费面** | 一处可查 + 测试 | ✅ `scflowpre_api.unreliable_recipes()` + 面板「Host 边界…」增列 |
+
+### R49-1 先全选再取
+
+`GetSelected<X>` 系列只在**有选中**时给对象。取实例前把 `Doc` 上的 `SetSelectAll*`
+逐个打上（布尔参数全给 `True`），于是 R48 里"取法都在、调用也成功，就是返回空"的几何类
+开始出货：
+
+| 类 | 取法 | 成员 |
+|---|---|---|
+| `ISEdge` | `Doc.GetSelectedSEdges` | 6，**0 未知** |
+| `IVEdge` | `Doc.GetSelectedVEdges` | 6（新增 2 条未实现：`GetPart`/`IsEqual`） |
+| `IVFace` | `Doc.GetSelectedVFaces` | 11，**0 未知** |
+
+`ISFace` 也拿到了对象（手册页 **0 成员** → 进 `no_member_classes`）；`ISVertex` 仍取不到
+（终态 `needs-corpus`）。
+
+**留痕**：打不上全选的成员要留原因（`selection_prime_errors`）—— 实测
+`SetSelectAllVFace` 两参版被拒，退到一参版（手册口径"少不报"）才通过。
+
+### R49-2 验身闸门误放率
+
+判据是"该类**独有成员**的解析率 ≥ 半数"。此前只有"拦住了什么"的记录
+（`identity_rejected`），没有"会不会放错"的数。`audit_identity_guard()` 在**真对象**上做
+跨类对照：拿 A 的对象去验 B 的独有成员。
+
+| 指标 | 值 |
+|---|---|
+| 抽样类数 | **40** |
+| 自类通过（不过 = 误杀真对象） | **40/40** |
+| 跨类尝试（A 的对象 × B 的独有成员） | **120** |
+| 误放（拿别家对象也被认作此类） | **0**（rate **0.0**） |
+
+> 口径说明：误放率 0 只说明**在这批真对象上**判据没松到放行别家对象；
+> 它不排除"两个类独有成员高度重叠"的极端情形 —— 那种情形下判据本就无从分辨，
+> 而 `swept_suspect`（整类未知过半）是第二道闸。
+
+### R49-3 取法不可照抄上产品面
+
+`automation/scflowpre_api.unreliable_recipes()`（类 → 证据）→ 面板
+`render_host_boundary()` 新增一节「取法不可照抄的类」（`nav_panels.HostBoundaryDialog`
+里可见）。目录里的 `recipe_unreliable` **4 类**（`CondCoSim`/`DiffusiveSpecies`/
+`Table`/`CondParticleCounter`），证据来自验身否与整类拿错对象。
+
+### 回归
+
+全量回归 **1536 passed / 4 skipped / 0 failed**（572.87 s，带 `-rs` 一并落盘 skip 原因：
+`test_material_prp_write` 1 + `test_native_bridge` 3，全是稳定环境项；R48 收口同口径 1525/4/0，
+增量 +11 = 本轮新模块 11 项）。新增测试 1 个模块 `test_r49_evidence.py`（11 项：
+全选前置与留痕/误放率与判据/产品面对账）。
+
+### 证据
+
+`schemas/host_member_availability.json`（155 类 / 3925 成员 / 未实现 27 / errors 0 /
+`guard_audit` / `selection_primed` **9 条** / `selection_prime_errors` 空（两参版被拒后
+退到一参版，9 个全选成员最终全部打上））、
+`schemas/unswept_account.json`（29 类终态）、`schemas/vb_api_catalog.json`
+（`host_absent` 27 / `recipe_unreliable` 4 类）、`_p12u_gate/r49/name_verdicts.json`、
+`_p12u_gate/r49_run2.log`。
+
+---
+
+## R50 —— 提案（≈1 人日）
 
 ### 依据
 
-* 33 个未普查类里 **29 类**是 `needs-corpus`（取法试过、返回空）—— 说明"缺的不是接口，
-  是**语料**"；其中 `ISFace`/`IVFace`/`ISEdge`/`IVEdge`/`ISVertex` 只需要**选中几何**
-  （`GetSelectedVFaces` 之类都在 Doc 上、都调用成功），值得在探针里补一步"先全选再取"；
-* `swept_suspect` 只有 1 条、`identity_rejected` 18 条 —— 验身闸门的**误报率**还没量过
-  （现在只知道它拦住了什么，不知道它有没有拦住真对象）；
-* `recipe_unreliable` 已入目录，但**读目录的代码**（物化包装、VBS 生成）还没利用它。
+* 覆盖 155/199 = **78%**，剩下 29 类里 **25 类**是 `needs-corpus`（取法试过、返回空）——
+  继续扩面的边际收益已经很低（本轮 +3 靠的是"先全选"这种**流程前置**，不是名字）；
+* `guard_audit` 只量了**误放**（0/120），**误杀**（真对象被否）只有"自类通过 40/40"这一面 ——
+  样本全是最终留下的对象，天然是"通过了的"，需要**故意构造边界样本**才能量误杀；
+* `host_absent`（27 条）与 `recipe_unreliable`（4 类）已经三处可查（API/文档/面板），
+  但**没有一处**把"这条成员为什么被判未实现"的**原始证据**（哪台机器、哪个工程、
+  哪次运行）串起来 —— 复验时只能翻日志。
 
 ### 条目
 
 | # | 条目 | 做法 | 验收句 | 人日 |
 |---|---|---|---|---|
-| **R49-1** | **先选中再取** | 探针在取 `IS*/IV*` 类前先 `SetSelectAllVFaces/SetSelectAllSFaces` 等 | 覆盖 152 → ≥160，或给出"选中也取不到"的证据 |
-| **R49-2** | **验身闸门误报率** | 对已普查类抽样"故意喂错对象"，量闸门判据（独有成员半数）的漏放/误杀 | 误报率有数（<10% 或说明为何不能更低） |
-| **R49-3** | **recipe_unreliable 上消费面** | 物化包装/VBS 生成遇到 `recipe_unreliable` 的类时给出提示 | 一处可查 + 测试 |
+| **R50-1** | **边界样本量误杀** | 构造"合法但独有成员少"的对象（如 1-2 个独有成员、解析一半）量判据在边界的行为 | 误杀/误放各有数，且给出阈值建议 | 0.5 |
+| **R50-2** | **证据可复验串** | `host_absent`/`recipe_unreliable` 条目带上 `evidence_run`（轮次+日志+工程集） | 任取一条能追到某轮某日志 | 0.25 |
+| **R50-3** | **普查收口声明** | 覆盖率达到"可宣告收敛"的口径（剩余类全部终态 + 边际收益 < 1 类/轮） | 文档一处宣告 + 测试锁住（覆盖率不许回落） | 0.25 |
 
 ### 明确不做
 
-* 不为扩面去猜取值/猜名字（只用手册词表与宿主实证的名字）；
-* 不动 `host_absent` 判据（`GetIDsOfNames` 仍是唯一证人）。
+* 不再为覆盖率找新机制（除非 R50-3 的收敛判据被推翻）；
+* 不动 `host_absent`/验身判据（`GetIDsOfNames` 与"独有成员半数"仍是唯一证人）。
 
 ---
 

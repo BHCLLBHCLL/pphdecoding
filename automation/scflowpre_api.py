@@ -1812,6 +1812,22 @@ def object_hints(path: Optional[Path] = None) -> dict:
     return dict(cov.get("empty_hints") or {})
 
 
+def unreliable_recipes(catalog: Optional[dict] = None) -> dict:
+    """**取法不可照抄**的类 → 理由（R49-3 产品面）。
+
+    这些类的 `instance` 配方（或名字家族候选）在实机普查里被**验身否掉**：
+    拿回来的对象不是这个类（例如 `Condition ← Doc.GetConditions` 给的是集合对象）。
+    照抄配方只会再撞一次墙 —— 面板/文档据此提示"先看证据"。
+    """
+    cat = catalog if catalog is not None else load_catalog()
+    out: dict = {}
+    for cls, info in (cat.get("classes") or {}).items():
+        if info.get("recipe_unreliable"):
+            ev = info.get("recipe_unreliable_evidence") or []
+            out[cls] = [str(x) for x in (ev if isinstance(ev, list) else [ev])]
+    return out
+
+
 def host_absent_members(catalog: Optional[dict] = None) -> dict:
     """宿主**未实现**的成员（手册有、宿主 GetIDsOfNames 解析不到）：类 → 名表。
 

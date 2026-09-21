@@ -35,7 +35,7 @@
 - CondCoSimRegion — 先有 CoSim 区域（由 CoSim 条件派生）
 - PropItem — 先注册材料/物性（或经闭空间的材料项取得）
 
-### 宿主未实现的成员（25 条）
+### 宿主未实现的成员（27 条）
 
 > Python 侧**不会**为这些条目造包装（调用必然 `com_error`）；手册有、宿主 `GetIDsOfNames` 解析不到。
 
@@ -51,6 +51,7 @@
 - Doc — GetAllMapCondNames
 - FaceRegionDerivedSheet — ImportCSV
 - FluidRegion — ImportCSV
+- IVEdge — GetPart / IsEqual
 - MeshingGroup — GetDiscontinuous / ReplaceMDLMode / SetDiscontinuous
 - MeshingGroupSetting — GetInternalUnit
 - SpecialRegion — ImportCSV

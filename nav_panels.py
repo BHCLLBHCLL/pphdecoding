@@ -73,16 +73,18 @@ DIALOG_KEYS = frozenset({
 
 
 def host_boundary_data() -> dict:
-    """宿主侧能力边界（R46-3）：走**产品 API**，缺证据时给空表。
+    """宿主侧能力边界（R46-3 / R49-3）：走**产品 API**，缺证据时给空表。
 
     为什么面板要这个：用户看到"这个条件建不出来"其实有两种根因 —— 面板没接线，
-    或**宿主 COM 面**没有对应成员。后者此前只在 schemas 里，这里给出可读面。
+    或**宿主 COM 面**没有对应成员 / 取法拿回来的是别的对象。后者此前只在 schemas 里，
+    这里给出可读面。
     """
-    out: dict = {"absent": {}, "hints": {}}
+    out: dict = {"absent": {}, "hints": {}, "recipes": {}}
     try:
         from automation import scflowpre_api as api
         out["absent"] = api.host_absent_members()
         out["hints"] = api.object_hints()
+        out["recipes"] = api.unreliable_recipes()
     except Exception:  # noqa: BLE001
         pass
     return out
@@ -97,6 +99,13 @@ def render_host_boundary(data: dict) -> str:
         lines.append("取不到实例的类（先跑前置流程）：")
         for cls in sorted(hints):
             lines.append("  · " + cls + " — " + str(hints[cls]))
+        lines.append("")
+    recipes = (data or {}).get("recipes") or {}
+    if recipes:
+        lines.append("取法不可照抄的类（" + str(len(recipes))
+                     + " 个；实机验身否掉了它们的取法）：")
+        for cls in sorted(recipes):
+            lines.append("  · " + cls + " — " + "；".join(recipes[cls])[:120])
         lines.append("")
     if absent:
         n = sum(len(v) for v in absent.values())

@@ -2203,6 +2203,38 @@ ProgID 变体全被宿主拒绝（`Invalid ProgID was specified`）→ 终态 `c
 （`vbs_bridge.host_absent_methods()` 委托它）；`ComObject.call` 调用前抛可读
 `ApiValueError`，措辞保留 `DISP_E_UNKNOWNNAME`。
 
+---
+
+## 63. R49 更新（2026-09-15）—— 先全选再取几何 + 验身闸门误放率 + 取法不可照抄上产品面
+
+### 63.1 先全选再取（R49-1）
+
+`GetSelected<X>` 只在**有选中**时给对象。取实例前把 `Doc` 的 `SetSelectAll*` 逐个打上：
+
+| 类 | 取法 | 成员 |
+|---|---|---|
+| `ISEdge` | `Doc.GetSelectedSEdges` | 6，0 未知 |
+| `IVEdge` | `Doc.GetSelectedVEdges` | 6（新增 2 条未实现 `GetPart`/`IsEqual`） |
+| `IVFace` | `Doc.GetSelectedVFaces` | 11，0 未知 |
+
+`ISFace` 也拿到了对象（手册页 0 成员 → `no_member_classes`）；`ISVertex` 仍取不到
+（`needs-corpus`）。`SetSelectAllVFace` 两参版被拒 → 退一参版成功（9/9 打上、0 残留错误），
+失败原因一律入 `selection_prime_errors`（不许静默）。
+
+覆盖 152 → **155 类**、成员 3902 → **3925**；未普查 33 → **29**。
+
+### 63.2 验身闸门误放率（R49-2）
+
+`audit_identity_guard()` 在**真对象**上做跨类对照（A 的对象 × B 的独有成员）：
+抽样 **40 类**、自类通过 **40/40**、跨类 **120 次误放 0（0.0%）**。口径：0 只说明在这批真对象上
+判据没松到放行别家对象；独有成员高度重叠的极端情形由 `swept_suspect`（整类未知过半）兜底。
+
+### 63.3 取法不可照抄上产品面（R49-3）
+
+`scflowpre_api.unreliable_recipes()` → 面板 `render_host_boundary()` 新增「取法不可照抄的类」
+一节（4 类：`CondCoSim`/`DiffusiveSpecies`/`Table`/`CondParticleCounter`）。
+
+
 
 
 
