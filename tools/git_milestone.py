@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -221,6 +222,21 @@ def main(argv=None) -> int:
     branch = _git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
     push = _git("push", "origin", branch, check=False)
     out = (push.stdout + push.stderr).strip()
+    # R52：本机 ssh-agent 常停（服务 Disabled）→ 第一次推送可能 "Permission denied
+    # (publickey)"。此时**用显式私钥重试一次**（同一台机器上 id_ed25519 无需口令，
+    # 实测可行），别让"自动推送"这条纪律卡在环境上。
+    if push.returncode != 0 and "Permission denied" in out:
+        key = Path.home() / ".ssh" / "id_ed25519"
+        if key.is_file():
+            print("[milestone] push 被拒（publickey）→ 用显式私钥重试：" + str(key))
+            env = dict(os.environ)
+            env["GIT_SSH_COMMAND"] = ('ssh -i "' + str(key).replace("\\", "/")
+                                      + '" -o IdentitiesOnly=yes')
+            push = subprocess.run(["git", "push", "origin", branch],
+                                  cwd=str(ROOT), text=True, encoding="utf-8",
+                                  errors="replace", capture_output=True,
+                                  check=False, env=env)
+            out = (push.stdout + push.stderr).strip()
     print("[milestone] push origin " + branch + " -> rc=" + str(push.returncode))
     if out:
         print("   " + out.replace("\n", "\n   "))
