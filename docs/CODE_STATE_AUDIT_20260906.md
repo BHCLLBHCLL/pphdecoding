@@ -2207,6 +2207,33 @@ ProgID 变体全被宿主拒绝（`Invalid ProgID was specified`）→ 终态 `c
 
 ## 63. R49 更新（2026-09-15）—— 先全选再取几何 + 验身闸门误放率 + 取法不可照抄上产品面
 
+### 63.1 先全选再取（R49-1）
+
+`GetSelected<X>` 只在**有选中**时给对象。取实例前把 `Doc` 的 `SetSelectAll*` 逐个打上：
+
+| 类 | 取法 | 成员 |
+|---|---|---|
+| `ISEdge` | `Doc.GetSelectedSEdges` | 6，0 未知 |
+| `IVEdge` | `Doc.GetSelectedVEdges` | 6（新增 2 条未实现 `GetPart`/`IsEqual`） |
+| `IVFace` | `Doc.GetSelectedVFaces` | 11，0 未知 |
+
+`ISFace` 也拿到了对象（手册页 0 成员 → `no_member_classes`）；`ISVertex` 仍取不到
+（`needs-corpus`）。`SetSelectAllVFace` 两参版被拒 → 退一参版成功（9/9 打上、0 残留错误），
+失败原因一律入 `selection_prime_errors`（不许静默）。
+
+覆盖 152 → **155 类**、成员 3902 → **3925**；未普查 33 → **29**。
+
+### 63.2 验身闸门误放率（R49-2）
+
+`audit_identity_guard()` 在**真对象**上做跨类对照（A 的对象 × B 的独有成员）：
+抽样 **40 类**、自类通过 **40/40**、跨类 **120 次误放 0（0.0%）**。口径：0 只说明在这批真对象上
+判据没松到放行别家对象；独有成员高度重叠的极端情形由 `swept_suspect`（整类未知过半）兜底。
+
+### 63.3 取法不可照抄上产品面（R49-3）
+
+`scflowpre_api.unreliable_recipes()` → 面板 `render_host_boundary()` 新增「取法不可照抄的类」
+一节（4 类：`CondCoSim`/`DiffusiveSpecies`/`Table`/`CondParticleCounter`）。
+
 ---
 
 ## 64. R50 更新（2026-09-15）—— 边界样本量误杀 + 证据可复验串 + **普查收口声明**
@@ -2251,35 +2278,34 @@ projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1
 ② 宿主版本变化（Cradle 2025.2 之外）；③ 出现"某类在手册里被声明却既拿不到对象、
 也解释不了原因"的新证据。
 
+---
 
-### 63.1 先全选再取（R49-1）
+## 65. R51 更新（2026-09-15）—— 失败路径给下一步 + 复验窗口工具化 + 缺语料清单
 
-`GetSelected<X>` 只在**有选中**时给对象。取实例前把 `Doc` 的 `SetSelectAll*` 逐个打上：
+### 65.1 一句话，三个面（R51-1）
 
-| 类 | 取法 | 成员 |
-|---|---|---|
-| `ISEdge` | `Doc.GetSelectedSEdges` | 6，0 未知 |
-| `IVEdge` | `Doc.GetSelectedVEdges` | 6（新增 2 条未实现 `GetPart`/`IsEqual`） |
-| `IVFace` | `Doc.GetSelectedVFaces` | 11，0 未知 |
+`scflowpre_api.member_alternative(cls, member)`：① 有实机裁定 `dispatch_name` → 改用裁定名；
+② 同名成员在**别类实测可用**（普查 resolved）→ 指出那些类；②' 只有手册里有 → 如实写**未实测**；
+③ 该类有"先跑哪个流程"提示 → 给提示；④ 都没有 → 指向 `docs/NYI_INVENTORY.md`。
 
-`ISFace` 也拿到了对象（手册页 0 成员 → `no_member_classes`）；`ISVertex` 仍取不到
-（`needs-corpus`）。`SetSelectAllVFace` 两参版被拒 → 退一参版成功（9/9 打上、0 残留错误），
-失败原因一律入 `selection_prime_errors`（不许静默）。
+三面接线：typed `ComObject.call` 的 `ApiValueError`、`vbs_bridge.validate_actions` 的告警、
+面板 `render_host_boundary` 的每条未实现成员。**27 条 `host_absent` 与"有裁定名"恰好不相交**，
+故规则①用合成目录在测试里验（免得看起来像漏测）。
 
-覆盖 152 → **155 类**、成员 3902 → **3925**；未普查 33 → **29**。
+### 65.2 复验窗口工具化（R51-2）
 
-### 63.2 验身闸门误放率（R49-2）
+`tools/sweep_reopen_check.py`：硬理由 = 宿主版本变了（注册表 vs 证据 progid）、
+目录**成员集**与证据对不上、覆盖率掉到收口下限以下；软信息 = 工程集变化、目录被重生成。
+第一版把"目录 mtime 比证据新"当硬理由 → **每轮都会触发**（收口流程本就用同一份证据重生成目录），
+改成"成员集对不上"才是真信号。当前结论 **无需重开**（exit 0）。
+`DEFAULT_PROJECTS` 补齐到 R49/R50 实际用的 6 个工程。
 
-`audit_identity_guard()` 在**真对象**上做跨类对照（A 的对象 × B 的独有成员）：
-抽样 **40 类**、自类通过 **40/40**、跨类 **120 次误放 0（0.0%）**。口径：0 只说明在这批真对象上
-判据没松到放行别家对象；独有成员高度重叠的极端情形由 `swept_suspect`（整类未知过半）兜底。
+### 65.3 缺语料清单（R51-3）
 
-### 63.3 取法不可照抄上产品面（R49-3）
+`needs_corpus_groups` 入 `schemas/unswept_account.json`：粒子/DEM 6、几何/MDL 5、
+混合物/燃烧 4、CoSim 3、条件/向导 3、材料/物性 1、其他 3（证据只说"返回空"，不编前置条件）。
+分组只看 `class + reason 结论句 + recipe`（冒号后的取法示例会带进无关宿主类名，已排除）。
 
-`scflowpre_api.unreliable_recipes()` → 面板 `render_host_boundary()` 新增「取法不可照抄的类」
-一节（4 类：`CondCoSim`/`DiffusiveSpecies`/`Table`/`CondParticleCounter`）。
-
-
-
-
+> 文档结构修正：R50 的 §64 曾整段插在 §63 标题与正文之间（锚点选在标题行的锅），
+> 本轮把 §64 移到 §63 正文之后，节序恢复 63 → 64 → 65。
 

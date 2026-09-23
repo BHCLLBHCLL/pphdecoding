@@ -130,6 +130,36 @@ def declared_candidates(cls: str, cat: dict) -> list:
             if p["how"].startswith("catalog:")]
 
 
+#: 缺语料分组（R51-3）：关键词 → 组名（按 reason/recipe 里的实证字样匹配）
+CORPUS_GROUPS = (
+    ("CoSim", ("cosim",)),
+    ("粒子/DEM", ("particle", "particletracking", "dem")),
+    ("混合物/燃烧", ("mixedgas", "combustion", "species", "reaction")),
+    ("材料/物性", ("propdata", "propitem", "material", "propgroup", "refprop")),
+    ("映射", ("mapcond", "mapforstructure", "nastran")),
+    ("几何/MDL", ("snode", "mdl", "vmdl", "region", "face", "edge",
+                  "vertex", "wrapping", "octree")),
+    ("条件/向导", ("cond", "条件")),
+)
+
+
+def corpus_group(row: dict) -> str:
+    """一个 `needs-corpus` 类**缺什么**（R51-3）：按证据文本归类。
+
+    分类只看 `reason`（+配方），不猜；匹配不到就进"其他"。
+    """
+    # 只看"缺什么"的证据：类名 + reason 的**结论句**（冒号前的部分，冒号后是
+    # 具体取法示例，会带进无关宿主类名污染匹配）+ 配方（配方里的宿主变量正是
+    # "缺的那个对象"）。**不猜**：匹配不到就进"其他"。
+    head = str(row.get("reason") or "").split("：")[0]
+    blob = (str(row.get("class") or "") + " " + head + " "
+            + str(row.get("recipe") or "")).lower()
+    for name, keys in CORPUS_GROUPS:
+        if any(k in blob for k in keys):
+            return name
+    return "其他"
+
+
 def classify(cls: str, cat: dict, ev: dict) -> dict:
     """一个类的终态 + 理由 + 证据（纯函数，可单测）。"""
     info = cat["classes"].get(cls) or {}
@@ -209,12 +239,20 @@ def account(avail: dict | None = None, cat: dict | None = None,
     rows = {cls: classify(cls, cat, ev) for cls in sorted(unswept)}
     counts = {t: sum(1 for r in rows.values() if r["terminal"] == t)
               for t in TERMINALS}
+    # R51-3：把 needs-corpus 的类按"缺什么"聚合（一处可查：schema + CLI）
+    groups: dict = {}
+    for cls, row in rows.items():
+        if row["terminal"] != "needs-corpus":
+            continue
+        groups.setdefault(corpus_group(row), []).append(cls)
+    groups = {g: sorted(v) for g, v in sorted(groups.items())}
     return {"source": "tools/unswept_account.py（R46-1）",
             "note": ("未普查类的**终态**：每个类都必须有一条，理由必须来自证据"
                      "（配方宿主 / 候选调用错误 / 返回空）；口径见模块 docstring。"
                      "终态不是待办 —— 除非将来补语料，这些类不会被再排期。"),
             "evidence": ev.get("_path"),
             "counts": {"total": len(rows), **counts},
+            "needs_corpus_groups": groups,
             "classes": rows}
 
 
@@ -236,6 +274,11 @@ def main(argv=None) -> int:
     print("[unswept] 未普查 " + str(counts["total"]) + " 类："
           + " / ".join(t + " " + str(counts[t]) for t in TERMINALS))
     print(_render(data["classes"]))
+    groups = data.get("needs_corpus_groups") or {}
+    if groups:
+        print("[unswept] needs-corpus 按缺什么分组：")
+        for g, members in groups.items():
+            print("   %-12s %2d 类：%s" % (g, len(members), ", ".join(members)))
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)
         args.json.write_text(json.dumps(data, ensure_ascii=False, indent=1),

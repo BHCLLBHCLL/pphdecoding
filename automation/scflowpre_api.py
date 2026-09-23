@@ -167,6 +167,8 @@ class ComObject:
         if name in unambiguous_host_absent():
             msg = (cls + "." + name + " 宿主未实现（GetIDsOfNames → DISP_E_UNKNOWNNAME；"
                    "目录 schemas/vb_api_catalog.json 已标 host_absent），调用必然失败")
+            # R51-1：失败信息里带**下一步**（换名 / 换类 / 先跑流程）
+            msg += "。下一步：" + member_alternative(cls, name)
             raise ApiValueError(msg)
         expected = signature_arity(entry.get("signature"))
         if expected is not None and len(args) > expected:
@@ -1810,6 +1812,43 @@ def object_hints(path: Optional[Path] = None) -> dict:
     """
     cov = (load_availability(path) or {}).get("coverage") or {}
     return dict(cov.get("empty_hints") or {})
+
+
+def member_alternative(cls: str, member: str,
+                       catalog: Optional[dict] = None) -> str:
+    """成员在宿主上不可用时给出**下一步**（R51-1）。
+
+    失败的三种消费者（typed 直调 / VBS 生成 / 面板）共用这一条：
+    ① 目录里有实机裁定的派发名 → 改用那个名字（R35 的 41 处标题拼写错就靠它）；
+    ② 同名成员在**别的类**里有实现 → 指出那些类（手册同名 ≠ 到处都没有）；
+    ③ 该类有"先跑哪个流程"的提示 → 给提示（空对象是流程产物，不是接口缺失）。
+    都没有就如实说"宿主没有等价物"，并指向 `docs/NYI_INVENTORY.md`。
+    """
+    cat = catalog if catalog is not None else load_catalog()
+    entry = _member_entry(cls, member, cat)
+    if entry:
+        disp = entry.get("dispatch_name") or entry.get("signature_name")
+        if disp and disp != member:
+            return "改用 " + cls + "." + str(disp) + "（实机裁定名）"
+    owners = [c for c, info in (cat.get("classes") or {}).items()
+              if c != cls and member in (info.get("methods") or {})
+              and not ((info.get("methods") or {}).get(member) or {}
+                       ).get("host_absent")]
+    if owners:
+        # 证据分级：**实测可用**（普查里 resolved）> 未实测（只是手册里有同名）
+        av = (load_availability() or {}).get("availability") or {}
+        measured = sorted(c for c in owners
+                          if (av.get(c) or {}).get(member) == "resolved")
+        if measured:
+            return ("该类未实现；" + "/".join(measured[:3])
+                    + " 的**同名成员实测可用**（普查 resolved）")
+        return ("该类未实现；" + "/".join(sorted(owners)[:3])
+                + " 手册里有同名成员但**未实测**（不在已普查范围）")
+    hint = object_hints().get(cls)
+    if hint:
+        return "先跑前置流程：" + hint
+    return ("宿主没有等价物（手册与实机都否）；替代路径见 docs/NYI_INVENTORY.md"
+            "「宿主侧能力边界」一节")
 
 
 def unreliable_recipes(catalog: Optional[dict] = None) -> dict:

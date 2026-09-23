@@ -145,9 +145,22 @@ def validate_actions(actions: list) -> list:
             elif method in absent:
                 # R47-3：**前置**拦下（生成期，早于任何宿主会话）——
                 # 以前要等 COM 抛 com_error 才知道调不通
-                out.append(method + " 宿主未实现（GetIDsOfNames → "
-                           "DISP_E_UNKNOWNNAME；目录 schemas/vb_api_catalog.json "
-                           "已标 host_absent），调用必然失败")
+                msg = (method + " 宿主未实现（GetIDsOfNames → "
+                       "DISP_E_UNKNOWNNAME；目录 schemas/vb_api_catalog.json "
+                       "已标 host_absent），调用必然失败")
+                # R51-1：与 typed 直调**同一句下一步**（动作行不带类信息，
+                # 故按"哪些类声明了这个成员"逐个给建议，取第一条可读的）
+                try:
+                    from automation.scflowpre_api import (
+                        load_catalog, member_alternative)
+                    for cls, info in (load_catalog().get("classes")
+                                      or {}).items():
+                        if method in (info.get("methods") or {}):
+                            msg += "。下一步：" + member_alternative(cls, method)
+                            break
+                except Exception:  # noqa: BLE001
+                    pass
+                out.append(msg)
         for method, literal in VBS_CALL_LITERAL.findall(str(action)):
             if not IDENT_LITERAL.match(literal):
                 continue

@@ -11,6 +11,47 @@
   "foreign-app": 0,
   "probe-limitation": 0
  },
+ "needs_corpus_groups": {
+  "CoSim": [
+   "CondCoSimRegionMarker",
+   "CondCoSimRegionSurface",
+   "CondCoSimRegionVolume"
+  ],
+  "其他": [
+   "BodyPattern",
+   "Table",
+   "Value"
+  ],
+  "几何/MDL": [
+   "CreateVMDLError",
+   "ISVertex",
+   "SNode",
+   "WrappingGroup",
+   "WrappingParam"
+  ],
+  "材料/物性": [
+   "PropDataBase"
+  ],
+  "条件/向导": [
+   "CondBUND",
+   "CondDTSR",
+   "CondRepulsion"
+  ],
+  "混合物/燃烧": [
+   "CondMixedGas",
+   "CondReactionIncompSpecies",
+   "DiffusiveSpecies",
+   "OutputCombustionSpecies"
+  ],
+  "粒子/DEM": [
+   "CondParticleConcentrationFpDEM",
+   "CondParticleCounter",
+   "CondParticleForceFPDEM",
+   "CondParticleHeatFPDEM",
+   "CondParticlePropertyMemberDEM",
+   "CondParticleRestitutionDEM"
+  ]
+ },
  "classes": {
   "BodyPattern": {
    "class": "BodyPattern",

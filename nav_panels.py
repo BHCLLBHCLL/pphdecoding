@@ -111,8 +111,16 @@ def render_host_boundary(data: dict) -> str:
         n = sum(len(v) for v in absent.values())
         lines.append("宿主未实现的成员（" + str(n) + " 条；调用必然失败，"
                      "面板与脚本都要避开）：")
+        try:
+            from automation.scflowpre_api import member_alternative
+            alt = member_alternative
+        except Exception:  # noqa: BLE001
+            alt = None
         for cls in sorted(absent):
             lines.append("  · " + cls + " — " + " / ".join(absent[cls]))
+            if alt is not None:
+                # R51-1：面板上也给**下一步**（与 typed 直调/VBS 同一句话）
+                lines.append("      下一步：" + alt(cls, absent[cls][0]))
     else:
         lines.append("（没有宿主未实现成员的证据：schemas/"
                      "host_member_availability.json 未生成）")

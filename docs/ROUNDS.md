@@ -3594,30 +3594,107 @@ R49 只量了误放。本轮把**误杀**这一面补齐 —— 三条证据（�
 
 ---
 
-## R51 —— 提案（≈1 人日）
+## R51 —— 失败路径给下一步 + 复验窗口工具化 + 缺语料清单（2026-09-15，✅ 已完成）
 
-普查域**已收口**（R50-3），故 R51 起不再以覆盖率为目标，转向「已收口的结论如何被**用**与
-**守**」：
+普查域已在 R50 收口，本轮起不再以覆盖率为目标，转向"已收口的结论如何被**用**与**守**"。
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R51-1** | **失败路径给下一步** | 三处失败路径都能给出下一步 + 测试 | ✅ 三面**共用一句话** `member_alternative()`：typed 直调 `ApiValueError` / VBS 生成告警 / 面板 Host 边界 |
+| **R51-2** | **复验窗口工具化** | 一条命令给结论 + 测试 | ✅ `tools/sweep_reopen_check.py`：三份客观事实 → 硬理由/软信息 + 退出码 |
+| **R51-3** | **缺语料清单** | 一处可查 + 测试 | ✅ `needs_corpus_groups` 进 `schemas/unswept_account.json`（25 类 → 7 组） |
+
+### R51-1 一句话，三个面
+
+`scflowpre_api.member_alternative(cls, member)` 的判定顺序（**全部来自证据，不猜**）：
+
+| 顺序 | 判据 | 给出的话 |
+|---|---|---|
+| ① | 目录里有实机裁定的 `dispatch_name` | "改用 X.Good（实机裁定名）" |
+| ② | 同名成员在**别类实测可用**（普查 `resolved`） | "该类未实现；A/B 的**同名成员实测可用**" |
+| ②' | 只有手册里有同名（**未实测**） | 如实写"**未实测**（不在已普查范围）"——不许吹成可用 |
+| ③ | 该类有"先跑哪个流程"提示 | "先跑前置流程：…" |
+| ④ | 都没有 | "宿主没有等价物…替代路径见 `docs/NYI_INVENTORY.md`「宿主侧能力边界」" |
+
+三面接线：typed `ComObject.call` 的 `ApiValueError` 追加"下一步："；`vbs_bridge.validate_actions`
+的告警追加同一句（动作行不带类信息，故按"哪些类声明了这个成员"取第一条）；面板
+`render_host_boundary` 给每条未实现成员加一行"下一步："。
+
+> 本轮实测口径：27 条 `host_absent` 与"有裁定名"**恰好不相交**，所以①用合成目录验规则
+> （在测试里写明，免得看起来像漏测）。
+
+### R51-2 复验窗口
+
+`tools/sweep_reopen_check.py` 把收口声明里的人工判断变成三份**客观事实**：
+
+| 事实 | 判据 | 权重 |
+|---|---|---|
+| 宿主版本变了 | 注册表 `scFLOWpre_Bx64net.Application.*` vs 证据 `progid` | **硬** → 建议重开 |
+| 目录**成员集**与证据对不上 | 目录类/成员数 vs 证据 `classes_total`/`members_total` | **硬** |
+| 覆盖率掉线 | `classes_swept < 155`（收口下限） | **硬** |
+| 工程集变了 | `DEFAULT_PROJECTS` vs 证据工程名 | ⚠️ 软（只记不改判） |
+
+> 第一版拿"目录 mtime 比证据新"当硬理由，实测**每轮都会触发** —— 因为收口流程本来就是
+> "先普查、再用同一份证据重生成目录"。改成"成员集对不上"才是真信号；重生成降级为软信息。
+> 顺带把 `DEFAULT_PROJECTS` 补齐到 R49/R50 实际用的 6 个工程（原来漏了 exA18-4）。
+
+当前结论：**无需重开**（exit 0）。
+
+### R51-3 缺语料清单
+
+`needs-corpus` 的 25 类按"缺什么"分组（只看 `class + reason 结论句 + recipe`，
+**不猜**；匹配不到进"其他"）：
+
+| 组 | 类数 | 例 |
+|---|---|---|
+| 粒子/DEM | **6** | `CondParticleCounter`/`CondParticleForceFPDEM`… |
+| 几何/MDL | **5** | `SNode`/`WrappingGroup`/`ISVertex`/`CreateVMDLError` |
+| 混合物/燃烧 | **4** | `CondMixedGas`/`DiffusiveSpecies`/`OutputCombustionSpecies` |
+| CoSim | **3** | `CondCoSimRegion*` |
+| 条件/向导 | **3** | `CondBUND`/`CondDTSR`/`CondRepulsion` |
+| 材料/物性 | **1** | `PropDataBase` |
+| 其他 | **3** | `BodyPattern`/`Table`/`Value`（证据只说"返回空"，不编前置条件） |
+
+### 回归
+
+全量回归 **1565 passed / 4 skipped / 0 failed**（596.26 s，带 `-rs` 落盘 skip 原因：
+`test_material_prp_write` 1 + `test_native_bridge` 3，全是稳定环境项；R50 收口同口径 1549/4/0，
+增量 +16 = 本轮新模块 16 项）。新增测试 1 个模块 `test_r51_evidence.py`（16 项：
+三面共用下一步 / 复验判定五路 / 分组守恒与证据化）。
+
+### 证据
+
+`schemas/unswept_account.json`（29 类终态 + `needs_corpus_groups`）、
+`schemas/host_member_availability.json`（155 类 / 3925 成员 / errors 0）、
+`automation/scflowpre_api.py`（`member_alternative()`）、
+`tools/sweep_reopen_check.py`、`_p12u_gate/r50/name_verdicts.json`（本轮未重跑普查，
+证据仍为 R50 那一轮）。
+
+---
+
+## R52 —— 提案（≈1 人日）
 
 ### 依据
 
-* `host_absent`/`recipe_unreliable`/`empty_hints` 三份结论已有四处可查面
-  （API / 文档 / 面板 / 目录），但**没有一处**在**失败时**把它们变成可操作的下一步
-  （例如"这个条件建不出来"时直接给出替代路径）；
-* 收口判据里的"复验窗口"是**人工判断**，没有工具能一眼看出"什么时候该重开"；
-* `unswept_account` 的 `needs-corpus` 25 类各缺什么语料，只在 reason 里散着写。
+* `member_alternative()` 的②只在**已普查**的类里找同名成员 —— 未普查的类（29 个）里
+  可能就有可用实现，但结论会写成"未实测"（保守但可能漏掉真路径）；
+* 收口后 `host_absent`/`recipe_unreliable`/`empty_hints`/`needs_corpus_groups`
+  四份结论**没有汇总入口**（要分别查 API/schema/文档/面板）；
+* `sweep_reopen_check` 只回答"要不要重开"，**不回答"重开后该盯哪些类"**。
 
 ### 条目
 
 | # | 条目 | 做法 | 验收句 | 人日 |
 |---|---|---|---|---|
-| **R51-1** | **失败路径给下一步** | typed 直调/面板遇 `host_absent`/空对象时，错误信息里带替代路径（用哪个成员/先跑哪个流程） | 三处失败路径都能给出下一步 + 测试 | 0.5 |
-| **R51-2** | **复验窗口工具化** | `tools/sweep_reopen_check.py`：对比宿主版本/工程集/目录，输出"是否该重开普查" | 一条命令给出结论 + 测试 | 0.25 |
-| **R51-3** | **缺语料清单** | 25 类 `needs-corpus` 按"缺什么"聚合成清单（材料/CoSim/粒子/映射/几何/条件） | 一处可查（文档或 schema）+ 测试 | 0.25 |
+| **R52-1** | **未普查类也参与②判定** | 用 `auto_plans` 的"手册声明候选"给未普查类里的同名成员定级（手册有/宿主未验） | 结论区分"未实测"与"手册无此成员" | 0.25 |
+| **R52-2** | **四份结论一个入口** | `scflowpre_api.host_capability_report()` 汇总（未实现成员/不可信取法/空对象提示/缺语料分组） | 一处可查 + 测试 | 0.5 |
+| **R52-3** | **重开后的盯防清单** | `sweep_reopen_check --watchlist` 输出"重开时优先复查的类"（suspect/近阈否/终态为 probe-limitation） | 一条命令给清单 + 测试 | 0.25 |
 
 ### 明确不做
 
-* 不再为覆盖率找新机制（收口判据未推翻前）；
+* 不重跑普查（无新语料/新宿主版本）；
 * 不动 `host_absent`/验身判据。
 
 ---

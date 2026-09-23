@@ -41,6 +41,7 @@ DEFAULT_PROJECTS = [
     EXERCISE / "exA26" / "exA26-1" / "Org" / "exA26-1_ldc.pph",
     EXERCISE / "exA16" / "exA16-2" / "Org" / "exA16-2.pph",
     EXERCISE / "exA25" / "exA25-1" / "Org" / "exA25-1.pph",
+    EXERCISE / "exA18" / "exA18-4" / "Org" / "exA18-4.pph",
 ]
 
 
