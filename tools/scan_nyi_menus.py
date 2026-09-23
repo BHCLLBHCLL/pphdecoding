@@ -9,11 +9,13 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# 能力汇总要从**产品面**取（R53-1）：脚本方式运行时仓库根不在 sys.path
+sys.path.insert(0, str(ROOT))
 GUI = ROOT / "pph_gui.py"
 #: R45-2：宿主侧边界的两个证据源（普查结果 + 目录的 host_absent 标记）
 AVAIL = ROOT / "schemas" / "host_member_availability.json"
@@ -21,51 +23,29 @@ CATALOG = ROOT / "schemas" / "vb_api_catalog.json"
 
 
 def host_boundary_lines() -> list:
-    """R45-2：宿主侧能力边界（取不到实例的类 / 宿主未实现的成员）。
+    """R45-2 / R53-1：宿主侧能力边界（**四段**，与产品面同源）。
 
     为什么进这份清单：用户看到的"功能不可用"有两种根因 —— 菜单没接线，或
-    **宿主 COM 面**没有对应的东西。前者是本表主体，后者此前只在 schemas 里，
-    这里给出可读面（含"先跑哪个流程"的先决提示），且与
-    `automation/scflowpre_api.object_hints()` 同源。
+    **宿主 COM 面**没有对应的东西。后者此前只在 schemas 里，这里给出可读面。
+
+    渲染**直接调** `automation.scflowpre_api.render_capability_report()`（R52-2 的
+    汇总入口）：未实现成员 / 取法不可照抄 / 取不到实例 / 缺语料分组四段一次到位，
+    文档与 API、面板三面永远一致（测试逐行对账）。取不到 API 时退回"证据缺失"说明。
     """
-    lines = ["## 宿主侧能力边界（R45 自动生成）", "",
-             "> 与 `tools/host_member_sweep.py --report-only` 同源（证据 "
-             "`schemas/host_member_availability.json` + 目录的 `host_absent` "
-             "标记）。这一节**不是菜单缺口**，是宿主 COM 面的实测边界。", ""]
-    cov = {}
+    lines = ["## 宿主侧能力边界（R53 自动生成，四段）", "",
+             "> 与 `automation.scflowpre_api.host_capability_report()` 同源"
+             "（证据 `schemas/host_member_availability.json` + 目录的 "
+             "`host_absent`/`recipe_unreliable` 标记 + "
+             "`schemas/unswept_account.json` 的缺语料分组）。",
+             "> 这一节**不是菜单缺口**，是宿主 COM 面的实测边界；"
+             "复验窗口见 `tools/sweep_reopen_check.py`。", ""]
     try:
-        cov = ((json.loads(AVAIL.read_text(encoding="utf-8")) or {})
-               .get("coverage") or {})
-    except Exception:  # noqa: BLE001
-        cov = {}
-    hints = cov.get("empty_hints") or {}
-    if hints:
-        lines += ["### 取不到实例的类（先把前置流程跑出来）", ""]
-        for cls in sorted(hints):
-            lines.append("- " + cls + " — " + str(hints[cls]))
-        lines.append("")
-    absent: dict = {}
-    try:
-        cat = json.loads(CATALOG.read_text(encoding="utf-8"))
-        for cls, info in (cat.get("classes") or {}).items():
-            names = [m for kind in ("methods", "properties")
-                     for m, en in (info.get(kind) or {}).items()
-                     if en.get("host_absent")]
-            if names:
-                absent[cls] = sorted(names)
-    except Exception:  # noqa: BLE001
-        absent = {}
-    if absent:
-        n = sum(len(v) for v in absent.values())
-        lines += ["### 宿主未实现的成员（" + str(n) + " 条）", "",
-                  "> Python 侧**不会**为这些条目造包装（调用必然 "
-                  "`com_error`）；手册有、宿主 `GetIDsOfNames` 解析不到。", ""]
-        for cls in sorted(absent):
-            lines.append("- " + cls + " — " + " / ".join(absent[cls]))
-        lines.append("")
+        from automation.scflowpre_api import render_capability_report
+        report = render_capability_report()
+    except Exception as exc:  # noqa: BLE001
+        report = "（能力汇总不可用：" + type(exc).__name__ + "）"
+    lines += ["```text", report, "```", ""]
     return lines
-
-
 def _balanced_call(src: str, start: int) -> str:
     """从 ``add_act(`` 的 '(' 起取到配对 ')' 的完整调用文本。"""
     i = start

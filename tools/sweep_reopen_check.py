@@ -144,6 +144,35 @@ WATCH_KINDS = {
 }
 
 
+def _action(kind: str, cls: str, cov: dict, account: dict) -> str:
+    """每档的**可执行动作**（R53-2）：试哪个取法 / 看哪条证据。"""
+    row = (account.get("classes") or {}).get(cls) or {}
+    plans = row.get("declared_candidates") or []
+    plan = plans[0] if plans else ""
+    empty = (cov.get("auto_empty_targets") or {}).get(cls)
+    if kind == "swept_suspect":
+        detail = (cov.get("swept_suspect") or {}).get(cls) or {}
+        return ("重取该类实例并用**更大的独有成员样本**重验（上次 "
+                + str(detail.get("unknown")) + "/" + str(detail.get("total"))
+                + " 未知）")
+    if kind == "near_threshold":
+        for m in (cov.get("guard_audit") or {}).get("rejection_margins") or []:
+            if str(m.get("how") or "").startswith(cls + " "):
+                return ("复验取法 " + str(m.get("how")) + "：样本 "
+                        + str(m.get("sample")) + " 解析 " + str(m.get("resolved"))
+                        + "（margin " + str(m.get("margin")) + "，差一点翻案）")
+        return "复验被否的取法（近阈）"
+    if kind == "empty_object":
+        hint = (cov.get("empty_hints") or {}).get(cls) or "先补前置流程"
+        return ("先跑：" + hint + "；再试 " + (empty or plan or "原取法"))
+    if kind == "probe_limitation":
+        return "试 " + (plan or "手册声明的取法") + "；看 " + str(
+            row.get("evidence") or "证据") + " 里的调用错误"
+    if kind == "no_member":
+        return "看手册该页是否补了成员（当前 0 成员）"
+    return "复查该类"
+
+
 def watchlist(evidence: dict, account: dict | None = None) -> dict:
     """重开普查时**优先复查**的类（R52-3；纯函数，可单测）。"""
     cov = (evidence or {}).get("coverage") or {}
@@ -163,8 +192,10 @@ def watchlist(evidence: dict, account: dict | None = None) -> dict:
         for cls, row in (account.get("classes") or {}).items():
             if row.get("terminal") == "probe-limitation":
                 out.setdefault(cls, []).append("probe_limitation")
-    return {cls: {"kinds": sorted(set(k)), "why": [WATCH_KINDS[k] for k in
-                                                  sorted(set(k))]}
+    return {cls: {"kinds": sorted(set(k)),
+                  "why": [WATCH_KINDS[k] for k in sorted(set(k))],
+                  "actions": [_action(k, cls, cov, account or {})
+                              for k in sorted(set(k))]}
             for cls, k in sorted(out.items())}
 
 
@@ -200,6 +231,8 @@ def main(argv=None) -> int:
                 print("  · " + cls + "（" + "/".join(meta["kinds"]) + "）")
                 for why in meta["why"]:
                     print("      " + why)
+                for act in meta.get("actions") or []:
+                    print("      → " + act)
         return 0
     res = decide(evidence, floor=args.floor, workspace_projects=projects)
     if args.json:

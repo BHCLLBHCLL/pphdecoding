@@ -2342,5 +2342,29 @@ CondOutputLFileWaterLevel/CondParticlePropertyDEM 的**同名成员实测可用*
 > 表现是"单测通过、全量回归失败"（取决于谁先跑）。修法：缓存**按路径键**。
 > 教训：**全局可变缓存 + 显式参数**是陷阱；要么按 key 缓存，要么显式路径不写缓存。
 
+---
+
+## 67. R53 更新（2026-09-15）—— 结论进自动文档 + 盯防清单带动作 + 契约门第 8 项
+
+### 67.1 文档与产品面同源（R53-1）
+
+`tools/scan_nyi_menus.py` 的「宿主侧能力边界」节直接调 `render_capability_report()`
+把四段渲染进 `docs/NYI_INVENTORY.md`；测试逐行断言"文档里的块 == 产品面输出"。
+踩坑：脚本方式运行 `sys.path` 里没有仓库根 → 第一次生成出"（能力汇总不可用：
+ModuleNotFoundError）"，已 `sys.path.insert(0, ROOT)`。
+
+### 67.2 盯防清单带动作（R53-2）
+
+`_action()` 给五档各自的可执行动作（都引证据）：suspect → 用更大独有成员样本重验；
+near_threshold → 复验取法 + 样本/解析/margin；empty_object → 先跑 hint 再试取法；
+probe_limitation → 试手册声明的取法 + 看证据里的调用错误；no_member → 看手册是否补成员。
+
+### 67.3 契约门第 8 项（R53-3）
+
+`check_sweep_convergence()`：覆盖率 ≥ 155、未普查类集与终态表完全一致（每行有 terminal+reason）、
+复验窗口"无需重开"；路径与下限**可注入**，测试用合成证据验三种掉线形态都被挡住。
+门 **8/8 PASS**；顺带清掉 `api_contract_check.py` 的死导入 `subprocess`。
+
+
 
 

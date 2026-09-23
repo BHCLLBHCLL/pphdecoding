@@ -24,35 +24,64 @@
 **J1 实测升级（2026-09-05，DEV_PLAN §21.5 / gap §10.20）**：全链前三腿打通——①同几何 12 三角立方体换件秒级成立（60k 三角同几何 STL 使 ImportPatchAsCAD 在工作进程内病态空转 2/2 复现，面片规模边界实证）；②MDL Wizard 重放 **151/151 err=0 全绿**（遗留⑤向导腿解除：录制变量别名 + AF 前置 + 模型状态 1.8MB snapshot 内嵌实证）；③容器级成对注入（`.his` 成员 + main.xml `<storedclosedvolumes>` 声明——装载开关，COM 换件重置该块的精确元素落点）→ 重开 `GetStoredClosedVolumes`=1。**恢复腿产品闸门维持关闭**：重开场景 `IsClosedVolumeRestorationAvailable`=False、候选查询空数组（cand_ub=-1）、`RestoreClosedVolumes` err=0 retval=False——两独立场景复现（I3 r3 cv1b 原生存储 + J1 r7 向导重建+注入），restorable 三态=-1 如实入册。域 10 边界维持：恢复可用性闸门在 COM 面不可构造（GUI [Store and Open] 对话钮无 COM 等价物），前置具备即可复验。遗留④宿主 VBS 能力时变当日未复现（重载日午后向导段正常执行）。
 
 
-## 宿主侧能力边界（R45 自动生成）
+## 宿主侧能力边界（R53 自动生成，四段）
 
-> 与 `tools/host_member_sweep.py --report-only` 同源（证据 `schemas/host_member_availability.json` + 目录的 `host_absent` 标记）。这一节**不是菜单缺口**，是宿主 COM 面的实测边界。
+> 与 `automation.scflowpre_api.host_capability_report()` 同源（证据 `schemas/host_member_availability.json` + 目录的 `host_absent`/`recipe_unreliable` 标记 + `schemas/unswept_account.json` 的缺语料分组）。
+> 这一节**不是菜单缺口**，是宿主 COM 面的实测边界；复验窗口见 `tools/sweep_reopen_check.py`。
 
-### 取不到实例的类（先把前置流程跑出来）
-
-- CondBoussinesqBaseTemp — 条件向导创建——宿主无 CreateCondBoussinesqBaseTemp 接口
-- CondCoSim — 先做 CoSim 设置（本机语料无该条件）
-- CondCoSimRegion — 先有 CoSim 区域（由 CoSim 条件派生）
-- PropItem — 先注册材料/物性（或经闭空间的材料项取得）
-
-### 宿主未实现的成员（27 条）
-
-> Python 侧**不会**为这些条目造包装（调用必然 `com_error`）；手册有、宿主 `GetIDsOfNames` 解析不到。
-
-- ClosedVolume — GetSweepDestinationFaceRegion / ImportCSV
-- CondBoundaryFlowIO — GetMassVolumePressureInflowDirectionType​ / GetPbmFuncType / SetPbmFuncType
-- CondFreeSurface — GetPhaseCheangeSw / SetPhaseCheangeSw
-- CondInitial — GetPbmFuncType / SetPbmFuncType
-- CondInitialShapeModify — RemoveMorphingRegion
-- CondOutputTimeSeries — GetProjectonType / SetProjectonType
-- CondPorousMedia — ImportCSV
-- CondSource — IsEnableConditionForCalculation
-- CoordinatesSpecifiedPart — GetRadiationValue / ImportCSV
-- Doc — GetAllMapCondNames
-- FaceRegionDerivedSheet — ImportCSV
-- FluidRegion — ImportCSV
-- IVEdge — GetPart / IsEqual
-- MeshingGroup — GetDiscontinuous / ReplaceMDLMode / SetDiscontinuous
-- MeshingGroupSetting — GetInternalUnit
-- SpecialRegion — ImportCSV
-- VolumeRegion — GetSweepDestinationFaceRegion
+```text
+宿主能力边界（R50 普查；155/199 类、3925/4455 成员）
+· 宿主未实现的成员：27 条 / 17 类
+· 取法不可照抄的类：4 个
+· 取不到实例（先跑前置流程）的类：4 个
+· 缺语料分组：7 组（CoSim3、其他3、几何/MDL5、材料/物性1、条件/向导3、混合物/燃烧4、粒子/DEM6）
+   ✗ ClosedVolume — GetSweepDestinationFaceRegion / ImportCSV
+     下一步：该类未实现；SNode 手册里有同名成员但**未实测**（该类还没取到实例）
+   ✗ CondBoundaryFlowIO — GetMassVolumePressureInflowDirectionType​ / GetPbmFuncType / SetPbmFuncType
+     下一步：宿主没有等价物（手册与实机都否）；替代路径见 docs/NYI_INVENTORY.md「宿主侧能力边界」一节
+   ✗ CondFreeSurface — GetPhaseCheangeSw / SetPhaseCheangeSw
+     下一步：宿主没有等价物（手册与实机都否）；替代路径见 docs/NYI_INVENTORY.md「宿主侧能力边界」一节
+   ✗ CondInitial — GetPbmFuncType / SetPbmFuncType
+     下一步：宿主没有等价物（手册与实机都否）；替代路径见 docs/NYI_INVENTORY.md「宿主侧能力边界」一节
+   ✗ CondInitialShapeModify — RemoveMorphingRegion
+     下一步：宿主没有等价物（手册与实机都否）；替代路径见 docs/NYI_INVENTORY.md「宿主侧能力边界」一节
+   ✗ CondOutputTimeSeries — GetProjectonType / SetProjectonType
+     下一步：宿主没有等价物（手册与实机都否）；替代路径见 docs/NYI_INVENTORY.md「宿主侧能力边界」一节
+   ✗ CondPorousMedia — ImportCSV
+     下一步：该类未实现；SNode/Table 手册里有同名成员但**未实测**（该类还没取到实例）
+   ✗ CondSource — IsEnableConditionForCalculation
+     下一步：该类未实现；CondInitial 的**同名成员实测可用**（普查 resolved）
+   ✗ CoordinatesSpecifiedPart — GetRadiationValue / ImportCSV
+     下一步：该类未实现；ClosedVolume/CondPorousMedia/FaceRegionDerivedSheet 的**同名成员实测可用**（普查 resolved）
+   ✗ Doc — GetAllMapCondNames
+     下一步：宿主没有等价物（手册与实机都否）；替代路径见 docs/NYI_INVENTORY.md「宿主侧能力边界」一节
+   ✗ FaceRegionDerivedSheet — ImportCSV
+     下一步：该类未实现；SNode/Table 手册里有同名成员但**未实测**（该类还没取到实例）
+   ✗ FluidRegion — ImportCSV
+     下一步：该类未实现；SNode/Table 手册里有同名成员但**未实测**（该类还没取到实例）
+   ✗ IVEdge — GetPart / IsEqual
+     下一步：该类未实现；ISEdge 的**同名成员实测可用**（普查 resolved）
+   ✗ MeshingGroup — GetDiscontinuous / ReplaceMDLMode / SetDiscontinuous
+     下一步：宿主没有等价物（手册与实机都否）；替代路径见 docs/NYI_INVENTORY.md「宿主侧能力边界」一节
+   ✗ MeshingGroupSetting — GetInternalUnit
+     下一步：该类未实现；ProjectSetting 的**同名成员实测可用**（普查 resolved）
+   ✗ SpecialRegion — ImportCSV
+     下一步：该类未实现；SNode/Table 手册里有同名成员但**未实测**（该类还没取到实例）
+   ✗ VolumeRegion — GetSweepDestinationFaceRegion
+     下一步：该类未实现；SNode 手册里有同名成员但**未实测**（该类还没取到实例）
+   ⚠ CondCoSim — stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）；stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析
+   ⚠ CondParticleCounter — 整类成员 8/9 解析不到（拿错对象）
+   ⚠ DiffusiveSpecies — stem:Conditions.GetCondBoundaryDiffusiveSpecies（验身否：该类独有成员解析率不过半）；stem:Conditions.GetCondBoundaryDif
+   ⚠ Table — stem:Conditions.GetCondFrequencyAmplitudeTable（验身否：该类独有成员解析率不过半）；stem:Conditions.GetCondFrequencyAmp
+   ○ CondBoussinesqBaseTemp — 条件向导创建——宿主无 CreateCondBoussinesqBaseTemp 接口
+   ○ CondCoSim — 先做 CoSim 设置（本机语料无该条件）
+   ○ CondCoSimRegion — 先有 CoSim 区域（由 CoSim 条件派生）
+   ○ PropItem — 先注册材料/物性（或经闭空间的材料项取得）
+   ▸ CoSim：CondCoSimRegionMarker, CondCoSimRegionSurface, CondCoSimRegionVolume
+   ▸ 其他：BodyPattern, Table, Value
+   ▸ 几何/MDL：CreateVMDLError, ISVertex, SNode, WrappingGroup, WrappingParam
+   ▸ 材料/物性：PropDataBase
+   ▸ 条件/向导：CondBUND, CondDTSR, CondRepulsion
+   ▸ 混合物/燃烧：CondMixedGas, CondReactionIncompSpecies, DiffusiveSpecies, OutputCombustionSpecies
+   ▸ 粒子/DEM：CondParticleConcentrationFpDEM, CondParticleCounter, CondParticleForceFPDEM, CondParticleHeatFPDEM, CondParticlePropertyMemberDEM, CondParticleRestitutionDEM
+```

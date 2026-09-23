@@ -120,6 +120,53 @@ def check_corpus() -> dict:
             "links_with_gap": sorted(gaps), "ok": not gaps}
 
 
+def check_sweep_convergence(avail_path: Path | None = None,
+                           unswept_path: Path | None = None,
+                           floor: int = 155) -> dict:
+    """R53-3：普查**收口结论**的自动守卫（第 8 项）。
+
+    收口判据（审计 §64.3）三条，这里逐条查：
+
+    1. 覆盖率 ≥ 收口下限（**只许升不许降**）；
+    2. 未普查类**全部有终态**（`unswept_account.json` 与证据的类集一致）；
+    3. 复验窗口结论为"无需重开"（宿主版本/成员集/覆盖率三份客观事实）。
+    """
+    # 路径可注入：测试要能拿**合成证据**验"掉线会被挡住"，而不是只跑现状
+    avail = avail_path or ROOT / "schemas" / "host_member_availability.json"
+    unswept = unswept_path or ROOT / "schemas" / "unswept_account.json"
+    res = {"floor": floor, "ok": False}
+    if not avail.is_file() or not unswept.is_file():
+        res["error"] = "缺证据（host_member_availability.json / unswept_account.json）"
+        return res
+    ev = json.loads(avail.read_text(encoding="utf-8"))
+    cov = ev.get("coverage") or {}
+    swept = int(cov.get("classes_swept") or 0)
+    res["classes_swept"] = swept
+    res["coverage_ok"] = swept >= floor
+    acct = json.loads(unswept.read_text(encoding="utf-8"))
+    want = set(cov.get("unswept_classes") or [])
+    got = set(acct.get("classes") or {})
+    res["unswept"] = len(want)
+    res["unattributed"] = sorted(want - got)
+    res["extra_rows"] = sorted(got - want)
+    res["terminals_ok"] = not res["unattributed"] and not res["extra_rows"]
+    bad = [c for c, row in (acct.get("classes") or {}).items()
+           if not (row.get("terminal") and str(row.get("reason") or "").strip())]
+    res["missing_terminal"] = sorted(bad)
+    res["terminals_ok"] = res["terminals_ok"] and not bad
+    try:
+        tool = _load("reopen_r53", ROOT / "tools" / "sweep_reopen_check.py")
+        dec = tool.decide(ev)
+        res["reopen_reasons"] = dec.get("reasons") or []
+        res["reopen_ok"] = not dec.get("reopen")
+    except Exception as exc:  # noqa: BLE001
+        res["reopen_error"] = type(exc).__name__ + ": " + str(exc)[:80]
+        res["reopen_ok"] = False
+    res["ok"] = bool(res["coverage_ok"] and res["terminals_ok"]
+                     and res["reopen_ok"])
+    return res
+
+
 def check_guard() -> dict:
     """三态口径：无词表 → None；越界 → False；命中 → True。"""
     none_state = api.check_api_value("MeshingGroupSetting",
@@ -134,7 +181,6 @@ def check_guard() -> dict:
 
 def check_host_absent() -> dict:
     """R42-2：仓内**不得**引用宿主未实现的成员（引用了就是"注定调不通"）。"""
-    import subprocess
     cat = json.loads(CATALOG.read_text(encoding="utf-8"))
     # 只在**无歧义**时才判：同名成员若在别的类里是实现了的（如 `ImportCSV`），
     # 单看名字会把正常引用误判成"引用未实现成员"（第一版就这么假阳性了一次）
@@ -180,7 +226,8 @@ def check_host_absent() -> dict:
 CHECKS = (("catalog", check_catalog), ("ledger", check_ledger),
           ("host_absent", check_host_absent),
           ("account", check_account), ("bridge", check_bridge),
-          ("corpus", check_corpus), ("guard", check_guard))
+          ("corpus", check_corpus), ("guard", check_guard),
+          ("convergence", check_sweep_convergence))
 
 
 def main(argv=None) -> int:
