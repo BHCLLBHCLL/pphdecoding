@@ -1,7 +1,7 @@
 {
  "source": "tools/unswept_account.py（R46-1）",
  "note": "未普查类的**终态**：每个类都必须有一条，理由必须来自证据（配方宿主 / 候选调用错误 / 返回空）；口径见模块 docstring。终态不是待办 —— 除非将来补语料，这些类不会被再排期。",
- "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+ "evidence": "_p12u_gate\\r50\\name_verdicts.json",
  "counts": {
   "total": 29,
   "needs-corpus": 25,
@@ -58,7 +58,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:Doc.GetBodyPatterns"
   },
@@ -107,7 +107,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:Conditions.QueryCondBUND"
   },
@@ -154,7 +154,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 condcosim 对象（本会话没有）"
   },
@@ -201,7 +201,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 condcosim 对象（本会话没有）"
   },
@@ -248,7 +248,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 condcosim 对象（本会话没有）"
   },
@@ -299,7 +299,7 @@
      "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondDTSR"
   },
@@ -346,7 +346,7 @@
      "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 mixedgas 对象（本会话没有）"
   },
@@ -395,7 +395,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "call-rejected",
    "reason": "手册取法调用被拒（非「未知名称」）：QueryCondMultiphaseMaterial → com_error: (-2147352562, '无效的参数数目。', None, None)"
   },
@@ -446,7 +446,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondParticleConcentrationFpDEM"
   },
@@ -458,7 +458,7 @@
     "catalog:Conditions.GetCondParticleCounter"
    ],
    "attempts": [],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "条件类的实例由条件向导/流程产生；批量 CreateCond* 未产出该类（本机语料没有这种条件）"
   },
@@ -508,7 +508,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondParticleForceFPDEM"
   },
@@ -557,7 +557,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondParticleHeatFPDEM"
   },
@@ -604,7 +604,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
@@ -651,7 +651,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 particletracking 对象（本会话没有）"
   },
@@ -701,7 +701,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondParticleRestitutionDEM"
   },
@@ -748,7 +748,7 @@
      "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：stem:CondInitial.GetTargetReactionIncompSpecies"
   },
@@ -787,7 +787,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:conditions.CreateCondRepulsion"
   },
@@ -836,7 +836,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:MeshingGroup.GetCreateVMDLError"
   },
@@ -885,7 +885,7 @@
      "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:Doc.QueryDiffusiveSpecies"
   },
@@ -932,7 +932,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：stem:Doc.HitTestSVertex"
   },
@@ -979,7 +979,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "call-rejected",
    "reason": "Kicker 会话已实测（Kicker.Application/LicenseStatus 都取到了），该类的取法被宿主拒绝：GetApplicationLaunchSetting(scFLOWpre_Bx64net.Application.2023) -> com_error: (-2147352567, '发生意外。', (4001, 'Kicker_Bx64', 'Invalid ProgID was specified.', 'C:\\\\Program"
   },
@@ -1026,7 +1026,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 combustion 对象（本会话没有）"
   },
@@ -1073,7 +1073,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：stem:CondBoundaryFlowIO.QueryPropValueObj"
   },
@@ -1120,7 +1120,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "no-creation-path",
    "reason": "手册未声明任何可取用的创建/取用成员；名字家族乱猜不构成「宿主无接口」的证据"
   },
@@ -1169,7 +1169,7 @@
      "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "配方需要先有 snode 对象（本会话没有）"
   },
@@ -1219,7 +1219,7 @@
      "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:Doc.CreateTable"
   },
@@ -1268,7 +1268,7 @@
      "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：catalog:CondAcceleration.GetValue"
   },
@@ -1319,7 +1319,7 @@
      "unknown": false
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：recipe:doc.QueryWrappingGroupByIndex"
   },
@@ -1366,7 +1366,7 @@
      "unknown": true
     }
    ],
-   "evidence": "_p12u_gate\\r49\\name_verdicts.json",
+   "evidence": "_p12u_gate\\r50\\name_verdicts.json",
    "terminal": "needs-corpus",
    "reason": "取法试过、返回空（本机工程没有该对象）：stem:Doc.GetWrappingGroups"
   }

@@ -96,6 +96,10 @@ def _is_excluded(rel: str) -> bool:
     ext = Path(rel).suffix.lower()
     if ext in EXCLUDE_EXT:
         return True
+    # 根目录的 _*.py 是**草稿脚本**（轮次里跑分析用），不是仓库资产：R47 误收 9 个、
+    # R49 又误收 3 个（收录模式含根目录 *.py）。正式工具一律放 tools/。
+    if "/" not in rel and rel.startswith("_") and ext == ".py":
+        return True
     return rel.endswith("_part.mdl") or rel.endswith("_ridge.mdl")
 
 

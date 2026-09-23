@@ -1,7 +1,7 @@
 {
  "source": "CradleCFD2025.2 Manuals scFLOW HTML VB_Interface_eng",
  "progid": "scFLOWpre_Bx64net.Application.2025",
- "extracted": "2026-09-21",
+ "extracted": "2026-09-23",
  "classes": {
   "AdaptiveParam": {
    "file": "Scf_vb_Preprocessor_AdaptiveParam_Class.html",
@@ -1436,7 +1436,8 @@
       "description": "Name of surface region (string)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "GetSweepFaceRegionName": {
      "signature": "retval=cvol.GetSweepFaceRegionName",
@@ -1565,7 +1566,8 @@
       "description": "True (successful), False (failed)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "InsertSweepLayer": {
      "signature": "retval=cvol.InsertSweepLayer(index, thickness)",
@@ -5074,7 +5076,8 @@
       ]
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "GetMixedGasInflowType": {
      "signature": "retval=boundflowio.GetMixedGasInflowType ()",
@@ -5236,7 +5239,8 @@
       ]
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "GetPBMType": {
      "signature": "retval=boundaryflowio.GetPBMType",
@@ -6505,7 +6509,8 @@
       "description": "True (successful), False (failed)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "SetPBMType": {
      "signature": "retval=boundaryflowio.SetPBMType(type)",
@@ -9262,6 +9267,7 @@
     }
    },
    "recipe_unreliable": true,
+   "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph",
    "recipe_unreliable_evidence": [
     "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
     "stem:Conditions.GetCondCoSimOption（验身否：该类独有成员解析率不过半）",
@@ -12006,7 +12012,8 @@
       "description": "True (Yes), False (No)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "GetPhaseChangeType": {
      "signature": "retval=freesurface.GetPhaseChangeType()",
@@ -12437,7 +12444,8 @@
     "SetPhaseCheangeSw": {
      "signature": "freesurface.SetPhaseCheangeSw(type, bset)",
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "SetPhaseChangeType": {
      "signature": "retval=freesurface.SetPhaseChangeType(type)"
@@ -13170,7 +13178,8 @@
       ]
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "GetPhaseMaterial": {
      "signature": "Set propitem=condinitial.GetPhaseMaterial",
@@ -13779,7 +13788,8 @@
       "description": "True (successful), False (failed)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "SetPhaseMaterial": {
      "signature": "retval=condinitial.SetPhaseMaterial(propname)",
@@ -14470,7 +14480,8 @@
     "RemoveMorphingRegion": {
      "signature": "retval=initial_shape_modify.RemoveMorphingRegion(name)",
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "SetAngularChange": {
      "signature": "retval=initial_shape_modify.SetAngularChange(angular change)",
@@ -25700,7 +25711,8 @@
       ]
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "GetTargetFluidRegion": {
      "signature": "retval=outputtimeseries.GetTargetFluidRegion",
@@ -25927,7 +25939,8 @@
      },
      "note": "Refer to SetProjectonType for output types.",
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "SetTargetMaterial": {
      "signature": "retval=outputtimeseries.SetTargetMaterial(name)",
@@ -26979,6 +26992,7 @@
     }
    },
    "recipe_unreliable": true,
+   "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph",
    "recipe_unreliable_evidence": [
     "整类成员 8/9 解析不到（拿错对象）"
    ]
@@ -31374,7 +31388,8 @@
       "description": "True (successful), False (failed)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "IsPressureDropCond": {
      "signature": "retval=porousmedia.IsPressureDropCond()",
@@ -32716,7 +32731,8 @@
       "description": "True (Valid), False (Not valid)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "IsForFaceCondition": {
      "signature": "retval=source.IsForFaceCondition ()",
@@ -47762,7 +47778,8 @@
       "description": "Value class"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "GetLinkedPartName": {
      "signature": "retval=coord_part.GetLinkedPartName",
@@ -47961,7 +47978,8 @@
       "description": "True (successful), False (failed)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "IsFluid": {
      "signature": "retval=coord_part.IsFluid",
@@ -49351,6 +49369,7 @@
     }
    },
    "recipe_unreliable": true,
+   "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph",
    "recipe_unreliable_evidence": [
     "stem:Conditions.GetCondBoundaryDiffusiveSpecies（验身否：该类独有成员解析率不过半）",
     "stem:Conditions.GetCondBoundaryDiffusiveSpecies（验身否：该类独有成员解析率不过半）"
@@ -51838,7 +51857,8 @@
       "description": "List of mapping condition names (string array)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "GetAllPartsBoundingBox": {
      "signature": "doc.GetAllPartsBoundingBox bbox bExcludePartForSubmesh",
@@ -62344,7 +62364,8 @@
       "description": "True (successful), False (failed)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "IsFluid": {
      "signature": "retval=frgn_derived_sheet.IsFluid",
@@ -63433,7 +63454,8 @@
       "description": "True (successful), False (failed)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "IsExpanded": {
      "signature": "retval=fluid_region.IsExpanded",
@@ -64529,7 +64551,8 @@
       "description": "Part to which the edge is attached (SNode)class"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "GetSelect": {
      "signature": "bSelect=sedge.GetSelect",
@@ -64563,7 +64586,8 @@
       "description": "True (Identical), False (Not identical)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "SetSelect": {
      "signature": "sedge.SetSelect(bSelect, bSpread)",
@@ -68210,7 +68234,8 @@
       "description": "True (Discontinuous mesh), False(Not discontinuous mesh)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "GetDiscontinuousMeshingGroup": {
      "signature": "Set static_meshgroup=meshgroup.GetDiscontinuousMeshingGroup",
@@ -69793,7 +69818,8 @@
       "description": "True(successful), False(failed)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "SaveCmbFile": {
      "signature": "retval=meshgroup.SaveCmbFile(path, type)",
@@ -70046,7 +70072,8 @@
       "description": "True (successful), False (failed)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "SetExpand": {
      "signature": "meshgroup.SetExpand(bExpand)",
@@ -70969,7 +70996,8 @@
       "description": "Internal unit of length(string)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "GetInvalidTolerance": {
      "signature": "retval=meshset.GetInvalidTolerance",
@@ -80756,7 +80784,8 @@
       "description": "True (successful), False (failed)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "IsRadiationField": {
      "signature": "retval=specialregion.IsRadiationField",
@@ -82146,6 +82175,7 @@
     }
    },
    "recipe_unreliable": true,
+   "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph",
    "recipe_unreliable_evidence": [
     "stem:Conditions.GetCondFrequencyAmplitudeTable（验身否：该类独有成员解析率不过半）",
     "stem:Conditions.GetCondFrequencyAmplitudeTable（验身否：该类独有成员解析率不过半）",
@@ -84357,7 +84387,8 @@
       "description": "Name of surface region (string)"
      },
      "host_absent": true,
-     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）"
+     "host_absent_evidence": "GetIDsOfNames → DISP_E_UNKNOWNNAME（tools/dispatch_name_probe.py --sweep）",
+     "evidence_run": "R50 | 2026-09-23T20:52:01 | log=_p12u_gate\\r50\\name_verdicts.json | projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1.pph,exA18-4.pph"
     },
     "GetSweepFaceRegionName": {
      "signature": "retval=volume_region.GetSweepFaceRegionName",

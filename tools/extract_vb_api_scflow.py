@@ -412,6 +412,25 @@ def _apply_name_verdicts(catalog: dict) -> int:
 HOST_AVAILABILITY = ROOT / "schemas" / "host_member_availability.json"
 
 
+def _evidence_run_text(data: dict) -> str:
+    """把普查证据里的**可复验串**压成一行（R50-2）：轮次 / 时间 / 日志 / 工程集。
+
+    这样目录里任取一条 `host_absent`/`recipe_unreliable`，都能追到"哪一轮、哪个
+    日志、哪些工程" —— 复验时不必翻全量日志找上下文。
+    """
+    run = (data.get("evidence_run") or (data.get("coverage") or {}).get(
+        "evidence_run") or {})
+    if not run:
+        return ""
+    parts = [str(run.get("round") or "?"), str(run.get("when") or "?")]
+    if run.get("log"):
+        parts.append("log=" + str(run["log"]))
+    projs = run.get("projects") or []
+    if projs:
+        parts.append("projects=" + ",".join(str(p) for p in projs))
+    return " | ".join(parts)
+
+
 def _apply_host_absent(catalog: dict) -> int:
     """把「手册有、宿主**未实现**」的成员标进目录（R42-1）。
 
@@ -424,6 +443,7 @@ def _apply_host_absent(catalog: dict) -> int:
         data = _json.loads(HOST_AVAILABILITY.read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001
         return 0
+    run = _evidence_run_text(data)       # R50-2：可复验串
     n = 0
     for cls, states in (data.get("availability") or {}).items():
         info = catalog["classes"].get(cls) or {}
@@ -434,6 +454,8 @@ def _apply_host_absent(catalog: dict) -> int:
                     entry["host_absent_evidence"] = (
                         "GetIDsOfNames → DISP_E_UNKNOWNNAME"
                         "（tools/dispatch_name_probe.py --sweep）")
+                    if run:
+                        entry["evidence_run"] = run
                     n += 1
     return n
 
@@ -455,6 +477,7 @@ def _apply_recipe_evidence(catalog: dict) -> int:
     except Exception:  # noqa: BLE001
         return 0
     cov = data.get("coverage") or {}
+    run = _evidence_run_text(data)          # R50-2：可复验串
     marked: set = set()
     n = 0
     for line in cov.get("identity_rejected") or []:
@@ -463,6 +486,8 @@ def _apply_recipe_evidence(catalog: dict) -> int:
         if not info:
             continue
         info["recipe_unreliable"] = True
+        if run:
+            info["evidence_run"] = run
         ev = info.setdefault("recipe_unreliable_evidence", [])
         marked.add(cls)
         if isinstance(ev, list) and how and how not in ev:
@@ -473,6 +498,8 @@ def _apply_recipe_evidence(catalog: dict) -> int:
         if not info:
             continue
         info["recipe_unreliable"] = True
+        if run:
+            info["evidence_run"] = run
         ev = info.setdefault("recipe_unreliable_evidence", [])
         text = ("整类成员 " + str(detail.get("unknown")) + "/"
                 + str(detail.get("total")) + " 解析不到（拿错对象）")

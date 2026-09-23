@@ -1,5 +1,20 @@
 {
  "source": "tools/dispatch_name_probe.py --sweep（GetIDsOfNames）",
+ "evidence_run": {
+  "round": "R50",
+  "when": "2026-09-23T20:52:01",
+  "log": "_p12u_gate\\r50\\name_verdicts.json",
+  "projects": [
+   "box.pph",
+   "exB01-1_intake_manifold.pph",
+   "exA26-1_ldc.pph",
+   "exA16-2.pph",
+   "exA25-1.pph",
+   "exA18-4.pph"
+  ],
+  "probe": "tools/dispatch_name_probe.py --sweep",
+  "progid": "scFLOWpre_Bx64net.Application.2025"
+ },
  "note": "state=unknown_name ⇒ 宿主**未实现**该成员；error:* ⇒ 探针侧问题（对象为空/过时），**不得**当宿主否证；未出现在本表的类 = **未普查**（不等于已实现）",
  "coverage": {
   "classes_swept": 155,
@@ -411,11 +426,177 @@
   "selection_prime_errors": {},
   "guard_audit": {
    "classes_sampled": 40,
-   "self_pass": 40,
+   "self_total": 108,
+   "rejections": 6,
+   "fragile_rejections": 0,
+   "rejection_margins": [
+    {
+     "how": "CondCoSim | stem:Conditions.GetCondCoSimOption",
+     "sample": 5,
+     "resolved": 0,
+     "margin": -5
+    },
+    {
+     "how": "Condition | catalog:Doc.GetConditions",
+     "sample": 4,
+     "resolved": 0,
+     "margin": -4
+    },
+    {
+     "how": "CrossSectionView | stem:Doc.GetCrossSectionRegions",
+     "sample": 5,
+     "resolved": 0,
+     "margin": -5
+    },
+    {
+     "how": "DiffusiveSpecies | stem:Conditions.GetCondBoundaryDiffusiveSpecies",
+     "sample": 5,
+     "resolved": 0,
+     "margin": -5
+    },
+    {
+     "how": "Table | stem:Conditions.GetCondFrequencyAmplitudeTable",
+     "sample": 5,
+     "resolved": 0,
+     "margin": -5
+    },
+    {
+     "how": "Table | stem:Doc.GetAllMultiYAxisTables",
+     "sample": 5,
+     "resolved": 0,
+     "margin": -5
+    }
+   ],
+   "self_pass": 108,
+   "false_kill": 0,
+   "distinctive_sample_sizes": {
+    "5": 73,
+    "4": 13,
+    "2": 15,
+    "1": 3,
+    "3": 4
+   },
    "cross_trials": 120,
    "false_accept": 0,
    "false_accept_rate": 0.0,
+   "boundary": [
+    {
+     "sample": 1,
+     "resolved": 0,
+     "accept": false
+    },
+    {
+     "sample": 1,
+     "resolved": 1,
+     "accept": true
+    },
+    {
+     "sample": 2,
+     "resolved": 0,
+     "accept": false
+    },
+    {
+     "sample": 2,
+     "resolved": 1,
+     "accept": true
+    },
+    {
+     "sample": 2,
+     "resolved": 2,
+     "accept": true
+    },
+    {
+     "sample": 3,
+     "resolved": 0,
+     "accept": false
+    },
+    {
+     "sample": 3,
+     "resolved": 1,
+     "accept": false
+    },
+    {
+     "sample": 3,
+     "resolved": 2,
+     "accept": true
+    },
+    {
+     "sample": 3,
+     "resolved": 3,
+     "accept": true
+    },
+    {
+     "sample": 4,
+     "resolved": 0,
+     "accept": false
+    },
+    {
+     "sample": 4,
+     "resolved": 1,
+     "accept": false
+    },
+    {
+     "sample": 4,
+     "resolved": 2,
+     "accept": true
+    },
+    {
+     "sample": 4,
+     "resolved": 3,
+     "accept": true
+    },
+    {
+     "sample": 4,
+     "resolved": 4,
+     "accept": true
+    },
+    {
+     "sample": 5,
+     "resolved": 0,
+     "accept": false
+    },
+    {
+     "sample": 5,
+     "resolved": 1,
+     "accept": false
+    },
+    {
+     "sample": 5,
+     "resolved": 2,
+     "accept": false
+    },
+    {
+     "sample": 5,
+     "resolved": 3,
+     "accept": true
+    },
+    {
+     "sample": 5,
+     "resolved": 4,
+     "accept": true
+    },
+    {
+     "sample": 5,
+     "resolved": 5,
+     "accept": true
+    }
+   ],
    "rule": "该类独有成员解析率 ≥ 半数即认作此类的对象"
+  },
+  "evidence_run": {
+   "round": "R50",
+   "when": "2026-09-23T20:52:01",
+   "log": "_p12u_gate\\r50\\name_verdicts.json",
+   "projects": [
+    "box.pph",
+    "exB01-1_intake_manifold.pph",
+    "exA26-1_ldc.pph",
+    "exA16-2.pph",
+    "exA25-1.pph",
+    "exA18-4.pph"
+   ],
+   "probe": "tools/dispatch_name_probe.py --sweep",
+   "progid": "scFLOWpre_Bx64net.Application.2025"
   }
  },
  "classes": {

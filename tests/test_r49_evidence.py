@@ -115,8 +115,8 @@ class TestGuardAudit(unittest.TestCase):
 
     def test_self_pass_is_total(self):
         # 真对象必须过自己的验身（不过就是误杀）
-        self.assertEqual(self.audit["self_pass"],
-                         self.audit["classes_sampled"])
+        total = self.audit.get("self_total", self.audit["classes_sampled"])
+        self.assertEqual(self.audit["self_pass"], total)
 
     def test_rule_is_the_documented_one(self):
         self.assertIn("半数", self.audit["rule"])

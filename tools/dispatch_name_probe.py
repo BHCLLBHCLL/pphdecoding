@@ -597,7 +597,7 @@ def prime_selection(ctx: dict, cat: dict) -> list:
 
 
 def audit_identity_guard(cat: dict, ctx: dict, index: dict,
-                         sample: int = 0) -> dict:
+                         sample: int = 0, details: dict | None = None) -> dict:
     """量验身闸门的**误放率**（R49-2）：拿别家的对象去验，看会不会被放行。
 
     判据是"该类独有成员的解析率 ≥ 半数"。这条例很便宜，但**只有拦住过什么**
@@ -607,25 +607,57 @@ def audit_identity_guard(cat: dict, ctx: dict, index: dict,
     """
     if sample <= 0:
         return {}
-    cands = [c for c in sorted(ctx)
-             if c in cat["classes"]
-             and len(distinctive_members(cat, c, index)) >= 2]
-    cands = cands[:sample]
-    trials = accepts = self_pass = 0
+    # ① 自类通过率：**全部**已取得类（不只抽样）—— 不过就是误杀真对象
+    all_cands = [c for c in sorted(ctx)
+                 if c in cat["classes"]
+                 and distinctive_members(cat, c, index)]
+    self_total = self_pass = 0
+    sample_sizes: dict = {}
+    for cls in all_cands:
+        obj = ctx.get(cls)
+        if obj is None:
+            continue
+        smp = distinctive_members(cat, cls, index)
+        ok, detail = identity_ok(obj, smp)
+        self_total += 1
+        self_pass += 1 if ok else 0
+        key = str(detail.get("sample"))
+        sample_sizes[key] = sample_sizes.get(key, 0) + 1
+    # ② 跨类误放（抽样 × 3 家别类）
+    cands = all_cands[:sample]
+    trials = accepts = 0
     for cls in cands:
         obj = ctx.get(cls)
         if obj is None:
             continue
-        ok, _ = identity_ok(obj, distinctive_members(cat, cls, index))
-        self_pass += 1 if ok else 0
-        others = [c for c in cands if c != cls][:3]
-        for other in others:
+        for other in [c for c in cands if c != cls][:3]:
             trials += 1
             ok2, _ = identity_ok(obj, distinctive_members(cat, other, index))
             accepts += 1 if ok2 else 0
-    return {"classes_sampled": len(cands), "self_pass": self_pass,
+    # ③ 边界表（离线、确定性）：样本量 1..5 × 解析数 0..s 的判定形状
+    boundary = [{"sample": s, "resolved": r, "accept": r * 2 >= s}
+                for s in range(1, 6) for r in range(s + 1)]
+    # ④ 被否样本的**稳健性**：离阈值多远（|2r − s| ≤ 1 ⇒ 差一点就翻案 = 判据脆）
+    margins = []
+    fragile = 0
+    for key, detail in (details or {}).items():
+        s = int(detail.get("sample") or 0)
+        r = int(detail.get("resolved") or 0)
+        if s <= 0:
+            continue
+        margin = 2 * r - s
+        fragile += 1 if abs(margin) <= 1 else 0
+        margins.append({"how": key, "sample": s, "resolved": r,
+                        "margin": margin})
+    return {"classes_sampled": len(cands), "self_total": self_total,
+            "rejections": len(margins), "fragile_rejections": fragile,
+            "rejection_margins": margins[:12],
+            "self_pass": self_pass,
+            "false_kill": self_total - self_pass,
+            "distinctive_sample_sizes": sample_sizes,
             "cross_trials": trials, "false_accept": accepts,
             "false_accept_rate": (round(accepts / trials, 3) if trials else None),
+            "boundary": boundary,
             "rule": "该类独有成员解析率 ≥ 半数即认作此类的对象"}
 
 
@@ -946,6 +978,8 @@ def main(argv=None) -> int:
     ap.add_argument("--sweep", action="store_true",
                     help="R42-1：对已取到实例的类做**成员可用性普查**"
                          "（GetIDsOfNames 逐个解析，零副作用）")
+    ap.add_argument("--evidence-run", default="",
+                    help="R50-2：本轮标签（轮次/日期）—— 写进证据，供逐条复验追溯")
     ap.add_argument("--guard-audit", type=int, default=0,
                     help="R49-2：抽样 N 个类量验身闸门的误放率（0=不量）")
     ap.add_argument("--auto-budget", type=float, default=300.0,
@@ -1416,15 +1450,29 @@ def main(argv=None) -> int:
         # R49-2：验身闸门误放率（真对象 × 别家的独有成员，抽样实测）
         if args.guard_audit:
             result["guard_audit"] = audit_identity_guard(
-                cat, ctx, member_name_index(cat), args.guard_audit)
+                cat, ctx, member_name_index(cat), args.guard_audit,
+                result.get("identity_detail") or {})
             ga = result["guard_audit"]
-            print("[r49] 验身闸门：抽样 " + str(ga["classes_sampled"]) + " 类，"
-                  + "自类通过 " + str(ga["self_pass"]) + "，跨类 "
-                  + str(ga["cross_trials"]) + " 次里误放 "
+            print("[r49] 验身闸门：自类通过 " + str(ga["self_pass"]) + "/"
+                  + str(ga["self_total"]) + "（误杀 " + str(ga["false_kill"])
+                  + "）；跨类 " + str(ga["cross_trials"]) + " 次里误放 "
                   + str(ga["false_accept"]) + "（"
-                  + str(ga["false_accept_rate"]) + "）", flush=True)
+                  + str(ga["false_accept_rate"]) + "）；被否 "
+                  + str(ga.get("rejections")) + " 条中近阈（|2r−s|≤1）"
+                  + str(ga.get("fragile_rejections")), flush=True)
+        # R50-2：**可复验串** —— 任取一条 host_absent / recipe_unreliable，
+        # 都能追到"哪一轮、哪个日志、哪些工程、什么时候"
+        result["evidence_run"] = {
+            "round": args.evidence_run or "（未标轮次）",
+            "when": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "log": str(args.json or ""),
+            "projects": [Path(p).name for p in projects],
+            "probe": "tools/dispatch_name_probe.py --sweep",
+            "progid": PROGID,
+        }
         sweep_path.write_text(json.dumps({
             "source": "tools/dispatch_name_probe.py --sweep（GetIDsOfNames）",
+            "evidence_run": result.get("evidence_run") or {},
             "note": ("state=unknown_name ⇒ 宿主**未实现**该成员；"
                      "error:* ⇒ 探针侧问题（对象为空/过时），**不得**当宿主否证；"
                      "未出现在本表的类 = **未普查**（不等于已实现）"),
@@ -1467,7 +1515,9 @@ def main(argv=None) -> int:
                          "selection_prime_errors": result.get(
                              "selection_prime_errors") or {},
                          # R49-2：验身闸门的误放率实测
-                         "guard_audit": result.get("guard_audit") or {}},
+                         "guard_audit": result.get("guard_audit") or {},
+                         # R50-2：可复验串（逐条证据都能追到这一轮）
+                         "evidence_run": result.get("evidence_run") or {}},
             "classes": {c: {"total": v["total"], "resolved": v["resolved"],
                             "unknown": v["unknown"],
                             "errors": v["errors"]}
