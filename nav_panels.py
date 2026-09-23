@@ -14916,8 +14916,16 @@ class HostBoundaryDialog(QDialog):
         outer = QVBoxLayout(self)
         self.txt = QPlainTextEdit()
         self.txt.setReadOnly(True)
-        self.txt.setPlainText(render_host_boundary(
-            data if data is not None else host_boundary_data()))
+        text = render_host_boundary(
+            data if data is not None else host_boundary_data())
+        # R52-2：面板这一处就是"四份结论一个入口"的 GUI 面 ——
+        # 直接渲染产品面的汇总（未实现成员/不可信取法/空对象提示/缺语料分组）
+        try:
+            from automation.scflowpre_api import render_capability_report
+            text = render_capability_report() + "\n\n" + text
+        except Exception:  # noqa: BLE001
+            pass
+        self.txt.setPlainText(text)
         self.txt.setStyleSheet("font-family:Consolas,monospace; font-size:11px;")
         outer.addWidget(self.txt, 1)
         outer.addWidget(_note(

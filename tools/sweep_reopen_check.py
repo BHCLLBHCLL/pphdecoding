@@ -134,11 +134,47 @@ def decide(evidence: dict, catalog_path: Path = CATALOG,
                         "projects_ran": ran}}
 
 
+#: 盯防清单的判定元数据（每档都写清"为什么盯它"）
+WATCH_KINDS = {
+    "swept_suspect": "整类成员未知过半（拿错对象，整类没记）——重开时优先复查",
+    "near_threshold": "验身否掉但离阈值很近（|2r−s| ≤ 1）——判据脆，重开时复验",
+    "probe_limitation": "终态 probe-limitation（试过但没结论）——重开时优先试",
+    "empty_object": "取不到实例（缺前置流程）——有语料后第一个该试",
+    "no_member": "取到了对象但手册页 0 成员——重开时看手册是否补了成员",
+}
+
+
+def watchlist(evidence: dict, account: dict | None = None) -> dict:
+    """重开普查时**优先复查**的类（R52-3；纯函数，可单测）。"""
+    cov = (evidence or {}).get("coverage") or {}
+    out: dict = {}
+    for cls in sorted(cov.get("swept_suspect") or {}):
+        out.setdefault(cls, []).append("swept_suspect")
+    for row in ((evidence or {}).get("coverage") or {}).get(
+            "guard_audit", {}).get("rejection_margins") or []:
+        cls = str(row.get("how") or "").split(" <- ")[0].strip()
+        if cls and abs(int(row.get("margin") or 0)) <= 1:
+            out.setdefault(cls, []).append("near_threshold")
+    for cls in sorted(cov.get("empty_objects") or []):
+        out.setdefault(cls, []).append("empty_object")
+    for cls in sorted(cov.get("no_member_classes") or []):
+        out.setdefault(cls, []).append("no_member")
+    if account:
+        for cls, row in (account.get("classes") or {}).items():
+            if row.get("terminal") == "probe-limitation":
+                out.setdefault(cls, []).append("probe_limitation")
+    return {cls: {"kinds": sorted(set(k)), "why": [WATCH_KINDS[k] for k in
+                                                  sorted(set(k))]}
+            for cls, k in sorted(out.items())}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="普查复验窗口检查（R51-2）")
     ap.add_argument("--avail", type=Path, default=AVAIL)
     ap.add_argument("--floor", type=int, default=FLOOR_CLASSES)
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--watchlist", action="store_true",
+                    help="R52-3：只输出「重开时优先复查的类」")
     args = ap.parse_args(argv)
     if not args.avail.is_file():
         print("[reopen] 缺证据：" + str(args.avail), file=sys.stderr)
@@ -150,6 +186,21 @@ def main(argv=None) -> int:
         projects = list(DEFAULT_PROJECTS)
     except Exception:  # noqa: BLE001
         projects = []
+    if args.watchlist:
+        acct = {}
+        p = ROOT / "schemas" / "unswept_account.json"
+        if p.is_file():
+            acct = json.loads(p.read_text(encoding="utf-8"))
+        wl = watchlist(evidence, acct)
+        if args.json:
+            print(json.dumps(wl, ensure_ascii=False, indent=1))
+        else:
+            print("[watchlist] 重开普查时优先复查 " + str(len(wl)) + " 个类：")
+            for cls, meta in wl.items():
+                print("  · " + cls + "（" + "/".join(meta["kinds"]) + "）")
+                for why in meta["why"]:
+                    print("      " + why)
+        return 0
     res = decide(evidence, floor=args.floor, workspace_projects=projects)
     if args.json:
         print(json.dumps(res, ensure_ascii=False, indent=1))

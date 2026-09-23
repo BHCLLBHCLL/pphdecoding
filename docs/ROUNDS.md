@@ -3674,23 +3674,106 @@ R49 只量了误放。本轮把**误杀**这一面补齐 —— 三条证据（�
 
 ---
 
-## R52 —— 提案（≈1 人日）
+## R52 —— 未普查类参与判定 + 四份结论一个入口 + 重开盯防清单（2026-09-15，✅ 已完成）
+
+收口之后的三件事：结论要**更准**、要**一处可查**、要被**守住**。
+
+### 条目与结果
+
+| # | 条目 | 验收句 | 结果 |
+|---|---|---|---|
+| **R52-1** | **未普查类也参与②判定** | 结论区分"未实测"与"手册无此成员" | ✅ `_grade_owners()` **四档**证据分级 |
+| **R52-2** | **四份结论一个入口** | 一处可查 + 测试 | ✅ `host_capability_report()` / `render_capability_report()` + 面板同源渲染 |
+| **R52-3** | **重开后的盯防清单** | 一条命令给清单 + 测试 | ✅ `sweep_reopen_check.py --watchlist` → 16 类（五档） |
+
+### R52-1 同名成员的证据分级（四档）
+
+以前只有两档（"实测可用" / "未实测"），第二档把"该类连实例都取不到"和"那边也不可用"
+混在一起。现在按普查证据分：
+
+| 档 | 判据 | 给出的话 |
+|---|---|---|
+| ① | 该类已普查且该成员 `resolved` | **实测可用**（可以直接换过去） |
+| ② | 该类在 `empty_objects`（有前置流程没跑） | 未实测 + **先跑什么**（`object_hints`） |
+| ③ | 该类从未普查 | 未实测（该类还没取到实例） |
+| ④ | 已普查但该成员 `unknown_name` | **不要换过去**（那边也不可用） |
+
+例：`Condition.GetName` → "…CondFMIVariable/CondOutputLFileWaterLevel/CondParticlePropertyDEM
+的**同名成员实测可用**（普查 resolved）"；`SpecialRegion.ImportCSV` → "…SNode/Table
+手册里有同名成员但**未实测**（该类还没取到实例）"。
+
+### R52-2 四份结论一个入口
+
+`scflowpre_api.host_capability_report()` 把四处结论装配起来（**每段都标来源**，不新增判断）：
+
+| 段 | 来源 | 本轮量 |
+|---|---|---|
+| `host_absent` | 目录（`host_absent` 标记） | 27 条 / 17 类 |
+| `unreliable_recipes` | 目录（`recipe_unreliable`） | 4 类 |
+| `object_hints` | 证据 `coverage.empty_hints` | 4 类 |
+| `needs_corpus_groups` | `unswept_account.json` | 7 组 / 25 类 |
+
+`render_capability_report()`（纯函数）渲染 54 行文本（未实现成员逐条**带下一步**、
+不可信取法、空对象提示、缺语料分组）；面板 `HostBoundaryDialog` 现在**同源渲染**这份汇总
+（GUI 面 102 行）。
+
+### R52-3 盯防清单（重开时先复查谁）
+
+`--watchlist` 从证据里挑出五档并写清"为什么盯它"：`swept_suspect`（整类拿错对象）、
+`near_threshold`（验身否但 `|2r−s| ≤ 1`，判据脆）、`probe_limitation`（试过没结论）、
+`empty_object`（缺前置流程，有语料第一个该试）、`no_member`（手册页 0 成员）。
+
+本轮 16 个类：`CondParticleCounter`（suspect）+ 4 个空对象 + 11 个无成员类。退出码 0（清单是信息，不替收口判据下结论）。
+
+### 回归
+
+全量回归 **1580 passed / 4 skipped / 0 failed**（566.99 s；R51 收口同口径 1565/4/0，
+增量 +15 = 本轮新模块 15 项。**首次全量回归 3 红** → 修掉缓存污染与一条假失败判据后复算全绿，
+详见下节）。新增测试 1 个模块 `test_r52_evidence.py`（15 项：
+分级四档 / 汇总四段对账 / 渲染完整与空输入 / 盯防五档与合成证据）。
+
+### 证据
+
+`schemas/unswept_account.json`（29 类终态 + 7 组）、`schemas/host_member_availability.json`
+（155 类 / 3925 成员 / errors 0）、`automation/scflowpre_api.py`（`_grade_owners()` /
+### 本轮抓到的**产品 bug**（全量回归抓的，单测抓不到）
+
+首次全量回归 3 红，根因是 `load_availability()` 的缓存被污染：早期实现用**单个全局值**，
+任何一次 `load_availability(别的路径)`（例如 `test_r46_evidence` 里"缺文件不许崩"的负例）
+都会把**默认路径**的缓存一起覆盖成空表 → 之后所有消费者（提示、能力汇总）拿到空数据。
+表现极具迷惑性：R52 的两个测试**单独跑通过、全量回归失败**（取决于谁先跑）。
+
+修法：缓存**按路径键**（`_AVAILABILITY[path]`），并把这条写进 docstring。另外把 R50 的
+"边际收益"测试从"样本里必须看到 ≥3 的增益"（窗口一滑动就假失败）改成"**最新一轮**增益 < 1
+且窗口里能看到历史增长"。
+
+### 证据
+
+`schemas/unswept_account.json`（29 类终态 + 7 组）、`schemas/host_member_availability.json`
+（155 类 / 3925 成员 / errors 0）、`automation/scflowpre_api.py`（`_grade_owners()` /
+`host_capability_report()` / `render_capability_report()` / 缓存按路径键）、
+`tools/sweep_reopen_check.py`。本轮未重跑普查（无新语料/新宿主版本），证据仍为 R50 那一轮。
+
+---
+
+## R53 —— 提案（≈1 人日）
 
 ### 依据
 
-* `member_alternative()` 的②只在**已普查**的类里找同名成员 —— 未普查的类（29 个）里
-  可能就有可用实现，但结论会写成"未实测"（保守但可能漏掉真路径）；
-* 收口后 `host_absent`/`recipe_unreliable`/`empty_hints`/`needs_corpus_groups`
-  四份结论**没有汇总入口**（要分别查 API/schema/文档/面板）；
-* `sweep_reopen_check` 只回答"要不要重开"，**不回答"重开后该盯哪些类"**。
+* `host_capability_report()` 现在有 API/面板两处，但**文档侧**（`docs/NYI_INVENTORY.md`
+  是自动生成的）还没有把"缺语料分组"与"不可信取法"纳入同一份可读面 —— 四处结论仍然
+  只在两处汇合；
+* `--watchlist` 只列类，不列**具体复查动作**（试哪个取法、看哪条证据）；
+* 收口后新增的两份工具（`sweep_reopen_check`/`unswept_account`）还没有进**契约门**
+  （`api_contract_check` 7 项里没有它们），收口结论缺一道自动守卫。
 
 ### 条目
 
 | # | 条目 | 做法 | 验收句 | 人日 |
 |---|---|---|---|---|
-| **R52-1** | **未普查类也参与②判定** | 用 `auto_plans` 的"手册声明候选"给未普查类里的同名成员定级（手册有/宿主未验） | 结论区分"未实测"与"手册无此成员" | 0.25 |
-| **R52-2** | **四份结论一个入口** | `scflowpre_api.host_capability_report()` 汇总（未实现成员/不可信取法/空对象提示/缺语料分组） | 一处可查 + 测试 | 0.5 |
-| **R52-3** | **重开后的盯防清单** | `sweep_reopen_check --watchlist` 输出"重开时优先复查的类"（suspect/近阈否/终态为 probe-limitation） | 一条命令给清单 + 测试 | 0.25 |
+| **R53-1** | **结论进自动文档** | `scan_nyi_menus.py` 的「宿主侧能力边界」节扩成四段（同 `host_capability_report`） | 文档一处可读 + 测试对账 | 0.5 |
+| **R53-2** | **盯防清单带动作** | `--watchlist` 每条给"试哪个取法 / 看哪条证据"（取 `auto_plans` 与 `evidence_run`） | 每条有可执行动作 + 测试 | 0.25 |
+| **R53-3** | **收口结论进契约门** | 契约门加第 8 项：覆盖率 ≥ 收口下限 + 未普查类全终态 + 复验窗口结论 | 门 8/8 PASS 且能挡住回落 | 0.25 |
 
 ### 明确不做
 

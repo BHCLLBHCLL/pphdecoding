@@ -155,21 +155,33 @@ class TestConvergence(unittest.TestCase):
             self.assertTrue(row["reason"].strip(), cls)
 
     def test_marginal_gain_is_below_one_per_round(self):
-        """边际收益 < 1 类/轮：用 git 历史里的覆盖率算最近几轮。"""
-        seq = []
-        for rev in ("HEAD~2", "HEAD~1", "HEAD"):
-            try:
-                out = subprocess.run(
-                    ["git", "show", rev + ":schemas/host_member_availability.json"],
-                    cwd=str(ROOT), capture_output=True, text=True,
-                    encoding="utf-8").stdout
-                seq.append(json.loads(out)["coverage"]["classes_swept"])
-            except Exception:  # noqa: BLE001
-                raise unittest.SkipTest("git 历史不可用")
+        """边际收益 < 1 类/轮：用 git 历史里的覆盖率算**最近 6 次**付存。
+
+        收口之后每轮增益自然为 0，所以判据是"**最新一轮**增益 < 1"（而不是
+        "样本里必须看到 >=3" —— 那会随窗口滑动变成假失败）；样本窗口里同时
+        要求能看到历史增长（否则窗口选错了）。
+        """
+        try:
+            revs = subprocess.run(
+                ["git", "log", "--format=%H", "-n", "6", "--",
+                 "schemas/host_member_availability.json"],
+                cwd=str(ROOT), capture_output=True, text=True,
+                encoding="utf-8").stdout.split()
+            seq = [json.loads(subprocess.run(
+                ["git", "show", r + ":schemas/host_member_availability.json"],
+                cwd=str(ROOT), capture_output=True, text=True,
+                encoding="utf-8").stdout)["coverage"]["classes_swept"]
+                for r in reversed(revs)]
+        except Exception:  # noqa: BLE001
+            raise unittest.SkipTest("git 历史不可用")
+        if len(seq) < 2:
+            raise unittest.SkipTest("历史太短")
         gains = [seq[i + 1] - seq[i] for i in range(len(seq) - 1)]
-        self.assertTrue(any(g >= 3 for g in gains),
-                        "历史样本里应能看到一轮 >=3 的增益：" + str(seq))
-        self.assertLessEqual(min(gains), 5, "增益不应出现异常跳变：" + str(seq))
+        self.assertTrue(any(g >= 1 for g in gains),
+                        "窗口里应能看到历史增长：" + str(seq))
+        self.assertLess(gains[-1], 1,
+                        "最新一轮的边际增益必须 < 1 类/轮：" + str(seq))
+        self.assertLessEqual(max(gains), 6, "增益不应出现异常跳变：" + str(seq))
 
     def test_convergence_declared_in_docs(self):
         text = AUDIT.read_text(encoding="utf-8")

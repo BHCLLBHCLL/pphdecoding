@@ -1784,7 +1784,12 @@ def _ensure_api_wiring() -> None:
 #: R45-2：普查证据（宿主成员可用性 + 空对象的前置流程提示）
 AVAILABILITY_PATH = (Path(__file__).resolve().parent.parent
                      / "schemas" / "host_member_availability.json")
-_AVAILABILITY: Optional[dict] = None
+#: 证据缓存**按路径键**（R52 修）：早期实现是单个全局值 —— 一次
+#: `load_availability(别的路径)`（例如"缺文件不许崩"的自检）会把默认路径的缓存也
+#: 覆盖成空表，之后所有消费者（提示/能力汇总）都拿到空数据。实测被
+#: `test_r46_evidence` 的负例打中，表现是 R52 的两个测试在**全量回归里**失败、
+#: 单独跑却通过。
+_AVAILABILITY: dict = {}
 
 
 def load_availability(path: Optional[Path] = None) -> dict:
@@ -1793,15 +1798,15 @@ def load_availability(path: Optional[Path] = None) -> dict:
     文件缺失（未跑过普查的部署）返回空 dict —— 提示是**可选**的辅助信息，
     不该让调用方为此崩掉。
     """
-    global _AVAILABILITY
-    if _AVAILABILITY is None or path is not None:
-        import json
+    import json
+    p = Path(path) if path else AVAILABILITY_PATH
+    key = str(p)
+    if key not in _AVAILABILITY:
         try:
-            _AVAILABILITY = json.loads(
-                Path(path or AVAILABILITY_PATH).read_text(encoding="utf-8"))
+            _AVAILABILITY[key] = json.loads(p.read_text(encoding="utf-8"))
         except Exception:  # noqa: BLE001
-            _AVAILABILITY = {}
-    return _AVAILABILITY
+            _AVAILABILITY[key] = {}
+    return _AVAILABILITY[key]
 
 
 def object_hints(path: Optional[Path] = None) -> dict:
@@ -1835,20 +1840,132 @@ def member_alternative(cls: str, member: str,
               and not ((info.get("methods") or {}).get(member) or {}
                        ).get("host_absent")]
     if owners:
-        # 证据分级：**实测可用**（普查里 resolved）> 未实测（只是手册里有同名）
-        av = (load_availability() or {}).get("availability") or {}
-        measured = sorted(c for c in owners
-                          if (av.get(c) or {}).get(member) == "resolved")
-        if measured:
-            return ("该类未实现；" + "/".join(measured[:3])
-                    + " 的**同名成员实测可用**（普查 resolved）")
-        return ("该类未实现；" + "/".join(sorted(owners)[:3])
-                + " 手册里有同名成员但**未实测**（不在已普查范围）")
+        return _grade_owners(owners, member)
     hint = object_hints().get(cls)
     if hint:
         return "先跑前置流程：" + hint
     return ("宿主没有等价物（手册与实机都否）；替代路径见 docs/NYI_INVENTORY.md"
             "「宿主侧能力边界」一节")
+
+
+def _grade_owners(owners: list, member: str) -> str:
+    """同名成员所在类的**证据分级**（R52-1）。
+
+    以前只有两档（实测可用 / 未实测），第二档把"该类连实例都取不到"和"手册里没有
+    这个成员"混在一起。现在按普查证据分四档：
+
+    | 档 | 判据 | 话 |
+    |---|---|---|
+    | ① | 该类已普查且该成员 resolved | **实测可用**（可以直接换过去） |
+    | ② | 该类在 empty_objects（有前置流程没跑） | 未实测，且给出**先跑什么** |
+    | ③ | 该类从未普查 | 未实测（该类还没取到实例） |
+    | ④ | 该类已普查但该成员没解析出来 | 不推荐（同名成员在那边也不可用） |
+    """
+    av_data = load_availability() or {}
+    av = av_data.get("availability") or {}
+    cov = av_data.get("coverage") or {}
+    empty = set(cov.get("empty_objects") or [])
+    hints = object_hints()
+    tier1, tier2, tier3, tier4 = [], [], [], []
+    for cls in sorted(owners):
+        states = av.get(cls) or {}
+        if states.get(member) == "resolved":
+            tier1.append(cls)
+        elif cls in states:                       # 普查过但这条没解析出来
+            tier4.append(cls)
+        elif cls in empty:
+            tier2.append(cls)
+        else:
+            tier3.append(cls)
+    if tier1:
+        return ("该类未实现；" + "/".join(tier1[:3])
+                + " 的**同名成员实测可用**（普查 resolved）")
+    if tier2:
+        cls = tier2[0]
+        tail = ("；先跑前置流程：" + hints[cls]) if hints.get(cls) else ""
+        return ("该类未实现；" + "/".join(tier2[:3])
+                + " 有同名成员但**未实测**（该类现在取不到实例）" + tail)
+    if tier3:
+        return ("该类未实现；" + "/".join(tier3[:3])
+                + " 手册里有同名成员但**未实测**（该类还没取到实例）")
+    if tier4:
+        return ("该类未实现；同名成员在 " + "/".join(tier4[:3])
+                + " 里**也解析不到**（普查 unknown）—— 不要换过去")
+    return ""
+
+
+def host_capability_report(catalog: Optional[dict] = None) -> dict:
+    """宿主能力边界**汇总入口**（R52-2）：四份结论 + 覆盖率 + 可复验串。
+
+    收口后结论散在四处（API / 目录 / 证据 / 面板），这里给一个入口，供文档生成、
+    面板与排期共用；**不新增判断**，只是把已有结论装配起来（各段都标了来源）。
+    """
+    av = load_availability() or {}
+    cov = av.get("coverage") or {}
+    cat = catalog if catalog is not None else load_catalog()
+    return {
+        "sources": {
+            "host_absent": "schemas/vb_api_catalog.json（host_absent 标记）",
+            "unreliable_recipes": "schemas/vb_api_catalog.json（recipe_unreliable）",
+            "object_hints": "schemas/host_member_availability.json（coverage.empty_hints）",
+            "needs_corpus_groups": "schemas/unswept_account.json（needs_corpus_groups）",
+        },
+        "coverage": {"classes_swept": cov.get("classes_swept"),
+                     "classes_total": cov.get("classes_total"),
+                     "members_swept": cov.get("members_swept"),
+                     "members_total": cov.get("members_total"),
+                     "unswept": len(cov.get("unswept_classes") or []),
+                     "empty_objects": list(cov.get("empty_objects") or []),
+                     "no_member_classes": list(cov.get("no_member_classes") or [])},
+        "evidence_run": av.get("evidence_run") or {},
+        "host_absent": host_absent_members(cat),
+        "unreliable_recipes": unreliable_recipes(cat),
+        "object_hints": dict(cov.get("empty_hints") or {}),
+        "needs_corpus_groups": _needs_corpus_groups(),
+    }
+
+
+def _needs_corpus_groups(path: Optional[Path] = None) -> dict:
+    """缺语料分组（读 schemas/unswept_account.json；缺文件给空表）。"""
+    import json
+    p = path or (Path(__file__).resolve().parent.parent / "schemas"
+                 / "unswept_account.json")
+    try:
+        data = json.loads(Path(p).read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+    return dict(data.get("needs_corpus_groups") or {})
+
+
+def render_capability_report(report: Optional[dict] = None) -> str:
+    """把汇总渲染成文本（纯函数，可离线单测）：文档/面板/CLI 共用一份。"""
+    rep = report if report is not None else host_capability_report()
+    cov = rep.get("coverage") or {}
+    run = rep.get("evidence_run") or {}
+    lines = ["宿主能力边界（" + str(run.get("round") or "未标轮次") + " 普查；"
+             + str(cov.get("classes_swept")) + "/" + str(cov.get("classes_total"))
+             + " 类、" + str(cov.get("members_swept")) + "/"
+             + str(cov.get("members_total")) + " 成员）"]
+    absent = rep.get("host_absent") or {}
+    lines.append("· 宿主未实现的成员：" + str(sum(len(v) for v in absent.values()))
+                 + " 条 / " + str(len(absent)) + " 类")
+    recipes = rep.get("unreliable_recipes") or {}
+    lines.append("· 取法不可照抄的类：" + str(len(recipes)) + " 个")
+    hints = rep.get("object_hints") or {}
+    lines.append("· 取不到实例（先跑前置流程）的类：" + str(len(hints)) + " 个")
+    groups = rep.get("needs_corpus_groups") or {}
+    lines.append("· 缺语料分组：" + str(len(groups)) + " 组（"
+                 + "、".join(g + str(len(v)) for g, v in groups.items()) + "）")
+    for cls in sorted(absent):
+        lines.append("   ✗ " + cls + " — " + " / ".join(absent[cls]))
+        lines.append("     下一步：" + member_alternative(cls, absent[cls][0]))
+    for cls in sorted(recipes):
+        lines.append("   ⚠ " + cls + " — " + "；".join(recipes[cls])[:100])
+    for cls in sorted(hints):
+        lines.append("   ○ " + cls + " — " + hints[cls])
+    for group in sorted(groups):
+        lines.append("   ▸ " + group + "：" + ", ".join(groups[group]))
+    return "\n".join(lines)
 
 
 def unreliable_recipes(catalog: Optional[dict] = None) -> dict:

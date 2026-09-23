@@ -2309,3 +2309,38 @@ projects=box.pph,exB01-1_intake_manifold.pph,exA26-1_ldc.pph,exA16-2.pph,exA25-1
 > 文档结构修正：R50 的 §64 曾整段插在 §63 标题与正文之间（锚点选在标题行的锅），
 > 本轮把 §64 移到 §63 正文之后，节序恢复 63 → 64 → 65。
 
+---
+
+## 66. R52 更新（2026-09-15）—— 同名判定分级 + 四份结论一个入口 + 重开盯防清单
+
+### 66.1 同名成员的四档分级（R52-1）
+
+`_grade_owners()`：① 该类已普查且该成员 resolved → **实测可用**；② 该类在 empty_objects →
+未实测 + **先跑什么**；③ 该类从未普查 → 未实测（还没取到实例）；④ 已普查但该成员
+unknown_name → **不要换过去**（那边也不可用）。例：`Condition.GetName` → "…CondFMIVariable/
+CondOutputLFileWaterLevel/CondParticlePropertyDEM 的**同名成员实测可用**（普查 resolved）"。
+
+### 66.2 四份结论一个入口（R52-2）
+
+`scflowpre_api.host_capability_report()`（**每段标来源**，不新增判断）：`host_absent` 27 条/17 类、
+`unreliable_recipes` 4 类、`object_hints` 4 类、`needs_corpus_groups` 7 组/25 类；
+`render_capability_report()` 渲染 54 行（未实现成员逐条带**下一步**）；面板
+`HostBoundaryDialog` 同源渲染（GUI 面 102 行）。
+
+### 66.3 盯防清单（R52-3）
+
+`sweep_reopen_check.py --watchlist`：五档 —— `swept_suspect` / `near_threshold`
+（`|2r−s| ≤ 1`，判据脆）/ `probe_limitation` / `empty_object` / `no_member`，
+每档写清"为什么盯它"；本轮 16 类（CondParticleCounter + 4 空对象 + 11 无成员类），退出码 0
+（清单是信息，不替收口判据下结论）。
+
+> 测试坑位记录：面板是 QWidget，测试里**必须先建 QApplication**（`QT_QPA_PLATFORM=offscreen`），
+> 否则 Qt 会卡住整个 pytest（本轮实测：7 个测试通过后无输出）。
+
+> **产品 bug（R52 抓）**：`load_availability()` 早期用**单个全局缓存值** —— 任何一次
+> `load_availability(别的路径)` 会把默认路径的缓存一起覆盖成空表，之后所有消费者拿到空数据。
+> 表现是"单测通过、全量回归失败"（取决于谁先跑）。修法：缓存**按路径键**。
+> 教训：**全局可变缓存 + 显式参数**是陷阱；要么按 key 缓存，要么显式路径不写缓存。
+
+
+
