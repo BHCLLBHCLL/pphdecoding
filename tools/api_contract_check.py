@@ -48,8 +48,8 @@ def _load(name: str, path: Path):
     return mod
 
 
-def check_catalog() -> dict:
-    cat = json.loads(CATALOG.read_text(encoding="utf-8"))
+def check_catalog(catalog_path: Path | None = None) -> dict:
+    cat = json.loads((catalog_path or CATALOG).read_text(encoding="utf-8"))
     bogus, bad_values, with_dispatch = 0, [], 0
     for cls, info in cat["classes"].items():
         for kind in ("methods", "properties"):
@@ -72,8 +72,8 @@ def check_catalog() -> dict:
             "ok": bogus == 0 and not bad_values and with_dispatch > 0}
 
 
-def check_ledger() -> dict:
-    led = json.loads(LEDGER.read_text(encoding="utf-8"))
+def check_ledger(ledger_path: Path | None = None) -> dict:
+    led = json.loads((ledger_path or LEDGER).read_text(encoding="utf-8"))
     gaps = set(led.get("known_gaps") or [])
     status = led.get("known_gap_status") or {}
     missing = sorted(gaps - set(status))
@@ -84,10 +84,11 @@ def check_ledger() -> dict:
             "ok": not missing and not bad_terminal and len(led["keys"]) >= 18}
 
 
-def check_account() -> dict:
-    if not ACCOUNT.is_file():
+def check_account(account_path: Path | None = None) -> dict:
+    path = account_path or ACCOUNT
+    if not path.is_file():
         return {"ok": False, "error": "缺 schemas/dispatch_account.json"}
-    data = json.loads(ACCOUNT.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
     counts = data["counts"]
     bad = [r for r in data["rows"] if r["state"] == "nyi" and not r.get("reason")]
     return {"total": counts["total"], "verdict": counts["verdict"],
@@ -179,9 +180,14 @@ def check_guard() -> dict:
             "ok": none_state is None and bad is False and good is True}
 
 
-def check_host_absent() -> dict:
-    """R42-2：仓内**不得**引用宿主未实现的成员（引用了就是"注定调不通"）。"""
-    cat = json.loads(CATALOG.read_text(encoding="utf-8"))
+def check_host_absent(catalog_path: Path | None = None,
+                      avail_path: Path | None = None,
+                      roots: list | None = None) -> dict:
+    """R42-2：仓内**不得**引用宿主未实现的成员（引用了就是"注定调不通"）。
+
+    路径可注入（R54-1）：自测要能拿**合成仓**验"引用了就挡住"。
+    """
+    cat = json.loads((catalog_path or CATALOG).read_text(encoding="utf-8"))
     # 只在**无歧义**时才判：同名成员若在别的类里是实现了的（如 `ImportCSV`），
     # 单看名字会把正常引用误判成"引用未实现成员"（第一版就这么假阳性了一次）
     all_members: dict = {}
@@ -192,7 +198,7 @@ def check_host_absent() -> dict:
     # R43：普查证据同时要看**探针侧错误必须为 0**（error:* 是对象为空/过时，不得当结论）
     probe_errors = 0
     coverage: dict = {}
-    av_path = ROOT / "schemas" / "host_member_availability.json"
+    av_path = avail_path or (ROOT / "schemas" / "host_member_availability.json")
     if av_path.is_file():
         ev = json.loads(av_path.read_text(encoding="utf-8"))
         coverage = ev.get("coverage") or {}
@@ -203,8 +209,8 @@ def check_host_absent() -> dict:
         return {"absent_members": 0, "references": [], "coverage": coverage,
                 "probe_errors": probe_errors, "ok": probe_errors == 0}
     hits = []
-    roots = [ROOT / "tools", ROOT / "automation"]
-    files = [p for r in roots for p in r.glob("*.py")]
+    scan_roots = roots or [ROOT / "tools", ROOT / "automation"]
+    files = [p for r in scan_roots for p in r.glob("*.py")]
     files += [p for p in ROOT.glob("*.py")]
     for path in files:
         if path.name in ("extract_vb_api_scflow.py", "api_contract_check.py",
@@ -230,10 +236,160 @@ CHECKS = (("catalog", check_catalog), ("ledger", check_ledger),
           ("convergence", check_sweep_convergence))
 
 
+def _self_test_cases(tmp: Path) -> dict:
+    """每一项的**合成反例**（R54-1）：喂假证据，必须 FAIL。
+
+    每例只改一处、跑完即还原 ——"门能不能挡住"从此有总账，而不是只跑现状。
+    """
+    cases: dict = {}
+
+    # ① catalog：假参数（参数名以引号开头）
+    p = tmp / "cat_bad.json"
+    p.write_text(json.dumps({"classes": {"X": {"methods": {"M": {
+        "arguments": [{"type": "", "name": '"bogus'}],
+        "dispatch_name": "M"}}}}}, ensure_ascii=False), encoding="utf-8")
+    cases["catalog"] = lambda path=p: check_catalog(path)
+
+    # ② ledger：有缺口却没终态
+    p = tmp / "ledger_bad.json"
+    p.write_text(json.dumps({"keys": [str(i) for i in range(18)],
+                             "known_gaps": ["GAP.A"],
+                             "known_gap_status": {}}, ensure_ascii=False),
+                 encoding="utf-8")
+    cases["ledger"] = lambda path=p: check_ledger(path)
+
+    # ③ host_absent：仓内**引用了**无歧义的未实现成员
+    r53 = tmp / "repo"
+    (r53 / "schemas").mkdir(parents=True, exist_ok=True)
+    (r53 / "tools").mkdir(parents=True, exist_ok=True)
+    (r53 / "schemas" / "vb_api_catalog.json").write_text(json.dumps(
+        {"classes": {"Y": {"methods": {"DeadMember": {
+            "host_absent": True}}}}}, ensure_ascii=False), encoding="utf-8")
+    (r53 / "schemas" / "host_member_availability.json").write_text(
+        json.dumps({"coverage": {"classes_swept": 155, "classes_total": 199,
+                                 "members_total": 1}, "classes": {}},
+                   ensure_ascii=False), encoding="utf-8")
+    (r53 / "tools" / "offender.py").write_text("x.DeadMember()\n",
+                                               encoding="utf-8")
+    cases["host_absent"] = lambda: check_host_absent(
+        catalog_path=r53 / "schemas" / "vb_api_catalog.json",
+        avail_path=r53 / "schemas" / "host_member_availability.json",
+        roots=[r53 / "tools"])
+
+    # ④ account：计数对不上（verdict + nyi ≠ total）
+    p = tmp / "acct_bad.json"
+    p.write_text(json.dumps({"counts": {"total": 10, "verdict": 3, "nyi": 3},
+                             "rows": []}, ensure_ascii=False), encoding="utf-8")
+    cases["account"] = lambda path=p: check_account(path)
+
+    # ⑤ bridge：覆盖率掉到 0.5
+    class _Cov:
+        @staticmethod
+        def report():
+            return {"coverage": 0.5, "wrapped": 1, "unknown_wrapped_members": []}
+
+    cases["bridge"] = lambda: _with_patched_load(
+        lambda: _Cov, check_bridge)
+
+    # ⑥ corpus：链接有"只有语料有"的漏项
+    r54 = tmp / "repo2"
+    (r54 / "_p12u_gate" / "r99").mkdir(parents=True, exist_ok=True)
+    (r54 / "_p12u_gate" / "r99" / "corpus_diff_attr.json").write_text(
+        json.dumps({"discovered": [{"parent": "P", "only_corpus": ["Q"]}]},
+                   ensure_ascii=False), encoding="utf-8")
+    cases["corpus"] = lambda: _with_patched_root(r54, check_corpus)
+
+    # ⑦ guard：三态判据坏掉（越界却判 True）
+    class _Api:
+        @staticmethod
+        def check_api_value(*_a):
+            return True
+
+    cases["guard"] = lambda: _with_patched_api(_Api, check_guard)
+
+    # ⑧ convergence：覆盖率掉线
+    p = tmp / "avail_bad.json"
+    p.write_text(json.dumps({"coverage": {"classes_swept": 3,
+                                          "classes_total": 199,
+                                          "unswept_classes": []}},
+                            ensure_ascii=False), encoding="utf-8")
+    cases["convergence"] = lambda path=p: check_sweep_convergence(
+        path, ROOT / "schemas" / "unswept_account.json")
+    return cases
+
+
+class _Patch:
+    """临时替换模块级名字（跑完还原）。"""
+
+    def __init__(self, **kw):
+        self.kw = kw
+        self.old: dict = {}
+
+    def __enter__(self):
+        for k, v in self.kw.items():
+            self.old[k] = globals()[k]
+            globals()[k] = v
+        return self
+
+    def __exit__(self, *exc):
+        for k, v in self.old.items():
+            globals()[k] = v
+        return False
+
+
+def _with_patched_load(factory, fn):
+    with _Patch(_load=lambda name, path: factory()):
+        return fn()
+
+
+def _with_patched_root(new_root: Path, fn):
+    with _Patch(ROOT=new_root):
+        return fn()
+
+
+def _with_patched_api(stub, fn):
+    with _Patch(api=stub):
+        return fn()
+
+
+def self_test() -> int:
+    """跑 8 项合成反例：每项都必须 FAIL，否则这门是**摆设**。"""
+    import tempfile
+    rows = []
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        cases = _self_test_cases(tmp)
+        for name, fn in CHECKS:
+            case = cases.get(name)
+            if case is None:
+                rows.append((name, "MISSING", False))
+                continue
+            try:
+                res = case()
+                detected = not res.get("ok")
+            except Exception as exc:  # noqa: BLE001
+                detected = False
+                res = {"error": type(exc).__name__ + ": " + str(exc)[:60]}
+            rows.append((name, json.dumps(res, ensure_ascii=False)[:90],
+                         detected))
+    all_ok = True
+    print("[self-test] 每项一个合成反例（必须 FAIL）")
+    for name, detail, detected in rows:
+        all_ok = all_ok and detected
+        print(("  挡住  " if detected else "  放行  ") + name.ljust(12) + detail)
+    print("SUMMARY: " + json.dumps({"self_test_passed": bool(all_ok),
+                                    "checks": len(rows)}))
+    return 0 if all_ok else 1
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="API 面契约门")
     ap.add_argument("--json", type=Path, default=None)
+    ap.add_argument("--self-test", action="store_true",
+                    help="R54-1：给 8 项各喂一个合成反例，必须全部 FAIL")
     args = ap.parse_args(argv)
+    if args.self_test:
+        return self_test()
     results = {}
     all_ok = True
     for name, fn in CHECKS:

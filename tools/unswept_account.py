@@ -246,6 +246,18 @@ def account(avail: dict | None = None, cat: dict | None = None,
             continue
         groups.setdefault(corpus_group(row), []).append(cls)
     groups = {g: sorted(v) for g, v in sorted(groups.items())}
+    # R54-2：每组"补上语料后**预计能多覆盖几类**" —— 判据是该类**有已知取法**：
+    # 目录/命名片段给了候选（declared_candidates 非空），或手册给了配方（配方的宿主
+    # 正是"缺的那个前置对象"，补上语料后即可执行）。两者都没有的类即便补了语料
+    # 也未必取得到，单列 no_path（排期时别把它们算进收益）。
+    plan: dict = {}
+    for g, members in groups.items():
+        with_path = [c for c in members
+                     if (rows[c].get("declared_candidates")
+                         or (rows[c].get("recipe") or "").startswith("Set "))]
+        plan[g] = {"classes": members,
+                   "expected_gain": len(with_path),
+                   "no_path": sorted(set(members) - set(with_path))}
     return {"source": "tools/unswept_account.py（R46-1）",
             "note": ("未普查类的**终态**：每个类都必须有一条，理由必须来自证据"
                      "（配方宿主 / 候选调用错误 / 返回空）；口径见模块 docstring。"
@@ -253,6 +265,7 @@ def account(avail: dict | None = None, cat: dict | None = None,
             "evidence": ev.get("_path"),
             "counts": {"total": len(rows), **counts},
             "needs_corpus_groups": groups,
+            "needs_corpus_plan": plan,
             "classes": rows}
 
 
@@ -276,9 +289,12 @@ def main(argv=None) -> int:
     print(_render(data["classes"]))
     groups = data.get("needs_corpus_groups") or {}
     if groups:
-        print("[unswept] needs-corpus 按缺什么分组：")
+        print("[unswept] needs-corpus 按缺什么分组（补上语料后预计能覆盖几类）：")
+        plan = data.get("needs_corpus_plan") or {}
         for g, members in groups.items():
-            print("   %-12s %2d 类：%s" % (g, len(members), ", ".join(members)))
+            est = (plan.get(g) or {}).get("expected_gain")
+            print("   %-12s %2d 类 → 预计可覆盖 %s 类：%s"
+                  % (g, len(members), est, ", ".join(members)))
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)
         args.json.write_text(json.dumps(data, ensure_ascii=False, indent=1),

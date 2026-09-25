@@ -34,10 +34,34 @@ def contract_gate() -> int:
     return r.returncode
 
 
+def reopen_notice() -> str:
+    """R54-3：复验窗口**提醒**（一条命令可见，异常才出声）。
+
+    收口之后"要不要重开普查"是周期性问题。这里把它挂到回归入口：跑一次
+    `tools/sweep_reopen_check.py`，**只有建议重开时才出声**（返回非空字符串），
+    平时安静 —— 免得每天刷一条"无需重开"。
+    """
+    try:
+        r = subprocess.run(
+            [PY, "-B", str(ROOT / "tools" / "sweep_reopen_check.py"), "--json"],
+            cwd=str(ROOT), capture_output=True, timeout=300)
+    except Exception as exc:  # noqa: BLE001
+        return "[reopen] 复验窗口检查跑不起来：" + type(exc).__name__
+    if r.returncode == 0:
+        return ""
+    text = (r.stdout + r.stderr).decode("utf-8", "replace")
+    lines = [ln for ln in text.splitlines() if "硬理由" in ln or "reopen" in ln]
+    return "[reopen] **建议重开普查**（收口判据被推翻，见 tools/sweep_reopen_check.py）：\n  " \
+        + "\n  ".join(lines[:5] or [text.strip()[:200]])
+
+
 def main() -> int:
     mods = sorted(p.stem for p in (ROOT / "tests").glob("test_*.py"))
     print(f"{len(mods)} test modules; runner = {PY}\n")
     gate_rc = contract_gate()
+    notice = reopen_notice()          # R54-3：只有建议重开时才出声
+    if notice:
+        print(notice + "\n")
     failed: list[str] = []
     crashed: list[str] = []
     stats = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}

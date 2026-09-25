@@ -52,6 +52,82 @@
    "CondParticleRestitutionDEM"
   ]
  },
+ "needs_corpus_plan": {
+  "CoSim": {
+   "classes": [
+    "CondCoSimRegionMarker",
+    "CondCoSimRegionSurface",
+    "CondCoSimRegionVolume"
+   ],
+   "expected_gain": 3,
+   "no_path": []
+  },
+  "其他": {
+   "classes": [
+    "BodyPattern",
+    "Table",
+    "Value"
+   ],
+   "expected_gain": 3,
+   "no_path": []
+  },
+  "几何/MDL": {
+   "classes": [
+    "CreateVMDLError",
+    "ISVertex",
+    "SNode",
+    "WrappingGroup",
+    "WrappingParam"
+   ],
+   "expected_gain": 3,
+   "no_path": [
+    "ISVertex",
+    "WrappingParam"
+   ]
+  },
+  "材料/物性": {
+   "classes": [
+    "PropDataBase"
+   ],
+   "expected_gain": 0,
+   "no_path": [
+    "PropDataBase"
+   ]
+  },
+  "条件/向导": {
+   "classes": [
+    "CondBUND",
+    "CondDTSR",
+    "CondRepulsion"
+   ],
+   "expected_gain": 3,
+   "no_path": []
+  },
+  "混合物/燃烧": {
+   "classes": [
+    "CondMixedGas",
+    "CondReactionIncompSpecies",
+    "DiffusiveSpecies",
+    "OutputCombustionSpecies"
+   ],
+   "expected_gain": 3,
+   "no_path": [
+    "CondReactionIncompSpecies"
+   ]
+  },
+  "粒子/DEM": {
+   "classes": [
+    "CondParticleConcentrationFpDEM",
+    "CondParticleCounter",
+    "CondParticleForceFPDEM",
+    "CondParticleHeatFPDEM",
+    "CondParticlePropertyMemberDEM",
+    "CondParticleRestitutionDEM"
+   ],
+   "expected_gain": 6,
+   "no_path": []
+  }
+ },
  "classes": {
   "BodyPattern": {
    "class": "BodyPattern",
