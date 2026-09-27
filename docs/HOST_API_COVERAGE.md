@@ -11,9 +11,11 @@
 
 ## 2. 口径（怎么判的）
 
-- **成员可用性**：`IDispatch::GetIDsOfNames` 逐个解析手册成员名，只解析不调用（零副作用）；`DISP_E_UNKNOWNNAME` 即宿主未实现。
-- **对象取法**：三层配方（手册 `instance` → 目录声明在已持有宿主上的取用成员 → 命名片段），实参按手册词表与阶梯给；**验身**（该类独有成员解析率 ≥ 半数）通过才收。
-- **假证据闸门**：整类未知过半不记（`swept_suspect`）；派发名不通时回退成员键名；标量返回不算对象。
+- **成员可用性**：`IDispatch::GetIDsOfNames` 逐个解析手册成员名，只解析不调用（零副作用）；`DISP_E_UNKNOWNNAME` 即宿主未实现。（实现：`tools/dispatch_name_probe.py:_resolve`）
+- **对象取法**：三层配方（手册 `instance` → 目录声明在已持有宿主上的取用成员 → 命名片段），实参按手册词表与阶梯给。（实现：`tools/dispatch_name_probe.py:auto_plans`）
+- **验身判据**：`identity_ok()` —— 该类独有成员解析率 ≥ 半数；不通过就换下一条配方，四条都不通过则整类不记。（实现：`tools/dispatch_name_probe.py:identity_ok`）
+- **假证据闸门**：整类未知过半不记（`swept_suspect`）；派发名不通时回退成员键名；标量返回不算对象（`_is_com`）。（实现：`tools/dispatch_name_probe.py:sweep_class_verdict`）
+- **未实现成员的拦截**：无歧义（所有声明它的类都标 `host_absent`）时才拦 —— typed 直调与 VBS 生成**共用同一判据**。（实现：`automation/scflowpre_api.py:unambiguous_host_absent`）
 
 ## 3. 桶分布（互斥且守恒）
 

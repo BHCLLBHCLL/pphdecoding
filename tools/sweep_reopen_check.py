@@ -64,14 +64,94 @@ def host_versions() -> list:
 
 
 def _progid_version(progid: str) -> str:
-    return str(progid or "").rsplit(".", 1)[-1]
+    """ProgID → 版本串。形态是 @@<前缀>.Application.<版本>@@ —— 取 @@Application.@@
+    之后那一段（R56 实测：按"最后一个点"切会把 @@…Application.2025.2@@ 切成 "2"）。
+    """
+    s = str(progid or "")
+    low = s.lower()
+    if ".application." in low:
+        return s[low.index(".application.") + len(".application."):]
+    return s.rsplit(".", 1)[-1]
+
+
+def installed_versions() -> list:
+    """本机装了哪些 Cradle 版本（读安装目录；取不到就空表）。
+
+    R56-3：比注册表更贴近"在用哪个版本" —— 注册表里旧版本的 ProgID 可能还在，
+    但安装目录里已经只剩新版本。
+    """
+    try:
+        base = Path(r"C:\Program Files\Cradle")
+        if not base.is_dir():
+            return []
+        out = []
+        for p in base.iterdir():
+            m = p.name.lower()
+            if p.is_dir() and m.startswith("cradlecfd"):
+                out.append(p.name[len("CradleCFD"):] if m.startswith(
+                    "cradlecfd") else p.name)
+        return sorted(set(out))
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def version_verdict(evidence_progid: str, registry: list,
+                    installed: list | None = None) -> dict:
+    """R56-3：三种情形分开说 —— **证据版本没了** / **仍在装但有更新的** / **只有它**。
+
+    以前只判"证据里的版本在不在注册表集合里"，于是"装了 2025.3、2025.2 还留着"
+    与"只剩 2025.3"给的是同一个结论（都是"在"），没有指向该用哪个版本复验。
+    """
+    want = _progid_version(evidence_progid)
+    reg_versions = sorted({_progid_version(p) for p in registry}) if registry \
+        else []
+    dirs = sorted(set(installed if installed is not None
+                      else installed_versions()))
+    res = {"evidence_version": want, "registry_versions": reg_versions,
+           "installed_versions": dirs, "reopen": False, "warnings": [],
+           "reasons": []}
+    if not want or want == "":
+        res["warnings"].append("证据里没写宿主版本，无法比对")
+        return res
+    pool = set(reg_versions) | set(dirs)
+    # 版本串形态不一：ProgID 尾缀是 "2025"（主版本）、安装目录是 "2025.2"（细分）。
+    # 判据按**主版本**比：主版本不在 → 版本变了（硬理由）。
+    want_major = want.split(".")[0]
+    majors = {v.split(".")[0] for v in pool}
+    if pool and want_major not in majors:
+        res["reopen"] = True
+        res["reasons"].append("宿主版本变了：证据是 " + want + "，本机现在是 "
+                              + ", ".join(sorted(pool)))
+        return res
+    if "." in want:
+        # 证据记的是**细版本**：安装目录里找不到它、但有更高的 → 也算变了
+        gone = sorted(v for v in dirs if v > want)
+        if dirs and want not in dirs and gone:
+            res["reopen"] = True
+            res["reasons"].append("证据版本 " + want + " 不在装，本机是 "
+                                  + ", ".join(gone) + " —— 版本变了")
+            return res
+        newer = sorted(v for v in dirs if v > want)
+        if newer:
+            res["warnings"].append("证据版本（" + want + "）仍在装，但本机还有更新的 "
+                                   + ", ".join(newer)
+                                   + " —— 建议在**默认版本**上复验（不必立刻重开）")
+        return res
+    # 证据只记了主版本：细版本差异（2025.2 → 2025.3）**判不出来**，如实写限制
+    if any("." in v for v in dirs):
+        res["warnings"].append(
+            "证据只记了主版本（" + want + "），而安装目录更细（"
+            + ", ".join(dirs) + "）—— 同主版本内的升级（如 2025.2 → 2025.3）"
+            "**判不出来**；重开普查时请在 evidence_run 里记细版本（host_install）")
+    return res
 
 
 def decide(evidence: dict, catalog_path: Path = CATALOG,
            installed: list | None = None,
            workspace_projects: list | None = None,
            floor: int = FLOOR_CLASSES,
-           now: float | None = None) -> dict:
+           now: float | None = None,
+           installed_dirs: list | None = None) -> dict:
     """三份客观事实 → 是否建议重开（纯函数，可单测）。"""
     run = (evidence or {}).get("evidence_run") or {}
     cov = (evidence or {}).get("coverage") or {}
@@ -79,14 +159,17 @@ def decide(evidence: dict, catalog_path: Path = CATALOG,
     notes: list = []
 
     # ① 宿主版本
+    # **合成数据要自洽**（R56 实测）：显式给了 installed（测试/外部注入）时，安装目录
+    # 默认取空 —— 否则会混进本机真实目录，把"版本变了"判成"没变"
     if installed is None:
         installed = host_versions()
-    if installed and run.get("progid"):
-        want = _progid_version(run["progid"])
-        got = sorted({_progid_version(p) for p in installed})
-        if want not in got:
-            reasons.append("宿主版本变了：证据是 " + str(run["progid"])
-                           + "，本机现在有 " + ", ".join(got))
+        dirs = installed_dirs if installed_dirs is not None \
+            else installed_versions()
+    else:
+        dirs = installed_dirs if installed_dirs is not None else []
+    verdict = version_verdict(str(run.get("progid") or ""), installed, dirs)
+    reasons += verdict["reasons"]
+    notes += verdict["warnings"]
 
     # ② **成员集**变了（不是 mtime —— 每轮收口都会用同一份证据重生成目录，
     #    那是正常流程；真正该重开的是"目录与证据对不上"）
@@ -128,6 +211,7 @@ def decide(evidence: dict, catalog_path: Path = CATALOG,
 
     return {"reopen": bool(reasons), "reasons": reasons, "notes": notes,
             "checked": {"installed_progids": installed,
+                        "installed_versions": verdict["installed_versions"],
                         "evidence_round": run.get("round"),
                         "evidence_when": when,
                         "classes_swept": swept, "floor": floor,

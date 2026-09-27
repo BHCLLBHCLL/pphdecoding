@@ -2415,6 +2415,31 @@ probe_limitation → 试手册声明的取法 + 看证据里的调用错误；no
 第 10 项 `check_panel_matches_report()`（面板数据/文本与产品面同源；无 Qt 环境按跳过处理）。
 `--self-test` 补两个反例 → **门 10/10 + 自测 10/10**。
 
+---
+
+## 70. R56 更新（2026-09-15）—— 口径绑定实现 + 测试总账 + 多版本宿主判据
+
+### 70.1 口径绑定实现（R56-1）
+
+一页文档的五条口径各绑 `file:symbol`（`dispatch_name_probe.py:_resolve/auto_plans/
+identity_ok/sweep_class_verdict`、`scflowpre_api.py:unambiguous_host_absent`）；
+`verify_method_bindings()` 用 AST 验符号存在，`--check` 先跑它 —— 判据改名就红。
+
+### 70.2 测试总账（R56-2，门第 11 项）
+
+① 33 条核心判据每条都要被**某个** `tests/*.py` 引用；② 每个轮次证据模块至少引用一个实现符号。
+首跑抓出 **4 条真缺口**（全仓无引用）：`_apply_host_absent`、`api_arg_values`（本轮补真测试）、
+`verify_method_bindings`/`version_verdict`（随本轮测试进账）；`mismatches` 只被非证据模块引用
+→ 判据搜索面放宽到全部 tests（轮次模块仍需各自有符号）。自测 11/11。
+> 坑：验证孤儿检测时，测试文件里写下假符号名就把它"变成被引用"了 —— 名字要**运行时拼接**。
+
+### 70.3 多版本宿主判据（R56-3）
+
+`version_verdict()` 四情形：同主版本（2025 vs 2025.2）→ 不重开但**标注"细版本升级判不出来"**；
+细版本消失（2025.2 → 2025.3）→ **重开**；主版本变（2026）→ **重开**；细版本在装且另有更新 →
+不重开 + 提醒在默认版本复验。顺带修 `_progid_version()` 按最后一个点切分的 bug（2025.2 被切成 "2"）。
+
+
 
 
 

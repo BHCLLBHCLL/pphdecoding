@@ -33,16 +33,58 @@ UNSWEPT = ROOT / "schemas" / "unswept_account.json"
 CATALOG = ROOT / "schemas" / "vb_api_catalog.json"
 OUT = ROOT / "docs" / "HOST_API_COVERAGE.md"
 
-#: 口径（怎么判的）—— 写死在这里，便于审阅
+#: 口径（怎么判的）—— 写死在这里便于审阅；**每条都绑到实现符号**（R56-1），
+#: 实现改名/被删时 verify_method_bindings() 与契约门第 9 项立刻报出来。
 METHOD = [
-    "**成员可用性**：`IDispatch::GetIDsOfNames` 逐个解析手册成员名，只解析不调用"
-    "（零副作用）；`DISP_E_UNKNOWNNAME` 即宿主未实现。",
-    "**对象取法**：三层配方（手册 `instance` → 目录声明在已持有宿主上的取用成员 → "
-    "命名片段），实参按手册词表与阶梯给；**验身**（该类独有成员解析率 ≥ 半数）"
-    "通过才收。",
-    "**假证据闸门**：整类未知过半不记（`swept_suspect`）；派发名不通时回退成员键名；"
-    "标量返回不算对象。",
+    ("**成员可用性**：`IDispatch::GetIDsOfNames` 逐个解析手册成员名，只解析不调用"
+     "（零副作用）；`DISP_E_UNKNOWNNAME` 即宿主未实现。",
+     "tools/dispatch_name_probe.py:_resolve"),
+    ("**对象取法**：三层配方（手册 `instance` → 目录声明在已持有宿主上的取用成员 → "
+     "命名片段），实参按手册词表与阶梯给。",
+     "tools/dispatch_name_probe.py:auto_plans"),
+    ("**验身判据**：`identity_ok()` —— 该类独有成员解析率 ≥ 半数；不通过就换下一条"
+     "配方，四条都不通过则整类不记。",
+     "tools/dispatch_name_probe.py:identity_ok"),
+    ("**假证据闸门**：整类未知过半不记（`swept_suspect`）；派发名不通时回退成员键名；"
+     "标量返回不算对象（`_is_com`）。",
+     "tools/dispatch_name_probe.py:sweep_class_verdict"),
+    ("**未实现成员的拦截**：无歧义（所有声明它的类都标 `host_absent`）时才拦 —— "
+     "typed 直调与 VBS 生成**共用同一判据**。",
+     "automation/scflowpre_api.py:unambiguous_host_absent"),
 ]
+
+
+def verify_method_bindings() -> dict:
+    """逐条查口径绑定的实现符号是否还在（R56-1）。纯函数（只读文件 + AST）。"""
+    import ast
+    missing, checked = [], 0
+    for _text, where in METHOD:
+        checked += 1
+        rel, _, sym = where.partition(":")
+        path = ROOT / rel
+        if not path.is_file():
+            missing.append(where + "（文件不存在）")
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError as exc:
+            missing.append(where + "（解析失败：" + str(exc)[:40] + "）")
+            continue
+        names = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                 ast.ClassDef)):
+                names.add(node.name)
+            elif isinstance(node, ast.Assign):
+                for t in node.targets:
+                    if isinstance(t, ast.Name):
+                        names.add(t.id)
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target,
+                                                                ast.Name):
+                names.add(node.target.id)
+        if sym not in names:
+            missing.append(where)
+    return {"checked": checked, "missing": missing, "ok": not missing}
 
 #: 适用边界（**不许外推**的地方）—— 同样写死，便于反驳
 BOUNDARY = [
@@ -83,7 +125,8 @@ def build(avail: dict, unswept: dict, catalog: dict) -> str:
         "## 2. 口径（怎么判的）",
         "",
     ]
-    lines += ["- " + m for m in METHOD]
+    lines += ["- " + text + "（实现：`" + where + "`）"
+              for text, where in METHOD]
     lines += ["", "## 3. 桶分布（互斥且守恒）", "",
               "| 桶 | 数量 |", "|---|---|",
               "| 已普查 | **" + str(cov.get("classes_swept")) + "** |",
@@ -160,6 +203,11 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=Path, default=OUT)
     args = ap.parse_args(argv)
     text = generate()
+    bind = verify_method_bindings()
+    if not bind["ok"]:
+        print("[coverage-doc] 口径绑定断了：" + str(bind["missing"]),
+              file=sys.stderr)
+        return 1
     if args.check:
         if not args.out.is_file():
             print("[coverage-doc] 缺文档：" + str(args.out), file=sys.stderr)

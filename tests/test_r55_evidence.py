@@ -121,10 +121,11 @@ class TestSurfaceChecks(unittest.TestCase):
         cls.gate = _load("gate_r55", GATE)
 
     def test_gate_has_ten_checks(self):
+        """门只许加不许减（R55 立 10 项、R56 加测试总账 1 项）。"""
         names = [n for n, _ in self.gate.CHECKS]
-        self.assertEqual(len(names), 10)
-        self.assertIn("doc_report", names)
-        self.assertIn("panel_report", names)
+        self.assertGreaterEqual(len(names), 10)
+        for key in ("doc_report", "panel_report", "test_ledger"):
+            self.assertIn(key, names)
 
     def test_surface_checks_pass_now(self):
         for name in ("doc_report", "panel_report"):

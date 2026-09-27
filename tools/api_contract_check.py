@@ -121,6 +121,107 @@ def check_corpus() -> dict:
             "links_with_gap": sorted(gaps), "ok": not gaps}
 
 
+#: 判据/口径**核心符号**（R56-2）：每一条都必须被至少一个 test_rNN 模块引用 ——
+#: 判据被删/改名时，这里会先红，而不是等某轮测试悄悄变绿。
+CRITERION_CORE = {
+    # 名字裁定与目录（R35–R40）
+    "mismatches": "标题/签名分歧清单",
+    "name_corrections": "目录键 → 实机可用名",
+    "materialize_catalog_wrappers": "物化包装（跳过 host_absent）",
+    "signature_arity": "参数个数口径（多则报、少不报）",
+    "api_arg_values": "取值词表三态",
+    # 普查（R41–R52）
+    "EMPTY_HINTS": "空对象前置提示（知识表）",
+    "_apply_host_absent": "宿主未实现入册",
+    "identity_ok": "验身（类独有成员解析率 ≥ 半数）",
+    "sweep_class_verdict": "整类未知过半不记",
+    "auto_plans": "三层配方（配方/目录声明/命名片段）",
+    "recipe_plan": "手册 instance 配方",
+    "signature_args": "手册词表填实参",
+    "stem_candidates": "命名片段候选",
+    "prime_selection": "先全选再取",
+    "harvest_names": "真名字池",
+    "arg_ladder": "实参阶梯",
+    "_is_com": "标量闸（只收 COM 对象）",
+    "audit_identity_guard": "验身误放/误杀量测",
+    "host_absent_methods": "无歧义未实现成员（VBS 侧）",
+    "unambiguous_host_absent": "无歧义未实现成员（typed 侧）",
+    "member_alternative": "失败给下一步",
+    "unreliable_recipes": "取法不可照抄",
+    "render_capability_report": "四份结论一个入口",
+    "needs_corpus_groups": "缺语料分组",
+    "obtained_via": "取得路径进总账",
+    "auto_empty_targets": "试过返回空的证据",
+    # 收口守卫（R53–R56）
+    "check_sweep_convergence": "收口收敛守卫",
+    "check_doc_matches_report": "文档 == 产品面",
+    "check_panel_matches_report": "面板 == 产品面",
+    "_self_test_cases": "门自测反例",
+    "reopen_notice": "复验提醒",
+    "verify_method_bindings": "口径绑定实现符号",
+    "version_verdict": "多版本宿主判据",
+}
+
+#: 测试模块里允许出现的"实现符号"来源（R56-2 另一方向：模块不许什么都不测）
+_SYMBOL_SOURCES = ("tools/dispatch_name_probe.py", "tools/unswept_account.py",
+                   "tools/sweep_reopen_check.py", "tools/api_contract_check.py",
+                   "tools/host_coverage_doc.py", "tools/scan_nyi_menus.py",
+                   "tools/host_member_sweep.py",
+                   "automation/scflowpre_api.py", "automation/vbs_bridge.py",
+                   "nav_panels.py", "run_all_tests.py")
+
+
+def _implementation_symbols() -> set:
+    """实现侧顶层符号（函数/类/常量）—— 判"这个测试模块到底测没测我们的东西"。"""
+    import ast
+    out: set = set()
+    for rel in _SYMBOL_SOURCES:
+        p = ROOT / rel
+        if not p.is_file():
+            continue
+        try:
+            tree = ast.parse(p.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                 ast.ClassDef)):
+                out.add(node.name)
+            elif isinstance(node, ast.Assign):
+                for t in node.targets:
+                    if isinstance(t, ast.Name):
+                        out.add(t.id)
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target,
+                                                                ast.Name):
+                out.add(node.target.id)
+    return out
+
+
+def check_test_ledger() -> dict:
+    """第 11 项（R56-2）：判据符号 ↔ 测试模块**双向**覆盖。
+
+    ① 每条核心判据都要有 test_rNN 模块引用它（判据被删会先红在这里）；
+    ② 每个 test_rNN 模块都要引用**至少一个**实现符号（不许"什么都不测"）。
+    """
+    mods = sorted((ROOT / "tests").glob("test_r*_evidence.py"))
+    texts = {p.name: p.read_text(encoding="utf-8") for p in mods}
+    # ① 方向：判据可以在**任何**测试文件里被引用（轮次证据模块之外的也算数）
+    all_texts = [p.read_text(encoding="utf-8")
+                 for p in (ROOT / "tests").glob("*.py")]
+    symbols = _implementation_symbols()
+    orphan = sorted(s for s in CRITERION_CORE
+                    if not any(s in t for t in all_texts))
+    # ② 方向：只有"轮次证据模块"必须各自引用实现符号（一模块一判据）
+    empty = sorted(n for n, t in texts.items()
+                   if not any(s in t for s in symbols | set(CRITERION_CORE)))
+    return {"core_symbols": len(CRITERION_CORE),
+            "impl_symbols": len(symbols),
+            "test_modules": len(mods),
+            "orphan_criteria": orphan,
+            "modules_without_symbol": empty,
+            "ok": (not orphan and not empty and len(mods) >= 8)}
+
+
 def check_doc_matches_report(doc_path: Path | None = None) -> dict:
     """第 9 项（R55-3）：`docs/NYI_INVENTORY.md` 的能力汇总块必须**逐行**等于产品面。
 
@@ -287,7 +388,8 @@ CHECKS = (("catalog", check_catalog), ("ledger", check_ledger),
           ("convergence", check_sweep_convergence),
           # R55-3：**同源面**也进门 —— 文档块与面板数据都必须等于产品面
           ("doc_report", check_doc_matches_report),
-          ("panel_report", check_panel_matches_report))
+          ("panel_report", check_panel_matches_report),
+          ("test_ledger", check_test_ledger))
 
 
 def _self_test_cases(tmp: Path) -> dict:
@@ -387,6 +489,20 @@ def _self_test_cases(tmp: Path) -> dict:
             return "只有一段"
 
     cases["panel_report"] = lambda nav=_Panel: check_panel_matches_report(nav)
+
+    # ⑪ test_ledger：造一个"没有测试引用的判据"。
+    #    **假判据必须在调用时**才注入 —— 早先写在构造期，"跑完即还原"让反例永远通过
+    #    （R56 实测：那项门看着有反例，其实是摆设）。
+    def _ledger_case():
+        real_core = dict(CRITERION_CORE)
+        CRITERION_CORE["__never_referenced__"] = "假判据"
+        try:
+            return check_test_ledger()
+        finally:
+            CRITERION_CORE.clear()
+            CRITERION_CORE.update(real_core)
+
+    cases["test_ledger"] = _ledger_case
     return cases
 
 
