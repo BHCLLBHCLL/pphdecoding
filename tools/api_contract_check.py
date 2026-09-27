@@ -121,6 +121,57 @@ def check_corpus() -> dict:
             "links_with_gap": sorted(gaps), "ok": not gaps}
 
 
+def check_doc_matches_report(doc_path: Path | None = None) -> dict:
+    """第 9 项（R55-3）：`docs/NYI_INVENTORY.md` 的能力汇总块必须**逐行**等于产品面。
+
+    文档是自动生成的，但"自动"不等于"一致"——生成器改了、report 改了，都可能漂移。
+    这一项把两者钉在一起（路径可注入，自测要用假文档验"漂移会被挡住"）。
+    """
+    path = doc_path or (ROOT / "docs" / "NYI_INVENTORY.md")
+    if not path.is_file():
+        return {"ok": False, "error": "缺文档：" + path.name}
+    text = path.read_text(encoding="utf-8")
+    i = text.find("宿主能力边界（")
+    if i < 0:
+        return {"ok": False, "error": "文档里没有能力汇总块"}
+    block = text[i:].split("```")[0].rstrip()
+    want = api.render_capability_report().rstrip()
+    same = block == want
+    return {"doc_lines": len(block.splitlines()),
+            "report_lines": len(want.splitlines()),
+            "diff_head": "" if same else [a for a, b in zip(block.splitlines(),
+                                                          want.splitlines())
+                                          if a != b][:2],
+            "ok": same}
+
+
+def check_panel_matches_report(nav=None) -> dict:
+    """第 10 项（R55-3）：面板面的数据/文本与产品面同源（纯函数，不开 Qt）。
+
+    @@nav@@ 可注入（自测用桩）。没有 Qt 的环境**不算失败**：与其它 GUI 面测试同口径
+    （缺依赖 → 跳过并如实标注），但**有 Qt 就必须一致**。
+    """
+    if nav is None:
+        try:
+            import nav_panels as nav
+        except ImportError as exc:  # noqa: BLE001
+            return {"ok": True, "skipped": "nav_panels 不可导入："
+                    + type(exc).__name__}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": "nav_panels 导入异常："
+                    + type(exc).__name__ + ": " + str(exc)[:60]}
+    data = nav.host_boundary_data()
+    rep = api.host_capability_report()
+    same_data = (data.get("absent") == rep["host_absent"]
+                 and data.get("recipes") == rep["unreliable_recipes"]
+                 and data.get("hints") == rep["object_hints"])
+    text = nav.render_host_boundary(data)
+    four = all(k in text for k in ("取不到实例", "宿主未实现", "取法不可照抄"))
+    return {"data_same": bool(same_data), "has_sections": bool(four),
+            "lines": len(text.splitlines()),
+            "ok": bool(same_data and four)}
+
+
 def check_sweep_convergence(avail_path: Path | None = None,
                            unswept_path: Path | None = None,
                            floor: int = 155) -> dict:
@@ -233,7 +284,10 @@ CHECKS = (("catalog", check_catalog), ("ledger", check_ledger),
           ("host_absent", check_host_absent),
           ("account", check_account), ("bridge", check_bridge),
           ("corpus", check_corpus), ("guard", check_guard),
-          ("convergence", check_sweep_convergence))
+          ("convergence", check_sweep_convergence),
+          # R55-3：**同源面**也进门 —— 文档块与面板数据都必须等于产品面
+          ("doc_report", check_doc_matches_report),
+          ("panel_report", check_panel_matches_report))
 
 
 def _self_test_cases(tmp: Path) -> dict:
@@ -315,6 +369,24 @@ def _self_test_cases(tmp: Path) -> dict:
                             ensure_ascii=False), encoding="utf-8")
     cases["convergence"] = lambda path=p: check_sweep_convergence(
         path, ROOT / "schemas" / "unswept_account.json")
+
+    # ⑨ doc_report：文档块被改坏（与 report 漂移）
+    p = tmp / "doc_bad.md"
+    p.write_text("宿主能力边界（假文档）\n\n```text\n与产品面不一致\n```\n",
+                 encoding="utf-8")
+    cases["doc_report"] = lambda path=p: check_doc_matches_report(path)
+
+    # ⑩ panel_report：面板拿到的边界数据与产品面不一致
+    class _Panel:
+        @staticmethod
+        def host_boundary_data():
+            return {"absent": {"X": ["Y"]}, "recipes": {}, "hints": {}}
+
+        @staticmethod
+        def render_host_boundary(_data):
+            return "只有一段"
+
+    cases["panel_report"] = lambda nav=_Panel: check_panel_matches_report(nav)
     return cases
 
 
@@ -350,6 +422,9 @@ def _with_patched_root(new_root: Path, fn):
 def _with_patched_api(stub, fn):
     with _Patch(api=stub):
         return fn()
+
+
+
 
 
 def self_test() -> int:

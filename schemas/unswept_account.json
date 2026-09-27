@@ -60,7 +60,9 @@
     "CondCoSimRegionVolume"
    ],
    "expected_gain": 3,
-   "no_path": []
+   "no_path": [],
+   "tier": "大",
+   "what": "一个**CoSim 设置**算例（结构耦合侧配合，本机语料没有）"
   },
   "其他": {
    "classes": [
@@ -69,7 +71,9 @@
     "Value"
    ],
    "expected_gain": 3,
-   "no_path": []
+   "no_path": [],
+   "tier": "小",
+   "what": "同条件/向导：多数是「建一个对象就有」的类"
   },
   "几何/MDL": {
    "classes": [
@@ -83,7 +87,9 @@
    "no_path": [
     "ISVertex",
     "WrappingParam"
-   ]
+   ],
+   "tier": "中",
+   "what": "一个跑完 MDL/BAM 的算例（面区域→闭空间；本仓 exB01 类算例可复用）"
   },
   "材料/物性": {
    "classes": [
@@ -92,7 +98,9 @@
    "expected_gain": 0,
    "no_path": [
     "PropDataBase"
-   ]
+   ],
+   "tier": "中",
+   "what": "一个**注册了材料**的算例（材料库/物性表；本机算例多含）"
   },
   "条件/向导": {
    "classes": [
@@ -101,7 +109,9 @@
     "CondRepulsion"
    ],
    "expected_gain": 3,
-   "no_path": []
+   "no_path": [],
+   "tier": "小",
+   "what": "任取一个算例，用条件向导建一个该类条件（分钟级）"
   },
   "混合物/燃烧": {
    "classes": [
@@ -113,7 +123,9 @@
    "expected_gain": 3,
    "no_path": [
     "CondReactionIncompSpecies"
-   ]
+   ],
+   "tier": "中",
+   "what": "一个带**混合气体/燃烧**设置的条件算例（需专门设置）"
   },
   "粒子/DEM": {
    "classes": [
@@ -125,7 +137,9 @@
     "CondParticleRestitutionDEM"
    ],
    "expected_gain": 6,
-   "no_path": []
+   "no_path": [],
+   "tier": "大",
+   "what": "一个**粒子/DEM 算例**（粒子发生/属性/边界一整套条件）"
   }
  },
  "classes": {

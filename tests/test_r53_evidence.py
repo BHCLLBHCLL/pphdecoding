@@ -120,9 +120,14 @@ class TestConvergenceGate(unittest.TestCase):
         cls.ev = json.loads(AVAIL.read_text(encoding="utf-8"))
 
     def test_gate_has_eight_checks(self):
+        """门只许加不许减：R53 立第 8 项、R55 加同源面两项（现在 10）。
+
+        断言写成"≥8 且关键项都在"，免得每次加项都要改这里（R55 就因此红过一次）。
+        """
         names = [n for n, _ in self.gate.CHECKS]
-        self.assertEqual(len(names), 8)
-        self.assertIn("convergence", names)
+        self.assertGreaterEqual(len(names), 8)
+        for key in ("convergence", "doc_report", "panel_report"):
+            self.assertIn(key, names)
 
     def test_convergence_passes_now(self):
         res = self.gate.check_sweep_convergence()

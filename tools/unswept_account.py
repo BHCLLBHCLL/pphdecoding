@@ -160,6 +160,25 @@ def corpus_group(row: dict) -> str:
     return "其他"
 
 
+#: 补语料**成本档**（R55-2）：人工判断，写在这里就是为了能被审阅与反驳。
+#: 判据 = "拿到该组需要的前置对象，最小代价是什么"。
+CORPUS_COST = {
+    "条件/向导": ("小", "任取一个算例，用条件向导建一个该类条件（分钟级）"),
+    "其他": ("小", "同条件/向导：多数是「建一个对象就有」的类"),
+    "几何/MDL": ("中", "一个跑完 MDL/BAM 的算例（面区域→闭空间；本仓 exB01 类算例可复用）"),
+    "材料/物性": ("中", "一个**注册了材料**的算例（材料库/物性表；本机算例多含）"),
+    "混合物/燃烧": ("中", "一个带**混合气体/燃烧**设置的条件算例（需专门设置）"),
+    "粒子/DEM": ("大", "一个**粒子/DEM 算例**（粒子发生/属性/边界一整套条件）"),
+    "CoSim": ("大", "一个**CoSim 设置**算例（结构耦合侧配合，本机语料没有）"),
+}
+
+
+def corpus_cost(group: str) -> dict:
+    """组 → 成本档与"要什么算例"（R55-2；没登记的组如实说"未评估"）。"""
+    tier, what = CORPUS_COST.get(group, ("未评估", "未登记——需要时再评估"))
+    return {"tier": tier, "what": what}
+
+
 def classify(cls: str, cat: dict, ev: dict) -> dict:
     """一个类的终态 + 理由 + 证据（纯函数，可单测）。"""
     info = cat["classes"].get(cls) or {}
@@ -257,7 +276,8 @@ def account(avail: dict | None = None, cat: dict | None = None,
                          or (rows[c].get("recipe") or "").startswith("Set "))]
         plan[g] = {"classes": members,
                    "expected_gain": len(with_path),
-                   "no_path": sorted(set(members) - set(with_path))}
+                   "no_path": sorted(set(members) - set(with_path)),
+                   **corpus_cost(g)}
     return {"source": "tools/unswept_account.py（R46-1）",
             "note": ("未普查类的**终态**：每个类都必须有一条，理由必须来自证据"
                      "（配方宿主 / 候选调用错误 / 返回空）；口径见模块 docstring。"
@@ -293,8 +313,11 @@ def main(argv=None) -> int:
         plan = data.get("needs_corpus_plan") or {}
         for g, members in groups.items():
             est = (plan.get(g) or {}).get("expected_gain")
-            print("   %-12s %2d 类 → 预计可覆盖 %s 类：%s"
-                  % (g, len(members), est, ", ".join(members)))
+            info = plan.get(g) or {}
+            print("   %-12s %2d 类 → 预计可覆盖 %s 类（成本档 %s）：%s"
+                  % (g, len(members), est, info.get("tier"), ", ".join(members)))
+            if info.get("what"):
+                print("        要什么算例：" + str(info["what"]))
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)
         args.json.write_text(json.dumps(data, ensure_ascii=False, indent=1),
